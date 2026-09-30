@@ -1,0 +1,30 @@
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Secrets (keep .env.example committed)
+.env
+.env.*
+!.env.example
+
+# Large or private run data
+results/raw/
+*.ndjson
+*.ndjson.gz
+
+# Drafts of posts and papers (reviewed by the researcher before anything is public)
+drafts/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

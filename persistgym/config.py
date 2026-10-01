@@ -12,14 +12,17 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-GENERATOR_VERSION = "0.1.1"
-SCHEMA_VERSION = 1
+GENERATOR_VERSION = "0.2.0"
+SCHEMA_VERSION = 2
 
-# Disjoint seed ranges (half-open). Pilot templates never share seeds with main templates
-# (PLAN §16.5 "Pilot templates use a disjoint seed range").
+# Disjoint seed ranges (half-open), PREREG D7. Template index i of a split has seed
+# range start + i, so the balance blocks (K consecutive indices) start at each range start.
+# Main sweep templates are taken in order from index 0, validity runs and the G1 spot-check
+# use their own range, and pilot templates never share seeds with either (PLAN §16.5).
 SEED_RANGES: dict[str, tuple[int, int]] = {
-    "main": (0, 1_000_000),
-    "pilot": (9_000_000, 9_100_000),
+    "main": (0, 50_000),
+    "validity": (50_000, 60_000),
+    "pilot": (90_000, 100_000),
 }
 
 RULE_PLACEMENTS = ("with_last_clue", "with_first_clue", "separate_step", "system_prompt")
@@ -45,8 +48,10 @@ class GeneratorConfig:
     assumed_max_reply_tokens: int = 1_000
     """Reply length assumed when computing designed survival for window cells, and the
     reply length under which every near cell must have S=1."""
-    window_counts_system_prompt: bool = False
-    """Whether the window budget W also has to hold the system prompt."""
+    window_counts_system_prompt: bool = True
+    """Whether the window budget W also has to hold the episode's system prompt (PREREG D5:
+    sys counts toward W, as in the harness cells and the PREREG formulas). The harness counts
+    the episode's system prompt only, not its notes sentence (harnesses/DESIGN.md §4)."""
     max_context_tokens: int = 64_000
     """Full-history context at the need step (system + observations + replies of
     assumed_max_reply_tokens) must stay at or below this (PLAN §5 'contexts stay <= 64k').
@@ -69,10 +74,23 @@ class GeneratorConfig:
     clue_spacing_steps: int = 1
     rule_placement: str = "with_last_clue"
     value_range: tuple[int, int] = (300, 899)
-    """Inclusive range of the target value and of every option value (all 3-digit)."""
+    """Inclusive range of the target value, of every option value and of every distractor
+    value (all 3-digit)."""
     minor_component_range: tuple[int, int] = (61, 98)
     """Inclusive range of the 2-digit additive clue values (offset, shift). Kept above 59 so
     they can never collide with clock fields in the log filler."""
+    option_spacing: int = 1
+    """The K options are one cluster of evenly spaced values around the target (PREREG D2):
+    sorted options are target + (i - rank) * option_spacing. With every addend drawn at least
+    rank * spacing above the bottom and (K - 1 - rank) * spacing below the top of
+    `minor_component_range`, no proper subset of the clues (with the rule) rules out any
+    option."""
+
+    # --- distractor bindings (PREREG D1) ---
+    n_distractors: int = 2
+    """Key-value bindings about other entities of the same kind, in the target's sentence
+    frame, shown once each at steps that hold no evidence in any cell. Never needed; their
+    values avoid every option and clue value; lookup serves their keys too (D3)."""
 
     # --- controls ---
     restate_mode: str = "as_revealed"
@@ -88,22 +106,22 @@ class GeneratorConfig:
 
     # --- lookup (recoverable cells) ---
     lookup_max_per_episode: int = 3
+    """Lookups served per episode (PREREG D3). Once they are used, a lookup returns 'lookup
+    unavailable' and costs one turn (once per pending step); it is not scored as an answer."""
     lookup_scope: str = "revealed_so_far"
-    """A lookup re-shows only the records already displayed before the pending step."""
+    """A lookup re-shows only the records already displayed at or before the pending step."""
 
-    # --- action parsing and scoring ---
+    # --- action parsing and scoring (PREREG D4: both rules pre-registered) ---
     accept_value_answers: bool = True
     """At the need step, accept the option value as well as its letter."""
     strict_action_parse: bool = False
     """True: only a line 'ACTION: verb(arg)' counts. False: if no ACTION line, fall back to
     the last 'verb(arg)' with a known verb anywhere in the reply."""
 
-    # --- survival accounting for summary/notes cells ---
-    carried_match_window_chars: int = 200
-    """A value counts as carried in a summary/note only if it appears within this many
-    characters of the entity name (0 = anywhere in the text)."""
-    carried_requires_rule: bool = False
-    """Derived facts: whether carrying all clue values also requires the rule to be carried."""
+    # Survival accounting for notes and summary cells uses one fixed rule (PREREG D6), not a
+    # config field: whole-word match of the target value, or of every clue value, with
+    # `(?<![0-9A-Za-z])VALUE(?![0-9A-Za-z])`; the rule need not be carried
+    # (survival.carried_in_text).
 
     # --- validity (PLAN §5, §16.3) ---
     validity_margin_pp: float = 10.0
@@ -135,6 +153,15 @@ class GeneratorConfig:
             raise ValueError("minor_component_range must be 2-digit and above 59")
         if min(self.n_clues_choices) < 2 or max(self.n_clues_choices) > 3:
             raise ValueError("n_clues_choices must be within 2..3")
+        if self.option_spacing < 1:
+            raise ValueError("option_spacing must be >= 1")
+        if mhi - mlo < (self.K_options - 1) * self.option_spacing:
+            raise ValueError("minor_component_range is too narrow for the option cluster: every "
+                             "addend must leave room for (K - 1) * option_spacing")
+        if hi - lo < (self.K_options - 1) * self.option_spacing + self.n_distractors:
+            raise ValueError("value_range must hold the option cluster and the distractor values")
+        if not 0 <= self.n_distractors <= 4:
+            raise ValueError("n_distractors must be between 0 and 4")
         if self.near_gap_steps >= self.far_gap_steps:
             raise ValueError("near_gap_steps must be smaller than the far gap")
         need_lo, need_hi = self.need_index_range
@@ -151,6 +178,13 @@ class GeneratorConfig:
         Assumes every observation has exactly v tokens; the generator re-checks the real
         token counts after rendering."""
         return math.floor((self.W_tokens + self.far_margin_tokens) / self.v_tokens)
+
+    @property
+    def addend_core_range(self) -> tuple[int, int]:
+        """Range of an addend minus its rank shift: addend = core + rank * option_spacing.
+        Every addend then lies in [lo + rank * s, hi - (K - 1 - rank) * s] (PREREG D2)."""
+        lo, hi = self.minor_component_range
+        return lo, hi - (self.K_options - 1) * self.option_spacing
 
     @property
     def max_reveal_span(self) -> int:
@@ -193,22 +227,23 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "near_gap_steps": ("§5", "'near = reveal about 4 steps before need'"),
     "far_margin_tokens": ("§4, §16.5", "how far beyond W counts as 'far' (obs tokens only)"),
     "assumed_max_reply_tokens": ("§5, §16.5", "reply length behind designed S for near cells"),
-    "window_counts_system_prompt": ("§6", "whether W also holds the system prompt"),
+    "window_counts_system_prompt": ("§6, D5", ("W also holds the episode's system prompt "
+                                                "(not the notes sentence)")),
     "max_context_tokens": ("§5", "'contexts stay <= 64k' (full history, assumed replies)"),
     "K_options": ("§5", "number of options at need; chance = 1/K"),
     "need_index_range": ("§5", "episode length ~20-32 steps"),
     "tail_steps_range": ("§5", "routine steps after need (cost without information)"),
-    "n_clues_choices": ("§4", "derived = computed from 2-3 observations"),
+    "n_clues_choices": ("§4, D2", "derived = 2-3 clues; exact split within each K-block"),
+    "option_spacing": ("§5, D2", "clustered options: no proper clue subset narrows them"),
+    "n_distractors": ("§5, D1", "distractor bindings per episode; lookup serves them (D3)"),
     "clue_spacing_steps": ("§4", "'shown at different steps'; spacing sets the reveal span"),
     "rule_placement": ("§5", "where the combining rule is shown"),
     "restate_mode": ("§5", "what restated-at-need repeats for derived facts"),
     "single_turn_reply_mode": ("§5, H3", "what fills reply positions in the flattened control"),
     "warn_future_need": ("§5", "whether agents are told that earlier records matter later"),
-    "lookup_max_per_episode": ("§4", "how many lookups a recoverable episode allows"),
-    "accept_value_answers": ("§4", "need-step scoring: letter only, or letter or value"),
-    "strict_action_parse": ("§4", "what counts as the reply's action"),
-    "carried_match_window_chars": ("§4, §10", "string-match rule behind P(carried)"),
-    "carried_requires_rule": ("§4, §10", "derived carried = all clues, with or without rule"),
+    "lookup_max_per_episode": ("§4, D3", "lookups served per episode; then 'unavailable'"),
+    "accept_value_answers": ("§4, D4", "need-step scoring: letter only, or letter or value"),
+    "strict_action_parse": ("§4, D4", "what counts as the reply's action"),
     "validity_margin_pp": ("§5, §16.3", "no-memory baselines <= chance + 10pp"),
 }
 

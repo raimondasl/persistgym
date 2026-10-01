@@ -10,8 +10,10 @@ from persistgym.controls import score_single_turn, single_turn_control
 from persistgym.episode import read_jsonl
 from persistgym.filler import Reserved
 from persistgym.validity import (
+    generator_aware_weights,
     heuristic_baselines,
     last_seen_option,
+    lookup_audit,
     most_frequent_option,
     option_hits,
     oracle_scores,
@@ -28,7 +30,35 @@ def _failed(report):
 
 
 def test_audit_passes(small_eps):
-    assert _failed(shortcut_audit(small_eps)) == []
+    report = shortcut_audit(small_eps)
+    assert _failed(report) == []
+    blocks = next(c for c in report if c["check"].startswith("letter_rank_and_n_clues"))
+    assert blocks["detail"]["complete_blocks"] == 1 and not blocks["detail"]["incomplete_blocks"]
+
+
+def test_lookup_audit_passes(small_eps):
+    report = lookup_audit(small_eps)
+    assert _failed(report) == [] and report[0]["detail"]["n_episodes"] == 10 * 4
+
+
+def test_audit_catches_distractor_problems(small_eps):
+    """D1: a distractor value equal to an option, or a distractor binding shown twice."""
+    ep = copy.deepcopy(pick(small_eps, "observed-nonrec-far"))
+    ep.distractors[0].value = ep.options[0].value
+    assert "distractor_bindings_valid" in _failed(shortcut_audit([ep]))
+    ep = copy.deepcopy(pick(small_eps, "observed-nonrec-far"))
+    ep.steps[ep.need_step - 1].observation += "\n" + ep.distractors[1].sentence
+    assert "distractor_bindings_valid" in _failed(shortcut_audit([ep]))
+
+
+def test_audit_catches_unbalanced_block(small_eps):
+    eps = [copy.deepcopy(e) for e in small_eps if e.variant == "base"]
+    for e in eps:  # pretend template 0 has template 1's letter
+        if e.template_id == "main-000000":
+            other = next(x for x in eps if x.template_id == "main-000001")
+            e.correct_label = other.correct_label
+    assert "letter_rank_and_n_clues_exact_within_complete_blocks" in _failed(
+        shortcut_audit(eps))
 
 
 def test_audit_catches_a_leak_in_filler(small_eps):
@@ -136,21 +166,50 @@ def test_single_turn_scoring_matches_env(small_eps):
     assert score_single_turn(c, f"ACTION: lookup({ep.entity})")["outcome"] == "wrong"
 
 
+TOY = {"K_options": 4, "validity_margin_pp": 10.0, "minor_component_range": [61, 98],
+       "option_spacing": 1}
+
+
 def test_partial_memory_diagnostic_toy():
-    # 2 clues, addends 61-98: the base-consistent window is [base + 61, base + 98]
-    items = [(2, 500, [570, 600, 700, 300], 570),   # only 570 in [561, 598]
-             (2, 500, [570, 590, 700, 300], 590),   # 570 and 590 remain
-             (3, 400, [530, 600, 590, 300], 590)]   # 3 clues: [523, 595] keeps 530, 590
-    pm = partial_memory_diagnostic(items, (61, 98), 4)
-    two, three = pm["by_n_clues"]["2"], pm["by_n_clues"]["3"]
-    assert two["base_and_range_unique_rate"] == 0.5
-    assert two["base_and_range_expected_accuracy"] == 0.75
-    assert two["nearest_above_base_accuracy"] == 0.5  # 570 is nearest above 500 both times
-    assert three["base_and_range_mean_options_left"] == 2
-    assert three["nearest_above_base_accuracy"] == 0.0
-    assert pm["all"]["n_templates"] == 3
-    with pytest.raises(ValueError):
-        partial_memory_diagnostic([(2, 500, [700, 300], 700)], (61, 98), 2)
+    """The old option sets (spread over the value range) fail the D2 gate; clustered ones
+    built as the generator builds them pass."""
+    # 2 clues, addends 61-98: with the base kept, only options in [base + 61, base + 98]
+    # stay consistent
+    spread = [(2, [500, 70], [570, 600, 700, 300], 570),   # only 570 in [561, 598]
+              (2, [500, 90], [570, 590, 700, 300], 590)]   # 570 and 590 remain
+    pm = partial_memory_diagnostic(spread, TOY)
+    row = pm["by_n_clues"]["2"]
+    assert row["narrowing_templates"] == 2 and "clue0" in row["narrowing_examples"]
+    assert row["base_and_rule_uniform_accuracy"] == 0.75  # (1 + 1/2) / 2
+    assert row["smallest_above_base_accuracy"] == 0.5  # 570 is smallest above 500 both times
+    assert not pm["pass"]
+    # clustered as the generator builds them (K = 4, rank r): options L..L+3, target L + r,
+    # each addend = core + r with the core in [61, 95], base = target - addends
+    clustered = [(2, [500, 61 + r], [561 + i for i in range(4)], 561 + r) for r in range(4)]
+    clustered += [(3, [450 - r, 70 + r, 80 + r], [600 + i for i in range(4)], 600 + r)
+                  for r in range(4)]
+    assert all(sum(clues) == target for _, clues, _, target in clustered)
+    pm = partial_memory_diagnostic(clustered, TOY)
+    assert pm["pass"] and pm["all"]["narrowing_templates"] == 0
+    assert pm["all"]["base_and_rule_options_left_mean"] == 4
+    assert pm["all"]["base_and_rule_uniform_accuracy"] == 0.25
+    assert pm["all"]["smallest_above_base_accuracy"] == 0.25  # rank 0 once per block
+
+
+def test_generator_aware_bayes_toy():
+    """The exact posterior for an agent that knows the sampler: with the base clue alone and
+    2 clues it is flat; an addend at the bottom of its range gives the rank away."""
+    opts = [600, 601, 602, 603]
+    flat = generator_aware_weights({0: 520}, 2, opts, 1, (61, 95))
+    assert len(set(flat)) == 1 and flat[0] > 0
+    # addend 61 = core + rank needs rank 0 (cores start at 61)
+    assert generator_aware_weights({1: 61}, 2, opts, 1, (61, 95)) == [1, 0, 0, 0]
+    # 3 clues, base known: the 2 missing addend cores sum to L - base - rank, whose count
+    # falls off along the triangle of a sum of two uniforms
+    assert generator_aware_weights({0: 450}, 3, opts, 1, (61, 95)) == [29, 28, 27, 26]
+    assert generator_aware_weights({0: 478}, 3, opts, 1, (61, 95)) == [1, 0, 0, 0]
+    # base and one addend known: the other core is fixed; only the known addend's range binds
+    assert generator_aware_weights({0: 450, 1: 75}, 3, opts, 1, (61, 95)) == [1, 1, 1, 1]
 
 
 def test_partial_memory_from_episodes_matches_templates(small_eps):
@@ -161,8 +220,31 @@ def test_partial_memory_from_episodes_matches_templates(small_eps):
     items = []
     for i in range(10):
         t = sample_template("main", i, GeneratorConfig.from_dict(cfg))
-        items.append((t.n_clues, t.clue_values[0], t.option_values, t.target_value))
-    assert pm == partial_memory_diagnostic(items, tuple(cfg["minor_component_range"]), 10)
+        items.append((t.n_clues, t.clue_values, t.option_values, t.target_value))
+    expected = partial_memory_diagnostic(items, cfg)
+    assert set(pm["cells"]) == {f"derived-{r}-{d}" for r in ("nonrec", "rec")
+                                for d in ("near", "far")}
+    assert all(c == expected for c in pm["cells"].values())
+    assert pm["pass"] and expected["all"]["narrowing_templates"] == 0
+    assert expected["by_n_clues"]["2"]["n_templates"] == 5  # exact split in the block
+
+
+def test_partial_memory_gate_on_2000_templates():
+    """D2 gate at scale (templates only): zero narrowing templates, both gated heuristics
+    <= 0.20, and the reported generator-aware bound below 0.20 too."""
+    from persistgym.template import sample_template
+
+    cfg = GeneratorConfig()
+    items = [(t.n_clues, t.clue_values, t.option_values, t.target_value)
+             for t in (sample_template("main", i, cfg) for i in range(2000))]
+    pm = partial_memory_diagnostic(items, cfg.to_dict())
+    a = pm["all"]
+    assert pm["pass"] and a["narrowing_templates"] == 0
+    assert a["base_and_rule_uniform_accuracy"] == pytest.approx(0.1)
+    assert a["smallest_above_base_accuracy"] == pytest.approx(0.1)  # rank 0, 1 in 10
+    assert a["generator_aware_bayes"]["rule_only"] == pytest.approx(0.1)
+    assert pm["by_n_clues"]["2"]["generator_aware_bayes"]["clue0"] == pytest.approx(0.1)
+    assert a["generator_aware_bayes_max"] < 0.2
 
 
 def test_cli_partial_memory(tmp_path, capsys):
@@ -180,11 +262,21 @@ def test_parse_overrides():
         parse_overrides(["nokey"])
 
 
+def test_cli_render_requires_whole_blocks(tmp_path, capsys):
+    """D7: template counts and start indices in whole balance blocks of K = 10."""
+    for start, n in ((0, 2), (5, 10), (0, 15)):
+        code = main(["render", "--n", str(n), "--start", str(start), "--no-checks",
+                     "--out", str(tmp_path / f"x{start}-{n}")])
+        assert code == 2
+        assert "multiples of the balance block K=10" in capsys.readouterr().err
+        assert not (tmp_path / f"x{start}-{n}").exists()
+
+
 def test_cli_render(tmp_path, capsys):
     out = tmp_path / "run"
     code = main(["render", "--n", "2", "--split", "pilot", "--W", "6400", "--v", "400",
                  "--set", "assumed_max_reply_tokens=200", "--single-turn", "--gzip",
-                 "--out", str(out)])
+                 "--partial-blocks", "--out", str(out)])
     assert code == 0
     with gzip.open(out / "episodes.jsonl.gz", "rt", encoding="utf-8") as f:
         lines = f.readlines()
@@ -199,7 +291,13 @@ def test_cli_render(tmp_path, capsys):
     assert all("-nonrec-" in c["cell"] and "lookup(" not in c["system_prompt"] for c in controls)
     summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert summary["validity_pass"] is True
-    assert summary["partial_memory"]["all"]["n_templates"] == 2
+    pm = summary["partial_memory"]
+    assert pm["pass"] and len(pm["cells"]) == 4
+    assert all(c["all"]["n_templates"] == 2 for c in pm["cells"].values())
+    checks = {c["check"]: c for c in summary["shortcut_audit"]}
+    assert checks["lookup_serves_keys_and_refuses_after_cap"]["detail"]["n_episodes"] == 2 * 4
+    assert checks["letter_rank_and_n_clues_exact_within_complete_blocks"]["detail"][
+        "incomplete_blocks"] == [["pilot", 0]]
     assert set(summary["cells"]) == {
         f"{f}-{r}-{d}" for f in ("observed", "derived") for r in ("nonrec", "rec")
         for d in ("near", "far")}

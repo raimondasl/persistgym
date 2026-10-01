@@ -52,7 +52,9 @@ Added only when configured: `max_output_tokens`, `prompt_cache_key`, `reasoning.
 ## 4. History policies
 Besides the hand-derived snapshots, `tests/test_payload_reference.py` checks every cell over 100 random episodes (per-turn observation and reply lengths, W, counted instructions and `summary_keep_recent_tokens` all varied) against a brute-force reference that recomputes the kept turns and the compaction points from token counts alone. Every harness test runs with outbound network connections and DNS blocked (`tests/conftest.py::no_network`), so a test that would reach an API fails.
 
-All token accounting uses the generator's tokenizer (tiktoken `o200k_base`) on **visible text only**: observation text, the reply's output text and the bridge text. There is no per-message overhead. Encrypted reasoning items are opaque and are not counted. Because of this, the window boundary and the summary trigger fall on the same steps in the r and 0 arms of a pair whenever the replies are the same. The cost is that an r arm's real context is larger than W by the rendered reasoning (§10). The instructions count toward W only if `window_counts_system_prompt` is set; the default is the episode's generator setting (false).
+All token accounting uses the generator's tokenizer (tiktoken `o200k_base`) on **visible text only**: observation text, the reply's output text and the bridge text. There is no per-message overhead. Encrypted reasoning items are opaque and are not counted. Because of this, the window boundary and the summary trigger fall on the same steps in the r and 0 arms of a pair whenever the replies are the same. The cost is that an r arm's real context is larger than W by the rendered reasoning (§10).
+
+The episode's system prompt counts toward W if `window_counts_system_prompt` is set; the default is the episode's generator setting, true since generator 0.2.0 (PREREG D5: sys counts toward W, as in the PREREG formulas). **The notes sentence is never counted.** What counts is the episode's own system prompt (`Episode.system_tokens`, 95-150 tokens at the defaults), the same in a notes cell and its no-notes partner. Counting the full instructions would make the two cells of a notes pair (W-n-0/W-0, Σ-n-r/Σ-0-r) evict and compact at different steps whenever a turn boundary falls within the sentence's 21 tokens of W, so the notes contrast would also carry a loss-policy difference. The visible request still sends the sentence; W is just the generator's design budget.
 
 W defaults to the episode's generator `W_tokens`, so the harness evicts exactly where the generator designed near and far.
 
@@ -90,18 +92,18 @@ The snapshot tests cover both settings.
 
 **Near cells.** The generator's DESIGN.md §8 warns that a summary cell which compacts the whole history can compact a near reveal. With the default `summary_keep_recent_tokens` = 0, near-cell S in Σ cells is therefore **measured, not designed**. The runner records payload S at every need step.
 
-`uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config, with every reply at the assumed 1,000 tokens and a 300-token summary:
+`uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config (0.2.0, with the system prompt counted toward W, PREREG D5), with every reply at the assumed 1,000 tokens and a 300-token summary:
 
 | `summary_keep_recent_tokens` | Compactions at turn | Near episodes with S = 0 at need | Summary calls per episode (input tokens each) | Input tokens per episode: summary / step requests |
 |---|---|---|---|---|
-| 0 (ARC-like) | 10 and 19 in all 40 | 25 of 40 | 2.0 (22,880-25,060) | 47,940 / 277,316 |
-| 16,500 (the near span: 6 turns + 1 observation) | every 3 turns from 10 (4-6 per episode) | 0 of 40 | 5.05 (7,884-10,060) | 41,996 / 401,046 |
+| 0 (ARC-like) | 9 and 18 in all 40 | 19 of 40 | 2.0 (22,554-22,885) | 45,439 / 267,887 |
+| 16,650 (the near span: system prompt of at most 150 tokens + 6 turns + 1 observation) | every 3 turns from 9 (4-6 per episode) | 0 of 40 | 5.35 (7,557-7,887) | 41,862 / 396,489 |
 
-Token counts are the fake model's: visible text only (tiktoken, no per-message overhead, no rendered reasoning), so they size the comparison, not the bill. An independent re-derivation from token counts alone (not through the harness) also gives 25 of 40.
+Token counts are the fake model's: visible text only (tiktoken, no per-message overhead, no rendered reasoning), so they size the comparison, not the bill. An independent re-derivation from token counts alone (not through the harness) also gives 19 of 40. With the system prompt counted, 9 turns of 2,500 tokens plus the next observation (24,000) no longer fit, so compaction comes one turn earlier than at generator 0.1.1 (10 and 19, 25 of 40); a keep budget of 16,500 no longer holds the near span (4 of 40 near episodes then lose a reveal), hence 16,650.
 
-So under the ARC-like default, most near Σ episodes reach the need step with the reveal summarized rather than verbatim, and the near/far contrast in Σ cells becomes "carried by the summary or not". Keeping the near span verbatim restores designed near S. The price:
-- about 2.5 times as many summary calls. Each holds about 8-10k input tokens instead of about W, so summary-call input per episode is similar (about 42k vs 48k); the extra summary calls cost mainly their output and reasoning tokens;
-- step requests that stay between about 17k and 24k tokens instead of dropping to a few thousand after each compaction: about 1.45 times the step-request input per episode (401k vs 277k), and a cached prefix that breaks at each of the 2.5 times as many compactions;
+So under the ARC-like default, about half of the near Σ episodes reach the need step with the reveal summarized rather than verbatim, and the near/far contrast in Σ cells becomes "carried by the summary or not". Keeping the near span verbatim restores designed near S. The price:
+- about 2.7 times as many summary calls. Each holds about 8k input tokens instead of about W, so summary-call input per episode is similar (about 42k vs 45k); the extra summary calls cost mainly their output and reasoning tokens;
+- step requests that stay between about 17k and 24k tokens instead of dropping to a few thousand after each compaction: about 1.48 times the step-request input per episode (396k vs 268k), and a cached prefix that breaks at each of the 2.7 times as many compactions;
 - a departure from ARC.
 
 Both settings are tested.
@@ -226,7 +228,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - [RESEARCHER DECISION] `service_tier` = `flex` for every cell, never switched per episode.
 - [RESEARCHER DECISION] `max_output_tokens` = none. A cap bounds runaway cost but truncates long reasoning and yields `incomplete` replies.
 - [RESEARCHER DECISION] `W_tokens` = the episode's generator W, so eviction matches the near/far design.
-- [RESEARCHER DECISION] `window_counts_system_prompt` = the episode's generator setting (false).
+- [RESEARCHER DECISION] `window_counts_system_prompt` = the episode's generator setting (true since generator 0.2.0, PREREG D5). The episode's system prompt counts toward W; the notes sentence does not, so notes pairs evict at the same steps (§4).
 - [RESEARCHER DECISION] `token_accounting`: visible text only (observations, replies, bridge), tiktoken `o200k_base`, no per-message overhead; reasoning items not counted.
 - [RESEARCHER DECISION] `summary_trigger`: pre-send visible context > W, rather than ARC's post-hoc provider `total_tokens` ≥ 175k.
 - [RESEARCHER DECISION] `summary_keep_recent_tokens` = 0: compact everything, as ARC. Near-cell S in Σ cells is then measured, not designed (§4.3).

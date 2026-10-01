@@ -2,15 +2,20 @@
 
 The scripted observations come from the Episode. The runner adds one dynamic behaviour:
 
-Lookup (recoverable cells only). If the reply's action is `lookup(<key>)` and the episode
-still has lookups left, the pending step is NOT scored and does not advance. The next
+Lookup (recoverable cells only; PREREG D3). If the reply's action is `lookup(<key>)` and the
+episode still has lookups left, the pending step is NOT scored and does not advance. The next
 observation is a lookup result (padded to v tokens like every observation) that re-shows
-every record about the entity displayed at or before the pending step, then repeats the
-pending EVENT. So a lookup costs exactly one extra turn. The key matches if it contains the
-entity name as a whole word, ignoring case (`render.lookup_key_matches`); any other key
-returns "no records found" and also costs the turn. In non-recoverable cells, or once the
-lookup limit is used up, a lookup is an invalid action: the pending step is scored wrong and
-the episode advances (no extra turn).
+every record displayed at or before the pending step about an entity named in the key (the
+target or a distractor; whole word, ignoring case: `render.lookup_key_matches`), then repeats
+the pending EVENT. So a lookup costs exactly one extra turn. A key with no such record shown
+yet returns "no such record" and also costs the turn.
+
+Once `lookup_max_per_episode` lookups are used, the next lookup at a pending step returns
+"lookup unavailable" and the pending EVENT again: it costs one turn, is not counted as a
+lookup and is not an answer, so the step is still scored on the agent's next action. A
+second over-cap lookup at the same pending step is an invalid action (this keeps episodes
+finite). In non-recoverable cells `lookup` is not offered, and a lookup is an invalid action:
+the pending step is scored wrong and the episode advances (no extra turn).
 
 Any other reply is scored against the pending step and the episode advances. A reply with no
 parseable action is scored wrong (no re-prompt).
@@ -84,11 +89,13 @@ def canonical(action: str) -> str:
 class Turn:
     turn: int
     pending_step: int
-    is_lookup_result: bool  # this observation is a lookup result
+    is_lookup_result: bool  # this observation answers a lookup (served or unavailable)
     observation_tokens: int
     reply: str | None = None
     action: str | None = None
-    outcome: str | None = None  # correct | wrong | unparsed | lookup | invalid_lookup
+    outcome: str | None = None
+    """correct | wrong | unparsed | lookup | lookup_unavailable | invalid_lookup"""
+    is_lookup_unavailable: bool = False  # this observation is a "lookup unavailable" response
 
 
 @dataclass
@@ -101,11 +108,13 @@ class EpisodeResult:
     need_label: str | None  # option letter the need action resolved to, if any
     routine_correct: int
     routine_total: int
-    n_lookups: int
+    n_lookups: int  # lookups served (at most lookup_max_per_episode)
     lookup_steps: list[int]
     n_turns: int
     step_outcomes: dict[int, str]
     turns: list[Turn] = field(default_factory=list)
+    n_lookups_unavailable: int = 0  # over-cap lookups answered "lookup unavailable"
+    lookup_unavailable_steps: list[int] = field(default_factory=list)
 
     @property
     def routine_accuracy(self) -> float:
@@ -127,6 +136,7 @@ class EpisodeEnv:
         self.pending = 0
         self.lookups_used = 0
         self.lookup_steps: list[int] = []
+        self.unavailable_steps: list[int] = []
         self.outcomes: dict[int, str] = {}
         self.actions: dict[int, str | None] = {}
         self.turns: list[Turn] = []
@@ -134,6 +144,7 @@ class EpisodeEnv:
         self._current_obs = self.ep.steps[0].observation
         self._current_tokens = self.ep.steps[0].obs_tokens
         self._current_is_lookup = False
+        self._current_unavailable = False
         self._new_turn()
         return self._current_obs
 
@@ -146,11 +157,22 @@ class EpisodeEnv:
         """Bookkeeping for oracles and logs. Never shown to an agent."""
         return {"turn": len(self.turns) - 1, "pending_step": self.pending,
                 "is_lookup_result": self._current_is_lookup,
+                "is_lookup_unavailable": self._current_unavailable,
                 "observation_tokens": self._current_tokens}
 
     def _new_turn(self) -> None:
         self.turns.append(Turn(len(self.turns), self.pending, self._current_is_lookup,
-                               self._current_tokens))
+                               self._current_tokens,
+                               is_lookup_unavailable=self._current_unavailable))
+
+    def _lookup_turn(self, turn: Turn, outcome: str, text: str, ntok: int,
+                     unavailable: bool) -> tuple[str, bool]:
+        turn.outcome = outcome
+        self._current_obs, self._current_tokens = text, ntok
+        self._current_is_lookup = True
+        self._current_unavailable = unavailable
+        self._new_turn()
+        return self._current_obs, False
 
     # ------------------------------------------------------------------
     def step(self, reply: str) -> tuple[str | None, bool]:
@@ -169,11 +191,14 @@ class EpisodeEnv:
                     self.ep, self.pending, self.lookups_used, parsed.arg or "")
                 self.lookups_used += 1
                 self.lookup_steps.append(self.pending)
-                turn.outcome = "lookup"
-                self._current_obs, self._current_tokens = text, ntok
-                self._current_is_lookup = True
-                self._new_turn()
-                return self._current_obs, False
+                return self._lookup_turn(turn, "lookup", text, ntok, unavailable=False)
+            if self.ep.lookup.available and self.pending not in self.unavailable_steps:
+                # Over the cap: "lookup unavailable", one turn, the step is asked again.
+                text, ntok, _ = self._renderer.lookup_unavailable_observation(self.ep,
+                                                                              self.pending)
+                self.unavailable_steps.append(self.pending)
+                return self._lookup_turn(turn, "lookup_unavailable", text, ntok,
+                                         unavailable=True)
             outcome = "invalid_lookup"
         elif parsed is None or parsed.verb is None:
             outcome = "unparsed"
@@ -190,6 +215,7 @@ class EpisodeEnv:
         nxt = self.ep.steps[self.pending]
         self._current_obs, self._current_tokens = nxt.observation, nxt.obs_tokens
         self._current_is_lookup = False
+        self._current_unavailable = False
         self._new_turn()
         return self._current_obs, False
 
@@ -218,4 +244,6 @@ class EpisodeEnv:
             routine_correct=sum(self.outcomes[i] == "correct" for i in routine),
             routine_total=len(routine), n_lookups=self.lookups_used,
             lookup_steps=list(self.lookup_steps), n_turns=len(self.turns),
-            step_outcomes=dict(self.outcomes), turns=list(self.turns))
+            step_outcomes=dict(self.outcomes), turns=list(self.turns),
+            n_lookups_unavailable=len(self.unavailable_steps),
+            lookup_unavailable_steps=list(self.unavailable_steps))

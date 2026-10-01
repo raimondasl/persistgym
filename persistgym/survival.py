@@ -7,11 +7,13 @@ are still in the context the harness sends at the need step.
   run from observation token counts and an assumed maximum reply length;
   `survival_from_payload` recomputes it from the payload a harness actually sent.
 * Summary and notes cells: S depends on what the model wrote, so `carried_in_text` string-
-  matches logged summaries and notes.
+  matches logged summaries and notes (whole-word regex of PREREG §2.8, D6).
 
 Window model ("drop oldest", as ARC's Standard harness): the history is a list of turns
 (observation, reply). Before sending observation m, the harness keeps the longest suffix of
-whole turns whose tokens fit in W; the current observation is always kept.
+whole turns whose tokens fit in W; the current observation is always kept. With
+`window_counts_system_prompt` (default true, PREREG D5) W also holds the episode's system
+prompt, `Episode.system_tokens`.
 """
 
 from __future__ import annotations
@@ -233,42 +235,32 @@ def reference_window_payload(episode: Episode, replies: Sequence[str], W: int | 
 # String match for summaries and notes
 # ---------------------------------------------------------------------------
 
-def _num_positions(text: str, value: int) -> list[int]:
-    return [m.start() for m in re.finditer(rf"(?<![0-9]){value}(?![0-9])", text)]
+def whole_word_regex(value: int | str) -> re.Pattern:
+    """PREREG §2.8 (D6): `(?<![0-9A-Za-z])VALUE(?![0-9A-Za-z])`."""
+    return re.compile(rf"(?<![0-9A-Za-z]){re.escape(str(value))}(?![0-9A-Za-z])")
 
 
-def _word_positions(text: str, word: str) -> list[int]:
-    return [m.start() for m in re.finditer(rf"(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text,
-                                           re.IGNORECASE)]
+def carried_in_text(text: str, episode: Episode) -> dict[str, Any]:
+    """Whether text the model wrote (a summary bridge, retained replies or notes) carries the
+    fact: S_carried of PREREG §2.8 (D6), behind P(carried) (PLAN §4, §10).
 
-
-def carried_in_text(text: str, episode: Episode, window_chars: int | None = None,
-                    requires_rule: bool | None = None) -> dict[str, Any]:
-    """Whether a logged summary or note carries the fact (PLAN §4, §10 P(carried)).
-
-    A value counts if it appears as a standalone number within `window_chars` characters of
-    the entity name (0 = anywhere). Derived facts are carried if the final value is carried,
-    or if every clue value is carried (and, if `requires_rule`, every clue name appears).
+    Whole-word match anywhere in the text with `whole_word_regex`: the target value, or for
+    a derived fact every clue value. The rule need not be carried. Pass only model-written
+    text: lookup responses and the need observation are excluded by the caller. Distractor
+    values never equal the target or a clue value, so a carried distractor never counts.
+    `entity_mentioned` is reported for diagnostics only; it does not enter `carried`.
     """
-    cfg = episode.config
-    window = cfg["carried_match_window_chars"] if window_chars is None else window_chars
-    need_rule = cfg["carried_requires_rule"] if requires_rule is None else requires_rule
-    ent_pos = _word_positions(text, episode.entity)
+    text = text or ""
 
     def present(value: int) -> bool:
-        pos = _num_positions(text, value)
-        if not pos:
-            return False
-        if window == 0:
-            return True
-        return any(abs(p - e) <= window for p in pos for e in ent_pos)
+        return whole_word_regex(value).search(text) is not None
 
     final = present(episode.target_value)
     clues = {c.comp_id: present(c.value) for c in episode.components if c.role == "clue"}
-    rule_names = [c.name for c in episode.components if c.role == "clue"]
-    rule = bool(rule_names) and all(_word_positions(text, n) for n in rule_names)
     all_clues = bool(clues) and all(clues.values())
     derived = episode.cell.fact == "derived"
-    carried = final or (derived and all_clues and (rule or not need_rule))
+    carried = final or (derived and all_clues)
+    entity = re.search(rf"(?<![A-Za-z]){re.escape(episode.entity)}(?![A-Za-z])", text,
+                       re.IGNORECASE)
     return {"carried": bool(carried), "final_value": final, "clues": clues,
-            "all_clues": all_clues, "rule_names": rule, "entity_mentioned": bool(ent_pos)}
+            "all_clues": all_clues, "entity_mentioned": entity is not None}

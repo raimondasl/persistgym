@@ -1,7 +1,7 @@
 From 0a8d690c0b123367990c3470d10773add1519740 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 01:19:36 -0400
-Subject: [PATCH 15/15] Keep the agent's own exit reason when the swarm revises
+Subject: [PATCH 15/16] Keep the agent's own exit reason when the swarm revises
  it
 
 Swarm.close_scorecard can rewrite exit_reason after the agents finish:

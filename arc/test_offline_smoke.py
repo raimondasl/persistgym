@@ -302,6 +302,8 @@ class TestCheckRun:
             ("S2", lambda r, b: b[1]["input"].insert(1, {"type": "thought", "content": []}), "thought replay"),
             ("S4", lambda r, b: [b[i]["input"].pop(1) for i in (1,)], "thought replay"),
             ("S1", lambda r, b: r["run_meta"]["runtime"].update(context_trims=2), "context_trims"),
+            ("S1", lambda r, b: b[1]["input"].pop(0), "oldest turn dropped"),
+            ("S2", lambda r, b: b[3]["input"].pop(0), "oldest turn dropped"),
             ("S1", lambda r, b: b.pop(2), "no summary request"),
             ("S2", lambda r, b: b[3]["input"].pop(0), "bridge"),
             ("S4", lambda r, b: b[2]["generation_config"].update(max_output_tokens=9), "max_output_tokens"),

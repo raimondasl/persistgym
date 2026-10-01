@@ -219,8 +219,18 @@ def check_run(label: str, result: dict[str, Any], bodies: list[dict[str, Any]]) 
             if position == 1 and not _first_text(body).startswith(BRIDGE_PREFIX):
                 problems.append("request after a summary does not start with the bridge")
             position = 0
-    if label in {"S1", "S2"} and runtime.get("context_trims") != 0:
-        problems.append(f"context_trims {runtime.get('context_trims')!r}")
+    if label in {"S1", "S2"}:
+        # Patch 0016: these lose history only by summarizing, never by
+        # dropping the oldest turn, so every action request starts with the
+        # first observation or a summary bridge.
+        if runtime.get("context_trims") != 0:
+            problems.append(f"context_trims {runtime.get('context_trims')!r}")
+        first = _first_text(actions[0]) if actions else ""
+        for index, body in enumerate(actions, start=1):
+            text = _first_text(body)
+            if text != first and not text.startswith(BRIDGE_PREFIX):
+                problems.append(f"request {index}: oldest turn dropped")
+                break
     return problems
 
 

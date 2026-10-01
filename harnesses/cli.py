@@ -40,7 +40,7 @@ from harnesses.openai_transport import (
     OpenAIResponsesTransport,
     PaidCallsNotAllowed,
 )
-from harnesses.runner import RAW, RESULTS, run_batch, run_episode
+from harnesses.runner import RAW, RESULTS, require_plain_name, run_batch, run_episode
 from persistgym.config import GeneratorConfig
 from persistgym.episode import TaskCell
 from persistgym.render import generate
@@ -80,8 +80,9 @@ def _run_matrix(a) -> RunMatrix:
     on --n = T_d templates, observed-far on the first --n-observed = T_o of them, default
     T_d / 3) or --cell-templates TASK_CELL=N ... (a custom matrix)."""
     if a.cell_templates:
-        if a.matrix != "full" or a.task_cell != ["all"]:
-            raise ValueError("--cell-templates replaces --matrix and --task-cell")
+        if a.matrix != "full" or a.task_cell != ["all"] or a.n_observed is not None:
+            raise ValueError("--cell-templates replaces --matrix, --task-cell and "
+                             "--n-observed")
         return RunMatrix.parse(a.cell_templates)
     if a.matrix == "d11":
         if a.task_cell != ["all"]:
@@ -138,6 +139,14 @@ def cmd_run(a) -> int:
         print(f"refused: {PILOT_EXPERIMENT} runs use --split {PILOT_SPLIT} only, got "
               f"{a.split!r}", file=sys.stderr)
         return 2
+    if a.split == PILOT_SPLIT and a.experiment != PILOT_EXPERIMENT:
+        # The reverse: pilot templates are pilot data (PREREG §11), so they run only under
+        # the blinded experiment. Without this, `--experiment persistgym` with the default
+        # --split pilot would commit per-arm outcomes on pilot templates to results/.
+        print(f"refused: --split {PILOT_SPLIT} templates are pilot data and run only with "
+              f"--experiment {PILOT_EXPERIMENT} (blinded, PREREG §11), got "
+              f"{a.experiment!r}; a main-sweep run needs --split main", file=sys.stderr)
+        return 2
     gen = _gen_config(a.gen_set)
     try:
         matrix = _run_matrix(a)
@@ -152,10 +161,15 @@ def cmd_run(a) -> int:
         print(f"refused: a pilot is at most {PILOT_MAX_EPISODES} episodes, got "
               f"{len(episodes)}", file=sys.stderr)
         return 2
+    run_id = a.run_id or _run_id(f"{cell.ascii_id}-{a.model}")
+    try:
+        require_plain_name("--run-id", run_id)
+    except ValueError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
     transport = _guarded_transport(a, a.model, a.experiment, a.planned_usd)
     if transport is None:
         return 2
-    run_id = a.run_id or _run_id(f"{cell.ascii_id}-{a.model}")
     meta = run_batch(episodes, cell, _harness_config(a), transport, experiment=a.experiment,
                      run_id=run_id, milestone=a.milestone, results_root=RESULTS,
                      raw_root=RAW, run_matrix=matrix.to_dict(),

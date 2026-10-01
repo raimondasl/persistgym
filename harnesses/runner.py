@@ -297,6 +297,8 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     results/raw/<experiment>/<run_id>/ instead, and meta.json leaves out reasoning tokens.
     Paid transports get their costs.csv row appended in `finally`, whatever happens.
     `run_matrix` (harnesses.matrix.RunMatrix.to_dict) is recorded in meta.json's config."""
+    for what, name in (("experiment", experiment), ("run_id", run_id)):
+        require_plain_name(what, name)
     blinded = blinding.is_blinded(experiment)
     out_dir = results_root / experiment / run_id
     raw_dir = raw_root / experiment / run_id
@@ -342,6 +344,15 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                            cost_row=cost_row, blinded=blinded, episodes_path=episodes_path,
                            run_matrix=run_matrix)
     return meta
+
+
+def require_plain_name(what: str, name: str) -> None:
+    """`name` must be one plain path component. A run id such as '../../x' would otherwise
+    move a blinded run's episodes.jsonl out of the gitignored results/raw/ (PREREG §11)."""
+    if (not name or name in (".", "..") or name != name.strip()
+            or any(ch in name for ch in '/\\:\0')):
+        raise ValueError(f"{what} must be a plain folder name (no path separators, ':' or "
+                         f"'..'), got {name!r}")
 
 
 def _rel(path: Path) -> str:

@@ -197,7 +197,7 @@ In Σ cells, `compacted_between` = 1 iff a compaction fired at a step s with r_f
 Σ results are reported split by `compacted_between`, and Σ cells enter no confirmatory test (D12). A test checks the value against the transcript in every Σ cell. With the fake model's short replies near cells give 0; with 150-token replies they give both 0 and 1.
 
 ### 7.3 Run matrix (D11)
-`harnesses/matrix.py`. A `RunMatrix` maps each task cell to a template count n. The cell runs on the first n templates from `--start`, so a cell with fewer templates uses a prefix of another cell's templates and every contrast stays within-template. Episodes come out template by template, so a run stopped by its cost cap leaves whole templates. `meta.json` records the matrix.
+`harnesses/matrix.py`. A `RunMatrix` maps each task cell to a template count n. The cell runs on the first n templates from `--start`, so a cell with fewer templates uses a prefix of another cell's templates and every contrast stays within-template. Episodes come out template by template, so a run stopped by its cost cap leaves whole templates plus at most one partial template, the one in progress. The r and 0 arms are separate runs, so their pairs are the episode ids both arms finished. `meta.json` records the matrix.
 
 | CLI | Matrix |
 |---|---|
@@ -223,7 +223,11 @@ Central case: `--matrix d11 --n 120` is 320 episodes per harness cell, 640 over 
 
 The echo and replay probes (`toggle_pilot`, `replay_probe`) and validity runs (`persistgym_validity`) are not blinded.
 
-What this does not blind (§11): the per-run `costs.csv` row (one per run, required by CLAUDE.md) still holds that run's input and output tokens, calls and cost. Output tokens are mostly reasoning tokens, and calls minus steps counts lookups and summaries, so the row approximates the withheld numbers for one arm. Only the explicit `reasoning_tokens` column is withheld.
+Two CLI checks keep pilot data inside this path:
+- `--split pilot` runs only under `--experiment persistgym_pilot`, the reverse of the older check. Pilot templates are pilot data, and `run` defaults to `--split pilot`, so `--experiment persistgym` without `--split main` would otherwise commit per-arm outcomes on pilot templates.
+- `run_batch` and the CLI refuse a run id or experiment that is not one plain folder name. A run id like `../../x` would otherwise put a blinded run's `episodes.jsonl` at `results/x/`.
+
+What this does not blind (§11): the per-run `costs.csv` row (one per run, required by CLAUDE.md) still holds that run's input and output tokens, calls and cost, and so does the run's `meta.json` (`tokens` without `reasoning_tokens`, as CLAUDE.md asks for token totals). `summary.json`'s `latency.n_calls` is the run's call count. Output tokens are mostly reasoning tokens, and calls minus steps counts lookups and summaries, so these approximate the withheld numbers for one arm. Only the explicit `reasoning_tokens` fields are withheld.
 
 ## 8. Paid calls (`openai_transport.py`)
 `OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless all of these hold:
@@ -335,6 +339,6 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - **Tokens are tiktoken's.** Provider counts differ by per-message overhead and rendered reasoning. Both are logged.
 - **The fake model's usage numbers are not realistic.** Fake runs check structure, not cost.
 - **Σ cells depend on what the model writes.** Their S is measured, and `carried_in_text` is the intended accounting (generator DESIGN.md §8, §12).
-- **Pilot blinding is partial.** Per-run costs.csv rows still carry one arm's output tokens, calls and cost (§7.4). Running `pilot-report` before and after a run also gives that run's numbers by difference. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data; the code makes them hard to see, not impossible.
+- **Pilot blinding is partial.** Per-run costs.csv rows and `meta.json` still carry one arm's output tokens, calls and cost (§7.4). Running `pilot-report` before and after a run also gives that run's numbers by difference. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data; the code makes them hard to see, not impossible.
 - **The approval check reads the checked-out `HEAD`.** A line committed on a feature branch passes while that branch is checked out. Paid runs are meant to run from `main`, where only the researcher's merges land; the guard does not check that.
 - **Need-phase tokens are provider counts.** They include rendered reasoning in r arms and per-message overhead, unlike W's tiktoken counts (§4).

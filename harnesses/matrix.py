@@ -13,7 +13,7 @@ Presets:
 
 Episodes come out template by template (all of a template's cells together, in
 `persistgym.episode.ALL_CELLS` order), so a run stopped early by its cost cap leaves whole
-templates.
+templates plus at most one partial template (the one in progress).
 """
 
 from __future__ import annotations

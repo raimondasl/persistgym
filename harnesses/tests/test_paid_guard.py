@@ -336,6 +336,22 @@ def test_cli_pilot_must_use_pilot_split(monkeypatch, capsys):
     assert "--split pilot" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("experiment", ["persistgym", "persistgym_validity"])
+def test_cli_pilot_split_only_under_the_blinded_pilot_experiment(monkeypatch, capsys,
+                                                                 experiment):
+    """The reverse (PREREG §11): pilot templates are pilot data, so a run under another
+    experiment (here with the default --split pilot) would commit per-arm outcomes on them
+    unblinded. It is refused before any transport exists."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before building a transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    assert cli.main(["run", "--cell", "F-r", "--experiment", experiment, "--matrix", "d11",
+                     "--n", "3", "--approved-block", "x", "--planned-usd", "1"]) == 2
+    assert "pilot data" in capsys.readouterr().err
+
+
 def test_costs_row_records_requested_and_served_tier(repo, monkeypatch):
     """`service_tier` is the requested tier; the served tier, cache writes and latency go
     into their own columns if common/costs.py has them, else into notes."""

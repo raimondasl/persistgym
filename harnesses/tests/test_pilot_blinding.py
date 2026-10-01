@@ -82,6 +82,29 @@ def test_pilot_run_commits_no_per_episode_outcomes(tmp_path):
     assert (raw / "transcript.jsonl.gz").exists()
 
 
+@pytest.mark.parametrize("run_id", ["../../x", "..", "a/b", "a\\b", "C:x", "", " p1"])
+def test_run_id_cannot_move_episodes_out_of_raw(tmp_path, run_id):
+    """A run id like '../../x' would put a blinded run's episodes.jsonl at results/x/, a
+    committed path. run_batch refuses it before writing anything."""
+    with pytest.raises(ValueError, match="plain folder name"):
+        run_batch(_pilot_eps(), CELLS["F-r"], CFG, FakeModel(), experiment=PILOT,
+                  run_id=run_id, results_root=tmp_path / "results",
+                  raw_root=tmp_path / "results" / "raw")
+    assert not list(tmp_path.rglob("*"))
+
+
+def test_cli_refuses_a_path_run_id_before_any_transport(monkeypatch, capsys):
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before building a transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    assert cli.main(["run", "--cell", "F-r", "--n", "1", "--task-cell", "derived-rec-far",
+                     "--gen-set", "W_tokens=6400", "--gen-set", "v_tokens=400",
+                     "--gen-set", "assumed_max_reply_tokens=200",
+                     "--run-id", "../../leak", "--approved-block", "x",
+                     "--planned-usd", "1"]) == 2
+    assert "plain folder name" in capsys.readouterr().err
+
+
 def test_other_experiments_are_not_blinded(tmp_path):
     assert not blinding.is_blinded("persistgym")
     assert not blinding.is_blinded("persistgym_validity")

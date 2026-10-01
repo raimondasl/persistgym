@@ -175,5 +175,6 @@ def test_run_cli_refuses_bad_matrix_options(paid_env, capsys):
     assert cli.main([*base, "--matrix", "d11", "--task-cell", "derived-rec-far"]) == 2
     assert cli.main([*base, "--n-observed", "1"]) == 2
     assert cli.main([*base, "--cell-templates", "derived-rec-near=1", "--matrix", "d11"]) == 2
+    assert cli.main([*base, "--cell-templates", "derived-rec-near=1", "--n-observed", "1"]) == 2
     assert cli.main([*base, "--matrix", "d11", "--n", "33"]) == 2  # 88 episodes > 10
     assert "at most 10" in capsys.readouterr().err

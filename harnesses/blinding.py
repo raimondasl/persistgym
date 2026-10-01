@@ -20,10 +20,14 @@ Both summaries are built from an allowlist of fields, so a field added to `Episo
 never reaches a committed pilot file by accident.
 
 What this does not blind: the per-run `results/costs.csv` row (CLAUDE.md requires one per
-run) still carries that run's input and output tokens, calls and cost, and one run is one
-harness cell. Output tokens are mostly reasoning tokens, so they approximate the withheld
-column; n_calls approximates lookups. Only the explicit `reasoning_tokens` column is left
-empty.
+run) and the run's `meta.json` token totals still carry that run's input and output tokens,
+calls and cost, and one run is one harness cell. Output tokens are mostly reasoning tokens,
+so they approximate the withheld column; n_calls approximates lookups. Only the explicit
+`reasoning_tokens` fields are left empty.
+
+The CLI also refuses pilot-split templates under any other experiment, and `run_batch`
+refuses a run id that is not a plain folder name, so pilot episodes cannot be written
+outside results/raw/ by either route.
 """
 
 from __future__ import annotations

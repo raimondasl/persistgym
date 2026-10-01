@@ -1,0 +1,86 @@
+key,ref_low,ref_high,computed_low,computed_high,diff_low,diff_high,flag_over_5pct,source,stated_as
+arc_1b_list,638,1054,637.72,1053.76,-0.000438871,-0.000227704,False,PLAN.md §16.1,1b ARC path at no-cache list over the 15 draws
+arc_1b_list_mean,896,896,895.6,895.6,-0.000446429,-0.000446429,False,PLAN.md §16.1,1b mean over draws
+arc_draws_above_900_list,6,6,6,6,0,0,False,PLAN.md §16.1,draws with 1b above $900 at no-cache list (those with both R11L and SC25)
+arc_1b_flex,319,527,318.86,526.88,-0.000438871,-0.000227704,False,PLAN.md §16.1,1b at Flex
+arc_pooled_usd_per_action_s0,0.203,0.203,0.203405,0.203405,0.00199592,0.00199592,False,review step 2a,published pooled $/action S0 (eligible games)
+arc_pooled_usd_per_action_s4,0.128,0.128,0.127682,0.127682,-0.0024821,-0.0024821,False,review step 2a,published pooled $/action S4 (eligible games)
+arc_seed1_s0s4_flex_cached,62,102,62.4225,101.55,0.0068146,-0.00441642,False,review step 3a,seed-1 S0+S4 (8 runs) Flex cache-billed
+arc_seed1_s0s4_flex_nocache,80,132,79.715,131.72,-0.0035625,-0.00212121,False,review step 3a,seed-1 S0+S4 Flex no-cache
+arc_seed1_s0s4_standard_cached,125,203,124.845,203.099,-0.00123992,0.000487938,False,review step 3a,seed-1 S0+S4 standard tier cache-billed
+arc_seed1_s0s4_list,159,263,159.43,263.44,0.0027044,0.001673,False,review step 3a,seed-1 S0+S4 no-cache list
+arc_remainder_flex_cached,187,305,187.268,304.649,0.00143056,-0.00115221,False,review step 4a,24-run remainder Flex cache-billed
+arc_remainder_flex_nocache,239,395,239.145,395.16,0.000606695,0.000405063,False,review step 4a,24-run remainder Flex no-cache
+arc_remainder_standard_cached,375,610,374.535,609.297,-0.00123992,-0.00115221,False,review step 4a,24-run remainder standard tier cache-billed
+arc_remainder_list,478,790,478.29,790.32,0.000606695,0.000405063,False,review step 4a,24-run remainder no-cache list
+arc_seed1_path_flex_nocache_max,263,263,263.44,263.44,0.001673,0.001673,False,review step 0a,seed-1 full path (S0-S4) at Flex for the costliest draws
+rerun_reserve_flex,60,80,49.938,81.2396,-0.1677,0.0154953,True,PLAN.md §16.1,1b error re-runs at Flex (moderate)
+rerun_reserve_standard,120,160,99.876,162.479,-0.1677,0.0154953,True,PLAN.md §16.1,1b error re-runs at standard tier (moderate)
+g0_rule_usd_per_run_reserve,23.44,23.44,23.4375,23.4375,-0.000106655,-0.000106655,False,PLAN.md §16.3,$900 / (32 runs x 1.2)
+g0_rule_usd_per_run_no_reserve,28.12,28.12,28.125,28.125,0.000177809,0.000177809,False,review plan_changes,$900 / 32 runs
+heldout_list,597,935,597.3,934.95,0.000502513,-5.34759e-05,False,PLAN.md §16.1,18 held-out runs at no-cache list
+heldout_flex,299,467,298.65,467.475,-0.00117057,0.00101713,False,PLAN.md §16.1,18 held-out runs at Flex
+heldout_standard_cached,560,560,559.685,559.685,-0.000562952,-0.000562952,False,review step 5a,18 held-out runs at standard tier with caching
+arc_1b_plus_heldout_list,1560,1664,1547.05,1676.68,-0.00830128,0.00762019,False,review plan_changes,1b plus held-out at list over draws
+phase2_overcap_cell10,5,5,5,5,0,0,False,review step 5a,phase 2 above $950 at list with a $10 PersistGym cell
+phase2_overcap_cell25,11,11,11,11,0,0,False,review step 5a,phase 2 above $950 at list with a $25 PersistGym cell
+phase2_overcap_cell40,14,14,14,14,0,0,False,review step 5a,phase 2 above $950 at list with a $40 PersistGym cell
+statecarry_pg_cell,10,40,12.4794,24.8794,0.247944,-0.378014,True,PLAN.md §12,StateCarry PersistGym cell on luna
+sol_output_per_episode_flex_1k,0.14,0.14,0.14,0.14,0,0,False,PLAN.md §16.1,sol output cost per episode at Flex and 1k output per call
+sol_F0_flex_1k_nowrites,0.319,0.319,0.31864,0.31864,-0.00112853,-0.00112853,False,review step 0g,sol F-0 per episode Flex 1k without cache writes
+sol_F0_flex_1k_writes,0.354,0.354,0.35344,0.35344,-0.00158192,-0.00158192,False,review step 0g,sol F-0 per episode Flex 1k with cache writes
+sol_Fr_flex_1k_nowrites,0.37,0.37,0.376852,0.376852,0.0185189,0.0185189,False,review step 0g,sol F-r per episode Flex 1k without cache writes
+sol_Fr_flex_1k_writes,0.415,0.415,0.422992,0.422992,0.0192578,0.0192578,False,review step 0g,sol F-r per episode Flex 1k with cache writes
+sol_W_flex_1k_nowrites,0.571,0.571,0.5962,0.5962,0.0441331,0.0441331,False,review step 0g,sol window cell per episode Flex 1k without cache writes
+sol_W_flex_1k_writes,0.677,0.677,0.708914,0.708914,0.0471407,0.0471407,False,review step 0g,sol window cell per episode Flex 1k with cache writes
+cache_write_uplift_sol_F,0.11,0.11,0.109214,0.109214,-0.007144,-0.007144,False,review plan_changes,cache writes add about 11% to sol F cells
+cache_write_uplift_sol_W,0.19,0.19,0.189054,0.189054,-0.00497638,-0.00497638,False,review plan_changes,cache writes add about 19% to window cells
+sol_core_flex_1k,250,250,248.458,248.458,-0.00616704,-0.00616704,False,PLAN.md §16.1,sol H2 core (640 episodes) Flex with cache writes at 1k output
+sol_core_flex_2k,360,360,365.879,365.879,0.0163307,0.0163307,False,PLAN.md §16.1,same at 2k output
+sol_core_flex_3k,480,480,483.3,483.3,0.00687467,0.00687467,False,PLAN.md §16.1,same at 3k output
+sol_h1_replication_flex_nowrites,365,544,381.568,560.768,0.0453918,0.0308235,False,review step 5b,sol H1 replication (640 episodes) Flex 1k-3k without cache writes
+sol_h1_replication_flex_writes,430,610,453.705,632.905,0.0551282,0.0375494,True,PLAN.md §16.1,sol H1 replication Flex with cache writes
+luna_sweep_4cells,78,78,83.7756,83.7756,0.074046,0.074046,True,review step 4b,luna sweep with the 4 replay-off cells (1k)
+luna_sweep_8cells,148,148,156.731,156.731,0.0589958,0.0589958,True,review step 4b,luna sweep with 8 cells (1k)
+luna_controls,4,4,5.2,5.2,0.3,0.3,True,review step 4b,luna control prompts
+phase_1a_total,230,415,366.276,440.144,0.592505,0.0605877,True,PLAN.md §16.1,phase 1a PersistGym total
+echo_check,0.35,0.35,0.2835,0.6615,-0.19,0.89,True,PLAN.md §16.2,OpenAI reasoning.context echo check
+replay_probe,2,2,1.18125,2.75625,-0.409375,0.378125,True,PLAN.md §16.2,private-choice replay probe (sol plus luna)
+gemini_probe,3,3,3.33666,3.33666,0.112219,0.112219,True,PLAN.md §16.2,Gemini acceptance and Flex latency probe
+arc_pilot_flex,13,13,12.333,12.333,-0.0513071,-0.0513071,True,PLAN.md §16.2,truncated ARC pilot at Flex
+arc_pilot_list,26,26,24.666,24.666,-0.0513071,-0.0513071,True,PLAN.md §16.2,truncated ARC pilot at no-cache list
+arc_pilot_s0s4_list,16.55,16.55,16.5544,16.5544,0.000264242,0.000264242,False,review step 2a,S0+S4 to 50 actions at list
+arc_pilot_s1s2_list,9.93,9.93,8.11164,8.11164,-0.183118,-0.183118,True,review step 2a,S1 to first compaction + 5 and S2 to 30 actions at list
+luna_pilots,2,4,1.04719,3.32528,-0.476403,-0.16868,True,review step 2b,luna pilots at Flex
+luna_validity,5.4,9.6,5.8932,10.0932,0.0913333,0.051375,True,review step 2b,luna 300-episode validity run at Flex
+sol_pilot,3.5,7,7.76432,15.1031,1.21838,1.15759,True,review step 2c,sol pilot at Flex
+sol_validity,12.8,24,14.1376,25.3376,0.1045,0.0557333,True,review step 2c,sol 40-episode validity at Flex
+block1_total,42,76,43.389,85.2796,0.0330718,0.1221,True,PLAN.md §16.2,block 1 pilots
+block1_openai,26,47,30.3071,57.277,0.165656,0.218659,True,PLAN.md §16.2,block 1 OpenAI share
+block1_google,16,29,13.0819,28.0027,-0.182378,-0.0343906,True,PLAN.md §16.2,block 1 Google share
+block2_flex,62,132,62.4225,131.72,0.0068146,-0.00212121,False,PLAN.md §16.2,block 2 seed-1 S0+S4 at Flex (excl. re-runs)
+block2_standard,125,263,124.845,263.44,-0.00123992,0.001673,False,PLAN.md §16.2,block 2 on the standard tier (excl. re-runs)
+block2_reruns,0,60,0,52.688,0,-0.121867,True,PLAN.md §16.2,block 2 re-runs (up to)
+block3_flex,540,790,595.378,785.824,0.102552,-0.00528604,True,PLAN.md §16.2,block 3 commitment with ARC at Flex
+block3_standard,760,1150,820.099,1151.4,0.079078,0.00121941,True,PLAN.md §16.2,block 3 with ARC on the standard tier with caching
+block3_list_max,1370,1370,1368.63,1368.63,-0.00100019,-0.00100019,False,PLAN.md §16.2,block 3 upper end at no-cache list
+block4,460,1100,440.925,1299.31,-0.0414678,0.181189,True,PLAN.md §16.2,block 4 phase 2
+before_g2,650,1550,713.674,1451.12,0.0979604,-0.0637933,True,PLAN.md §16.1,spend before G2 (blocks 1-3) across Flex and standard tier
+cum_by_g2_flex,650,1000,713.674,953.937,0.0979604,-0.0460626,True,review stage 4,blocks 1-3 with ARC at Flex
+cum_by_g2_standard,950,1550,1023.05,1451.12,0.0768922,-0.0637933,True,review stage 4,blocks 1-3 with ARC on the standard tier
+cum_by_g2_list,1050,1800,1194.23,1745.93,0.137363,-0.0300375,True,review stage 4,blocks 1-3 with ARC at no-cache list
+pre_commit_flex,105,225,118.296,192.218,0.126629,-0.145696,True,review commit_point,blocks 1-2 with ARC at Flex
+pre_commit_standard,175,400,202.948,323.823,0.159705,-0.190442,True,review commit_point,blocks 1-2 with ARC on the standard tier
+total_flex_cached,1300,1300,1411.16,1411.16,0.0855082,0.0855082,True,PLAN.md §16.1,central total through phase 2 with ARC on Flex
+total_flex_cached_google,850,850,915.306,915.306,0.0768302,0.0768302,True,PLAN.md §16.1,Google share of that total
+total_flex_cached_openai,460,460,495.855,495.855,0.0779456,0.0779456,True,PLAN.md §16.1,OpenAI share of that total
+total_standard_cached,2000,2000,2173.13,2173.13,0.0865648,0.0865648,True,PLAN.md §16.1,central total with ARC on the standard tier with caching
+total_standard_cached_google,1550,1550,1677.27,1677.27,0.0821127,0.0821127,True,PLAN.md §16.1,Google share (ARC on the standard tier with caching)
+total_standard_cached_openai,460,460,495.855,495.855,0.0779456,0.0779456,True,PLAN.md §16.1,OpenAI share (ARC on the standard tier with caching)
+total_list_nocache,2400,2400,2623.05,2623.05,0.092939,0.092939,True,PLAN.md §16.1,central total with ARC at no-cache list
+total_list_nocache_google,1960,1960,2127.2,2127.2,0.0853054,0.0853054,True,PLAN.md §16.1,Google share (ARC at no-cache list)
+total_list_nocache_openai,460,460,495.855,495.855,0.0779456,0.0779456,True,PLAN.md §16.1,OpenAI share (ARC at no-cache list)
+total_everything_list,2900,2900,3118.91,3118.91,0.0754857,0.0754857,True,PLAN.md §16.1,everything at list
+total_pessimistic,4000,4000,4221.02,4221.02,0.0552545,0.0552545,True,PLAN.md §16.1,pessimistic case
+openai_uncapped_3k,800,800,914.899,914.899,0.143624,0.143624,True,review who_gets_paid,OpenAI total at 3k output per call without the 1a cap
+e1_gpu,20,80,17.85,79.5,-0.1075,-0.00625,True,PLAN.md §12,E1 GPU (extension; not in the central case)

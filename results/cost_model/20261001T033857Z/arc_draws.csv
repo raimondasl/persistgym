@@ -1,0 +1,16 @@
+draw,drawn,undrawn,flex_cached,flex_nocache,list_nocache,standard_cached,above_cap_flex_cached,above_cap_with_reserve_flex_cached,above_cap_standard_cached,above_cap_with_reserve_standard_cached,above_cap_list_nocache,above_cap_with_reserve_list_nocache,above_cap_flex_nocache,above_cap_with_reserve_flex_nocache
+1,CD82+FT09+LP85+R11L,SB26+SC25,317.571,405.68,811.36,635.141,False,False,False,False,False,True,False,False
+2,CD82+FT09+LP85+SB26,R11L+SC25,249.69,318.86,637.72,499.38,False,False,False,False,False,False,False,False
+3,CD82+FT09+LP85+SC25,R11L+SB26,305.2,399.56,799.12,610.399,False,False,False,False,False,True,False,False
+4,CD82+FT09+R11L+SB26,LP85+SC25,333.508,427,854,667.016,False,False,False,False,False,True,False,False
+5,CD82+FT09+R11L+SC25,LP85+SB26,389.018,507.7,1015.4,778.036,False,False,False,True,True,True,False,False
+6,CD82+FT09+SB26+SC25,LP85+R11L,321.137,420.88,841.76,642.274,False,False,False,False,False,True,False,False
+7,CD82+LP85+R11L+SB26,FT09+SC25,329.634,424.86,849.72,659.269,False,False,False,False,False,True,False,False
+8,CD82+LP85+R11L+SC25,FT09+SB26,385.144,505.56,1011.12,770.288,False,False,False,True,True,True,False,False
+9,CD82+LP85+SB26+SC25,FT09+R11L,317.263,418.74,837.48,634.527,False,False,False,False,False,True,False,False
+10,CD82+R11L+SB26+SC25,FT09+LP85,401.081,526.88,1053.76,802.163,False,False,False,True,True,True,False,False
+11,FT09+LP85+R11L+SB26,CD82+SC25,334.751,416.96,833.92,669.502,False,False,False,False,False,True,False,False
+12,FT09+LP85+R11L+SC25,CD82+SB26,390.261,497.66,995.32,780.521,False,False,False,True,True,True,False,False
+13,FT09+LP85+SB26+SC25,CD82+R11L,322.38,410.84,821.68,644.76,False,False,False,False,False,True,False,False
+14,FT09+R11L+SB26+SC25,CD82+LP85,406.198,518.98,1037.96,812.396,False,False,False,True,True,True,False,False
+15,LP85+R11L+SB26+SC25,CD82+FT09,402.324,516.84,1033.68,804.649,False,False,False,True,True,True,False,False

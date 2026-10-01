@@ -1,0 +1,400 @@
+From 67f6dd0d37eccb8f77a7645f0e0e9fc2ea400359 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 16:33:00 -0400
+Subject: [PATCH 17/17] Request the standard service tier in the Gemini path
+ profiles
+
+The four Gemini 3.8 Flash high profiles (Standard, rolling summary,
+rolling summary notes-off, Provider Adapter) left request.service_tier
+unset, so the provider default applied. They now set it to "standard",
+the literal google-genai 2.4.0 accepts for standard processing on the
+Interactions API (interaction_create_params.py:93, echoed on
+Interaction.service_tier). Every action and summary request carries the
+field, and run_meta.json records it as requested_service_tier. The
+checked-in low Provider Adapter profile is unchanged.
+
+Snapshot tests: every request body of the four profiles, summary
+requests included, carries service_tier "standard". A configured flex
+or standard tier still differs from the same config without a tier only
+in that field. New tests check the SDK literal, that every
+google-gemini-3-8-flash-high* profile requests standard (so none can
+send flex or priority), that the served tier is recorded per step, and
+that a different served tier is recorded and logged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ README.md                                     |   3 +-
+ benchmarking/model_configs.yaml               |  12 ++
+ docs/runtime-state.md                         |   4 +-
+ tests/unit/test_gemini_path_configs.py        |   8 +-
+ tests/unit/test_gemini_path_payloads.py       |  21 ++-
+ tests/unit/test_gemini_path_service_tier.py   | 161 ++++++++++++++++++
+ .../unit/test_gemini_summary_path_configs.py  |   2 +-
+ 7 files changed, 202 insertions(+), 9 deletions(-)
+ create mode 100644 tests/unit/test_gemini_path_service_tier.py
+
+diff --git a/README.md b/README.md
+index 752845b..da6009a 100644
+--- a/README.md
++++ b/README.md
+@@ -154,7 +154,8 @@ Interactions API request settings. `google-gemini-3-8-flash-high-rolling-summary
+ keeps the Standard visible-text transcript but replaces oldest-turn trimming
+ with the Provider Adapter's harness summary compaction, and
+ `google-gemini-3-8-flash-high-rolling-summary-notes-off` also omits the
+-carry-forward instruction.
++carry-forward instruction. All four request the standard service tier
++explicitly (`request.service_tier: "standard"`).
+ 
+ Both harnesses use the same games, actions, limits, and scoring. The Standard
+ harness supports controlled comparisons across providers, while the Provider
+diff --git a/benchmarking/model_configs.yaml b/benchmarking/model_configs.yaml
+index 9dd6631..2e0b246 100644
+--- a/benchmarking/model_configs.yaml
++++ b/benchmarking/model_configs.yaml
+@@ -317,6 +317,9 @@
+   request:
+     model: "gemini-3.8-flash"
+     store: false
++    # Standard processing, requested explicitly rather than left to the
++    # provider default.
++    service_tier: "standard"
+     generation_config:
+       max_output_tokens: 65_536
+       thinking_level: "high"
+@@ -355,6 +358,9 @@
+   request:
+     model: "gemini-3.8-flash"
+     store: false
++    # Standard processing, requested explicitly rather than left to the
++    # provider default.
++    service_tier: "standard"
+     generation_config:
+       max_output_tokens: 65_536
+       thinking_level: "high"
+@@ -391,6 +397,9 @@
+   request:
+     model: "gemini-3.8-flash"
+     store: false
++    # Standard processing, requested explicitly rather than left to the
++    # provider default.
++    service_tier: "standard"
+     generation_config:
+       max_output_tokens: 65_536
+       thinking_level: "high"
+@@ -426,6 +435,9 @@
+   request:
+     model: "gemini-3.8-flash"
+     store: false
++    # Standard processing, requested explicitly rather than left to the
++    # provider default.
++    service_tier: "standard"
+     generation_config:
+       max_output_tokens: 65_536
+       thinking_level: "high"
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index d42062f..ebfe2b3 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -341,7 +341,9 @@ runtimes (`auto`, `default`, `flex`, `scale`, `priority`). Run metadata records
+ the requested tier as `requested_service_tier`, and each step record stores the
+ tier the provider reported for the accepted response as `service_tier`. A
+ reported tier that differs from an explicit request other than `auto` is
+-logged as a warning. Both fields are omitted when absent.
++logged as a warning. Both fields are omitted when absent. The four
++`google-gemini-3-8-flash-high*` profiles set `service_tier: "standard"`, the
++value google-genai accepts for standard processing on the Interactions API.
+ 
+ ## Throttled responses
+ 
+diff --git a/tests/unit/test_gemini_path_configs.py b/tests/unit/test_gemini_path_configs.py
+index 2734472..2c7626e 100644
+--- a/tests/unit/test_gemini_path_configs.py
++++ b/tests/unit/test_gemini_path_configs.py
+@@ -22,6 +22,7 @@ CARRY_FORWARD = (
+ HIGH_REQUEST = {
+     "model": "gemini-3.8-flash",
+     "store": False,
++    "service_tier": "standard",
+     "generation_config": {
+         "max_output_tokens": 65_536,
+         "thinking_level": "high",
+@@ -79,6 +80,9 @@ class TestGeminiFlashHighProfiles:
+         expected = deepcopy(get_model_config(LOW_PROVIDER_ADAPTER))
+         expected["id"] = PROVIDER_ADAPTER
+         expected["request"]["generation_config"]["thinking_level"] = "high"
++        # The standard tier, requested explicitly (the low profile leaves it to
++        # the provider default).
++        expected["request"]["service_tier"] = "standard"
+         # Transport-level backoff only; it does not change any request body.
+         expected["client"]["transport_retry"] = TRANSPORT_RETRY
+ 
+@@ -100,7 +104,7 @@ class TestGeminiFlashHighProfiles:
+         assert standard["agent"]["MAX_ACTIONS_BASELINE_MULTIPLIER"] == (
+             adapter["agent"]["MAX_ACTIONS_BASELINE_MULTIPLIER"]
+         )
+-        assert "service_tier" not in standard["request"]
++        assert standard["request"]["service_tier"] == "standard"
+ 
+     def test_standard_agent_uses_rolling_text_history(self, monkeypatch, tmp_path):
+         agent = _agent(monkeypatch, tmp_path, STANDARD)
+@@ -114,7 +118,7 @@ class TestGeminiFlashHighProfiles:
+         assert CARRY_FORWARD in agent._build_system_prompt()
+         meta = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
+         assert "runtime" not in meta
+-        assert "requested_service_tier" not in meta
++        assert meta["requested_service_tier"] == "standard"
+ 
+     def test_provider_adapter_agent_replays_native_state(self, monkeypatch, tmp_path):
+         agent = _agent(monkeypatch, tmp_path, PROVIDER_ADAPTER)
+diff --git a/tests/unit/test_gemini_path_payloads.py b/tests/unit/test_gemini_path_payloads.py
+index c928e72..466ce67 100644
+--- a/tests/unit/test_gemini_path_payloads.py
++++ b/tests/unit/test_gemini_path_payloads.py
+@@ -58,6 +58,8 @@ GENERATION_CONFIG = {
+     "thinking_summaries": "auto",
+ }
+ SUMMARY_GENERATION_CONFIG = {**GENERATION_CONFIG, "max_output_tokens": 8_192}
++# Every path profile requests the standard tier explicitly.
++SERVICE_TIER = "standard"
+ # ARC's harness-summary prompts at 4ca00e6 (benchmarking/compaction.py).
+ SUMMARY_SYSTEM_PROMPT = (
+     "You create concise conversation summaries for reliable continuation. "
+@@ -79,10 +81,18 @@ def _bridge(summary: str) -> str:
+     )
+ 
+ 
+-def _config(config_id: str, *, service_tier: str | None = None, **agent: object) -> dict:
++_CHECKED_IN = object()
++
++
++def _config(
++    config_id: str, *, service_tier: object = _CHECKED_IN, **agent: object
++) -> dict:
++    """The checked-in config; ``service_tier=None`` removes the tier, a string sets it."""
+     config = deepcopy(get_model_config(config_id))
+     config["agent"].update(agent)
+-    if service_tier is not None:
++    if service_tier is None:
++        config["request"].pop("service_tier", None)
++    elif service_tier is not _CHECKED_IN:
+         config["request"]["service_tier"] = service_tier
+     return config
+ 
+@@ -140,6 +150,7 @@ def _body(system: str, inputs: list[dict], *, summary: bool = False) -> dict:
+     return {
+         "model": "gemini-3.8-flash",
+         "store": False,
++        "service_tier": SERVICE_TIER,
+         "generation_config": SUMMARY_GENERATION_CONFIG if summary else GENERATION_CONFIG,
+         "system_instruction": system,
+         "input": inputs,
+@@ -789,7 +800,7 @@ def test_notes_sentence_and_high_thinking_on_every_request(
+         assert body["generation_config"]["thinking_summaries"] == "auto"
+         assert body["model"] == "gemini-3.8-flash"
+         assert body["store"] is False
+-        assert "service_tier" not in body
++        assert body["service_tier"] == "standard"
+ 
+ 
+ def test_notes_off_and_provider_adapter_send_identical_first_requests(
+@@ -820,14 +831,16 @@ def test_configured_service_tier_is_sent_on_every_request(
+         actions=3,
+         server=server,
+     )
++    # The same config with the tier removed (provider default).
+     default_bodies, _ = _play(
+         monkeypatch,
+         tmp_path / "default",
+-        _config(config_id),
++        _config(config_id, service_tier=None),
+         actions=3,
+         server=default_server,
+     )
+ 
++    assert all("service_tier" not in body for body in default_bodies)
+     assert [body.pop("service_tier") for body in bodies] == [tier] * len(bodies)
+     assert bodies == default_bodies
+     run_meta = json.loads((tmp_path / "tier" / agent.run_dir / "run_meta.json").read_text())
+diff --git a/tests/unit/test_gemini_path_service_tier.py b/tests/unit/test_gemini_path_service_tier.py
+new file mode 100644
+index 0000000..595423d
+--- /dev/null
++++ b/tests/unit/test_gemini_path_service_tier.py
+@@ -0,0 +1,161 @@
++"""The Gemini 3.8 Flash high path profiles request the standard tier explicitly.
++
++The four profiles (Standard, rolling summary, rolling summary notes-off,
++Provider Adapter) set ``request.service_tier: "standard"``, the literal the
++pinned google-genai SDK accepts for standard processing on the Interactions
++API. A Flex or priority tier cannot be sent by these profiles, and the tier the
++provider reports is recorded per step.
++"""
++
++import json
++import logging
++import typing
++from copy import deepcopy
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++from arcengine import FrameData, GameAction, GameState
++from google.genai._interactions.types.interaction import Interaction
++from google.genai._interactions.types.interaction_create_params import (
++    BaseCreateModelInteractionParams,
++)
++
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.model_config import (
++    SERVICE_TIERS_BY_RUNTIME_PAIR,
++    get_model_config,
++    load_model_configs,
++)
++from benchmarking.runtime_models import ModelResponse, NormalizedUsage
++
++pytestmark = pytest.mark.unit
++
++PATH_PROFILES = (
++    "google-gemini-3-8-flash-high",
++    "google-gemini-3-8-flash-high-rolling-summary",
++    "google-gemini-3-8-flash-high-rolling-summary-notes-off",
++    "google-gemini-3-8-flash-high-provider-adapter",
++)
++STANDARD_TIER = "standard"
++
++
++def _literal_values(annotation: object) -> set[str]:
++    """String values of a ``Literal[...]``, also inside ``Optional``."""
++    values: set[str] = set()
++    for arg in typing.get_args(annotation):
++        if isinstance(arg, str):
++            values.add(arg)
++        else:
++            values |= _literal_values(arg)
++    return values
++
++
++def test_standard_is_the_pinned_sdk_literal_for_the_interactions_api():
++    request_tiers = _literal_values(
++        typing.get_type_hints(BaseCreateModelInteractionParams)["service_tier"]
++    )
++    response_tiers = _literal_values(
++        Interaction.model_fields["service_tier"].annotation
++    )
++
++    assert STANDARD_TIER in request_tiers
++    assert request_tiers == response_tiers == {"flex", "standard", "priority"}
++    assert (
++        SERVICE_TIERS_BY_RUNTIME_PAIR[("google-genai", "interactions")] == request_tiers
++    )
++
++
++@pytest.mark.parametrize("config_id", PATH_PROFILES)
++def test_path_profile_requests_the_standard_tier(config_id):
++    config = get_model_config(config_id)
++
++    assert (config["runtime"]["sdk"], config["runtime"]["api"]) == (
++        "google-genai",
++        "interactions",
++    )
++    assert config["request"]["service_tier"] == STANDARD_TIER
++
++
++def test_every_gemini_high_profile_requests_the_standard_tier():
++    high = [
++        entry
++        for entry in load_model_configs()
++        if entry["id"].startswith("google-gemini-3-8-flash-high")
++    ]
++
++    assert sorted(entry["id"] for entry in high) == sorted(PATH_PROFILES)
++    assert {entry["request"]["service_tier"] for entry in high} == {STANDARD_TIER}
++
++
++def test_upstream_low_profile_keeps_the_provider_default():
++    config = get_model_config("google-gemini-3-8-flash-low-provider-adapter")
++
++    assert "service_tier" not in config["request"]
++
++
++class _TierAdapter:
++    def __init__(self, reported: str | None) -> None:
++        self.reported = reported
++
++    def invoke(self, request):
++        return ModelResponse(
++            output_text="ACTION1",
++            usage=NormalizedUsage(total_tokens=5),
++            service_tier=self.reported,
++        )
++
++
++def _agent(monkeypatch, tmp_path, *, reported: str | None) -> BenchmarkingAgent:
++    config = deepcopy(get_model_config(PATH_PROFILES[0]))
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_adapter",
++        lambda **_kwargs: _TierAdapter(reported),
++    )
++    return BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=SimpleNamespace(info=SimpleNamespace(baseline_actions=[])),
++        config=config["id"],
++    )
++
++
++def _frame() -> FrameData:
++    return FrameData(
++        frame=[[[0, 1], [1, 0]]],
++        state=GameState.NOT_FINISHED,
++        levels_completed=0,
++        available_actions=[GameAction.ACTION1.value],
++    )
++
++
++def test_requested_and_served_tiers_are_recorded(monkeypatch, tmp_path):
++    agent = _agent(monkeypatch, tmp_path, reported="standard")
++
++    agent.choose_action([], _frame())
++
++    run = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++    step = json.loads((Path(agent.run_dir) / "step_001.json").read_text())
++    assert run["requested_service_tier"] == STANDARD_TIER
++    assert step["service_tier"] == "standard"
++
++
++def test_a_different_served_tier_is_recorded_and_logged(monkeypatch, tmp_path, caplog):
++    agent = _agent(monkeypatch, tmp_path, reported="flex")
++
++    with caplog.at_level(logging.WARNING):
++        agent.choose_action([], _frame())
++
++    assert "Requested service_tier='standard' but the provider reported 'flex'" in (
++        caplog.text
++    )
++    step = json.loads((Path(agent.run_dir) / "step_001.json").read_text())
++    assert step["service_tier"] == "flex"
+diff --git a/tests/unit/test_gemini_summary_path_configs.py b/tests/unit/test_gemini_summary_path_configs.py
+index 55eb2cd..e01b251 100644
+--- a/tests/unit/test_gemini_summary_path_configs.py
++++ b/tests/unit/test_gemini_summary_path_configs.py
+@@ -79,7 +79,7 @@ def test_request_client_and_pricing_match_both_ends_of_the_path(config_id):
+     for end in (STANDARD, PROVIDER_ADAPTER):
+         for section in ("client", "request", "pricing"):
+             assert config[section] == get_model_config(end)[section]
+-    assert "service_tier" not in config["request"]
++    assert config["request"]["service_tier"] == "standard"
+ 
+ 
+ @pytest.mark.parametrize(
+-- 
+2.54.0.windows.1
+

@@ -1,7 +1,7 @@
 From a5cb0f47c415672f5a7ccb8bbe70b37948645904 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:16:17 -0400
-Subject: [PATCH 08/16] Add payload snapshot tests for the rolling-summary
+Subject: [PATCH 08/17] Add payload snapshot tests for the rolling-summary
  profiles
 
 Extends the Gemini 3.8 Flash high payload snapshots to the two

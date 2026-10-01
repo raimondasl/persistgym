@@ -19,6 +19,18 @@ from persistgym import tokens
 ReplyFn = Callable[[dict, int], str]
 
 
+def padded_text(prefix: str, n: int, tokenizer: str = "o200k_base") -> str:
+    """`prefix` padded with ' x' words to exactly n tokens (for scripted replies)."""
+    text = prefix + " x" * max(n - tokens.count(prefix, tokenizer), 0)
+    while tokens.count(text, tokenizer) > n and text.endswith(" x"):
+        text = text[:-2]
+    while tokens.count(text, tokenizer) < n:
+        text += " x"
+    if tokens.count(text, tokenizer) != n:
+        raise ValueError(f"cannot hit {n} tokens with prefix {prefix!r}")
+    return text
+
+
 def _default_reply(payload: dict, i: int) -> str:
     return f"Fake reply to turn {i}.\nACTION: ack(none)"
 

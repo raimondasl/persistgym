@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 import openai
 
 from common import runmeta
-from harnesses import probes
+from harnesses import diagnostics, probes
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -44,6 +44,13 @@ PILOT_MAX_EPISODES = 10  # CLAUDE.md: a pilot is <= 10 episodes
 
 def _run_id(tag: str) -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + tag
+
+
+def _rel(path) -> str:
+    try:
+        return path.relative_to(runmeta.REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _gen_config(sets: list[str]) -> GeneratorConfig:
@@ -119,8 +126,8 @@ def cmd_run(a) -> int:
         return 2
     run_id = a.run_id or _run_id(f"{cell.ascii_id}-{a.model}")
     meta = run_batch(episodes, cell, _harness_config(a), transport, experiment=a.experiment,
-                     run_id=run_id, milestone=a.milestone,
-                     notes=f"{a.split} {a.start}-{a.start + a.n - 1}")
+                     run_id=run_id, milestone=a.milestone, results_root=RESULTS,
+                     raw_root=RAW, notes=f"{a.split} {a.start}-{a.start + a.n - 1}")
     print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason", "reasoning_context_echoed",
                                            "model_returned", "cost_usd")}, indent=2))
     return 0
@@ -133,7 +140,8 @@ def _probe_run(a, kind: str) -> int:
         transport = _guarded_transport(a, model, experiment)
         if transport is None:
             return 2
-        run_id = a.run_id or _run_id(f"{kind}-{model}")
+        run_id = (f"{a.run_id}-{model}" if a.run_id and len(a.model) > 1
+                  else a.run_id or _run_id(f"{kind}-{model}"))
         out_dir, raw_dir = RESULTS / experiment / run_id, RAW / experiment / run_id
         out_dir.mkdir(parents=True, exist_ok=True)
         raw_dir.mkdir(parents=True, exist_ok=True)
@@ -179,10 +187,16 @@ def _probe_run(a, kind: str) -> int:
                 cost_usd={"list": transport.ledger.cost_usd_list,
                           "billed_est": transport.ledger.cost_usd_billed_est,
                           "costs_csv_row_appended": row is not None},
-                raw_transcript_path=(raw_dir / "transcript.jsonl.gz").relative_to(
-                    runmeta.REPO_ROOT).as_posix())
+                raw_transcript_path=_rel(raw_dir / "transcript.jsonl.gz"))
         print(f"{model}: {exit_reason}; echoed {echoed}; results in {out_dir}")
     return status
+
+
+def cmd_summary_timing(a) -> int:
+    print(json.dumps(diagnostics.summary_timing(
+        a.n, split=a.split, summary_tokens=a.summary_tokens,
+        keep_recent=tuple(a.keep_recent)), indent=2))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,6 +231,13 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--planned-usd", type=float, default=None)
 
     sub.add_parser("cells", help="list the harness cells").set_defaults(fn=cmd_cells)
+
+    st = sub.add_parser("summary-timing", help="where Σ cells compact at the default volume ($0)")
+    st.add_argument("--n", type=int, default=20)
+    st.add_argument("--split", default="main")
+    st.add_argument("--summary-tokens", type=int, default=300)
+    st.add_argument("--keep-recent", type=int, nargs="+", default=[0, 16_500])
+    st.set_defaults(fn=cmd_summary_timing)
 
     d = sub.add_parser("dry-run", help="one episode with the fake model ($0)")
     episode_args(d)

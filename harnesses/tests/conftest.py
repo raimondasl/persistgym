@@ -13,9 +13,8 @@ import re
 import pytest
 
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT, HarnessConfig
-from harnesses.fake import FakeModel
+from harnesses.fake import FakeModel, padded_text
 from harnesses.session import HarnessSession
-from persistgym import tokens
 from persistgym.config import GeneratorConfig
 from persistgym.episode import ALL_CELLS
 from persistgym.render import generate
@@ -26,12 +25,7 @@ BRIDGE_PREFIX = "Earlier conversation history was compacted."
 
 def text_with_tokens(prefix: str, n: int) -> str:
     """`prefix` padded with ' x' words to exactly n o200k_base tokens."""
-    text = prefix
-    while tokens.count(text) < n:
-        text += " x"
-    if tokens.count(text) != n:
-        raise AssertionError(f"cannot hit {n} tokens with prefix {prefix!r}")
-    return text
+    return padded_text(prefix, n)
 
 
 def obs_text(i: int, n: int = 200) -> str:

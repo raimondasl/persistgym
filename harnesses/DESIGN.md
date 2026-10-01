@@ -152,6 +152,7 @@ Per episode it also records:
 - `compacted_between` in Σ cells, and the step of every compaction and whether it fired during a lookup round-trip (§7.2);
 - `call_latency_s`: wall-clock seconds of every call, retries and backoff included;
 - `n_unparsed_routine`: unparsed replies at routine steps (a format-error count; the need step is left out because it is an outcome);
+- `n_lookups` (lookups served, at most the cap) and next to it `n_lookups_unavailable` (lookups past the cap that got one "lookup unavailable" turn; generator 0.2.0, D3). Each costs one turn, so `n_turns` = steps + `n_lookups` + `n_lookups_unavailable` for an episode that finishes;
 - `model` (requested) and `designed.evidence_steps`.
 
 **Exit reasons:**
@@ -180,12 +181,12 @@ The researcher chose need-phase tokens as H1's primary token reading (D8, 2026-1
 |---|---|
 | `tokens` | **N**: provider-reported `input_tokens` + `output_tokens`, summed over every call made while the need step is pending. OpenAI's `input_tokens` includes cached tokens and `output_tokens` includes reasoning tokens, so this is "input incl. cached + output incl. reasoning" |
 | `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens` | The same sum by component |
-| `n_calls`, `n_step_calls`, `n_lookup_result_calls`, `n_summary_calls` | Calls in the phase. Each lookup adds one step call that answers the lookup result |
+| `n_calls`, `n_step_calls`, `n_lookup_result_calls`, `n_summary_calls` | Calls in the phase. Each lookup adds one step call that answers the lookup result; a "lookup unavailable" turn counts here too |
 | `summary_tokens` | The part of `tokens` spent on summary calls fired while the need step was pending |
 | `first_step_call` | Usage of the need step's first step call: H2's `usage[n]` (D9), for TE |
 | `complete` | The call that returns the scored action was made. False when the episode stopped inside the phase (error, cost cap, echo mismatch) |
 
-The phase runs from the first call at the need step through the call that returns the scored action (a non-lookup reply, or a lookup the environment refuses), with every lookup round-trip in between. It is the run of calls whose pending step is the need step. `need_phase` is `None` when the episode never reached the need step.
+The phase runs from the first call at the need step through the call that returns the scored action (a non-lookup reply, or a lookup the environment scores as an invalid action), with every lookup round-trip in between. A "lookup unavailable" turn is not scored, so it is one more round-trip inside the phase. It is the run of calls whose pending step is the need step. `need_phase` is `None` when the episode never reached the need step.
 
 A summary call that fires while the need step is pending is a call at the need step, so it is included, and `tokens − summary_tokens` gives the reading without it. H1's cells (W-0, F-0) never summarize, so for H1 the two readings are the same.
 

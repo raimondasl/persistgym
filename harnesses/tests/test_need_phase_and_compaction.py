@@ -240,7 +240,7 @@ def test_a_compaction_during_a_lookup_at_the_need_step_does_not_count(small_eps)
             r_first, n = min(ep.reveal_steps), ep.need_step
             at_lookup = [c for c in run.compactions
                          if c["at_step"] == n and c["at_lookup_result"] == 1]
-            assert run.n_lookups == 3 and at_lookup
+            assert run.n_lookups == 3 and run.n_lookups_unavailable == 1 and at_lookup
             # the reading D12 no longer uses would count it
             assert any(r_first < c["at_step"] <= n for c in run.compactions)
             assert run.compacted_between == 0 == _expected_between(ep, events)

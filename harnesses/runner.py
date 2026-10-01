@@ -112,6 +112,7 @@ class EpisodeRun:
     need_label: str | None = None
     routine_accuracy: float | None = None
     n_lookups: int = 0
+    n_lookups_unavailable: int = 0  # over-cap lookups answered "lookup unavailable" (D3)
     n_turns: int = 0
     n_requests: int = 0
     n_summary_requests: int = 0
@@ -267,6 +268,7 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
         run.need_label = res.need_label
         run.routine_accuracy = (res.routine_accuracy if res.routine_total else None)
         run.n_lookups = res.n_lookups
+        run.n_lookups_unavailable = res.n_lookups_unavailable
         run.n_turns = res.n_turns
         run.n_unparsed_routine = sum(o == "unparsed" for s, o in res.step_outcomes.items()
                                      if s != need)

@@ -84,7 +84,7 @@ Comparison: an observed fact at far distance, window harness **without** notes (
 **Falsified or kill** if the difference between the two penalties is below 10pp, with the 90% CI upper bound below 15pp. In that case drop the "success vs cost" framing.
 
 ### H2: reasoning replay carries derived state
-Model: gpt-6.1-sol, plus gpt-6-luna if the M0 pilot shows it honours `all_turns`. Arms: full history, `reasoning.context` = `all_turns` (F-r) vs `current_turn` (F-0). **[A2]** sol runs only the far cells: derived-far on T_d templates and observed-far on T_d/3 of them (D11 option A, §17.1).
+Model: gpt-6.1-sol, plus gpt-6-luna if the M0 pilot shows it honours `all_turns`. Arms: full history, `reasoning.context` = `all_turns` (F-r) vs `current_turn` (F-0). **[A2]** sol runs only the far cells: derived-far on T_d templates and observed-far on T_d/3 of them (D11 option A, §17.1). On sol, the observed-fact prediction below is therefore checked on observed-far cells only.
 
 **Predictions:**
 - Less than 3pp difference on observed facts.
@@ -135,7 +135,7 @@ The Adapter's advantage in P(clear level ℓ | reached ℓ) is larger at levels 
 - near = reveal about 4 steps before need;
 - far = reveal beyond W.
 
-**Templates.** A template is one sampled skeleton: surface story, fact values, filler. Each template is rendered into **all 8 task cells and all harness cells** (fully crossed). All contrasts are therefore within-template, and template fixed effects absorb difficulty. Add templates rather than seeds: run 1 repeat per template × cell, and 2 repeats on a 10% subset to estimate within-template noise. **[A2]** The repeat subset runs on both luna and sol. Template seeds start at 0, and runs use whole blocks of 10 seeds (D7, §17.1).
+**Templates.** A template is one sampled skeleton: surface story, fact values, filler. Each template is rendered into **all 8 task cells and all harness cells** (fully crossed). All contrasts are therefore within-template, and template fixed effects absorb difficulty. Add templates rather than seeds: run 1 repeat per template × cell, and 2 repeats on a 10% subset to estimate within-template noise. **[A2]** The repeat subset runs on both luna and sol. Template seeds start at 0, and runs use whole blocks of 10 seeds (D7, §17.1). sol is not fully crossed: its templates are rendered into the far cells only (D11 option A, §17.1).
 
 **Controls, on the same templates:**
 - **Position-matched single-turn:** the same token sequence flattened into one prompt, with the fact at the same offset. Used for H3.
@@ -265,7 +265,7 @@ StateCarry is a provider-neutral state component for ARC's Standard harness (`ma
 
 **Steps:**
 1. Check StateCarry cheaply as an extra PersistGym cell on luna. Does it rescue the far / derived / non-recoverable cells?
-2. Develop on the 4 path-study games (dev set), with a spend cap of $150.
+2. Develop on the 4 path-study games (dev set), with a spend cap of $150. **[A2]** The 4 G3 runs are a separate phase-2 line, outside this cap (D24, §17.1).
 3. Evaluate on held-out games: 3 games (the 2 undrawn eligible games plus VC33 or RE86, fixed in PREREG) × {S0, S4, S0+StateCarry} × 2 seeds = 18 runs. Pilot runs from M0 are never counted as dev or held-out data. **[A2]** The held-out games are SP80, VC33 and TN36. All three are committed; there is no conditional cut to 2 games (D14 option A, D24 option B; §17.1).
 
 **Pre-registered win:** on held-out games, StateCarry closes at least 50% of the S0→S4 gap, at a mean cost per game no higher than S4's. **[A2]** Cost is compared on the billed basis, with list reported alongside (D23, §17.1).
@@ -297,7 +297,7 @@ StateCarry's niche is different: API models inside ARC's *Standard* harness, mea
   - Upstream PR of the S1/S2 path configs and an opt-in StateCarry mode to ARC's harness, if the researcher agrees.
 
 ## 10. Analysis plan
-**Primary PersistGym analysis, per model.** Success at the need step, analysed with the fully crossed within-template design.
+**Primary PersistGym analysis, per model.** Success at the need step, analysed with the fully crossed within-template design. **[A2]** On sol the design covers the far cells only, so H2's contrasts are within-template on those cells (D11 option A, §17.1).
 - **Primary contrasts (H1-H3):** probability-scale differences of cell means, with 90% and 95% CIs from a cluster bootstrap over templates (10,000 resamples).
 - **Confirmatory model:** logistic regression with template fixed effects, harness × recoverable × derived × distance terms and cluster-robust SEs. This is what the power simulation assumed.
 - **Sensitivity model:** a Bayesian logistic GLMM with template random intercepts (e.g. `bambi`).
@@ -381,7 +381,7 @@ Prices were checked 2026-09-29/30 ([Gemini](https://ai.google.dev/gemini-api/doc
 This is above the profile's ~$1k flag and ~$200/month cash, and well below the ~$5-10k infeasibility line. **The researcher must approve the phase-1 ARC spend before M1.** **[A1]** Replaced by staged approvals (§16.2). The estimates above are corrected in §16.1. **[A2]** The forecasts in §17.2 replace these estimates, and §17.3 sets the caps. None of this money goes to ARC Prize: the ARC API is free, and the ARC rows are Gemini tokens billed by Google.
 
 Cheaper fallbacks, in order:
-1. Flex everywhere. **[A2]** OpenAI only; ARC stays on the standard tier (D21).
+1. Flex everywhere. **[A2]** No longer a fallback: OpenAI already runs on Flex (D13), and ARC stays on the standard tier (D21). The ARC fallbacks are 3 games, then medium thinking.
 2. 3 ARC games.
 3. Medium thinking. The published medium gap is 20pp.
 4. Fewer sol templates (30). **[A2]** Under D11 option A this means a lower T_d (§17.1).
@@ -530,7 +530,7 @@ If it continues, seed-1 S1+S2 and all of seed 2 run as one wave, so the four con
 - The researcher is consulted before every paid block (§16.2) and before any cap is exceeded.
 
 ## 17. Amendment A2 (2026-10-01): researcher decisions before the PREREG freeze
-**Why.** On 2026-10-01 the researcher decided the open items (D1-D39) of the `PREREG.md` draft. Several decisions change this plan. This amendment records them before `PREREG.md` is frozen. No paid call has been made, and no hypothesis changes. `PREREG.md` records the final wording of every D item; this section covers only what changes the plan. §16 is left as written; §17.5 lists the parts of it that A2 replaces.
+**Why.** On 2026-10-01 the researcher decided the open items (D1-D39) of the `PREREG.md` draft. Several decisions change this plan. This amendment records them before `PREREG.md` is frozen. No paid call has been made. No hypothesis or threshold changes, but two decisions change how a prediction is read: D8 (H1's token clause) and D11 (H2's observed-fact check now uses far cells only). `PREREG.md` records the final wording of every D item; this section covers only what changes the plan. §16 is left as written; §17.5 lists the parts of it that A2 replaces.
 
 **Where the numbers come from.** Every cost, ops and power figure below is in a committed file, written by a committed script, in a run folder with a `meta.json`. The three run folders arrive with PR #17:
 - `results/arc_public_ops/20261001T185155Z/` (`arc/public/ops.py`): `summary.md` and `recordings_per_action.csv`.
@@ -541,19 +541,22 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 ### 17.1 Decisions
 **D14 option A: ARC games fixed by rule, with no draw** (§8.3, §9).
-- Path (dev) games: FT09, SB26, R11L, CD82. These are the §8.3 eligible games without LP85 and SC25, whose published Standard-high runs ended `ERROR_OR_CLOSED` (ops `summary.md`).
-- Held-out games: SP80, VC33, TN36. The rule: take the remaining public games with a published high-effort gap ≥ 20 and a normal Standard-high ending (not early: `ACTION_BUDGET` or `GAME_WIN`). Keep the 3 with the lowest maximum published cost. Their published list costs (Standard / Adapter) are $29.21 / $66.72, $86.99 / $39.70 and $42.87 / $90.89 (ops `summary.md`, eligibility table).
+- A **normal ending** is `GAME_WIN`, `ACTION_BUDGET` or `TIME_BUDGET`, as the operational slice infers it; the other inferred ending, `ERROR_OR_CLOSED`, is not normal (ops `summary.md`).
+- Path (dev) games: public games where both published high-effort runs cost ≤ $60, the published gap is ≥ 20 and the published Standard-high run ended normally. These are FT09, SB26, R11L and CD82: the §8.3 eligible games without LP85 and SC25, whose published Standard-high runs ended `ERROR_OR_CLOSED` (ops `summary.md`).
+- Held-out games: SP80, VC33, TN36. The rule: among the remaining public games with a published high-effort gap ≥ 20 and a normal Standard-high ending, keep the 3 with the lowest max(published Standard cost, published Adapter cost). Their published list costs (Standard / Adapter) are $29.21 / $66.72, $86.99 / $39.70 and $42.87 / $90.89 (ops `summary.md`, the D14 line under the eligibility table). The next game by this rule is SU15 ($100.0 / $48.5, Standard-high ended `TIME_BUDGET`); RE86 is excluded by its `ERROR_OR_CLOSED` ending.
+- Path and held-out games are no longer exchangeable. The held-out games come from a separate cost rule, and none of the three meets the $60 filter (eligibility table), which is why they are not path games.
 - LP85 and SC25 are neither path nor held-out games. No pilot runs on a held-out game.
 
 **D15: beacon seed after the freeze.** The seed comes from the first NIST Randomness Beacon pulse at least 10 minutes after the freeze commit, with drand as the fallback (`arc/draw_games.py`, PR #16). The games are fixed, so the seed picks no games. It picks the truncated-pilot game (`perm[0]` of the 4 path games), the game dropped under the 3-game fallback (`perm[3]`) and the run orders (D18).
 
 **D11 option A: sol runs far cells only** (§4 H2, §7).
-- sol runs F-r vs F-0 on the derived-far cells (recoverable and not) on T_d templates. It runs the observed-far cells (recoverable and not) on the first T_o = T_d/3 of them, rounded up. sol runs no near cells.
+- sol runs F-r vs F-0 on the derived-far cells (recoverable and not) on T_d templates. It runs the observed-far cells (recoverable and not) on the first T_o = T_d/3 of them. sol runs no near cells.
+- T_d is a multiple of 30, so that T_o is a multiple of 10 and every 10-template balance block is whole (D7).
 - Planning value: T_d = 120, T_o = 40. That is 320 template-cells per arm, as many as PLAN's 40 templates × 8 cells. With the 10% repeats it is 704 sol episodes (`optA_sizing_1a.csv`).
 - T_d may rise up to 200 only if the researcher raises the 1a cap before the sol main sweep starts. T_d never changes after any H2 outcome has been computed.
-- If output runs longer than 1k tokens per call, the A1 sizing rule applies: fewer templates (§16.1, §17.2).
+- The 0.80 power target stays. If the 1a cap does not afford it (for example because calls run longer than 1k output tokens), sol uses the largest affordable T_d, the achieved power is reported, and a sol result that is neither equivalent nor falsified is called inconclusive (§17.2).
 
-**Power of this design** (`h2_sol_power.csv`). Each row is 1,000 simulated runs, with template SD 1.0 on the logit scale and success under F-0 (p_F0) of 0.6 or 0.8. No variance has been measured yet. H2's derived-far success effect is tested with a one-sided bootstrap test at α = 0.0125.
+**Power of this design** (`h2_sol_power.csv`). Each row is 1,000 simulated runs, with template SD 1.0 on the logit scale and success under F-0 (p_F0) of 0.6 or 0.8. No variance has been measured yet. H2's derived-far success effect is tested with a one-sided bootstrap test at α = 0.0125, the strictest step of the 4-test Holm family (D26).
 
 | T_d (T_o) | 90 (30) | 120 (40) | 150 (50) | 180 (60) | 210 (70) |
 |---|---|---|---|---|---|
@@ -577,30 +580,32 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - Secondary, reported alongside: R_tok, the same ratio with whole-episode tokens, and the literal ratio T(W-0, far) / T(F-0, far).
 
 **D2: clustered options** (§5).
-- For a derived fact, the K = 10 options are one cluster of consecutive values. With the rule and any proper subset of the clues, every option stays possible, so partial memory gives no edge.
+- For a derived fact, the K = 10 options are one cluster of evenly spaced values around the true value (spacing 1, i.e. consecutive values, in generator 0.2.0, PR #15). With the rule and any proper subset of the clues, every option stays possible, so partial memory gives no edge.
 - New $0 check in every derived cell: no template where a proper subset of the clues narrows the options, and partial-memory heuristics score ≤ 20% (chance + 10pp).
 
 **D21: Gemini standard tier for all ARC runs** (§8.3, §15).
-- All ARC runs, pilots included, use Gemini's standard tier. Flex is not used for ARC.
-- The Flex latency probe is dropped. The payload acceptance probe stays.
+- All ARC runs, pilots included, use Gemini's standard tier. Flex is not used for ARC, and runs never switch tier.
+- Block 1's Flex latency probe is dropped; a standard-tier payload acceptance check takes its place.
+- Warning rule, per run: before each block, the researcher is told if any planned run's 1.5 × published actions × published seconds per action exceeds 12 h. Among the published runs of the 7 games, only VC33's Standard-high run (10.39 h; ops `summary.md`) trips it, so VC33's S0 runs in phase 2 will be flagged.
 - OpenAI runs stay on Flex (D13).
 
 **D20: `TIME_BUDGET` is final** (§8.3).
-- A `TIME_BUDGET` ending is scored as is and not re-run.
-- The exception is a provider-latency incident: the run's median seconds per call is more than 2× that of the same config's earlier counted runs. Then the run is re-run once, like an error.
+- A `TIME_BUDGET` ending is scored as is, flagged and not re-run.
+- The exception is a provider-latency incident: the run's median seconds per model call is more than 2× the median of the same config's earlier counted runs, or the pilot's median if there is no earlier counted run. Then the run is re-run once, like an error.
 
 **D23: cost basis** (§9).
-- The billed estimate is primary: provider-reported tokens at the standard tier's prices, with cached input at the cached price. ARC's no-cache list cost is reported alongside.
-- This applies to the StateCarry win, G3, G4, and the forecasts and cap comparisons in this section.
+- The billed estimate is primary: provider-reported tokens at the prices of the tier used (the standard tier for ARC), with cached input at the cached price. ARC's no-cache list cost is reported alongside.
+- This applies to the StateCarry win, G3 and G4. The forecasts in §17.2 use the same basis. How the paid guard measures spend against the caps is still open (§17.4).
 
 **D24 option B: all 3 held-out games** (§9, §12).
 - Phase 2 commits to all 3 held-out games: 3 games × {S0, S4, S0+StateCarry} × 2 seeds = 18 runs. There is no conditional cut to 2 games.
+- The 4 G3 runs (frozen StateCarry v0, once per dev game) are their own phase-2 budget line, outside the $150 dev cap (§9 step 2). The phase 2 forecast in §17.2 prices them that way.
 - The phase 2 cap rises from $950 to $1,150 (§17.3).
-- The rest of D24 is as `PREREG.md` records it.
+- The rest of D24 is recorded in `PREREG.md`: closure as a ratio of means, the held-out S0 and S4 runs first, the StateCarry held-out runs only if the held-out gap is ≥ 10 RHAE, and the G4 bands.
 
 **D27 rule 1: cost forecasts** (§11 G0, §14 item 2).
 - G0 prices S1 and S2 at the midpoint of S0 and S4 for each game. Go on cost iff the 1b forecast plus the 20% re-run reserve is ≤ $900, billed at the standard tier.
-- Checkpoint C adds a conservative check. It prices S1 and S2 at the measured S0 cost per call × the larger of the measured S0 and S4 actions. If the 1b forecast under this rule exceeds $900, a 1b cap increase of up to about $170 may be requested at Checkpoint C. The researcher decides.
+- Checkpoint C adds a conservative check on the remaining 24 runs. Seed-2 S0 and S4 are priced at their measured seed-1 costs per game, and S1 and S2 at the measured S0 cost per call × the larger of the measured S0 and S4 actions, plus the re-run allowance. If this exceeds the remaining 1b cap, a 1b cap increase of up to about $170 may be requested at Checkpoint C. The researcher decides.
 
 **Approval lines for paid blocks** (§16.2).
 - A paid block spends only after the researcher merges one line into `results/decisions.md` on `origin/main`, of the form `approved_block: <name> | experiments: <list> | max_usd: <n>`.
@@ -633,7 +638,7 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 **ARC forecasts** (`optA_forecasts.csv`). Billed (list), with the 20% re-run reserve unless noted:
 - Block 2 (seed-1 S0+S4, 8 runs): 202.97 (256.19). Without the reserve: 169.14 (213.49).
 - G0 forecast for 1b (D27 rule 1): 811.86 (1,024.75) against $900. That is $25.37 per counted run. The billed headroom is $88.14.
-- Checkpoint C conservative forecast for 1b: 1,042.92 (1,251.80). On the billed basis, this rule would ask for a 1b cap increase of $142.92, within the ~$170 the researcher allowed.
+- Checkpoint C conservative forecast for 1b: 1,042.92 (1,251.80). On the billed basis, this rule would ask for a 1b cap increase of $142.92, within the ~$170 that D27 lets Claude request (the researcher still decides).
 - Held-out, 18 runs: 967.98 with S0+StateCarry priced at the midpoint; 1,381.11 at the Checkpoint C rule.
 - G3, 4 runs: 101.48 at the midpoint; 159.25 at the Checkpoint C rule.
 - Phase 2, central (1k output tokens per PersistGym call): 1,233.19. That is $83.19 over the new $1,150 cap. Without the G3 and held-out reserves it is 1,054.94. At the Checkpoint C rule it is 1,704.09.
@@ -658,8 +663,10 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 | 200 (67) | 663.90 | 41.93 |
 | 210 (70) | 685.64 | 43.48 |
 
+- The 200 (67) row is D11's ceiling as the cost model prices it, with T_o rounded up. T_d = 200 is not a multiple of 30, so D7 does not allow it as is (§17.4).
 - With 4 luna cells at 1k, T_d = 150 comes to 467.83.
-- At T_d = 120 and 2k output tokens per call, even 4 luna cells cost 565.80, over $500. The A1 sizing rule then applies (§16.1).
+- At T_d = 120 and 2k output tokens per call, even 4 luna cells cost 565.80, over $500. D11's sizing rule then lowers T_d (§17.1).
+- luna's controls are priced as single prompts ($5.20, `optA_central_line_items.csv`). Under D36 the restated-at-need control runs as full F-0 episodes on luna, which the cost model does not price yet, so 1a is somewhat understated (§17.4).
 
 ### 17.3 Phase caps
 | Phase | Cap before A2 | Cap from A2 | Basis |
@@ -677,7 +684,8 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 ### 17.4 Open after A2
 - **How the guard measures spend.** `common.costs.headroom`, and the paid guard built on it, counts the larger of list and billed spend. On OpenAI Flex, list is twice billed (`harnesses/pricing.py`), so the guard would stop phase 1a at about half its billed forecast. For ARC rows it depends on what `cost_usd_list` will hold; no ARC costs writer exists yet. Before block 3, the researcher decides whether caps are measured on billed spend, as the forecasts here are (D23).
-- **D20's latency test** compares with the same config's earlier counted runs. `PREREG.md` must say what applies to a config's first counted run.
+- **T_d's ceiling and D7's whole blocks.** D11 allows T_d up to 200, and D7 needs T_d to be a multiple of 30, so the largest allowed T_d is 180 (T_o = 60). The cost model's T_d = 200 row and the `PREREG.md` draft (T_o = ⌈T_d/3⌉, T_d a multiple of 10) allow a part block (T_o = 67). The researcher confirms 180 as the ceiling, or sets T_o for T_d = 200 (60 or 70), before the sol main sweep; `PREREG.md` follows.
+- **luna control cost.** The 1a forecast prices luna's controls as single prompts. D36 runs restated-at-need as full F-0 episodes on all 8 task cells. The cost model should price that before block 3, since 1a's central forecast (480.66) is already close to $500.
 - **Phase 2 reserves.** At the central forecast they take phase 2 $83.19 over its cap. If they are needed, the researcher is asked then.
 
 ### 17.5 Parts of §16 that A2 replaces

@@ -1,0 +1,7 @@
+harness,effort,GAME_WIN,ACTION_BUDGET,TIME_BUDGET,ERROR_OR_CLOSED,n_runs,early_no_win
+standard,high,0,14,6,5,25,11
+standard,medium,0,18,0,7,25,7
+standard,low,1,18,0,6,25,6
+provider_adapter,high,9,11,5,0,25,5
+provider_adapter,medium,6,19,0,0,25,0
+provider_adapter,low,4,20,0,1,25,1

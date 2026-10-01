@@ -23,7 +23,7 @@ from persistgym.render import generate
 
 def summary_timing(n: int = 20, *, split: str = "main", gen: GeneratorConfig | None = None,
                    reply_tokens: int | None = None, summary_tokens: int = 300,
-                   keep_recent: tuple[int, ...] = (0, 16_500),
+                   keep_recent: tuple[int, ...] = (0, 16_650),
                    cell_id: str = "Σ-n-0") -> dict:
     """For the non-recoverable near cells of templates 0..n-1: the turns at which the Σ cell
     compacts, and how many episodes reach the need step with S = 0 (a reveal compacted),

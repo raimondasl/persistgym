@@ -5,6 +5,8 @@ which pending step), not from the runner's own running sums."""
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 
 from harnesses.cells import CELLS
@@ -15,6 +17,7 @@ from harnesses.runner import run_episode
 from harnesses.tests.conftest import SMALL
 from persistgym.episode import ALL_CELLS
 from persistgym.render import generate
+from persistgym.tokens import count as count_tokens
 
 CFG = HarnessConfig()
 SUMMARY_CELLS = [c for c in CELLS if CELLS[c].history == "summary"]
@@ -86,16 +89,63 @@ def test_need_phase_includes_lookup_round_trips(small_eps):
         assert "lookup" not in item_text(need[-1]["response"]["output"][1])  # scored action
 
 
+SUMMARY = "SUMMARY: fake summary of the earlier turns."
+
+
+@functools.cache
+def _ack_reply(pad: int) -> str:
+    """`_long_replies`' reply text with a `pad`-token notes part."""
+    return padded_text("Notes.", pad) + "\nACTION: ack(none)"
+
+
+def _compaction_steps(ep, reply_tokens: int) -> list[int]:
+    """Steps at which a Σ cell compacts (CFG: summary_keep_recent_tokens = 0) when every reply
+    has `reply_tokens` visible tokens and every summary is SUMMARY. This is the W accounting
+    of harnesses/DESIGN.md §4.3 on the generator's own counts, not the session's: before the
+    step call of step s, compact iff a turn is kept and the system prompt (if the episode's W
+    counts it; never the notes sentence) + bridge + kept turns + observation s > W. The
+    replies here never look up, so turn t is step t."""
+    W = ep.config["W_tokens"]
+    system = ep.system_tokens if ep.config["window_counts_system_prompt"] else 0
+    bridge_tokens = count_tokens(CFG.summary_bridge_template.format(summary=SUMMARY),
+                                 CFG.tokenizer)
+    bridge, kept, n_kept, steps = 0, 0, 0, []
+    for s, st in enumerate(ep.steps):
+        if n_kept and system + bridge + kept + st.obs_tokens > W:
+            steps.append(s)
+            bridge, kept, n_kept = bridge_tokens, 0, 0
+        kept += st.obs_tokens + reply_tokens
+        n_kept += 1
+    return steps
+
+
+def _reply_compacting_at_need(ep) -> str:
+    """The shortest `_ack_reply` with which a Σ cell compacts at the need step itself, from
+    the W accounting. One always exists: a reply of more than W tokens makes every step after
+    step 0 compact."""
+    for pad in range(count_tokens("Notes.", CFG.tokenizer), ep.config["W_tokens"] + 1):
+        reply = _ack_reply(pad)
+        if ep.need_step in _compaction_steps(ep, count_tokens(reply, CFG.tokenizer)):
+            return reply
+    raise AssertionError(f"no reply length compacts at need step {ep.need_step}")
+
+
 def test_need_phase_includes_a_summary_fired_at_the_need_step(small_eps):
-    """With 250-token replies, template 0's near Σ episodes compact at the need step itself.
-    The summary call is a call at the need step: it is in `tokens` and also in
-    `summary_tokens`, so the reading that leaves it out is tokens - summary_tokens."""
-    seen = 0
-    for ep in (e for e in small_eps if e.template_id == small_eps[0].template_id):
-        run, events = _events(ep, "Σ-n-0", FakeModel(_long_replies(250)))
-        if not any(c["at_step"] == ep.need_step for c in run.compactions):
-            continue
-        seen += 1
+    """A summary fired at the need step itself is a call at the need step: it is in `tokens`
+    and also in `summary_tokens`, so the reading that leaves it out is tokens - summary_tokens.
+    The reply length that puts a compaction at the need step is chosen per episode from the W
+    accounting (system prompt counted since generator 0.2.0, bridge, kept turns), not fixed:
+    a fixed length stops compacting at the need step whenever that accounting changes."""
+    seen = set()
+    for ep in small_eps:
+        reply = _reply_compacting_at_need(ep)
+        fake = FakeModel(lambda p, i, r=reply: r, summary_fn=lambda p, j: SUMMARY)
+        run, events = _events(ep, "Σ-n-0", fake)
+        # the premise: the harness compacts where the W accounting says, so at the need step
+        expected = _compaction_steps(ep, count_tokens(reply, CFG.tokenizer))
+        assert [c["at_step"] for c in run.compactions] == expected
+        assert ep.need_step in expected
+        seen.add(ep.cell.distance)
         need, tokens = _need_tokens(ep, events)
         n = run.need_phase
         assert [e["kind"] for e in need] == ["summary", "step"]
@@ -109,7 +159,7 @@ def test_need_phase_includes_a_summary_fired_at_the_need_step(small_eps):
         # agent first saw the need-step observation after it: it counts
         (c,) = [c for c in run.compactions if c["at_step"] == ep.need_step]
         assert c["at_lookup_result"] == 0 and run.compacted_between == 1
-    assert seen >= 1
+    assert seen == {"near", "far"}
 
 
 def test_need_phase_incomplete_or_absent_when_the_episode_stops(small_eps):
@@ -140,8 +190,10 @@ def _expected_between(ep, events):
 
 
 def _long_replies_with_lookups_at_need(ep, n_tokens):
-    """Long replies, and a lookup in reply to every presentation of the need step (the
-    environment allows 3; the 4th reply is the scored action)."""
+    """Long replies, and a lookup in reply to every presentation of the need step. Since
+    generator 0.2.0 (D3) the environment serves 3, answers the 4th with one "lookup
+    unavailable" turn, and scores the 5th (a second over-cap lookup at the same step) as an
+    invalid action."""
     def reply(payload, i):
         last = item_text(payload["input"][-1])
         action = (f"lookup({ep.entity})" if "needs its" in last else "ack(none)")
@@ -188,7 +240,7 @@ def test_a_compaction_during_a_lookup_at_the_need_step_does_not_count(small_eps)
             r_first, n = min(ep.reveal_steps), ep.need_step
             at_lookup = [c for c in run.compactions
                          if c["at_step"] == n and c["at_lookup_result"] == 1]
-            assert run.n_lookups == 3 and at_lookup
+            assert run.n_lookups == 3 and run.n_lookups_unavailable == 1 and at_lookup
             # the reading D12 no longer uses would count it
             assert any(r_first < c["at_step"] <= n for c in run.compactions)
             assert run.compacted_between == 0 == _expected_between(ep, events)

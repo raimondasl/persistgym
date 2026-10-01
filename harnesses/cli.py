@@ -318,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--n", type=int, default=20)
     st.add_argument("--split", default="main")
     st.add_argument("--summary-tokens", type=int, default=300)
-    st.add_argument("--keep-recent", type=int, nargs="+", default=[0, 16_500])
+    st.add_argument("--keep-recent", type=int, nargs="+", default=[0, 16_650])
     st.set_defaults(fn=cmd_summary_timing)
 
     d = sub.add_parser("dry-run", help="one episode with the fake model ($0)")

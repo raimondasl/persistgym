@@ -7,7 +7,7 @@ script. They never come from agent trajectories (PLAN §4).
 Node ids:
   obs:<t>     the scheduled observation at step t
   act:<t>     the action expected at step t
-  comp:<id>   a revealed component (fact, clue0..clue2, rule)
+  comp:<id>   a revealed component (fact, clue0..clue2, rule) or distractor (dist0, dist1)
   fact        the target fact (k=1)
   env:lookup  the lookup action (recoverable cells only)
 """
@@ -67,11 +67,14 @@ class DependencyGraph:
 
 
 def build_graph(n_steps: int, need_step: int, components: list[dict], fact_kind: str,
-                recoverable: bool, rule_in_system_prompt: bool = False) -> DependencyGraph:
+                recoverable: bool, rule_in_system_prompt: bool = False,
+                distractors: list[dict] = ()) -> DependencyGraph:
     """Build the graph from the episode script.
 
     `components`: dicts with comp_id, role and step (step None = always visible, e.g. a rule
     in the system prompt; or not shown at all in the withheld control, role 'null').
+    `distractors`: dicts with comp_id and step. A distractor is revealed (and re-shown by
+    lookup) but has no edge to the fact, so it is never needed and never live.
     """
     g = DependencyGraph(need_step=need_step)
     for t in range(n_steps):
@@ -93,6 +96,12 @@ def build_graph(n_steps: int, need_step: int, components: list[dict], fact_kind:
             g.edges.append({"src": "env:lookup", "dst": cid, "rel": "re-shows"})
         first = c["step"] if c["step"] is not None else 0
         g.live[cid] = [first, need_step]
+    for d in distractors:
+        did = f"comp:{d['comp_id']}"
+        g.nodes.append({"id": did, "kind": "component", "role": "distractor", "step": d["step"]})
+        g.edges.append({"src": f"obs:{d['step']}", "dst": did, "rel": "reveals"})
+        if recoverable:
+            g.edges.append({"src": "env:lookup", "dst": did, "rel": "re-shows"})
     if recoverable:
         g.nodes.append({"id": "env:lookup", "kind": "env_action", "step": None})
     if rule_in_system_prompt:

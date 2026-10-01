@@ -1,9 +1,13 @@
 """Render PersistGym-lite templates to JSONL and run the $0 validity checks.
 
     uv run python -m persistgym render --n 20
-    uv run python -m persistgym render --split pilot --n 5 --single-turn --gzip
+    uv run python -m persistgym render --split validity --n 10 --single-turn --gzip
     uv run python -m persistgym render --n 50 --W 24000 --v 1500 --out results/raw/persistgym/x
     uv run python -m persistgym partial-memory --n 2000
+
+Template counts and start indices come in whole balance blocks of K templates (PREREG D7);
+`--partial-blocks` allows other counts for quick $0 checks. Splits: main [0, 50000),
+validity [50000, 60000), pilot [90000, 100000) (seed = range start + index).
 
 Writes into the output folder (default results/raw/persistgym/<split>-<start>-<n>-<hash8>,
 gitignored): episodes.jsonl[.gz] (one Episode per line), single_turn.jsonl[.gz] (optional),
@@ -30,6 +34,7 @@ from persistgym.render import generate
 from persistgym.template import sample_template
 from persistgym.validity import (
     heuristic_baselines,
+    lookup_audit,
     oracle_scores,
     partial_memory_diagnostic,
     partial_memory_from_episodes,
@@ -91,6 +96,14 @@ def parse_overrides(items: list[str]) -> dict:
     return out
 
 
+def whole_blocks_error(start: int, n: int, K: int) -> str | None:
+    """PREREG D7: template counts come in whole balance blocks of K templates."""
+    if start % K or n % K or n <= 0:
+        return (f"--start {start} and --n {n} must be multiples of the balance block K={K} "
+                "(PREREG D7); pass --partial-blocks for a quick $0 check")
+    return None
+
+
 def run(args: argparse.Namespace) -> int:
     overrides = parse_overrides(args.set or [])
     overrides.update({k: v for k, v in (("W_tokens", args.W), ("v_tokens", args.v))
@@ -100,6 +113,10 @@ def run(args: argparse.Namespace) -> int:
     bad = [v for v in variants if v not in VARIANTS]
     if bad:
         print(f"unknown variants {bad}; choose from {VARIANTS}", file=sys.stderr)
+        return 2
+    if not args.partial_blocks and (err := whole_blocks_error(args.start, args.n,
+                                                                cfg.K_options)):
+        print(err, file=sys.stderr)
         return 2
     indices = range(args.start, args.start + args.n)
     chash = config_hash(cfg.to_dict())
@@ -136,14 +153,16 @@ def run(args: argparse.Namespace) -> int:
     if not args.no_checks:
         other = "pilot" if args.split == "main" else "main"
         cal = [sample_template(other, i, cfg).correct_label for i in range(min(args.n, 100))]
-        summary["shortcut_audit"] = shortcut_audit(all_eps)
+        summary["shortcut_audit"] = shortcut_audit(all_eps) + lookup_audit(all_eps)
         summary["heuristic_baselines"] = heuristic_baselines(all_eps, calibration_labels=cal)
         summary["oracles"] = oracle_scores(all_eps)
-        # Reported, not gated: what the base clue alone gives away in derived cells.
+        # Gated (PREREG D2): no proper clue subset narrows the options, and the partial-
+        # memory heuristics stay <= chance + margin in every derived cell.
         summary["partial_memory"] = partial_memory_from_episodes(all_eps)
         summary["validity_pass"] = (all(c["pass"] for c in summary["shortcut_audit"])
                                     and summary["heuristic_baselines"].get("pass", True)
-                                    and summary["oracles"]["pass"])
+                                    and summary["oracles"]["pass"]
+                                    and (summary["partial_memory"] or {}).get("pass", True))
     manifest = {
         "created_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "generator_version": GENERATOR_VERSION, "schema_version": SCHEMA_VERSION,
@@ -189,19 +208,28 @@ def print_summary(summary: dict, out: Path) -> None:
             accs = ", ".join(f"{k}={v['need_acc']:.2f}" for k, v in orc[name].items())
             print(f"  oracle {name}: {accs}")
         if summary.get("partial_memory"):
-            print_partial_memory(summary["partial_memory"], indent="  ")
+            for cid, pm in summary["partial_memory"]["cells"].items():
+                print(f"  {cid}:")
+                print_partial_memory(pm, indent="    ")
         print(f"validity_pass={summary['validity_pass']}")
 
 
 def print_partial_memory(pm: dict, indent: str = "") -> None:
-    print(f"{indent}partial memory, derived cells (reported, not gated; chance "
-          f"{pm['chance']:.2f}):")
+    print(f"{indent}partial memory (gated: narrowing = 0, base+rule uniform and smallest "
+          f"above base <= {pm['threshold']:.2f}; chance {pm['chance']:.2f}): "
+          f"{'pass' if pm['pass'] else 'FAIL'}")
     for key, row in [*pm["by_n_clues"].items(), ("all", pm["all"])]:
         label = f"{key} clues" if key != "all" else "all"
-        print(f"{indent}  {label:<8} n={row['n_templates']:<5} base+range unique="
-              f"{row['base_and_range_unique_rate']:.3f} expected acc="
-              f"{row['base_and_range_expected_accuracy']:.3f} nearest-above-base acc="
-              f"{row['nearest_above_base_accuracy']:.3f}")
+        print(f"{indent}  {label:<8} n={row['n_templates']:<5} narrowing="
+              f"{row['narrowing_templates']} options left={row['base_and_rule_options_left_mean']:.1f}"
+              f" base+rule uniform={row['base_and_rule_uniform_accuracy']:.3f} smallest above "
+              f"base={row['smallest_above_base_accuracy']:.3f} | reported: nearest mid-range="
+              f"{row['nearest_to_midrange_accuracy']:.3f} generator-aware Bayes max="
+              f"{row['generator_aware_bayes_max']:.3f}")
+    bayes = pm["all"]["generator_aware_bayes"] if pm["all"] else {}
+    if bayes:
+        print(f"{indent}  generator-aware Bayes by kept clues (reported): "
+              + ", ".join(f"{k}={v:.3f}" for k, v in bayes.items()))
 
 
 def run_partial_memory(args: argparse.Namespace) -> int:
@@ -211,14 +239,14 @@ def run_partial_memory(args: argparse.Namespace) -> int:
     items = []
     for i in range(args.start, args.start + args.n):
         t = sample_template(args.split, i, cfg)
-        items.append((t.n_clues, t.clue_values[0], t.option_values, t.target_value))
-    pm = partial_memory_diagnostic(items, cfg.minor_component_range, cfg.K_options)
+        items.append((t.n_clues, t.clue_values, t.option_values, t.target_value))
+    pm = partial_memory_diagnostic(items, cfg.to_dict())
     pm.update(split=args.split, indices=[args.start, args.start + args.n],
               config_hash=config_hash(cfg.to_dict()), generator_version=GENERATOR_VERSION)
     if args.out:
         Path(args.out).write_text(json.dumps(pm, indent=2) + "\n", encoding="utf-8")
     print_partial_memory(pm)
-    return 0
+    return 0 if pm["pass"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -239,11 +267,13 @@ def main(argv: list[str] | None = None) -> int:
                    help="override any GeneratorConfig field (value parsed as JSON), repeatable")
     r.add_argument("--out", default=None, help="output folder")
     r.add_argument("--gzip", action="store_true")
+    r.add_argument("--partial-blocks", action="store_true",
+                   help="allow --start/--n that are not whole balance blocks (quick $0 checks)")
     r.add_argument("--no-checks", action="store_true", help="skip audit, baselines, oracles")
     r.add_argument("--verbose", action="store_true")
     pm = sub.add_parser("partial-memory",
-                        help="what the base clue alone gives away in derived cells "
-                             "(templates only, no rendering)")
+                        help="what partial memory of a derived fact gives away (PREREG D2; "
+                             "templates only, no rendering)")
     pm.add_argument("--n", type=int, default=2000, help="number of templates")
     pm.add_argument("--split", choices=sorted(SEED_RANGES), default="main")
     pm.add_argument("--start", type=int, default=0)

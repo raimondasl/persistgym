@@ -22,7 +22,8 @@ CFG = HarnessConfig()
 PILOT = "persistgym_pilot"
 # Per-episode or per-arm outcome fields that must never appear in a committed pilot file.
 OUTCOMES = {"need_correct", "need_label", "routine_accuracy", "need_phase", "need_payload",
-            "need_bridge_carried", "n_lookups", "compacted_between", "usage", "rate"}
+            "need_bridge_carried", "n_lookups", "n_lookups_unavailable", "compacted_between",
+            "usage", "rate"}
 
 
 def _pilot_eps(variants=("base",), cells=("derived-nonrec-far", "observed-rec-far")):

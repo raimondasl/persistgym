@@ -72,7 +72,7 @@ Routine actions depend only on the current observation; the dependency graph rec
 `TaskCell(fact, recoverable, distance)`; ids like `derived-rec-far`. All 8 cells of a template share:
 - the need step index, the need event, the options, the correct letter and the correct value;
 - the routine event and log filler of every step index (identical observation text wherever both cells have a routine step);
-- the clock and the system prompt, except for the lookup paragraph in recoverable cells.
+- the clock and the system prompt, except for the lookup paragraph in recoverable cells (and the standing rule in derived cells when `rule_placement` is `system_prompt`).
 
 Within a template, the need observation is byte-identical across all 8 base cells and the withheld cells (audited).
 

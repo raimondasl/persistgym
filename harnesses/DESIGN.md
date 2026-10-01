@@ -1,6 +1,6 @@
 # PersistGym harness cells: design
 
-_Track: M0 harness cells (PLAN.md §6, §7; amendment A1 §16.3, §16.5). Built on the generator in `persistgym/` (episode schema 1). Everything here is $0: no API call has been made. The paid transport exists but has never run._
+_Track: M0 harness cells (PLAN.md §6, §7; amendment A1 §16.3, §16.5). Built on the generator in `persistgym/` (generator 0.2.0, episode schema 2). Everything here is $0: no API call has been made. The paid transport exists but has never run._
 
 A harness cell decides what the model sees at every turn of a PersistGym episode. This package turns each new observation into the exact JSON body of an OpenAI Responses API request (`POST /v1/responses`) and asserts, with payload snapshot tests, exactly which turns, reasoning items and instructions every cell sends. PLAN §6 calls these tests the single most important correctness check, and no paid run may happen until they pass.
 
@@ -51,7 +51,7 @@ Added only when configured: `max_output_tokens`, `prompt_cache_key`, `reasoning.
 - **The reply** the environment scores is the concatenated `output_text` of the assistant message items (the SDK's `response.output_text`).
 
 ## 4. History policies
-Besides the hand-derived snapshots, `tests/test_payload_reference.py` checks every cell over 100 random episodes (per-turn observation and reply lengths, W, counted instructions and `summary_keep_recent_tokens` all varied) against a brute-force reference that recomputes the kept turns and the compaction points from token counts alone. Every harness test runs with outbound network connections and DNS blocked (`tests/conftest.py::no_network`), so a test that would reach an API fails.
+Besides the hand-derived snapshots, `tests/test_payload_reference.py` checks every cell over 100 random episodes (per-turn observation and reply lengths, W, whether the system prompt counts and `summary_keep_recent_tokens` all varied) against a brute-force reference that recomputes the kept turns and the compaction points from token counts alone. Every harness test runs with outbound network connections and DNS blocked (`tests/conftest.py::no_network`), so a test that would reach an API fails.
 
 All token accounting uses the generator's tokenizer (tiktoken `o200k_base`) on **visible text only**: observation text, the reply's output text and the bridge text. There is no per-message overhead. Encrypted reasoning items are opaque and are not counted. Because of this, the window boundary and the summary trigger fall on the same steps in the r and 0 arms of a pair whenever the replies are the same. The cost is that an r arm's real context is larger than W by the rendered reasoning (§10).
 
@@ -63,10 +63,10 @@ W defaults to the episode's generator `W_tokens`, so the harness evicts exactly 
 Every earlier turn, verbatim, in order.
 
 ### 4.2 Window (W)
-Before sending observation m, keep the longest suffix of whole earlier turns (observation and output items) such that kept turns + observation m (+ instructions, if counted) ≤ W tokens. This is `persistgym.survival.window_keep_start`, the same function the generator used to design near and far. Dropped turns never come back. The boundary is inclusive: a context of exactly W is kept whole. A test checks that at every step the W cells' visible messages equal `persistgym.survival.reference_window_payload` for the same replies.
+Before sending observation m, keep the longest suffix of whole earlier turns (observation and output items) such that kept turns + observation m (+ the episode's system prompt, if counted; never the notes sentence, §4) ≤ W tokens. This is `persistgym.survival.window_keep_start`, the same function the generator used to design near and far. Dropped turns never come back. The boundary is inclusive: a context of exactly W is kept whole. A test checks that at every step the W cells' visible messages equal `persistgym.survival.reference_window_payload` for the same replies.
 
 ### 4.3 Summary at W (Σ)
-Before sending observation m, compute the visible context that the step request would hold: bridge + turns since the last compaction + observation m (+ instructions, if counted). If it exceeds W (strictly) and at least one turn can be compacted, the harness first sends a **summary request**:
+Before sending observation m, compute the visible context that the step request would hold: bridge + turns since the last compaction + observation m (+ the episode's system prompt, if counted; never the notes sentence, §4). If it exceeds W (strictly) and at least one turn can be compacted, the harness first sends a **summary request**:
 - `instructions`: ARC's summary system prompt, verbatim;
 - `input`: the current bridge (if any), the turns to compact with their reasoning items, then ARC's `SUMMARY_REQUEST_PROMPT` as a user message;
 - the same `reasoning` settings as the cell, including its `reasoning.context`;

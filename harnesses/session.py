@@ -106,9 +106,9 @@ class HarnessSession:
 
     @classmethod
     def for_episode(cls, cell: CellSpec, episode, cfg: HarnessConfig) -> HarnessSession:
-        """Session for a persistgym Episode. W and whether the instructions count default to
-        the episode's generator config, so eviction happens where near and far were
-        designed."""
+        """Session for a persistgym Episode. W and whether the episode's system prompt counts
+        (never the notes sentence) default to the episode's generator config, so eviction
+        happens where near and far were designed."""
         ecfg = episode.config
         if cfg.tokenizer != ecfg["tokenizer"]:
             raise ValueError(f"harness tokenizer {cfg.tokenizer!r} differs from the "

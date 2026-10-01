@@ -31,3 +31,8 @@ def test_summary_timing_on_two_templates():
     ark, keep = out["per_keep_recent"][0], out["per_keep_recent"][16_500]
     assert all(t.startswith("10,") for t in ark["compaction_turns"])
     assert keep["need_S0"] == 0
+    # keeping the near span verbatim: more, smaller summary calls and larger step requests
+    assert keep["summary_calls_per_episode"] > ark["summary_calls_per_episode"] == 2
+    assert (keep["summary_call_input_tokens_min_max"][1]
+            < ark["summary_call_input_tokens_min_max"][0])
+    assert keep["step_input_tokens_per_episode"] > ark["step_input_tokens_per_episode"]

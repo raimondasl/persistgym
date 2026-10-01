@@ -12,7 +12,7 @@ import pytest
 from common import runmeta
 from harnesses.cells import CELLS
 from harnesses.config import HarnessConfig
-from harnesses.fake import FakeModel
+from harnesses.fake import FakeModel, padded_text
 from harnesses.items import item_text
 from harnesses.runner import run_batch, run_episode
 from persistgym.episode import Episode
@@ -142,6 +142,28 @@ def test_empty_summaries_are_retried_then_fail(small_eps):
                       FakeModel(status_fn=lambda p, tag: "incomplete" if tag[0] == "s"
                                 else "completed"))
     assert run.exit_reason == "AGENT_ERROR"
+
+
+def test_summary_attempts_are_counted_per_compaction(small_eps):
+    """With summary_keep_recent_tokens > 0 and a long summary, one observation can need
+    several compactions in a row. Each gets its own `summary_max_attempts` (ARC counts
+    response failures per compaction); failures of an earlier, successful compaction must not
+    use them up."""
+    ep = small_eps[0]
+    calls = []
+
+    def every_other_fails(payload, j):
+        calls.append(j)
+        return "" if len(calls) % 2 == 1 else padded_text(f"SUMMARY s{j}", 1_200)
+
+    cfg = CFG.replace(summary_keep_recent_tokens=6_000, summary_max_attempts=2)
+    events, rec = _record()
+    run = run_episode(ep, CELLS["Σ-n-0"], cfg, FakeModel(summary_fn=every_other_fails),
+                      recorder=rec)
+    kinds = [e["kind"] for e in events]
+    back_to_back = any(kinds[i:i + 4] == ["summary"] * 4 for i in range(len(kinds)))
+    assert back_to_back  # two compactions (fail + success each) before one step request
+    assert run.exit_reason == "DONE" and run.n_summary_failures == len(run.compactions)
 
 
 def test_payloads_are_deterministic_and_survive_jsonl_roundtrip(small_eps):

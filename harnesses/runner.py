@@ -197,6 +197,7 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                     continue
                 if req.kind == "step":
                     break
+                failures = 0  # a compaction succeeded; the next one gets its own attempts
             obs, done = env.step(reply)
     except BudgetExceeded as e:
         run.exit_reason, run.error = "COST_CAP", str(e)

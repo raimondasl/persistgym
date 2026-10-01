@@ -50,6 +50,8 @@ Added only when configured: `max_output_tokens`, `prompt_cache_key`, `reasoning.
 - **The reply** the environment scores is the concatenated `output_text` of the assistant message items (the SDK's `response.output_text`).
 
 ## 4. History policies
+Besides the hand-derived snapshots, `tests/test_payload_reference.py` checks every cell over 100 random episodes (per-turn observation and reply lengths, W, counted instructions and `summary_keep_recent_tokens` all varied) against a brute-force reference that recomputes the kept turns and the compaction points from token counts alone. Every harness test runs with outbound network connections and DNS blocked (`tests/conftest.py::no_network`), so a test that would reach an API fails.
+
 All token accounting uses the generator's tokenizer (tiktoken `o200k_base`) on **visible text only**: observation text, the reply's output text and the bridge text. There is no per-message overhead. Encrypted reasoning items are opaque and are not counted. Because of this, the window boundary and the summary trigger fall on the same steps in the r and 0 arms of a pair whenever the replies are the same. The cost is that an r arm's real context is larger than W by the rendered reasoning (§10). The instructions count toward W only if `window_counts_system_prompt` is set; the default is the episode's generator setting (false).
 
 W defaults to the episode's generator `W_tokens`, so the harness evicts exactly where the generator designed near and far.
@@ -90,12 +92,19 @@ The snapshot tests cover both settings.
 
 `uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config, with every reply at the assumed 1,000 tokens and a 300-token summary:
 
-| `summary_keep_recent_tokens` | Compactions at turn | Near episodes with S = 0 at need |
-|---|---|---|
-| 0 (ARC-like) | 10 and 19 in all 40 | 25 of 40 |
-| 16,500 (the near span: 6 turns + 1 observation) | every 3 turns from 10 (4-6 per episode) | 0 of 40 |
+| `summary_keep_recent_tokens` | Compactions at turn | Near episodes with S = 0 at need | Summary calls per episode (input tokens each) | Input tokens per episode: summary / step requests |
+|---|---|---|---|---|
+| 0 (ARC-like) | 10 and 19 in all 40 | 25 of 40 | 2.0 (22,880-25,060) | 47,940 / 277,316 |
+| 16,500 (the near span: 6 turns + 1 observation) | every 3 turns from 10 (4-6 per episode) | 0 of 40 | 5.05 (7,884-10,060) | 41,996 / 401,046 |
 
-So under the ARC-like default, most near Σ episodes reach the need step with the reveal summarized rather than verbatim, and the near/far contrast in Σ cells becomes "carried by the summary or not". Keeping the near span verbatim restores designed near S. The price is two to three times as many summary calls, each holding about W tokens of input, and a departure from ARC. Both settings are tested.
+Token counts are the fake model's: visible text only (tiktoken, no per-message overhead, no rendered reasoning), so they size the comparison, not the bill. An independent re-derivation from token counts alone (not through the harness) also gives 25 of 40.
+
+So under the ARC-like default, most near Σ episodes reach the need step with the reveal summarized rather than verbatim, and the near/far contrast in Σ cells becomes "carried by the summary or not". Keeping the near span verbatim restores designed near S. The price:
+- about 2.5 times as many summary calls. Each holds about 8-10k input tokens instead of about W, so summary-call input per episode is similar (about 42k vs 48k); the extra summary calls cost mainly their output and reasoning tokens;
+- step requests that stay between about 17k and 24k tokens instead of dropping to a few thousand after each compaction: about 1.45 times the step-request input per episode (401k vs 277k), and a cached prefix that breaks at each of the 2.5 times as many compactions;
+- a departure from ARC.
+
+Both settings are tested.
 
 ## 5. Notes instruction
 ARC Standard's sentence, verbatim: "Include any context you want to carry forward in your reply, along with the action you want to take." In ARC it sits inside the system prompt (`benchmarking/agent.py::_build_system_prompt` at `4ca00e6`; checked on 2026-10-01). Here notes cells append it to the episode's system prompt as its last line, joined with `"\n"`. The episode's prompt is one instruction per line. It never appears in the input items or in summary requests. Tests check that notes cells and their no-notes partners (W-n-0/W-0, Σ-n-r/Σ-0-r) differ only in the step requests' `instructions`.
@@ -141,7 +150,7 @@ At the need step's **first** presentation (not a lookup result) it records:
 |---|---|
 | `DONE` | the episode finished |
 | `REASONING_CONTEXT_MISMATCH` | an echoed `reasoning.context` differed from the request (the episode is excluded) |
-| `AGENT_ERROR` | the summary failed `summary_max_attempts` times |
+| `AGENT_ERROR` | one compaction's summary failed `summary_max_attempts` times (each compaction gets its own attempts) |
 | `API_ERROR` | an OpenAI error after retries |
 | `COST_CAP` | the run's spend reached the planned amount |
 | `MAX_TURNS` | the episode passed `max_turns` |
@@ -157,16 +166,21 @@ For a paid transport, `run_batch` also calls `finalize` in a `finally` block, wh
 `OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless all of these hold:
 1. `PERSISTGYM_ALLOW_PAID=1` is set;
 2. `--approved-block <name>` is given. This is the researcher's approved spending block from PLAN §16.2; the approval itself is recorded in `results/decisions.md`;
-3. `PREREG.md` exists (§16.3: PREREG before any paid call);
-4. the experiment has a budget phase in `common/costs.py`, and `common.costs.headroom(planned_usd, phase, rows)` ≥ 0.
+3. `PREREG.md` is **committed** (§16.3: PREREG committed before any paid call): tracked by git, present in `HEAD`, and with no uncommitted changes. A draft in the working tree does not count;
+4. `--planned-usd` is a positive, finite number (`nan` would otherwise pass every budget comparison);
+5. the experiment has a budget phase in `common/costs.py`, and `common.costs.headroom(planned_usd, phase, rows)` ≥ 0.
+
+`--planned-usd` is the planned spend of the whole command: for `probe-echo` and `probe-replay` with several models, each model's transport gets only what the earlier models left. `run` refuses a `persistgym_pilot` run on any split other than `pilot` (§16.5: pilot templates use a disjoint seed range).
 
 While running, it:
 - stops before a call once the run's estimated billed cost reaches `--planned-usd` (`COST_CAP`);
-- retries 429s, timeouts and 5xx errors with exponential backoff, but never `insufficient_quota`. Flex 429s are not charged ([Flex guide](https://developers.openai.com/api/docs/guides/flex-processing));
-- logs the echoed `reasoning.context` and the returned model string of every response;
-- appends one costs.csv row per run, with `approved_block`, the number of context mismatches and the git dirty flag in `notes`.
+- retries 429s, timeouts and 5xx errors with exponential backoff, but never `insufficient_quota`. Flex 429s are not charged ([Flex guide](https://developers.openai.com/api/docs/guides/flex-processing)). A timed-out or dropped connection may still have been processed and billed; such attempts are not in the ledger;
+- logs the echoed `reasoning.context`, the returned model string and the served service tier of every response;
+- appends one costs.csv row per run, with `approved_block`, the number of context mismatches and the git dirty flag in `notes`. `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
 
-It never switches service tier.
+It never switches service tier. The API can still serve a request on a different tier than requested; the response says so and the row records it.
+
+**Arming paid calls for one command only.** In Git Bash, `PERSISTGYM_ALLOW_PAID=1 uv run ...` sets the variable for that command only. In PowerShell, `$env:PERSISTGYM_ALLOW_PAID = "1"` stays set for the rest of the session, so remove it right after (`Remove-Item Env:PERSISTGYM_ALLOW_PAID`). Never put it in `.env`: `uv run --env-file .env` would then arm every command.
 
 Prices are in `pricing.py`, with sources: luna $0.10/$0.01/$0.50, sol $2/$0.10/$10 per M tokens, cache writes 1.25× input, Flex 50% off; checked 2026-09-30. The code never reads or names an API key. The OpenAI SDK reads it from the environment, so load it with `uv run --env-file .env`.
 

@@ -1,6 +1,8 @@
 # PersistGym-lite generator: design
 
-_Track: M0 PersistGym build (PLAN.md §5, §6; amendment A1 §16.3 and §16.5). Generator version 0.1.0, episode schema 1. Everything here is $0: no API calls._
+_Track: M0 PersistGym build (PLAN.md §5, §6; amendment A1 §16.3 and §16.5). Generator version 0.1.1, episode schema 1. Everything here is $0: no API calls._
+
+_0.1.1 (review of PR #7): a biobank site no longer contains an entity name; a lookup key matches when it contains the entity name as a word; single-turn controls come from non-recoverable cells only and have a scorer; a partial-memory diagnostic is reported (§9, §12)._
 
 PersistGym-lite generates multi-turn episodes in which one target fact is needed at a known step. Each template is rendered into 8 task cells that vary three things one at a time, at a fixed token volume per observation:
 - **observed vs derived:** the fact is shown verbatim once, or it must be computed from 2-3 clues plus a combining rule and is never shown in final form;
@@ -14,12 +16,13 @@ The harness cells (F, W, Σ; notes and replay flags) are a separate track. This 
 uv run python -m persistgym render --n 20                    # main split, templates 0-19
 uv run python -m persistgym render --split pilot --n 5 --single-turn --gzip
 uv run python -m persistgym render --n 50 --W 24000 --v 1500 --set assumed_max_reply_tokens=800
+uv run python -m persistgym partial-memory --n 2000          # templates only, no rendering
 uv run pytest -q persistgym && uv run ruff check persistgym
 ```
 `render` writes to `results/raw/persistgym/<split>-<start>-<n>-<confighash8>/` (gitignored):
 - `episodes.jsonl[.gz]`: one Episode per line (§10);
-- `single_turn.jsonl[.gz]`: position-matched single-turn controls (with `--single-turn`);
-- `summary.json`: per-cell shape, the shortcut audit, the heuristic baselines and oracle scores;
+- `single_turn.jsonl[.gz]`: position-matched single-turn controls for the 4 non-recoverable cells (with `--single-turn`);
+- `summary.json`: per-cell shape, the shortcut audit, the heuristic baselines, oracle scores and the partial-memory diagnostic;
 - `manifest.json`: config, config hash, generator version, seed ranges, tiktoken version, git commit and dirty flag.
 
 The exit code is 1 if any validity check fails. A rendered episode is about 110 KB of JSON at the defaults (about 2.6 MB per template for 8 cells × 3 variants); use `--gzip` for large N.
@@ -91,6 +94,8 @@ Within a template, the need observation is byte-identical across all 8 base cell
 - `withheld`: every reveal record is replaced by a null record from the same source with the same id and no value (`Sample BEECH has been logged at intake.`). The step structure is unchanged and `components` is empty (validity gate: LLM ≤ chance + 10pp).
 
 **Position-matched single-turn control** (`controls.single_turn_control`, H3): the same observations 0..n, with replies between them, flattened into one user message after a one-line preamble. Replies default to the minimal correct reply `ACTION: <expected>` (`single_turn_reply_mode`). Passing a real run's replies yokes the control to that run. The result records each component's token offset in the flattened prompt and in the multi-turn message contents. The two differ only by the separator tokens (`<<< update >>>`, `<<< operator reply >>>`) and the preamble.
+- It is built from **non-recoverable** base episodes only. A recoverable cell has the same observations, and its system prompt offers `lookup`, which a single prompt cannot serve, so its control would differ only by offering an action that cannot work. Compare it with the multi-turn non-recoverable cell.
+- `controls.score_single_turn(control, reply)` scores a reply exactly as `EpisodeEnv` scores the need step (same parser, letter or value).
 
 ## 4. Lookup semantics (exact; `env.EpisodeEnv`)
 - Lookup is available only in recoverable cells, at most `lookup_max_per_episode` (3) times per episode.
@@ -98,7 +103,7 @@ Within a template, the need observation is byte-identical across all 8 base cell
   - `LOOKUP RESULT for sample BEECH:`, followed by every record about the entity first shown at or before the pending step, verbatim as originally displayed (records that share a step are merged into one line);
   - `Pending request (repeated): <the pending step's event>`.
 - The agent then answers the repeated request. **A lookup therefore costs exactly one extra turn and v tokens.**
-- The key is matched case-insensitively against the entity name. Any other key returns `no records found` and still costs the turn. A lookup before any reveal returns `no records yet`.
+- The key matches if it contains the entity name as a whole word, ignoring case (`BEECH`, `beech` and `sample BEECH` match; `BEECHES` does not). With one entity per episode this is unambiguous, and it keeps formatting slips from adding turns and tokens that are not about memory (H1's cost outcome). Any other key returns `no records found` and still costs the turn. A lookup before any reveal returns `no records yet`.
 - In non-recoverable cells, or once the limit is used, `lookup(...)` is an invalid action. The pending step is scored wrong (`invalid_lookup`), the episode advances and no extra turn is added.
 - Lookup observations are deterministic: same template seed, pending step and lookup number give the same text. `render.renderer_for(episode)` rebuilds the renderer from `template_seed` and `config`, so this also works for episodes loaded from JSONL.
 
@@ -141,6 +146,8 @@ Built from the script, never from agent trajectories (PLAN §4).
   - Accepted message shapes: chat-style, Responses-style (`content` parts and reasoning items, which count as opaque) and Gemini-style (`parts`, role `model`).
   - Summary cells insert a model-written summary as a user message. Exclude its index so that S stays environment-side, and string-match the summary separately.
   - Assistant text is reported as `assistant_carried`.
+  - Use the payload of the need step's **first** presentation. After a lookup, the payload holds the re-shown records (S=1 by construction) and the model's own lookup reply, which may quote the options next to the entity name.
+- **Near and far are designed for drop-oldest windows.** Far holds for any loss policy that keeps at most W tokens of observations, so the reveal is outside the verbatim context whatever the replies are. Near holds only for a policy that keeps the most recent W tokens verbatim. A summary cell that compacts the whole history whenever the context passes W can compact a near reveal: with 1k-token replies a full history passes 24k at step 9 or 10, and a second compaction can land between a near reveal (n−4 to n−6) and the need step. The harness track must either summarize only the turns that fall outside the most recent W tokens, or treat near-cell S in summary cells as measured (string match), not designed.
 - `carried_in_text(text, ep)`: P(carried) accounting for logged summaries and notes. A value counts if it appears as a standalone number within `carried_match_window_chars` (200) of the entity name. Derived facts count as carried if the final value is carried, or if every clue value is (plus every clue name, if `carried_requires_rule`).
 - `reference_window_payload(ep, replies)`: a reference drop-oldest payload for cross-checking harness implementations. Tests show that its payload-S equals the designed S when replies have the assumed length.
 
@@ -181,7 +188,18 @@ Built from the script, never from agent trajectories (PLAN §4).
     - lookup oracle without memory: 1.00 on recoverable base and on restated, 0.10 on non-recoverable base and on withheld;
   - routine accuracy is 1.00 for the key and text oracles.
 
-  Re-run that command to reproduce; the numbers are in its `summary.json`.
+  Re-run that command to reproduce; the numbers are in its `summary.json`. The review of PR #7 re-ran it at generator 0.1.0 and got the same numbers.
+
+  The baselines sit at exactly 0.10 *because of* block balance: no option value ever occurs outside the option list, so every text heuristic falls back to a position, and every position is correct once per block of 10. They rule out positional and frequency shortcuts; they do not rule out an LLM prior over values, which only the paid withheld run at G1 can measure.
+- **Partial-memory diagnostic** (`validity.partial_memory_diagnostic`; reported in `summary.json` as `partial_memory`, not gated). It asks what an agent that kept only the base clue of a derived fact can do. Result from `uv run python -m persistgym partial-memory --n 2000` (main templates 0-1,999):
+
+  | | 2 clues (n=1,035) | 3 clues (n=965) | all |
+  |---|---|---|---|
+  | base clue + rule + the addend range leave exactly one option | 0.550 | 0.347 | 0.452 |
+  | expected accuracy, uniform pick among the options left | 0.755 | 0.621 | 0.690 |
+  | smallest option above the base clue (no range knowledge) | 0.308 | 0.151 | 0.233 |
+
+  The pilot split (templates 0-1,999) gives 0.687 and 0.246 for the two accuracies. Agents are never told the addend range, so the two accuracy rows bracket plausible base-only behaviour rather than bound it. Even the naive 0.23 is above the 0.20 no-memory threshold. See §12.
 
 ## 10. Data model (the harness-cell contract)
 `Episode` (episode.py) is a plain dataclass with `to_dict` / `from_dict`. It is stored as one JSON object per JSONL line; `persistgym.read_jsonl(path)` reads `.jsonl` or `.jsonl.gz` back into Episodes.
@@ -218,7 +236,7 @@ Each item below is a named field of `GeneratorConfig` (config.py; also listed in
 - [RESEARCHER DECISION] `W_tokens` = 24,000. PLAN §5. Eviction threshold. Amendment §16.5 asks for a tuning rule applied in M1 rather than a fixed number.
 - [RESEARCHER DECISION] `v_tokens` = 1,500. PLAN §5. Tokens per observation; with W it fixes the far gap (`floor(W/v)` = 16 steps).
 - [RESEARCHER DECISION] `near_gap_steps` = 4. PLAN §5: "reveal about 4 steps before need". For derived facts this places the *latest* component; the earliest is up to 2 steps earlier.
-- [RESEARCHER DECISION] `far_margin_tokens` = 0 (proposed). Far = observation tokens from the latest reveal through need > W + margin. A margin of v would not change the gap at the defaults.
+- [RESEARCHER DECISION] `far_margin_tokens` = 0 (proposed). Far = observation tokens from the latest reveal through need > W + margin. Any margin below v (1,500) leaves the far gap at 16 steps at the defaults; a margin of v or more makes it 17 and raises the minimum need index to 21.
 - [RESEARCHER DECISION] `assumed_max_reply_tokens` = 1,000 (proposed; ARC Standard's published visible output averages about 907 tokens per action, `docs/background.md` §4). Near cells must keep S=1 at this reply length. At the defaults, near cells keep S=1 up to uniform replies of 4,125 tokens (observed), 3,000 (2 clues) and 2,250 (3 clues). `max_reply_tokens_for_survival` gives the exact limit per episode, and payload-S catches longer real replies.
 - [RESEARCHER DECISION] `window_counts_system_prompt` = false (proposed). Whether W must also hold the system prompt; it must match the harness cells.
 - [RESEARCHER DECISION] `max_context_tokens` = 64,000. PLAN §5: "contexts stay ≤ 64k". Checked by the audit for full history with assumed replies.
@@ -245,7 +263,7 @@ Also for PREREG, though these are not config fields:
 
 ## 12. Known limitations and what this does not show
 - **Not yet checked with a model.** The $0 checks show that the generator is internally consistent and has no trivial shortcut. They do not show that an LLM finds the routine steps easy, that restated-at-need reaches ≥ 85%, or that the fact-withheld control sits at chance. Those are the paid validity runs at G1.
-- **Partial memory gives partial information in derived cells.** A model that kept the base clue but lost the addends can narrow the options to values just above the base. That is memory, not a shortcut, but it means derived-cell success is not all-or-nothing in what is carried. Hard-negative distractors (e.g. base + one addend) would remove this, but would make the option set depend on the clues; not done.
+- **Partial memory gives a lot away in derived cells.** A model that kept the base clue (and the rule) but lost the 2-digit addends can drop every option outside [base + 61, base + 98] (2 clues) or [base + 123, base + 195] (3 clues). One option is left in 45% of templates, and a uniform pick among those left scores 0.69 (§9). Picking the smallest option above the base, with no idea of the range, scores 0.23. This is memory, not a no-memory shortcut, and window cells never carry the base alone (near keeps every clue, far drops every clue). It matters wherever a model writes what it carries: notes and summary cells, and the accounting P(rescued | not carried), where a summary that kept only the base counts as "not carried" (`carried_in_text`) yet can still succeed. **[RESEARCHER DECISION]** before PREREG: accept and report it (e.g. log a "base only" carried category), or change the option set so the base alone does not narrow it, e.g. options built as several equal-sized clusters of close values with the target in one of them (no-memory accuracy stays 1/K; base-only accuracy falls to about 1 / cluster size). Any such change makes the option set depend on the clues and must keep the no-memory baselines at chance; it is not done here.
 - **The fact is salient.** Reveal records are the only events that mention the entity before the need step. No distractor records about other entities are generated (k=1).
 - **Fixed sentence frames.** The surface text varies through 5 skins but uses fixed frames; a model may learn the format within one episode.
 - **Survival by verbatim match** treats a paraphrased record in a user-role message as not surviving. Window harnesses send observations verbatim, so this matters only for summary cells, where `carried_in_text` is the intended measure.

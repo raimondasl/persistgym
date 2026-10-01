@@ -24,14 +24,14 @@ Version: 0.1-draft
 3. The version line becomes `Version: 1.0` and the status line becomes "Frozen on <date> by <researcher>".
 4. The change is merged through a pull request by the researcher. The merge commit is the **freeze commit**, recorded in `results/decisions.md`.
 5. The game draw (§7.3) runs once, at the freeze commit.
-6. Only then may the Stage 1 pilots (paid) be requested (PLAN §16.2). Run metadata records the PREREG version string; a paid run under a `-draft` version is a protocol violation.
+6. Only then, and only once the payload snapshot tests pass (PLAN §6, §16.2; CLAUDE.md), may the Stage 1 pilots (paid) be requested (PLAN §16.2). Run metadata records the PREREG version string; a paid run under a `-draft` version is a protocol violation.
 
 | Sign-off field | Value |
 |---|---|
 | Frozen by | |
 | Date (UTC) | |
 | Freeze commit | |
-| D-items resolved (D1-D33) | |
+| D-items resolved (D1-D39) | |
 | Operational-slice commit used for D14, D16, D21, D22, D27, D28 | |
 
 ## 1. Research question and order of operations
@@ -49,7 +49,7 @@ Version: 0.1-draft
 2. PREREG freeze, then the seeded game draw (§7.3).
 3. Block 1, pilots (§11), then gate G0 (§10.1).
 4. Block 2, seed-1 S0+S4 (8 counted runs), then Checkpoint C (§10.3).
-5. Block 3, the other 24 ARC runs plus the PersistGym main sweep, then G2 (§10.4).
+5. Block 3, the other 24 ARC runs plus the PersistGym main sweep, then G2 (§10.4). The PersistGym main sweep starts only after gate G1 (§10.2) has passed and been recorded (PLAN §11).
 6. Block 4, phase 2 (StateCarry), with gates G3 and G4 (§8).
 
 Each block needs the researcher's explicit approval (§12).
@@ -159,8 +159,9 @@ For ARC runs: `run_id`, `game_id`, `config_id` (S0, S1, S2, S4, S0+SC), `config_
 - **Far:** sys + O(r_last, n) > W. Replies only add tokens, and a drop-oldest window keeps a contiguous suffix of turns. So every window cell drops all of the evidence before the need step, whatever the agent writes. In summary cells the payload must exceed W at some step after r_last and no later than n, so the evidence has passed through a summary by the need step (the trigger is defined in §5).
 - **Near:** every evidence step lies in [n − 6, n − 1]. An observed fact's reveal sits at n − 4. Derived clues and the rule are spread over [n − 6, n − 1]. In addition, sys + O(r_first, n) + (n − r_first) × R_plan ≤ W, with a planning allowance of R_plan = 1,000 tokens per visible reply. Near evidence is *planned* to survive in window cells. Actual survival is checked on the payload sent (`S_verbatim`, §2.8).
 - Near and far are properties of the rendered template, not of the harness. The same episodes run in every harness cell (PLAN §5, fully crossed). In F cells, "far" only places the evidence far back; nothing is evicted.
+- **Shared skeleton:** all 8 task-cell renderings of a template share T, `need_step` n, the routine steps and the filler. They differ only in where the evidence bindings sit, in the bindings themselves (observed vs derived), and in whether `lookup` is offered. Near and far renderings therefore have the same length, which H1's token reading relies on (§3 H1, D8).
 
-**[RESEARCHER DECISION]** (D5) Accept the far inequality, the near window [n − 6, n − 1] with R_plan = 1,000, and `o200k_base` as the project tokenizer. *Trade-off:* a larger R_plan protects near cells against long replies but forces a larger W or a smaller v. `o200k_base` may not match the providers' own tokenizers exactly. That affects only cost estimates, because W is defined in project tokens and provider counts are logged.
+**[RESEARCHER DECISION]** (D5) Accept the far inequality, the near window [n − 6, n − 1] with R_plan = 1,000, the shared skeleton (same T and n in all 8 task cells of a template), and `o200k_base` as the project tokenizer. *Trade-off:* a larger R_plan protects near cells against long replies but forces a larger W or a smaller v. `o200k_base` may not match the providers' own tokenizers exactly. That affects only cost estimates, because W is defined in project tokens and provider counts are logged.
 
 ### 2.8 Survives (S), carried and rescued
 > **Survives (S):** whether the fact (or all its clues) is still in the context the harness sends at the need step. Computed from token positions for window harnesses. Measured by string match for summary and notes, since those depend on what the model writes. (PLAN §4)
@@ -171,10 +172,12 @@ For ARC runs: `run_id`, `game_id`, `config_id` (S0, S1, S2, S4, S0+SC), `config_
 - **`S_carried`** (cells with notes or summaries, when `S_verbatim` = 0) = 1 iff text the model wrote and that is still in `payload[n]` contains the right string as a whole-word match. That text is the summary bridge message plus the retained assistant replies. The match uses the regex `(?<![0-9A-Za-z])VALUE(?![0-9A-Za-z])`. For an observed fact the string is `fact_value`. For a derived fact it is `fact_value`, or else every value in `clue_values`. Lookup responses and the need observation are excluded.
 - **`S`** = `S_verbatim` OR `S_carried`.
 - **Window accounting ignores replayed reasoning.** W counts project-tokenizer tokens of the system prompt, the observations and the visible replies only. In replay cells, reasoning items travel with the turns they belong to and are dropped with them. This keeps W-n-r and W-n-0 on the same eviction rule, and it matches the identical-payload replay toggle (§6).
-- **Accounting check:** in window cells, episodes with `S_planned` ≠ `S_verbatim` are counted per cell. If any cell exceeds 2%, analysis stops until the cause (a window-accounting bug) is found.
+- **Accounting check.** Two kinds of mismatch are kept apart, because only one of them is a bug.
+  - *Bugs:* in window cells, `S_verbatim` must equal the survival recomputed by replaying the drop-oldest rule on the project-token counts of the turns actually sent. In window cells at far distance, `S_verbatim` = 1 is impossible by §2.7. Any episode that breaks either condition is a window-accounting bug, and analysis stops until it is found.
+  - *Expected near losses:* in near window cells, `S_planned` = 1 but `S_verbatim` = 0 can happen without a bug, when visible replies longer than R_plan or lookup responses push the evidence out. These episodes are counted per cell, reported, and analysed by their assigned cell (§13). If they exceed 2% of any near window cell in the block-1 pilots (pooled tokens only, §11), R_plan or W is re-tuned under §4.2 before the main sweep.
 - **Carried, used, rescued** (PLAN §5, §10): among episodes with `S_verbatim` = 0, P(carried) = mean `S_carried`; P(used | carried) = mean `success` where `S_carried` = 1; P(rescued | not carried) = mean `success` where `S_carried` = 0, split by whether a lookup was taken. Chance is 0.10. Episodes with `S_verbatim` = 1 give the residual at S = 1.
 
-**[RESEARCHER DECISION]** (D6) Accept whole-word string matching on the value or all clues, the exclusion of replayed reasoning from W, and the 2% stop. *Trade-off:* string match misses paraphrased carry (for example "the code ends in 17"), so it undercounts P(carried). Counting replayed reasoning toward W would make window cells evict sooner when replay is on, which would confound replay with loss.
+**[RESEARCHER DECISION]** (D6) Accept whole-word string matching on the value or all clues, the exclusion of replayed reasoning from W, the bug stop, and the 2% pilot re-tuning trigger for expected near losses. *Trade-off:* string match misses paraphrased carry (for example "the code ends in 17"), so it undercounts P(carried). Counting replayed reasoning toward W would make window cells evict sooner when replay is on, which would confound replay with loss. Treating every planned-vs-actual mismatch as a bug would halt the analysis on expected behaviour: ARC's Standard harness averages about 907 visible output tokens per action with the notes instruction on (`docs/background.md` §4), close to R_plan.
 
 ### 2.9 Templates, repeats and seeds
 > **Templates.** A template is one sampled skeleton: surface story, fact values, filler. Each template is rendered into **all 8 task cells and all harness cells** (fully crossed). All contrasts are therefore within-template, and template fixed effects absorb difficulty. Add templates rather than seeds: run 1 repeat per template × cell, and 2 repeats on a 10% subset to estimate within-template noise. (PLAN §5)
@@ -216,7 +219,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 - **Tokens prediction:** let T(h, d) be the mean provider-reported total tokens per episode (input including cached, plus output including reasoning), in harness h and the observed-R cell at distance d. The proposed reading is the difference-in-differences ratio R_tok = [T(W-0, far) / T(F-0, far)] / [T(W-0, near) / T(F-0, near)] ≥ 1.30. The literal ratio T(W-0, far) / T(F-0, far) is reported next to it.
 - **Kill** (as written): Δ_H1 < 10pp (point estimate) **and** the upper bound of its 90% CI < 15pp.
 
-**[RESEARCHER DECISION]** (D8) Accept the difference-in-differences reading of "total tokens rise by at least 30%", and the zero-lookup rule. *Trade-off:* the literal ratio is confounded, because the window caps input tokens: W-0 sends fewer tokens per call than F-0 even without lookups, so the literal ratio can fall below 1 when the predicted cost penalty is present. The difference-in-differences cancels that cap, because near and far episodes have equal length, and it reuses near-R cells that already run.
+**[RESEARCHER DECISION]** (D8) Accept the difference-in-differences reading of "total tokens rise by at least 30%", and the zero-lookup rule. *Trade-off:* the literal ratio is confounded, because the window caps input tokens: W-0 sends fewer tokens per call than F-0 even without lookups, so the literal ratio can fall below 1 when the predicted cost penalty is present. The difference-in-differences cancels that cap, because near and far renderings of a template have equal length (the shared skeleton, §2.7), and it reuses near-R cells that already run (§4.6).
 
 ### H2: reasoning replay carries derived state
 > Model: gpt-6.1-sol, plus gpt-6-luna if the M0 pilot shows it honours `all_turns`. Arms: full history, `reasoning.context` = `all_turns` (F-r) vs `current_turn` (F-0).
@@ -275,6 +278,8 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 - **Optional S3** (PLAN §8.2), if run, is exploratory and stays out of the shares.
 - **Sensitivity analyses:** excluding games flagged under D14; scoring the original errored runs instead of their re-runs (§7.5); excluding units that contain a `COST_CAP` ending (§7.7).
 
+**[RESEARCHER DECISION]** (D34) Accept judging Predictions A and B on point estimates, and withholding the shares when G < 10 RHAE. *Trade-off:* PLAN asks which prediction "the data supports" without saying how; point estimates fit "descriptive" and "no significance claims" best, with the bootstrap intervals shown next to them. When G is small, each share's denominator is near 0, so shares can take any size or sign. Withholding them avoids over-reading noise. Reporting them anyway, clearly labelled, would be more transparent.
+
 ### H5: the Adapter advantage grows with level depth
 > The Adapter's advantage in P(clear level ℓ | reached ℓ) is larger at levels ≥4 than at levels 1-2.
 > - Tested first on ARC's published public-set runs (free; §8.1).
@@ -287,6 +292,9 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 - **H5 contrast:** A_deep − A_early > 0 (point estimate), with a 90% interval from a game-cluster bootstrap (10,000 resamples). Descriptive, like H4 (PLAN §10).
 - **Data:** (a) the published Gemini 3.8 Flash high-effort public-set runs, one per game and harness, 25 games, analysed in the hypothesis slice *after* the freeze commit (PLAN §16.3). Other efforts and models are exploratory. (b) Our runs, S0 vs S4 on the path games.
 - **Sensitivity:** drop levels at which a run ended by an (inferred) error rather than by budget.
+- **Not a blind test on the published runs.** Per-game scores for both harnesses (`docs/background.md` §4) and at least one per-level ending (LP85, PLAN §16.4) were seen before this draft. The operational slice must also infer where each published run ended, which reveals the last level each run reached. H5 on published runs is therefore a pre-specified analysis of partly seen data. Only H5 on our own runs is a test on unseen data.
+
+**[RESEARCHER DECISION]** (D35) Accept: reached = at least one action on ℓ; two bands (1-2 and ≥ 4) with level 3 left out of the contrast, rather than a continuous depth term; the probability-scale average marginal effect with a game-cluster bootstrap; and high effort as the only registered published-data analysis. *Trade-off:* PLAN §8.1 lists P(clear | reached) "by harness and effort", and PLAN §10 names "depth" without bands. Restricting to high effort matches H4 and the path study, but drops the low- and medium-effort runs, where the published gap is smaller. Bands follow H5's own wording ("levels ≥4" vs "levels 1-2"), but discard level 3. "At least one action" excludes runs that cleared ℓ − 1 and then ended at once, which avoids counting an infrastructure ending as a failure to clear ℓ.
 
 ## 4. PersistGym-lite tasks and controls (PLAN §5)
 
@@ -318,7 +326,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
   - sol: the smallest number with probability ≥ 0.80 that the 90% CI of Δ_der lies inside ±8pp when the true Δ_der = 0, within the phase-1a cap.
 - If the cap does not allow 0.80, the largest affordable count is used and the achieved power is stated in the results. A sol result that is neither equivalent nor falsified is then reported as **inconclusive**, not as "no effect".
 
-**[RESEARCHER DECISION]** (D11) Accept the 0.80 power target and the quantities it is computed for. *Trade-off:* a rough unpaired calculation (p ≈ 0.5, 40 templates × 2 derived-far cells per arm) gives a 90% CI half-width of about 13pp. Fitting inside ±8pp then needs a within-template correlation of roughly 0.6 or more (about 0.7 at 30 templates). So the cap will probably bind, and the H2 equivalence branch may be unreachable. The alternative is to demote that branch to exploratory now.
+**[RESEARCHER DECISION]** (D11) Accept the 0.80 power target and the quantities it is computed for. *Trade-off:* a rough unpaired calculation (p ≈ 0.5, 40 templates × 2 derived-far cells per arm) gives a 90% CI half-width of about 13pp. Even a CI centred exactly on 0 fits inside ±8pp only if the within-template correlation between arms is about 0.62 or more (0.72 at 30 templates). The 0.80 target needs a standard error of at most 8 / (1.645 + 1.28) ≈ 2.7pp, i.e. a correlation of about 0.88 at 40 templates (0.91 at 30). So the cap will almost certainly bind, and the H2 equivalence branch is probably unreachable. The alternative is to demote that branch to exploratory now.
 
 ### 4.3 Controls (as written)
 > **Controls, on the same templates:**
@@ -335,13 +343,41 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 >
 > Add $0 validity checks: a programmatic shortcut audit, and no-memory heuristic baselines (most frequent option, last-seen option) that must score ≤ chance + 10pp. (PLAN §16.3)
 
-**Operational.** Validity runs use harness cell F-0 and the validity seed range (§2.9). The 85% and 20% thresholds apply to the pooled rate over the 8 task cells, and per-cell rates are reported. The spot-check uses generated episodes from the validity range; the researcher reviews them without model output. The heuristic baselines run on 1,000 generated episodes per task cell at $0.
+**Operational.** Validity runs use harness cell F-0 and the validity seed range (§2.9). The 85% and 20% thresholds apply to the pooled rate over the 8 task cells, and per-cell rates are reported. The spot-check uses generated episodes from the validity range; the researcher reviews them without model output.
+
+**Heuristic baselines** ($0; 1,000 generated episodes per task cell; each must score ≤ 20% in **every** task cell):
+- **Position:** always choose the first option; always choose the last option.
+- **Most frequent option:** on a disjoint set of 1,000 generated episodes of the same task cell, find the value and the list position that are most often correct; predict them on the test episodes.
+- **Last-seen option:** on the fact-withheld rendering (§4.3), choose the option whose string occurs latest in the episode text before the option list, and a random option if none occurs.
+
+A literal "last-seen" or "most frequent in the episode" heuristic on the normal rendering is not a no-memory baseline here: under §2.3 the target is the only option string that occurs before the option list, so such a heuristic recalls the fact and would score near 100% on observed cells. That is why it runs on the fact-withheld rendering, where any option string found before the list is a leak.
+
+**[RESEARCHER DECISION]** (D39) Accept: restated-at-need for a derived fact restates the clues and the rule, not the value; the fact-withheld control uses equal-length distractor bindings; validity runs use F-0; the 85% and 20% LLM thresholds apply to the rate pooled over the 8 task cells; and the heuristic baselines above, applied per task cell. *Trade-off:* restating the clues keeps the derivation in the ceiling, which is the right ceiling for derived cells but makes 85% harder to reach there; restating the value would test only retrieval. Pooled LLM thresholds keep the paid validity runs small, but can hide one failing task cell (for example derived-restated at 70%); per-cell thresholds would need more validity episodes. The heuristics are free, so they are applied per cell.
 
 ### 4.5 Survival calculator (as written)
 > For every harness × task cell, it computes S from token positions *before* running:
 > - For window harnesses, S is mechanical, so the window effect at S=0 is not itself a finding.
 > - The estimands are the non-mechanical parts: the rescue rate P(success | S=0), via notes, lookup or re-derivation; the residual at S=1; the value of replay for derived state.
 > - For summary and notes cells, log whether the fact or clues appear in the summary or retained notes. This gives an accounting of P(carried), P(used | carried) and P(rescued | not carried). (PLAN §5)
+
+### 4.6 Run matrix (PLAN §7, §12, §16.1)
+> Core: F-r vs F-0 on all 8 task cells. The W/Σ replay pairs run only if H2 shows signal. (PLAN §7)
+>
+> Phase 1a stays under $450 by sizing (30 sol templates; luna's 4 replay-off cells first). (PLAN §16.1)
+
+**Operational.** Which harness cells run on which model in the main sweep. Every row uses all 8 task cells and the template counts set by §4.2.
+
+| Model | Harness cells | Controls | Status |
+|---|---|---|---|
+| gpt-6-luna | F-0, W-n-0, Σ-n-0, W-0, run first | Position-matched single-turn and restated-at-need, on all 8 task cells (PLAN §12's ~1,600 control prompts) | Confirmatory for H1 and H3; the rest is accounting (§2.8) and cost outcomes (§9.5) |
+| gpt-6-luna | F-r, W-n-r, Σ-n-r | none | Only if luna's toggle is verified at G0 (D29) and the phase-1a cap allows. Exploratory (§9.10) |
+| gpt-6.1-sol | F-r, F-0 | none | H2 core, confirmatory |
+| gpt-6.1-sol | W-n-r vs W-n-0, Σ-n-r vs Σ-n-0 | none | Only if H2 shows "signal" (§3 H2) and the phase-1a cap allows. Exploratory |
+| either | Σ-0-r (optional) | none | Only on a verified toggle and if the cap allows. Exploratory |
+
+Validity runs (§4.4) use F-0 on each model that runs a main sweep. The sol H1 replication is not in the MVP (PLAN §4 [A1]).
+
+**[RESEARCHER DECISION]** (D36) Accept this run matrix, and running both controls on all 8 task cells even though H3 uses only the far, not-recoverable cells (D10). *Trade-off:* fixing the matrix now stops cells being added or dropped after results are seen. Running the controls on all 8 task cells follows PLAN §12's cost line and gives a restated ceiling per task cell, at the cost of about 1,600 luna control prompts; running only the single-turn control, and only on the 2 task cells H3 uses, would cut that by seven eighths.
 
 ## 5. Harness cells (PLAN §6)
 > | Cell | History / loss policy | Notes instruction | Reasoning replay | Role |
@@ -387,7 +423,7 @@ PLAN §7's rows for Qwen3.6-27B and gpt-oss-120b (extension E1) and DeepSeek V4.
 - **Pins:** none of luna, 6.1-sol or Gemini 3.8 Flash has a dated snapshot (PLAN §16.2, §16.6). The `model_returned` string on each response is therefore the pin. If it changes during a sweep, the change is flagged, and results are also reported split by model string.
 - A response with status `incomplete` at the need step (for example, hitting `max_output_tokens`) counts as a content failure and scores 0.
 
-**[RESEARCHER DECISION]** (D13) Accept effort `medium`, mode `standard`, `max_output_tokens` 32,000 and Flex for OpenAI. *Trade-off:* medium is the documented default and keeps sol inside the phase-1a cap. But the ARC leg runs Gemini at *high*, and the published ARC gap grows with effort, so a medium-effort H2 may understate the value of replay relative to the ARC leg.
+**[RESEARCHER DECISION]** (D13) Accept effort `medium`, mode `standard`, `max_output_tokens` 32,000 and Flex for OpenAI. *Trade-off:* medium is the documented default and is cheaper than high, which matters because sol's H2 core is the largest line in phase 1a (PLAN §16.1). But the ARC leg runs Gemini at *high*, and the published ARC gap grows with effort, so a medium-effort H2 may understate the value of replay relative to the ARC leg.
 
 ## 7. ARC path study (PLAN §8)
 > We use ARC's own MIT harness ([arcprize/arc-agi-3-benchmarking](https://github.com/arcprize/arc-agi-3-benchmarking)), forked and pinned at commit `4ca00e6` (2026-09-21, the HEAD of `main` on 2026-09-30). Pull later upstream changes only on purpose, and record them. (PLAN §8)
@@ -537,14 +573,15 @@ held_out = perm[4:]     # StateCarry held-out set, plus the third game (D16)
 - **Cost per game** is the mean over games of the mean over replicates of counted-run cost on the primary basis (D23). S0+StateCarry includes every StateCarry call (promotion, digest). Re-run costs are reported separately and left out of the comparison.
 - **StateCarry freeze:** the code commit and config hash of the StateCarry version under test are recorded by a pre-declared amendment ("A-SC", §17) before any G3 evaluation run, and again before any held-out run.
 
-**[RESEARCHER DECISION]** (D23) **Cost basis:** primary = **billed estimate**, from provider-reported cached tokens at the chosen tier's prices. Secondary = ARC no-cache list, also reported. *Trade-off:* billed is what a Standard-harness user actually pays, and the only basis on which StateCarry's cache-friendly layout can pay off. It is also the harder bar. In the published high-effort runs (means over 25 games), S0 already costs more than S4 billed (~$74 vs ~$53), while at list they are about even (~$80 vs ~$82). List matches ARC's published accounting.
+**[RESEARCHER DECISION]** (D23) **Cost basis:** primary = **billed estimate**, from provider-reported cached tokens at the chosen tier's prices. Secondary = ARC no-cache list, also reported. Re-run costs are excluded from the comparison and reported separately. *Trade-off:* billed is what a Standard-harness user actually pays, and the only basis on which StateCarry's cache-friendly layout can pay off. It is also the harder bar. In the published high-effort public-set runs (means over 25 games, `docs/background.md` §4), the Standard harness already costs more than the Adapter when billed with caching (~$74 vs ~$53), while at list the Adapter costs a little more (~$83 vs ~$87; ARC's results page shows ~$80 vs ~$82). List matches ARC's published accounting. Excluding re-runs keeps the comparison on counted runs, but hides a config that errors (and so costs) more often.
 
 **[RESEARCHER DECISION]** (D24) **Gate and claim rules.**
 - **G3:** the frozen v0 runs once, with a fresh replicate, on each of the 4 dev games. These 4 runs are compared with the path-study counted S0 and S4 runs on the same games. Continue iff C_dev ≥ 0.25 **and** the cost per game of S0+SC ≤ that of S4. Development runs made before the v0 freeze do not enter G3.
+- **Dev cap:** the 4 G3 runs count toward the $150 dev spend cap (PLAN §9). At the published S0 list costs of the eligible games ($11.68-$54.75 per run), 4 runs could take most of that cap at list; the researcher is asked before the cap is exceeded (CLAUDE.md).
 - **Held-out order** (PLAN §16.4 option, adopted): the 12 held-out S0+S4 runs go first. The 6 StateCarry held-out runs proceed only if the held-out G ≥ 10 RHAE, the same bar as kill criterion 4. Otherwise closure cannot be estimated, and that is reported.
 - **G4 wording:** **win** iff C ≥ 0.50 **and** cost(SC) ≤ cost(S4). **Partial** iff 0.25 ≤ C < 0.50, or C ≥ 0.50 with the cost condition failing. **Negative** iff C < 0.25.
 
-*Trade-off:* a ratio of means is stable when one game's gap is near 0, but lets a large-gap game dominate. Gating the StateCarry runs on a held-out gap ≥ 10 saves the 6 StateCarry runs (a third of the held-out runs) when there is nothing to close, but it adds a decision point.
+*Trade-off:* a ratio of means is stable when one game's gap is near 0, but lets a large-gap game dominate. Gating the StateCarry runs on a held-out gap ≥ 10 saves the 6 StateCarry runs (a third of the held-out runs) when there is nothing to close, but it adds a decision point. Counting the G3 runs toward the $150 dev cap keeps phase-2 spend inside PLAN's line, but leaves little money for development before v0 is frozen; the alternative is a separate, stated G3 budget.
 
 ## 9. Analysis plan (PLAN §10)
 
@@ -560,7 +597,7 @@ held_out = perm[4:]     # StateCarry held-out set, plus the third game (D16)
 - **Confirmatory GLM:** `statsmodels` binomial GLM with template dummies and a covariance clustered by template, fitted separately per model. Templates with no outcome variation in the fitted subset carry no within-template information and are dropped from the GLM only; their count is reported. The bootstrap keeps them.
 - The Bayesian sensitivity model needs a new dependency (`bambi`), which the analysis track adds with `uv add` and notes in its PR.
 
-**[RESEARCHER DECISION]** (D25) Accept percentile intervals and dropping no-variation templates from the GLM. *Trade-off:* percentile intervals are simple, but can under-cover near 0% or 100%; BCa intervals cover better but are harder to audit. Dropping no-variation templates is standard for fixed-effects logit, but it shifts the GLM's population away from the bootstrap's.
+**[RESEARCHER DECISION]** (D25) Accept percentile intervals, dropping no-variation templates from the GLM, and the quasi-Poisson log-link model for cost outcomes (§9.5). *Trade-off:* percentile intervals are simple, but can under-cover near 0% or 100%; BCa intervals cover better but are harder to audit. Dropping no-variation templates is standard for fixed-effects logit, but it shifts the GLM's population away from the bootstrap's. PLAN asks for "log-linear models"; a log-link GLM handles zero lookups directly, while OLS on log outcomes would need an offset for zeros and estimates a geometric rather than an arithmetic mean ratio.
 
 ### 9.2 Not used
 > **Not used:** max−min harness spread. Under the null it rises as success falls; a simulation with no true effect gave an expected 8.7pp at p=0.95 and 16.1pp at p=0.60. If a single "how much does the harness matter" summary is wanted, use a harness variance component with a permutation null. (PLAN §10)
@@ -577,7 +614,9 @@ Every primary contrast is reported on both the probability and the logit scale. 
 3. H2 tokens: H0 is TE ≤ 0 (sol).
 4. H3: H0 is Δ_H3 ≥ 5pp (non-inferiority).
 
-Each p-value is the one-sided percentile-bootstrap p-value from §9.1 (the share of resamples on the null side), on the probability scale; for test 3, on the ratio scale. A hypothesis is called "supported" only if its Holm-adjusted test rejects **and** the confirmatory GLM estimate has the same sign. *Trade-off:* splitting H2's "or" prediction into two tests is more conservative than PLAN's three-member family, but it protects both branches. Bootstrap p-values match the probability-scale predictions and kill rules. Logit Wald p-values would match the power simulation's assumptions, but can disagree with them near ceilings.
+Each p-value is the one-sided percentile-bootstrap p-value from §9.1 (the share of resamples on the null side), on the probability scale; for test 3, on the ratio scale. A hypothesis is called "supported" only if its Holm-adjusted test rejects **and** the model-based estimate agrees: for tests 1 and 2, the confirmatory GLM estimate has the same sign; for test 3, the log-link estimate of §9.5 is above 0; for test 4, a binomial GLM with template fixed effects and an arm indicator (single-turn vs multi-turn) on the H3 cells gives a probability-scale Δ_H3 below 5pp (the confirmatory GLM of §9.1 has no term for the single-turn control).
+
+The §3 readings ("prediction holds", "falsified", "kill", "equivalence") use point estimates or unadjusted 90% CIs, as PLAN writes them; "supported" uses the Holm-adjusted tests. Both are reported, and only "supported" is used for a confirmatory claim. *Trade-off:* splitting H2's "or" prediction into two tests is more conservative than PLAN's three-member family, but it protects both branches. Bootstrap p-values match the probability-scale predictions and kill rules. Logit Wald p-values would match the power simulation's assumptions, but can disagree with them near ceilings.
 
 ### 9.5 Cost outcomes
 > **Cost outcomes:** tokens, reasoning tokens, lookups and dollars per episode. Use log-linear models with template fixed effects, and report ratios. (PLAN §10)
@@ -631,13 +670,21 @@ Every gate metric is computed by a committed script. The decision, the numbers b
 >
 > **G0 toggle rule** adds a replay-use probe (~$2). Turn 1 asks the model to privately pick a 3-digit number and reply only "ready"; turn 2 is filler; turn 3 asks for the number. Both arms send identical payloads; only `reasoning.context` differs. Chance is 1/1000. The probe is excluded from all analyses. (PLAN §16.3)
 
+The text elided from PLAN §11 above gives G0's cost and toggle fallbacks; they are kill criteria 1 and 2 (§10.8) and the fallback list below.
+
+**[RESEARCHER DECISION]** (D37) **The other G0 conditions.**
+- **"Snapshot tests pass":** every payload snapshot test, for each PersistGym harness cell (§5) and each ARC config S0-S4 (§7.1), passes at the commit the block-1 runs use.
+- **"Gemini S0-S2 run":** in the truncated pilot (§11), S0 reaches 50 actions, S1 reaches its first compaction plus 5 turns, and S2 reaches 30 actions, each on the Interactions API at `thinking_level: high` with the payload accepted and no `API_ERROR` or `AGENT_ERROR` ending. S1's compaction must produce the user-role bridge message. S4 must reach 50 actions, because D27 needs its billed/list ratio.
+
+*Trade-off:* reaching the truncation point is a weak bar; it shows the configs run, not that they run for a full game within the 12 h clock. The $0 offline games with a stub model (PLAN §16.3) cover full-game mechanics without cost.
+
 **[RESEARCHER DECISION]** (D27) **Cost forecast.**
 - F = Σ over the 4 path games g and the configs c ∈ {S0, S1, S2, S4} of 2 × L(g, c) × b(c).
 - L(g, c) is the per-run list forecast: the published list cost of game g under the Standard harness for c = S0, under the Adapter for c = S4, and the larger of the two for S1 and S2. Where the operational slice infers that the relevant published run ended early without a win, its clean-run upper bound replaces it.
-- b(c) is the billed/list cost ratio measured for config c in the truncated pilot at the chosen tier.
+- b(c) is the billed/list cost ratio measured for config c in the truncated pilot, from its provider-reported usage priced at the chosen tier's prices, so it can be computed whichever tier the pilot ran on.
 - **Go on cost iff F + reserve ≤ $900**, with the reserve as in D28.
 
-*Trade-off:* published costs understate runs that crashed early, which is why the clean-run bound is used there. Using the bound for every game would be safer, but would probably fail G0 and force the 3-game or medium-thinking fallback.
+*Trade-off:* published costs understate runs that crashed early, which is why the clean-run bound is used there. Using the bound for every game would be safer, but would probably fail G0 and force the 3-game or medium-thinking fallback. Pricing S1 and S2 at the larger of the two published costs is more cautious than PLAN §16.1, which priced them at the mean of the two: re-derived from the `docs/background.md` §4 table, the list forecast over the 15 possible draws is $764-1,166 (mean $1,015) under the larger-of-two rule, against PLAN's $638-1,054 (mean $896) under the mean rule.
 
 **[RESEARCHER DECISION]** (D28) **Re-run reserve = 20% of F.** G0 thus requires 1.2 F ≤ $900, about $23.4 per run (PLAN §16.3). *Trade-off:* 11 of 25 published Standard-high runs ended early without a win, so a 20% reserve could be too small if our error rate is similar. A larger reserve leaves less forecast room under the cap, and the backoff patches should reduce transport errors.
 
@@ -678,9 +725,11 @@ The gate is defined in §4.4.
 **Operational.**
 - **Kill criterion 4:** G = R̄_S4 − R̄_S0 over the 8 counted units (H4) is < 10.
 - **Kill criterion 5** requires all three of the following:
-  - "H1 inside equivalence bounds" means H1's kill condition holds (§3 H1).
+  - "H1 inside equivalence bounds" means H1's kill condition holds (§3 H1). See D38.
   - "H2 inside equivalence bounds" means H2's equivalence condition holds (§3 H2). If H2 moved to open weights (kill criterion 1), the condition is read on that run.
   - "Dominated" is defined by D30.
+
+**[RESEARCHER DECISION]** (D38) Read "H1 inside equivalence bounds" as H1's kill condition (Δ_H1 < 10pp and the upper bound of its 90% CI < 15pp). *Trade-off:* PLAN gives H1 a kill rule but no separate equivalence rule, and the kill rule is the closest bound it states. A symmetric rule (for example, the 90% CI of Δ_H1 inside ±10pp) would be stricter and would fire less often.
 
 **[RESEARCHER DECISION]** (D30) **"Dominated by a mechanism with no provider-neutral analogue"** means **σ_replay ≥ 2/3** as a point estimate. Here σ_replay is the share of the S2→S4 step, which bundles native replay with the native item format and is the only step with no provider-neutral analogue. *Trade-off:* at 2/3, the provider-neutral steps (loss policy plus notes) carry at most a third of the gap. A bar of 1/2 (Prediction B) would skip phase 2 more readily. Also requiring the bootstrap lower bound to be ≥ 1/2 would make the kill nearly impossible to trigger with 8 units.
 
@@ -692,7 +741,7 @@ The gate is defined in §4.4.
 ### 10.6 3-game fallback
 > How a game is dropped under the 3-game fallback (seeded, not by cost). (PLAN §16.5)
 
-**[RESEARCHER DECISION]** (D32) If the 3-game fallback is triggered, **drop `perm[3]`**, the last path game in the draw. If it has already been run, its runs are reported as exploratory and it stays a dev game. Otherwise it is set aside (neither path nor held-out) unless the researcher decides otherwise at G2. *Trade-off:* a position-based drop is fixed at the draw and cannot be steered by results or costs, but it may drop the game with the cleanest measurement.
+**[RESEARCHER DECISION]** (D32) If the 3-game fallback is triggered, **drop `perm[3]`**, the last path game in the draw. If it has already been run, its runs are reported as exploratory and it stays a dev game. Otherwise it is set aside (neither path nor held-out) unless the researcher decides otherwise at G2. H4, Checkpoint C and kill criterion 4 then use the 3 remaining path games (6 units instead of 8), with the same thresholds; Checkpoint C's cost rule then counts 18 remaining runs instead of 24, and its error rule 6 seed-1 runs instead of 8. *Trade-off:* a position-based drop is fixed at the draw and cannot be steered by results or costs, but it may drop the game with the cleanest measurement.
 
 ### 10.7 G3 and G4
 Defined in §8 (D24).
@@ -747,7 +796,7 @@ Defined in §8 (D24).
 - **OpenAI echo mismatch:** the episode is excluded (CLAUDE.md). If a cell exceeds 5%, the run stops and the researcher is told.
 - **Transport failure after the harness's retries** (HTTP 429/5xx, timeouts): the episode is re-run once with the same template and seeds. A second failure means exclusion. Counts are reported per cell.
 - **Content failures** (unparseable, invalid or refused actions; an `incomplete` response at the need step) score 0 and are not re-run.
-- Episodes are analysed by their **assigned** cell. `S_planned` ≠ `S_verbatim` mismatches are reported, not excluded (but see the 2% stop in §2.8).
+- Episodes are analysed by their **assigned** cell. `S_planned` ≠ `S_verbatim` mismatches are reported, not excluded (but see the bug stop in §2.8).
 
 *Trade-off:* re-running transport failures keeps the cells balanced, but repeats a template's exposure in that cell. Excluding them instead risks unbalanced, informative missingness if failures cluster in long-context cells.
 
@@ -771,10 +820,10 @@ Extensions are **not** pre-registered here, apart from the two rules carried ove
 - **Equivalence is not absence.** "Inside equivalence bounds" means the effect is within the stated bounds at the stated confidence. It does not mean there is no effect, and an underpowered result is called inconclusive.
 - **StateCarry is not claimed to be new as an idea.** Ledger-style state and reasoning replay already exist (Ledger 2608.00808, the Kaggle "Duck" baseline, public Kaggle ablations). The claim is limited to closing the Standard-to-Adapter gap under ARC's rules on held-out games. It is not a state-of-the-art claim, and a coding success win would not be new.
 - **Costs are period-specific.** They are estimates at the prices checked on 2026-09-29/30. Gemini 3.8 Flash prices double on 2027-01-01.
-- **H5 on published runs is observational.** It cannot separate depth from game difficulty beyond game fixed effects.
+- **H5 on published runs is observational and not blind.** It cannot separate depth from game difficulty beyond game fixed effects. Per-game scores were seen before this pre-registration, and the operational slice reveals where each published run ended (§3 H5). Only H5 on our own runs is a test on unseen data.
 
 ## 16. Decision register
-Every item below is marked **[RESEARCHER DECISION]** in the text, in this order. The researcher accepts, changes or strikes each one before freeze.
+Every item below is marked **[RESEARCHER DECISION]** in the text. D1-D33 appear in the text in this order; D34-D39 were added in review and sit in the sections listed. The researcher accepts, changes or strikes each one before freeze.
 
 | ID | Section | Item | Proposed |
 |---|---|---|---|
@@ -782,8 +831,8 @@ Every item below is marked **[RESEARCHER DECISION]** in the text, in this order.
 | D2 | §2.4 | Derived-fact wording | Evidence set includes the rule; all K options consistent under any proper subset of clues; m = 2/3 split 50/50 |
 | D3 | §2.5 | Recoverable wording | Generic `lookup(key)` over any earlier key; one extra step; cap 3 |
 | D4 | §2.6 | Needed and success | Score the first non-lookup action at the need step; invalid output = 0 |
-| D5 | §2.7 | Near/far | Far: sys + O(r_last, n) > W; near window [n−6, n−1], R_plan = 1,000; tokenizer `o200k_base` |
-| D6 | §2.8 | Survives (S) | Whole-word match of value or all clues; replayed reasoning not counted in W; 2% mismatch stop |
+| D5 | §2.7 | Near/far | Far: sys + O(r_last, n) > W; near window [n−6, n−1], R_plan = 1,000; same T and n in all 8 task cells of a template; tokenizer `o200k_base` |
+| D6 | §2.8 | Survives (S) | Whole-word match of value or all clues; replayed reasoning not counted in W; stop on window-accounting bugs; expected near losses > 2% in pilots trigger re-tuning |
 | D7 | §2.9, §11 | Seed ranges and repeats | Main 1-49,999; validity 50,000-59,999; pilots 90,000-99,999; primary analysis on repeat 0 |
 | D8 | §3 H1 | H1 token and lookup reading | Difference-in-differences token ratio ≥ 1.30; zero-lookup rule |
 | D9 | §3 H2 | H2 token measure and readings | Need-step reasoning tokens; point estimates; sol only in Holm; "signal" = not falsified |
@@ -800,17 +849,23 @@ Every item below is marked **[RESEARCHER DECISION]** in the text, in this order.
 | D20 | §7.5 | `TIME_BUDGET` handling | Re-run once (as written) |
 | D21 | §7.6 | Tier latency rule | Flex iff p90 × 1.5 × max published actions ≤ 6 h and no probe call > 15 min; else standard tier |
 | D22 | §7.7 | Cost-guard value | $120 per run at list; `COST_CAP` scored as is and reported |
-| D23 | §8 | Cost basis for StateCarry and G3/G4 | Billed estimate primary; list secondary |
-| D24 | §8 | Closure, G3, held-out order, G4 wording | Ratio of means; held-out S0+S4 first with gap ≥ 10; win/partial/negative bands |
-| D25 | §9.1 | Bootstrap and GLM details | Percentile intervals; drop no-variation templates from the GLM only |
-| D26 | §9.4 | Holm family | 4 one-sided bootstrap tests; GLM sign must agree |
-| D27 | §10.1 | G0 cost forecast formula | Published cost, or clean-run bound if crashed, × pilot billed/list ratio |
+| D23 | §8 | Cost basis for StateCarry and G3/G4 | Billed estimate primary; list secondary; re-run costs excluded |
+| D24 | §8 | Closure, G3, held-out order, G4 wording | Ratio of means; G3 runs count toward the $150 dev cap; held-out S0+S4 first with gap ≥ 10; win/partial/negative bands |
+| D25 | §9.1, §9.5 | Bootstrap, GLM and cost-model details | Percentile intervals; drop no-variation templates from the GLM only; quasi-Poisson log-link for cost outcomes |
+| D26 | §9.4 | Holm family | 4 one-sided bootstrap tests; model-based estimate must agree (H3: arm GLM below 5pp); "supported" vs "prediction holds" kept apart |
+| D27 | §10.1 | G0 cost forecast formula | Published cost (S1/S2: larger of S0 and S4), or clean-run bound if crashed, × pilot billed/list ratio at the chosen tier |
 | D28 | §10.1 | Re-run reserve | 20% of the forecast |
 | D29 | §10.1 | Toggle rule and probe thresholds | 100% echo match; probe ≥ 10/20 vs ≤ 1/20 |
 | D30 | §10.4 | Numeric "dominated" | σ_replay ≥ 2/3 (point estimate) |
 | D31 | §10.5 | Per-component ablation (kill criterion 6) | Isolates exactly one of loss / notes / replay on ARC-AGI-3 |
-| D32 | §10.6 | 3-game fallback drop rule | Drop `perm[3]` |
+| D32 | §10.6 | 3-game fallback drop rule | Drop `perm[3]`; H4, Checkpoint C and kill criterion 4 on the 3 remaining games |
 | D33 | §13 | PersistGym episode errors and exclusions | Echo → exclude (5% stop); transport → one re-run; content → 0 |
+| D34 | §3 H4 | H4 readings | Predictions A/B on point estimates; shares withheld if G < 10 RHAE |
+| D35 | §3 H5 | H5 operational choices | Reached = ≥ 1 action; bands 1-2 vs ≥ 4; probability-scale AME with game-cluster bootstrap; high effort only on published runs |
+| D36 | §4.6 | Run matrix | luna: 4 replay-off cells first, replay cells only on a verified toggle; sol: F-r vs F-0, W/Σ pairs only on "signal"; both controls on all 8 task cells (luna) |
+| D37 | §10.1 | Other G0 conditions | All payload snapshot tests pass; truncated S0-S2 (and S4) reach their stopping points without API/agent errors |
+| D38 | §10.4 | Kill criterion 5, H1 reading | "H1 inside equivalence bounds" = H1's kill condition |
+| D39 | §4.3, §4.4 | Controls and validity details | Restated derived = clues + rule; withheld = equal-length distractors; validity in F-0; LLM thresholds pooled; heuristic baselines defined and applied per task cell |
 
 ## 17. Amendment log
 No amendments yet (draft). Pre-declared amendments, each merged by PR before the event it guards:

@@ -1,0 +1,5 @@
+provider,model,tier,input_usd_per_m,cached_usd_per_m,output_usd_per_m,valid_to,source_url,checked
+google,gemini-3.8-flash,standard,0.75,0.075,3.75,2026-12-31,https://ai.google.dev/gemini-api/docs/pricing,2026-09-30
+google,gemini-3.8-flash,standard_from_2027,1.50,,7.50,,https://ai.google.dev/gemini-api/docs/pricing,2026-09-30
+openai,gpt-6-luna,standard,0.10,0.01,0.50,,https://developers.openai.com/api/docs/pricing,2026-09-30
+openai,gpt-6.1-sol,standard,2.00,0.10,10.00,,https://developers.openai.com/api/docs/pricing,2026-09-30

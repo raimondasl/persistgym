@@ -101,6 +101,7 @@ class TestStubModel:
         assert [step["type"] for step in response["steps"]] == ["thought", "model_output"]
         assert response["steps"][1]["content"][0]["text"] == "turn 1: ACTION1"
         assert response["usage"]["total_tokens"] == 120
+        assert response["model"] == "gemini-3.8-flash-stub"
         assert stub.reported_totals == [120]
 
     def test_summary_requests_get_a_summary_and_no_turn(self):
@@ -277,6 +278,8 @@ def _run(label: str) -> tuple[dict, list[dict]]:
         "reported_totals": [120, 180_000, 120],
         "run_meta": {
             "exit_reason": "GAME_WIN",
+            "agent_exit_reason": "GAME_WIN",
+            "reported_models": ["gemini-3.8-flash-stub"],
             "arc_environment": {"kind": "local"},
             **({"runtime": runtime} if runtime else {}),
         },
@@ -303,6 +306,8 @@ class TestCheckRun:
             ("S2", lambda r, b: b[3]["input"].pop(0), "bridge"),
             ("S4", lambda r, b: b[2]["generation_config"].update(max_output_tokens=9), "max_output_tokens"),
             ("S0", lambda r, b: r["run_meta"].update(exit_reason="AGENT_ERROR"), "exit_reason"),
+            ("S1", lambda r, b: r["run_meta"].update(agent_exit_reason="API_ERROR"), "agent_exit_reason"),
+            ("S4", lambda r, b: r["run_meta"].pop("reported_models"), "reported_models"),
             ("S0", lambda r, b: r["run_meta"].update(arc_environment={"kind": "remote"}), "arc_environment"),
             ("S1", lambda r, b: b[0].update(service_tier="flex"), "service_tier"),
             ("S0", lambda r, b: b[0]["generation_config"].update(thinking_level="low"), "thinking_level"),

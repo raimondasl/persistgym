@@ -131,9 +131,12 @@ def last_user_text(body: dict[str, Any]) -> str:
     return "".join(part.get("text", "") for part in users[-1].get("content", []))
 
 
-def interactions_response(index: int, text: str, total: int) -> dict[str, Any]:
+def interactions_response(
+    index: int, text: str, total: int, model: str = "stub-model"
+) -> dict[str, Any]:
     return {
         "id": f"stub-interaction-{index}",
+        "model": model,
         "created": "2026-10-01T00:00:00Z",
         "updated": "2026-10-01T00:00:00Z",
         "status": "completed",
@@ -199,10 +202,13 @@ class StubModel:
             total = self.usage.total_tokens(turn, len(system) + sum(map(len, texts)))
             self.reported_totals.append(total)
         index = len(self.bodies)
+        # Report a model name the request did not use, so the run files show
+        # that it comes from the response (patch 0014).
+        model = f"{body.get('model', 'stub')}-stub"
         if "messages" in body:
-            payload = chat_response(index, str(body.get("model", "stub")), text, total)
+            payload = chat_response(index, model, text, total)
         else:
-            payload = interactions_response(index, text, total)
+            payload = interactions_response(index, text, total, model)
         return httpx.Response(200, request=request, json=payload)
 
 

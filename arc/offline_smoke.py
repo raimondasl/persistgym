@@ -167,6 +167,12 @@ def check_run(label: str, result: dict[str, Any], bodies: list[dict[str, Any]]) 
     problems: list[str] = []
     if meta.get("exit_reason") not in ENDINGS:
         problems.append(f"exit_reason {meta.get('exit_reason')!r}")
+    if meta.get("agent_exit_reason") != meta.get("exit_reason"):
+        problems.append(
+            f"agent_exit_reason {meta.get('agent_exit_reason')!r} != exit_reason"
+        )
+    if not meta.get("reported_models"):
+        problems.append("run_meta has no reported_models")
     if meta.get("arc_environment") != {"kind": "local"}:
         problems.append(f"arc_environment {meta.get('arc_environment')!r}")
     actions = [body for body in bodies if not _is_summary(body)]

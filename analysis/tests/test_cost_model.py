@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from analysis import cost_model as cm
+from common import costs
 
 
 @pytest.fixture(scope="module")
@@ -186,7 +187,10 @@ def option_a(model) -> cm.OptionAModel:
 def test_option_a_inputs_and_recorded_costs(model, option_a):
     params = pd.read_csv(cm.DATA_DIR / cm.OPTION_A_FILE, dtype=str, keep_default_na=False)
     assert params.name.is_unique and (params.source.str.len() > 0).all()
-    assert option_a.caps == {"0": 100, "1a": 500, "1b": 900, "2": 1150}
+    # 1a $500 and phase 2 $1,250: approved by the researcher on 2026-10-01 (PLAN §17.3).
+    assert option_a.caps == {"0": 100, "1a": 500, "1b": 900, "2": 1250}
+    # The forecasts use the caps the paid guard enforces (common/costs.py, PLAN §17.3).
+    assert option_a.caps == costs.PHASE_CAPS
     arc = option_a.arc
     assert set(arc.loc[arc.role == "path", "game"]) == {"FT09", "SB26", "R11L", "CD82"}
     assert set(arc.loc[arc.role == "heldout", "game"]) == {"SP80", "VC33", "TN36"}
@@ -220,8 +224,12 @@ def test_option_a_arc_rules(option_a):
 def test_option_a_sol_reallocation_and_repeats(model, option_a):
     s = cm.OPTION_A_CENTRAL
     assert option_a.sol_templates(s) == (120, 40)
-    assert option_a.sol_templates(replace(s, sol_td=200)) == (200, 67)
-    assert option_a.with_repeats(120, True) == 132 and option_a.with_repeats(67, True) == 74
+    # The ceiling is T_d = 210 (T_o = 70); T_d is always a multiple of 30 (D7, D11).
+    assert option_a.sol_templates(replace(s, sol_td=210)) == (210, 70)
+    for bad in (0, -30, 100, 200, 240):
+        with pytest.raises(ValueError, match="not allowed"):
+            option_a.sol_templates(replace(s, sol_td=bad))
+    assert option_a.with_repeats(120, True) == 132 and option_a.with_repeats(70, True) == 77
     central = {n: u for *_, n, u in model.items(cm.CENTRAL)}
     # T_d = 120, T_o = 40 is budget-neutral with PLAN's 40 templates x 8 task cells.
     assert sum(option_a.sol_lines(s)) == pytest.approx(central["sol H2 core"])
@@ -229,6 +237,28 @@ def test_option_a_sol_reallocation_and_repeats(model, option_a):
     assert sum(option_a.sol_lines(s)) / no_rep == pytest.approx((2 * 132 + 2 * 44) / 320)
     items = {n: u for *_, n, u in option_a.items(s)}
     assert items["luna sweep"] == pytest.approx(central["luna sweep"])  # 100 + 10 repeats
+
+
+def test_option_a_luna_controls_follow_d36(model, option_a):
+    """Restated-at-need: full F-0 episodes on all 8 task cells; single-turn: one prompt on each
+    of the 4 non-recoverable task cells; both on luna's 100 templates plus the 10 repeats."""
+    s = cm.OPTION_A_CENTRAL
+    ctl = option_a.luna_controls(s)
+    assert ctl["restated_episodes"] == 110 * 8 and ctl["single_turn_prompts"] == 110 * 4
+    assert ctl["restated_usd"] == pytest.approx(880 * model.episode(cm.LUNA, "F-0", 1000))
+    assert ctl["single_turn_usd"] == pytest.approx(440 * model.control_prompt(cm.LUNA, 1000,
+                                                                              True, True))
+    no_rep = option_a.luna_controls(replace(s, repeats=False))
+    assert no_rep["restated_episodes"] == 800 and no_rep["single_turn_prompts"] == 400
+    items = {n: u for *_, n, u in option_a.items(s)}
+    assert "luna control prompts" not in items
+    assert items["luna restated-at-need control (F-0 episodes; D36)"] == ctl["restated_usd"]
+    assert items["luna single-turn control prompts (D36)"] == ctl["single_turn_usd"]
+    # Full episodes cost more than the single prompts PLAN §12 priced (1,600 at 48k input).
+    old = {n: u for *_, n, u in model.items(cm.CENTRAL)}["luna control prompts"]
+    assert ctl["restated_usd"] + ctl["single_turn_usd"] > old
+    # The A1 scenarios are unchanged: they keep the 1,600 single prompts.
+    assert old == pytest.approx(1600 * model.control_prompt(cm.LUNA, 1000, True, True))
 
 
 def test_option_a_items(model, option_a):
@@ -258,10 +288,17 @@ def test_option_a_tables(option_a):
     assert g0.usd_with_reserve == pytest.approx(1.2 * g0.usd)
     assert g0.headroom_usd == pytest.approx(900 - g0.usd_with_reserve)
     z = t["optA_sizing_1a"]
-    assert set(z.T_d) == {90, 120, 150, 180, 200, 210} and (z.sol_repeats_usd > 0).all()
+    assert set(z.T_d) == {90, 120, 150, 180, 210} and (z.sol_repeats_usd > 0).all()
+    assert (z.T_d % 30 == 0).all() and (z.T_o * 3 == z.T_d).all()
     one = z.loc[(z.T_d == 120) & (z.output_per_call == 1000) & (z.luna_cells == 8)].iloc[0]
     assert one.sol_episodes == 704
+    ctl = option_a.luna_controls(cm.OPTION_A_CENTRAL)
+    assert one.luna_controls_usd == pytest.approx(ctl["restated_usd"] + ctl["single_turn_usd"])
     tot = t["optA_totals_by_phase_payee"]
-    assert set(tot.loc[tot.phase != "total", "cap"]) == {100, 500, 900, 1150}
+    assert set(tot.loc[tot.phase != "total", "cap"]) == {100, 500, 900, 1250}
     lines = option_a.summary_lines(t)
     assert any(line.startswith("- G0 forecast") for line in lines)
+    assert any(line.startswith("- Restated-at-need:") for line in lines)
+    head = next(line for line in lines if line.startswith("\nCentral size (T_d = 120"))
+    assert f"(headroom {500 - one.phase_1a_usd:.2f})" in head
+    assert not any("roposed" in line for line in lines)

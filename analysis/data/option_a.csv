@@ -7,13 +7,19 @@ heldout_seeds,2,seeds,PLAN.md §9,held-out S0 S4 S0+StateCarry
 g3_runs_per_dev_game,1,runs,PREREG draft D24 (G3 rule),frozen StateCarry v0 runs once per dev game; costed as its own phase-2 line outside the $150 dev cap (task brief for D24 option B)
 rerun_reserve,0.20,fraction of counted runs,PLAN.md §16.3; PREREG draft D28,applied to every counted ARC run: path; G3; held-out
 gemini_probe_flex_calls,0,calls,decision D21 (researcher 2026-10-01),Gemini standard tier for all ARC runs; Flex latency probe dropped; the acceptance calls stay
-sol_td_central,120,templates,assumption,budget-neutral with PLAN §7's 40 sol templates x 8 task cells: 2 x 120 + 2 x 40 = 320 template-cells per arm
-sol_td_grid,90;120;150;180;200;210,templates,decision D11 option A; the power_sim grid,200 is the D11 A ceiling if the researcher raises the 1a cap before the sol main sweep
-sol_to_divisor,3,ratio,decision D11 option A,T_o = T_d / 3 rounded up
+sol_td_central,120,templates,decision D11 option A (researcher 2026-10-01),central T_d; budget-neutral with PLAN §7's 40 sol templates x 8 task cells: 2 x 120 + 2 x 40 = 320 template-cells per arm
+sol_td_grid,90;120;150;180;210,templates,decision D11 option A with the researcher's A2 follow-up (b) (2026-10-01); the power_sim grid,every allowed T_d from 90 up to the ceiling sol_td_max
+sol_td_step,30,templates,decisions D7 and D11 option A (researcher 2026-10-01),T_d is always a multiple of 30 so that T_o = T_d / 3 is a whole number of 10-template balance blocks
+sol_td_max,210,templates,researcher's A2 follow-up (b) (2026-10-01),ceiling for raising T_d; a raise is decided only before the sol main sweep starts and before any H2 outcome is computed
+sol_to_divisor,3,ratio,decision D11 option A,T_o = T_d / 3 exactly (T_d is a multiple of sol_td_step)
 sol_derived_far_cells,2,cells per template,decision D11 option A,derived x far x {recoverable; not}
 sol_observed_far_cells,2,cells per template,decision D11 option A,observed x far x {recoverable; not}; no near cells on sol
 repeat_every,10,templates,decision D7 as amended by the researcher (2026-10-01),template seeds start at 0; every seed divisible by 10 gets a second repeat; on BOTH luna and sol (the luna-only change was rejected)
+luna_restated_cells,8,task cells,decision D36 (researcher 2026-10-01),restated-at-need control on luna on all 8 task cells; each one a full episode (replaces PLAN §12's single control prompts)
+luna_restated_harness_cell,F-0,harness cell,decision D36 (researcher 2026-10-01),restated-at-need runs as full F-0 episodes; priced with the PLAN §12 token profile of that cell
+luna_single_turn_cells,4,task cells,decision D36 (researcher 2026-10-01),position-matched single-turn control on the 4 non-recoverable task cells only; one single-turn prompt each (pg_control_prompt_tokens)
+luna_control_repeats,1,flag,assumption,1 = the D7 repeat rule also covers the control renderings (one more run for every template seed divisible by 10); conservative because PREREG §2.9 does not say whether controls get repeat 1
 cap_phase_0,100,usd,PLAN.md §12,unchanged
-cap_phase_1a,500,usd,proposed 2026-10-01 (confirmed by the researcher merging amendment A2),was 450 (PLAN.md §12)
+cap_phase_1a,500,usd,approved by the researcher 2026-10-01 (PLAN amendment A2 §17.3),was 450 (PLAN.md §12)
 cap_phase_1b,900,usd,PLAN.md §12,unchanged
-cap_phase_2,1150,usd,decision D24 option B (proposed 2026-10-01),was 950 (PLAN.md §12)
+cap_phase_2,1250,usd,decision D24 option B; amount approved by the researcher 2026-10-01 (A2 follow-up (a)),was 950 (PLAN.md §12); A2 first proposed 1150

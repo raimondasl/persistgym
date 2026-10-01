@@ -47,10 +47,11 @@ def _is_loopback(address) -> bool:
         return False
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def no_network():
     """Every harness test runs with outbound connections blocked, so a test that would reach
-    an API (paid or not) fails loudly instead. Loopback stays open (asyncio uses it on
+    an API (paid or not) fails loudly instead. Module scope (not session) so the patch is
+    undone after each harness test module and never leaks into other suites' tests. Loopback stays open (asyncio uses it on
     Windows). The tokenizer is loaded first: tiktoken downloads o200k_base once if it is not
     cached yet, a free public file, never an API call."""
     tokens.encoding("o200k_base")

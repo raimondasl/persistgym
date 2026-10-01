@@ -637,6 +637,27 @@ def test_prereg_missing_on_main_refuses(tmp_path, armed):
     assert _require(repo, _costs(tmp_path)).prereg_version == "0.1"
 
 
+def test_prereg_differing_from_main_only_in_line_endings_refuses(repo):
+    """The check compares blobs byte for byte: a PREREG committed with other line endings
+    (CRLF for LF, or LF for CRLF) is not the one merged to main, even though it reads the
+    same and records the same version. Normalising line endings before comparing would let
+    it through."""
+    c = _costs(repo.parent)
+    p = repo / "PREREG.md"
+    merged = p.read_bytes()  # as committed and pushed (write_text gives CRLF on Windows)
+    flipped = (merged.replace(b"\r\n", b"\n") if b"\r\n" in merged
+               else merged.replace(b"\n", b"\r\n"))
+    assert flipped != merged and flipped.replace(b"\r", b"") == merged.replace(b"\r", b"")
+    p.write_bytes(flipped)
+    git_in(repo, "-c", "core.autocrlf=false", "commit", "-q", "-am", "line endings only")
+    assert git_out(repo, "rev-parse", "HEAD:PREREG.md") != git_out(
+        repo, "rev-parse", "refs/remotes/origin/main:PREREG.md")  # the blob keeps the bytes
+    with pytest.raises(PaidCallsNotAllowed, match=PREREG_DIFFERS):
+        _require(repo, c)
+    push_main(repo)  # the CRLF file merged: now it is the frozen one
+    assert _require(repo, c).prereg_version == "0.1"
+
+
 def test_prereg_check_ignores_replace_refs(repo):
     """A local `git replace` of origin/main's commit cannot make HEAD's PREREG look merged."""
     c = _costs(repo.parent)
@@ -699,6 +720,9 @@ def test_block_spend_limit(tmp_path, armed):
     ("1,5", "", "replay_probe", "is not a number"),
     ("nan", "1", "replay_probe", "is not a finite"),         # list is checked, not counted
     ("", "", "replay_probe", "no cost"),                     # would count as free
+    # finite as a Decimal, so check_ledger passes it, but infinite as the float the phase
+    # cap sums: headroom raises, and the guard must turn that into a refusal
+    ("", "1e400", "replay_probe", "is not a finite"),
     ("99", "99", "", "has no budget phase"),                 # would count toward no cap
     ("99", "99", "mystery", "has no budget phase"),
 ])

@@ -1,0 +1,3 @@
+[submodule "arc/upstream"]
+	path = arc/upstream
+	url = https://github.com/arcprize/arc-agi-3-benchmarking

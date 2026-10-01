@@ -1,0 +1,240 @@
+From 843a64c900aa4832a2d88452ee118429a0d7d3e2 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 01:14:23 -0400
+Subject: [PATCH 13/15] Add path parity snapshots beyond the first compaction
+
+The Gemini 3.8 Flash high snapshots compared S2 (rolling summary, notes
+off) with S4 (Provider Adapter) only through one scheduled compaction,
+and S0 with S1 only through separate literal snapshots. These tests
+compare the profiles directly on the paths where the manual_rolling
+summary code mirrors the Google adapter by hand:
+
+- S0 equals S1 request for request until something is lost (no trim,
+  usage below the 175k trigger): S0 -> S1 changes only the loss policy.
+- S2 equals S4 without thought steps across two compactions; the second
+  summary covers the first bridge and the turns after it.
+- S2 equals S4 without thought steps through action-request overflow
+  recovery: both summarize the accepted history without the current
+  observation and resend that observation after the bridge.
+- S2 equals S4 without thought steps after an unparseable reply: the
+  same request is retried and neither keeps the rejected reply or its
+  thought.
+
+Tests only; no harness code changes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ tests/unit/test_gemini_path_payloads.py | 200 ++++++++++++++++++++++++
+ 1 file changed, 200 insertions(+)
+
+diff --git a/tests/unit/test_gemini_path_payloads.py b/tests/unit/test_gemini_path_payloads.py
+index 75b6f94..8b1a29f 100644
+--- a/tests/unit/test_gemini_path_payloads.py
++++ b/tests/unit/test_gemini_path_payloads.py
+@@ -863,3 +863,203 @@ def test_literal_prompts_match_the_pinned_harness():
+     assert compaction.SUMMARY_SYSTEM_PROMPT == SUMMARY_SYSTEM_PROMPT
+     assert compaction.SUMMARY_REQUEST_PROMPT == SUMMARY_REQUEST_PROMPT
+     assert compaction.build_summary_bridge("x") == _bridge("x")
++
++
++# ── Path parity beyond the first compaction ────────────────────────────
++
++
++class _OverflowServer(_InteractionsServer):
++    """Rejects chosen action requests (1-based) as over the context window."""
++
++    def __init__(self, overflow_requests: set[int], **kwargs) -> None:
++        super().__init__(**kwargs)
++        self.overflow_requests = overflow_requests
++        self.action_requests = 0
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        body = json.loads(request.content)
++        if body.get("system_instruction") != SUMMARY_SYSTEM_PROMPT:
++            self.action_requests += 1
++            if self.action_requests in self.overflow_requests:
++                self.bodies.append(body)
++                return httpx.Response(
++                    400,
++                    request=request,
++                    json={
++                        "error": {
++                            "code": 400,
++                            "message": "The input token count exceeds the maximum "
++                            "number of tokens allowed.",
++                            "status": "INVALID_ARGUMENT",
++                        }
++                    },
++                )
++        return super().__call__(request)
++
++
++class _UnparseableOnceServer(_InteractionsServer):
++    """Answers one chosen action request (1-based) with text naming no action."""
++
++    def __init__(self, unparseable_request: int, **kwargs) -> None:
++        super().__init__(**kwargs)
++        self.unparseable_request = unparseable_request
++        self.action_requests = 0
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        body = json.loads(request.content)
++        if body.get("system_instruction") != SUMMARY_SYSTEM_PROMPT:
++            self.action_requests += 1
++            if self.action_requests == self.unparseable_request:
++                self.bodies.append(body)
++                return httpx.Response(
++                    200,
++                    request=request,
++                    json={
++                        "id": "interaction-unparseable",
++                        "created": "2026-09-30T00:00:00Z",
++                        "updated": "2026-09-30T00:00:00Z",
++                        "status": "completed",
++                        "steps": [
++                            {
++                                "type": "thought",
++                                "signature": "opaque-unparseable",
++                                "summary": [{"type": "text", "text": "undecided"}],
++                            },
++                            {
++                                "type": "model_output",
++                                "content": [{"type": "text", "text": "still thinking"}],
++                            },
++                        ],
++                        "usage": {
++                            "total_input_tokens": 100,
++                            "total_output_tokens": 10,
++                            "total_thought_tokens": 10,
++                            "total_tokens": 120,
++                        },
++                    },
++                )
++        return super().__call__(request)
++
++
++def _assert_notes_off_equals_adapter_without_thoughts(
++    notes_off: list[dict], adapter: list[dict]
++) -> None:
++    assert len(notes_off) == len(adapter)
++    for s2_body, s4_body in zip(notes_off, adapter, strict=True):
++        assert s2_body == {**s4_body, "input": _strip_native(s4_body["input"])}
++
++
++class TestPathParity:
++    def test_standard_equals_rolling_summary_until_something_is_lost(
++        self, monkeypatch, tmp_path
++    ):
++        # S0 -> S1 changes only the loss policy: while S0 has not trimmed and
++        # S1 has not reached its trigger, every request body is identical.
++        usage = {turn: 174_999 for turn in range(1, 5)}
++        standard, _ = _play(
++            monkeypatch,
++            tmp_path / "s0",
++            _config(STANDARD),
++            actions=4,
++            server=_InteractionsServer(total_tokens=usage),
++        )
++        rolling, _ = _play(
++            monkeypatch,
++            tmp_path / "s1",
++            _config(ROLLING_SUMMARY),
++            actions=4,
++            server=_InteractionsServer(total_tokens=usage),
++        )
++
++        assert len(standard) == 4
++        assert standard == rolling
++
++    def test_notes_off_equals_provider_adapter_across_two_compactions(
++        self, monkeypatch, tmp_path
++    ):
++        # The second summary covers the first bridge and the turns after it.
++        def _run(config_id: str, path: str) -> tuple[list[dict], _InteractionsServer]:
++            server = _InteractionsServer(total_tokens={2: 180_000, 4: 180_000})
++            bodies, _ = _play(
++                monkeypatch,
++                tmp_path / path,
++                _config(config_id),
++                actions=6,
++                server=server,
++            )
++            return bodies, server
++
++        notes_off, s2_server = _run(NOTES_OFF, "s2")
++        adapter, s4_server = _run(PROVIDER_ADAPTER, "s4")
++
++        assert s2_server.summaries == s4_server.summaries == 2
++        second_summary = notes_off[5]
++        assert second_summary["system_instruction"] == SUMMARY_SYSTEM_PROMPT
++        assert second_summary["input"] == [
++            _user(_bridge("summary of play 1")),
++            _user(OBS[3]),
++            _text_turn(_note(3)),
++            _user(OBS[4]),
++            _text_turn(_note(4)),
++            _user(SUMMARY_REQUEST_PROMPT),
++        ]
++        assert notes_off[6]["input"][0] == _user(_bridge("summary of play 2"))
++        _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
++
++    def test_notes_off_equals_provider_adapter_through_overflow_recovery(
++        self, monkeypatch, tmp_path
++    ):
++        # The third action request is rejected as too long. Both harnesses
++        # summarize the accepted history without the current observation,
++        # then resend that observation after the bridge.
++        def _run(config_id: str, path: str) -> list[dict]:
++            bodies, _ = _play(
++                monkeypatch,
++                tmp_path / path,
++                _config(config_id),
++                actions=4,
++                server=_OverflowServer({3}),
++            )
++            return bodies
++
++        notes_off = _run(NOTES_OFF, "s2")
++        adapter = _run(PROVIDER_ADAPTER, "s4")
++
++        bridge = _user(_bridge("summary of play 1"))
++        assert notes_off[2]["input"][-1] == _user(OBS[3])
++        assert notes_off[3] == _body(
++            SUMMARY_SYSTEM_PROMPT,
++            [
++                _user(OBS[1]),
++                _text_turn(_note(1)),
++                _user(OBS[2]),
++                _text_turn(_note(2)),
++                _user(SUMMARY_REQUEST_PROMPT),
++            ],
++            summary=True,
++        )
++        assert notes_off[4] == _body(NO_NOTES_PROMPT, [bridge, _user(OBS[3])])
++        _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
++
++    def test_notes_off_equals_provider_adapter_after_an_unparseable_reply(
++        self, monkeypatch, tmp_path
++    ):
++        # A reply without an action is retried with the same request; neither
++        # harness keeps the rejected reply or its thought.
++        def _run(config_id: str, path: str) -> list[dict]:
++            bodies, _ = _play(
++                monkeypatch,
++                tmp_path / path,
++                _config(config_id),
++                actions=3,
++                server=_UnparseableOnceServer(2),
++            )
++            return bodies
++
++        notes_off = _run(NOTES_OFF, "s2")
++        adapter = _run(PROVIDER_ADAPTER, "s4")
++
++        assert notes_off[1] == notes_off[2]
++        assert all("still thinking" not in json.dumps(body) for body in notes_off)
++        assert all("opaque-unparseable" not in json.dumps(body) for body in adapter)
++        _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
+-- 
+2.54.0.windows.1
+

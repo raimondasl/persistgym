@@ -1,0 +1,484 @@
+From 58dc34160ff9ad688bcf8bb59e17b164033d7d7b Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 01:18:24 -0400
+Subject: [PATCH 14/15] Record the model name each provider response reports
+
+Step records stored only the requested model (request.model). The model
+name the provider returns with each response, which can be more
+specific than the request (a dated or versioned ID), was dropped, so a
+run could not show which model actually served it. Gemini 3.8 Flash has
+no dated snapshot ID, so the returned name is the only pin available.
+
+- ModelResponse.reported_model is filled from the response's model field
+  for Google Interactions, OpenAI Responses and OpenAI Chat Completions
+  (the runtimes request.service_tier covers). Other runtimes leave it
+  unset.
+- step_NNN.json stores reported_model for the accepted response and
+  compaction_NNN.json for the accepted summary; run_meta.json stores
+  reported_models, the distinct names in order of first appearance.
+- All three fields are omitted when no model name is reported, so
+  existing files are unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py             |  17 +-
+ benchmarking/compaction.py        |   3 +
+ benchmarking/recording.py         |   7 +
+ benchmarking/runtime_models.py    |  11 ++
+ tests/unit/test_reported_model.py | 274 ++++++++++++++++++++++++++++++
+ 5 files changed, 311 insertions(+), 1 deletion(-)
+ create mode 100644 tests/unit/test_reported_model.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 20e556a..a3d8da8 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -623,6 +623,7 @@ class BenchmarkingAgent(Agent):
+                 for field in (
+                     "runtime",
+                     "requested_service_tier",
++                    "reported_models",
+                     "transport_retry",
+                     "cost_guard",
+                     "arc_environment",
+@@ -631,6 +632,14 @@ class BenchmarkingAgent(Agent):
+             }
+             f.write(self.run_record.model_dump_json(indent=2, exclude=exclude))
+ 
++    def _note_reported_model(self, model: str | None) -> None:
++        """Add a provider-reported model name to run_meta.json's list."""
++        if model is None or not hasattr(self, "run_record"):
++            return
++        models = self.run_record.reported_models or []
++        if model not in models:
++            self.run_record.reported_models = [*models, model]
++
+     def _save_diagnostic(self, response: Any) -> None:
+         """Dump a raw API response to a diagnostic file for post-mortem debugging."""
+         filename = os.path.join(
+@@ -681,10 +690,12 @@ class BenchmarkingAgent(Agent):
+                     "state_transition",
+                     "continuation",
+                     "service_tier",
++                    "reported_model",
+                 )
+                 if getattr(step, field) is None
+             }
+             f.write(step.model_dump_json(indent=2, exclude=exclude))
++        self._note_reported_model(step.reported_model)
+         self._write_run_meta()
+         logger.info(f"Saved step {self.step_counter} to {filename}")
+ 
+@@ -698,7 +709,9 @@ class BenchmarkingAgent(Agent):
+             f"compaction_{self._compaction_counter:03d}.json",
+         )
+         with open(filename, "w") as f:
+-            f.write(compaction.model_dump_json(indent=2))
++            exclude = {"reported_model"} if compaction.reported_model is None else None
++            f.write(compaction.model_dump_json(indent=2, exclude=exclude))
++        self._note_reported_model(compaction.reported_model)
+         self._write_run_meta()
+         logger.info(
+             "Saved harness summary compaction %s before step %s",
+@@ -791,6 +804,7 @@ class BenchmarkingAgent(Agent):
+                 overflow_recoveries=result.overflow_recoveries,
+                 excluded_turns=result.excluded_turns,
+                 excluded_history_items=result.excluded_history_items,
++                reported_model=getattr(result, "reported_model", None),
+                 usage=compaction_usage,
+             )
+         )
+@@ -1064,6 +1078,7 @@ class BenchmarkingAgent(Agent):
+                 state_transition=state_transition,
+                 continuation=continuation,
+                 service_tier=model_response.service_tier,
++                reported_model=model_response.reported_model,
+             )
+         )
+         self._pending_compaction_continuation = None
+diff --git a/benchmarking/compaction.py b/benchmarking/compaction.py
+index 776940f..215d2fc 100644
+--- a/benchmarking/compaction.py
++++ b/benchmarking/compaction.py
+@@ -74,6 +74,8 @@ class SummaryCompactionResult(BaseModel):
+     overflow_recoveries: int = 0
+     excluded_turns: int = 0
+     excluded_history_items: int = 0
++    # Model name the provider reported for the accepted summary, if any.
++    reported_model: str | None = None
+ 
+ 
+ def runtime_state_item_count(state: RuntimeState) -> int:
+@@ -384,6 +386,7 @@ class SummaryCompactor:
+                 overflow_recoveries=overflow_recoveries,
+                 excluded_turns=len(excluded_turns),
+                 excluded_history_items=excluded_history_items,
++                reported_model=getattr(result.response, "reported_model", None),
+             )
+ 
+         raise CompactionFailureError(
+diff --git a/benchmarking/recording.py b/benchmarking/recording.py
+index eb27050..89e6a35 100644
+--- a/benchmarking/recording.py
++++ b/benchmarking/recording.py
+@@ -108,6 +108,8 @@ class StepRecord(BaseModel):
+     continuation: CompactionContinuationRecord | None = None
+     # Service tier the provider reported for the accepted response, if any.
+     service_tier: str | None = None
++    # Model name the provider reported for the accepted response, if any.
++    reported_model: str | None = None
+ 
+ 
+ class CompactionRecord(BaseModel):
+@@ -129,6 +131,8 @@ class CompactionRecord(BaseModel):
+     excluded_turns: int = 0
+     excluded_history_items: int = 0
+     usage: StepUsage = Field(default_factory=StepUsage)
++    # Model name the provider reported for the accepted summary, if any.
++    reported_model: str | None = None
+ 
+ 
+ class RunRecord(BaseModel):
+@@ -149,6 +153,9 @@ class RunRecord(BaseModel):
+     exit_reason: Optional[str] = None
+     # request.service_tier from the model config; None means provider default.
+     requested_service_tier: Optional[str] = None
++    # Distinct model names the provider reported for accepted action and
++    # summary responses, in order of first appearance; None if none reported.
++    reported_models: Optional[list[str]] = None
+     # client.transport_retry policy and counters; None when not configured.
+     transport_retry: dict[str, Any] | None = None
+     # agent.MAX_RUN_COST_USD and the spend estimate it is compared with;
+diff --git a/benchmarking/runtime_models.py b/benchmarking/runtime_models.py
+index b851052..457bfba 100644
+--- a/benchmarking/runtime_models.py
++++ b/benchmarking/runtime_models.py
+@@ -69,6 +69,9 @@ class ModelResponse(BaseModel):
+     response_id: str | None = None
+     # Service tier the provider reports for this response, when it reports one.
+     service_tier: str | None = None
++    # Model name the provider reports for this response, when it reports one.
++    # It can be more specific than the requested model (a dated or versioned ID).
++    reported_model: str | None = None
+ 
+ 
+ def _extract_output_text_with_usage(
+@@ -94,6 +97,11 @@ def _reported_service_tier(response: Any) -> str | None:
+     return tier if isinstance(tier, str) and tier else None
+ 
+ 
++def _reported_model(response: Any) -> str | None:
++    model = _value_from_response_object(response, "model")
++    return model if isinstance(model, str) and model else None
++
++
+ def _normalize_chat_usage(usage: Any) -> dict[str, Any]:
+     if not usage:
+         return {}
+@@ -472,6 +480,7 @@ def normalize_chat_completion_response(response: Any) -> ModelResponse:
+         usage=usage,
+         raw_response=response,
+         service_tier=_reported_service_tier(response),
++        reported_model=_reported_model(response),
+     )
+ 
+ 
+@@ -492,6 +501,7 @@ def normalize_responses_response(response: Any) -> ModelResponse:
+         raw_response=response,
+         response_id=_value_from_response_object(response, "id"),
+         service_tier=_reported_service_tier(response),
++        reported_model=_reported_model(response),
+     )
+ 
+ 
+@@ -535,6 +545,7 @@ def normalize_google_interaction_response(response: Any) -> ModelResponse:
+         ),
+         response_id=_value_from_response_object(response, "id"),
+         service_tier=_reported_service_tier(response),
++        reported_model=_reported_model(response),
+     )
+ 
+ 
+diff --git a/tests/unit/test_reported_model.py b/tests/unit/test_reported_model.py
+new file mode 100644
+index 0000000..9668de0
+--- /dev/null
++++ b/tests/unit/test_reported_model.py
+@@ -0,0 +1,274 @@
++"""The model name each provider response reports is recorded per step and per run."""
++
++import json
++from pathlib import Path
++from types import SimpleNamespace
++
++import httpx
++import numpy as np
++import pytest
++from arcengine import FrameDataRaw, GameAction, GameState
++from google import genai as google_genai
++from openai import OpenAI
++
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.model_config import get_model_config
++from benchmarking.runtime_adapters import (
++    GoogleGenAIInteractionsAdapter,
++    OpenAIChatCompletionsAdapter,
++    OpenAIResponsesAdapter,
++)
++from benchmarking.runtime_models import Message, ModelRequest
++
++pytestmark = [
++    pytest.mark.unit,
++    pytest.mark.filterwarnings("ignore:Interactions usage is experimental"),
++]
++
++ROLLING_SUMMARY = "google-gemini-3-8-flash-high-rolling-summary"
++PROVIDER_ADAPTER = "google-gemini-3-8-flash-high-provider-adapter"
++SUMMARY_SYSTEM_PROMPT = (
++    "You create concise conversation summaries for reliable continuation. "
++    "Return only the requested summary."
++)
++ACTION_MODEL = "gemini-3.8-flash-test-001"
++SUMMARY_MODEL = "gemini-3.8-flash-test-002"
++
++
++def _interaction_json(index: int, text: str, total: int, model: str | None) -> dict:
++    payload = {
++        "id": f"interaction-{index}",
++        "created": "2026-10-01T00:00:00Z",
++        "updated": "2026-10-01T00:00:00Z",
++        "status": "completed",
++        "steps": [
++            {
++                "type": "thought",
++                "signature": f"opaque-{index}",
++                "summary": [{"type": "text", "text": f"thinking {index}"}],
++            },
++            {"type": "model_output", "content": [{"type": "text", "text": text}]},
++        ],
++        "usage": {
++            "total_input_tokens": total - 20,
++            "total_output_tokens": 10,
++            "total_thought_tokens": 10,
++            "total_tokens": total,
++        },
++    }
++    if model is not None:
++        payload["model"] = model
++    return payload
++
++
++class _Server:
++    """Interactions stub: action replies report one model, summaries another."""
++
++    def __init__(self, *, report: bool, trigger_turn: int = 2) -> None:
++        self.report = report
++        self.trigger_turn = trigger_turn
++        self.turns = 0
++        self.requests = 0
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        body = json.loads(request.content)
++        self.requests += 1
++        if body.get("system_instruction") == SUMMARY_SYSTEM_PROMPT:
++            text, total, model = "summary", 1_000, SUMMARY_MODEL
++        else:
++            self.turns += 1
++            text = f"turn {self.turns}: ACTION1"
++            total = 180_000 if self.turns == self.trigger_turn else 120
++            model = ACTION_MODEL
++        payload = _interaction_json(
++            self.requests, text, total, model if self.report else None
++        )
++        return httpx.Response(200, request=request, json=payload)
++
++
++def _raw_frame(value: int) -> FrameDataRaw:
++    raw = FrameDataRaw()
++    raw.game_id = "game-id"
++    raw.frame = [np.array([[value, 0], [0, value]], dtype=np.int8)]
++    raw.state = GameState.NOT_FINISHED
++    raw.levels_completed = 0
++    raw.win_levels = 1
++    raw.action_input = None
++    raw.guid = "guid-1"
++    raw.full_reset = False
++    raw.available_actions = [GameAction.ACTION1.value]
++    return raw
++
++
++class _Game:
++    def __init__(self) -> None:
++        self.info = SimpleNamespace(baseline_actions=[])
++        self.observation_space = _raw_frame(1)
++        self.actions = 0
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        self.actions += 1
++        self.observation_space = _raw_frame(self.actions + 1)
++        return self.observation_space
++
++
++def _play(monkeypatch, tmp_path: Path, config_id: str, server: _Server) -> Path:
++    client = google_genai.Client(
++        api_key="test-key",
++        http_options={
++            "base_url": "https://example.test",
++            "httpx_client": httpx.Client(transport=httpx.MockTransport(server)),
++        },
++    )
++    tmp_path.mkdir(parents=True, exist_ok=True)
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: client
++    )
++    agent = BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=_Game(),
++        config=config_id,
++    )
++    agent._level_action_budgets = [3]
++    try:
++        agent.main()
++    finally:
++        client.close()
++    return tmp_path / agent.run_dir
++
++
++def _read(run_dir: Path, name: str) -> dict:
++    return json.loads((run_dir / name).read_text())
++
++
++class TestNormalizedResponses:
++    def test_google_interactions_reports_the_model(self):
++        server = _Server(report=True)
++        client = google_genai.Client(
++            api_key="test-key",
++            http_options={
++                "base_url": "https://example.test",
++                "httpx_client": httpx.Client(transport=httpx.MockTransport(server)),
++            },
++        )
++        request = ModelRequest(
++            messages=[Message(role="user", content="frame")],
++            request_config={"model": "gemini-3.8-flash"},
++        )
++
++        response = GoogleGenAIInteractionsAdapter(client).invoke(request)
++
++        assert response.reported_model == ACTION_MODEL
++
++    def test_google_interactions_without_a_model_field(self):
++        server = _Server(report=False)
++        client = google_genai.Client(
++            api_key="test-key",
++            http_options={
++                "base_url": "https://example.test",
++                "httpx_client": httpx.Client(transport=httpx.MockTransport(server)),
++            },
++        )
++        request = ModelRequest(
++            messages=[Message(role="user", content="frame")],
++            request_config={"model": "gemini-3.8-flash"},
++        )
++
++        assert GoogleGenAIInteractionsAdapter(client).invoke(request).reported_model is None
++
++    def test_openai_responses_and_chat_report_the_model(self):
++        def respond(request: httpx.Request) -> httpx.Response:
++            if request.url.path.endswith("/responses"):
++                payload = {
++                    "id": "resp_1",
++                    "object": "response",
++                    "created_at": 0,
++                    "status": "completed",
++                    "model": "gpt-test-2026-01-01",
++                    "output": [
++                        {
++                            "type": "message",
++                            "id": "msg_1",
++                            "role": "assistant",
++                            "status": "completed",
++                            "content": [
++                                {"type": "output_text", "text": "ACTION1", "annotations": []}
++                            ],
++                        }
++                    ],
++                    "usage": {
++                        "input_tokens": 10,
++                        "output_tokens": 2,
++                        "total_tokens": 12,
++                        "input_tokens_details": {"cached_tokens": 0},
++                        "output_tokens_details": {"reasoning_tokens": 0},
++                    },
++                    "parallel_tool_calls": True,
++                    "tool_choice": "auto",
++                    "tools": [],
++                }
++            else:
++                payload = {
++                    "id": "chatcmpl-1",
++                    "object": "chat.completion",
++                    "created": 0,
++                    "model": "gpt-test-2026-01-02",
++                    "choices": [
++                        {
++                            "index": 0,
++                            "finish_reason": "stop",
++                            "message": {"role": "assistant", "content": "ACTION1"},
++                        }
++                    ],
++                    "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
++                }
++            return httpx.Response(200, request=request, json=payload)
++
++        client = OpenAI(
++            api_key="test-key",
++            base_url="https://example.test/v1",
++            http_client=httpx.Client(transport=httpx.MockTransport(respond)),
++        )
++        request = ModelRequest(
++            messages=[Message(role="user", content="frame")],
++            request_config={"model": "gpt-test"},
++        )
++
++        responses = OpenAIResponsesAdapter(client).invoke(request)
++        chat = OpenAIChatCompletionsAdapter(client).invoke(request)
++
++        assert responses.reported_model == "gpt-test-2026-01-01"
++        assert chat.reported_model == "gpt-test-2026-01-02"
++
++
++class TestRunFiles:
++    @pytest.mark.parametrize("config_id", [ROLLING_SUMMARY, PROVIDER_ADAPTER])
++    def test_steps_compactions_and_run_meta_record_reported_models(
++        self, monkeypatch, tmp_path, config_id
++    ):
++        get_model_config(config_id)  # the profile exists
++        run_dir = _play(monkeypatch, tmp_path, config_id, _Server(report=True))
++
++        steps = [_read(run_dir, f"step_{n:03d}.json") for n in (1, 2, 3)]
++        assert [step["reported_model"] for step in steps] == [ACTION_MODEL] * 3
++        assert [step["model"] for step in steps] == ["gemini-3.8-flash"] * 3
++        assert _read(run_dir, "compaction_001.json")["reported_model"] == SUMMARY_MODEL
++        assert _read(run_dir, "run_meta.json")["reported_models"] == [
++            ACTION_MODEL,
++            SUMMARY_MODEL,
++        ]
++
++    @pytest.mark.parametrize("config_id", [ROLLING_SUMMARY, PROVIDER_ADAPTER])
++    def test_fields_are_omitted_when_no_model_is_reported(
++        self, monkeypatch, tmp_path, config_id
++    ):
++        run_dir = _play(monkeypatch, tmp_path, config_id, _Server(report=False))
++
++        assert "reported_model" not in _read(run_dir, "step_001.json")
++        assert "reported_model" not in _read(run_dir, "compaction_001.json")
++        assert "reported_models" not in _read(run_dir, "run_meta.json")
+-- 
+2.54.0.windows.1
+

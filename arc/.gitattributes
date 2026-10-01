@@ -1,0 +1,2 @@
+# Keep patch files byte-exact on every platform so `git am` applies them unchanged.
+patches/*.patch -text

@@ -1,0 +1,624 @@
+From b464c55d293ba87e4c33a6d4a6c58aa2964378ea Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 23:40:52 -0400
+Subject: [PATCH 05/15] Add payload snapshot tests for Gemini 3.8 Flash high
+ runs
+
+Runs BenchmarkingAgent.main() on a scripted game through the real
+google-genai SDK over httpx.MockTransport and compares the full JSON body
+of every Interactions request with a literal snapshot:
+
+- google-gemini-3-8-flash-high: carry-forward sentence in the system
+  instruction; only visible user/model text is sent, never thought items,
+  signatures or reasoning summaries; the oldest turn pair is dropped above
+  MAX_CONTEXT_LENGTH; provider usage above 175k never compacts.
+- the same profile with agent.carry_forward_instruction=false: identical
+  requests except the system instruction, which then equals the Provider
+  Adapter's; the flag also wins over analysis_mode.
+- google-gemini-3-8-flash-high-provider-adapter: signed thought steps
+  and model outputs are replayed exactly as parsed; at 175k the harness
+  summary request (8,192-token cap) sees the full native history, and
+  later turns restart from the user-role bridge.
+- every request uses thinking_level=high and thinking_summaries=auto;
+  service_tier is absent by default and sent on every request, including
+  the summary request, when configured.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ tests/unit/test_gemini_path_payloads.py | 584 ++++++++++++++++++++++++
+ 1 file changed, 584 insertions(+)
+ create mode 100644 tests/unit/test_gemini_path_payloads.py
+
+diff --git a/tests/unit/test_gemini_path_payloads.py b/tests/unit/test_gemini_path_payloads.py
+new file mode 100644
+index 0000000..a563de7
+--- /dev/null
++++ b/tests/unit/test_gemini_path_payloads.py
+@@ -0,0 +1,584 @@
++"""Payload snapshots for the Gemini 3.8 Flash high Standard and Provider Adapter runs.
++
++Each test runs BenchmarkingAgent.main() against a scripted game through the real
++google-genai SDK over httpx.MockTransport, then compares the complete JSON body
++of every Interactions request with a literal snapshot. Nothing leaves the
++process. Configurations:
++
++- standard: google-gemini-3-8-flash-high (manual_rolling, notes instruction on)
++- notes-off: the standard profile with agent.carry_forward_instruction=false
++- provider adapter: google-gemini-3-8-flash-high-provider-adapter
++"""
++
++import json
++from copy import deepcopy
++from types import SimpleNamespace
++
++import httpx
++import numpy as np
++import pytest
++import yaml
++from arcengine import FrameDataRaw, GameAction, GameState
++from google import genai as google_genai
++
++import benchmarking.model_config as model_config
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.model_config import get_model_config
++
++pytestmark = [
++    pytest.mark.unit,
++    pytest.mark.filterwarnings("ignore:Interactions usage is experimental"),
++]
++
++STANDARD = "google-gemini-3-8-flash-high"
++NOTES_OFF = "google-gemini-3-8-flash-high-notes-off"
++PROVIDER_ADAPTER = "google-gemini-3-8-flash-high-provider-adapter"
++
++NOTES_SENTENCE = (
++    "Include any context you want to carry forward in your reply, "
++    "along with the action you want to take."
++)
++NOTES_PROMPT = (
++    "You are playing a game. Your goal is to win. Include any context you want to "
++    "carry forward in your reply, along with the action you want to take. The final "
++    "action mentioned in your reply will be executed next turn.\n"
++)
++NO_NOTES_PROMPT = (
++    "You are playing a game. Your goal is to win. The final action mentioned in "
++    "your reply will be executed next turn.\n"
++)
++GENERATION_CONFIG = {
++    "max_output_tokens": 65_536,
++    "thinking_level": "high",
++    "thinking_summaries": "auto",
++}
++SUMMARY_GENERATION_CONFIG = {**GENERATION_CONFIG, "max_output_tokens": 8_192}
++# ARC's harness-summary prompts at 4ca00e6 (benchmarking/compaction.py).
++SUMMARY_SYSTEM_PROMPT = (
++    "You create concise conversation summaries for reliable continuation. "
++    "Return only the requested summary."
++)
++SUMMARY_REQUEST_PROMPT = (
++    "Summarize the conversation so you can continue making progress on the task in "
++    "a future context. The conversation history will be replaced by this summary "
++    "and will no longer be available.\n"
++    "Use your judgment about what matters for this task."
++)
++
++
++def _bridge(summary: str) -> str:
++    return (
++        "Earlier conversation history was compacted. Use the following summary as "
++        "prior context. If it conflicts with newer input, prefer the newer input."
++        f"\n\n{summary}"
++    )
++
++
++def _config(config_id: str, *, service_tier: str | None = None, **agent: object) -> dict:
++    source = STANDARD if config_id == NOTES_OFF else config_id
++    config = deepcopy(get_model_config(source))
++    config["id"] = config_id
++    if config_id == NOTES_OFF:
++        config["agent"]["carry_forward_instruction"] = False
++    config["agent"].update(agent)
++    if service_tier is not None:
++        config["request"]["service_tier"] = service_tier
++    return config
++
++
++# ── Literal request pieces ─────────────────────────────────────────────
++
++
++def _observation(value: int, *, reset: bool) -> str:
++    actions = "- RESET\n- ACTION1" if reset else "- ACTION1"
++    return (
++        "State: NOT_FINISHED\nLevels completed: 0\n\n"
++        f"Frame 0:\n  [{value}, 0]\n  [0, {value}]\n\n"
++        f"Available actions:\n{actions}"
++    )
++
++
++OBS = {
++    1: _observation(1, reset=False),
++    2: _observation(2, reset=True),
++    3: _observation(3, reset=True),
++    4: _observation(4, reset=True),
++}
++
++
++def _note(turn: int) -> str:
++    return f"note {turn}: ACTION1"
++
++
++def _user(text: str) -> dict:
++    return {"type": "user_input", "content": [{"type": "text", "text": text}]}
++
++
++def _text_turn(text: str) -> dict:
++    """An assistant turn rebuilt from the visible-text transcript."""
++    return {"type": "model_output", "content": [{"type": "text", "text": text}]}
++
++
++def _replayed_output(text: str) -> dict:
++    """A native model_output step replayed exactly as the SDK parsed it."""
++    return {
++        "type": "model_output",
++        "content": [{"text": text, "type": "text", "annotations": None}],
++    }
++
++
++def _replayed_thought(turn: int) -> dict:
++    return {
++        "type": "thought",
++        "signature": f"opaque-action-{turn}",
++        "summary": [{"text": f"thinking {turn}", "type": "text", "annotations": None}],
++    }
++
++
++def _body(system: str, inputs: list[dict], *, summary: bool = False) -> dict:
++    return {
++        "model": "gemini-3.8-flash",
++        "store": False,
++        "generation_config": SUMMARY_GENERATION_CONFIG if summary else GENERATION_CONFIG,
++        "system_instruction": system,
++        "input": inputs,
++    }
++
++
++# ── Offline provider and game ──────────────────────────────────────────
++
++
++class _InteractionsServer:
++    """Answers each action with a signed thought plus visible text."""
++
++    def __init__(self, total_tokens: dict[int, int] | None = None) -> None:
++        self.total_tokens = total_tokens or {}
++        self.bodies: list[dict] = []
++        self.action_turns = 0
++        self.summaries = 0
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        body = json.loads(request.content)
++        self.bodies.append(body)
++        if body.get("system_instruction") == SUMMARY_SYSTEM_PROMPT:
++            self.summaries += 1
++            signature = f"opaque-summary-{self.summaries}"
++            thinking = f"summary thinking {self.summaries}"
++            text = f"summary of play {self.summaries}"
++            total = 1_000
++        else:
++            self.action_turns += 1
++            turn = self.action_turns
++            signature = f"opaque-action-{turn}"
++            thinking = f"thinking {turn}"
++            text = _note(turn)
++            total = self.total_tokens.get(turn, 120)
++        payload = {
++            "id": f"interaction-{len(self.bodies)}",
++            "created": "2026-09-30T00:00:00Z",
++            "updated": "2026-09-30T00:00:00Z",
++            "status": "completed",
++            "steps": [
++                {
++                    "type": "thought",
++                    "signature": signature,
++                    "summary": [{"type": "text", "text": thinking}],
++                },
++                {"type": "model_output", "content": [{"type": "text", "text": text}]},
++            ],
++            "usage": {
++                "total_input_tokens": total - 20,
++                "total_output_tokens": 10,
++                "total_thought_tokens": 10,
++                "total_tokens": total,
++            },
++        }
++        if "service_tier" in body:
++            payload["service_tier"] = body["service_tier"]
++        return httpx.Response(200, request=request, json=payload)
++
++
++def _raw_frame(value: int) -> FrameDataRaw:
++    raw = FrameDataRaw()
++    raw.game_id = "game-id"
++    raw.frame = [np.array([[value, 0], [0, value]], dtype=np.int8)]
++    raw.state = GameState.NOT_FINISHED
++    raw.levels_completed = 0
++    raw.win_levels = 1
++    raw.action_input = None
++    raw.guid = "guid-1"
++    raw.full_reset = False
++    raw.available_actions = [GameAction.ACTION1.value]
++    return raw
++
++
++class _Game:
++    """Each accepted action shows the next frame: [[n, 0], [0, n]]."""
++
++    def __init__(self) -> None:
++        self.info = SimpleNamespace(baseline_actions=[])
++        self.observation_space = _raw_frame(1)
++        self.actions: list[GameAction] = []
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        self.actions.append(action)
++        self.observation_space = _raw_frame(len(self.actions) + 1)
++        return self.observation_space
++
++
++def _play(
++    monkeypatch,
++    tmp_path,
++    config: dict,
++    *,
++    actions: int,
++    server: _InteractionsServer | None = None,
++    max_context_length: int | None = None,
++) -> tuple[list[dict], BenchmarkingAgent]:
++    server = server or _InteractionsServer()
++    tmp_path.mkdir(parents=True, exist_ok=True)
++    http_client = httpx.Client(transport=httpx.MockTransport(server))
++    client = google_genai.Client(
++        api_key="test-key",
++        http_options={"base_url": "https://example.test", "httpx_client": http_client},
++    )
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: client
++    )
++    game = _Game()
++    agent = BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=game,
++        config=config["id"],
++    )
++    agent._level_action_budgets = [actions]
++    if max_context_length is not None:
++        agent.MAX_CONTEXT_LENGTH = max_context_length
++    try:
++        agent.main()
++    finally:
++        client.close()
++    assert game.actions == [GameAction.ACTION1] * actions
++    return server.bodies, agent
++
++
++def _input_types(body: dict) -> list[str]:
++    return [item["type"] for item in body["input"]]
++
++
++# ── Standard (S0) ──────────────────────────────────────────────────────
++
++
++class TestStandardPayloads:
++    def test_requests_match_snapshot(self, monkeypatch, tmp_path):
++        bodies, _ = _play(monkeypatch, tmp_path, _config(STANDARD), actions=3)
++
++        assert bodies == [
++            _body(NOTES_PROMPT, [_user(OBS[1])]),
++            _body(NOTES_PROMPT, [_user(OBS[1]), _text_turn(_note(1)), _user(OBS[2])]),
++            _body(
++                NOTES_PROMPT,
++                [
++                    _user(OBS[1]),
++                    _text_turn(_note(1)),
++                    _user(OBS[2]),
++                    _text_turn(_note(2)),
++                    _user(OBS[3]),
++                ],
++            ),
++        ]
++
++    def test_no_thought_items_or_reasoning_text_are_sent(self, monkeypatch, tmp_path):
++        bodies, agent = _play(monkeypatch, tmp_path, _config(STANDARD), actions=3)
++
++        for body in bodies:
++            assert set(_input_types(body)) <= {"user_input", "model_output"}
++            serialized = json.dumps(body)
++            assert "signature" not in serialized
++            assert "opaque-action" not in serialized
++            assert "thinking " not in serialized
++            assert "reasoning_summary" not in serialized
++        # Summaries are still recorded locally for analysis.
++        step = json.loads((tmp_path / agent.run_dir / "step_002.json").read_text())
++        assert step["reasoning"] == "thinking 2"
++
++    def test_oldest_turn_is_dropped_above_max_context_length(self, monkeypatch, tmp_path):
++        # Room for the system prompt and the newest two observations only.
++        limit = sum(len(text) for text in (NOTES_PROMPT, OBS[2], _note(2), OBS[3]))
++
++        bodies, _ = _play(
++            monkeypatch,
++            tmp_path,
++            _config(STANDARD),
++            actions=3,
++            max_context_length=limit,
++        )
++
++        assert bodies[1]["input"] == [
++            _user(OBS[1]),
++            _text_turn(_note(1)),
++            _user(OBS[2]),
++        ]
++        assert bodies[2] == _body(
++            NOTES_PROMPT,
++            [_user(OBS[2]), _text_turn(_note(2)), _user(OBS[3])],
++        )
++
++    def test_provider_usage_above_175k_never_compacts(self, monkeypatch, tmp_path):
++        server = _InteractionsServer(total_tokens={1: 400_000, 2: 400_000})
++
++        bodies, _ = _play(
++            monkeypatch, tmp_path, _config(STANDARD), actions=3, server=server
++        )
++
++        assert server.summaries == 0
++        assert [body["system_instruction"] for body in bodies] == [NOTES_PROMPT] * 3
++
++
++# ── Standard with the notes instruction off (S2 in part A) ─────────────
++
++
++class TestNotesOffPayloads:
++    def test_requests_match_snapshot(self, monkeypatch, tmp_path):
++        bodies, _ = _play(monkeypatch, tmp_path, _config(NOTES_OFF), actions=3)
++
++        assert bodies == [
++            _body(NO_NOTES_PROMPT, [_user(OBS[1])]),
++            _body(NO_NOTES_PROMPT, [_user(OBS[1]), _text_turn(_note(1)), _user(OBS[2])]),
++            _body(
++                NO_NOTES_PROMPT,
++                [
++                    _user(OBS[1]),
++                    _text_turn(_note(1)),
++                    _user(OBS[2]),
++                    _text_turn(_note(2)),
++                    _user(OBS[3]),
++                ],
++            ),
++        ]
++
++    def test_flag_wins_over_analysis_mode(self, monkeypatch, tmp_path):
++        config = _config(NOTES_OFF, analysis_mode=True)
++
++        bodies, _ = _play(monkeypatch, tmp_path, config, actions=2)
++
++        system = bodies[1]["system_instruction"]
++        assert NOTES_SENTENCE not in system
++        assert system.startswith(NO_NOTES_PROMPT)
++        assert "<reasoning_summary>" in system
++        # Readable summaries are replayed as text; thought items still are not.
++        assert bodies[1]["input"][1] == _text_turn(
++            "<reasoning_summary>\nthinking 1\n</reasoning_summary>\n\n" + _note(1) + "\n"
++        )
++        assert "thought" not in _input_types(bodies[1])
++
++
++# ── Provider Adapter (S4) ──────────────────────────────────────────────
++
++
++class TestProviderAdapterPayloads:
++    def test_requests_match_snapshot_through_compaction(self, monkeypatch, tmp_path):
++        # Turn 2 reports 180k total tokens, above the 175k compaction trigger.
++        server = _InteractionsServer(total_tokens={2: 180_000})
++
++        bodies, agent = _play(
++            monkeypatch,
++            tmp_path,
++            _config(PROVIDER_ADAPTER),
++            actions=4,
++            server=server,
++        )
++
++        bridge = _user(_bridge("summary of play 1"))
++        assert bodies == [
++            _body(NO_NOTES_PROMPT, [_user(OBS[1])]),
++            _body(
++                NO_NOTES_PROMPT,
++                [
++                    _user(OBS[1]),
++                    _replayed_thought(1),
++                    _replayed_output(_note(1)),
++                    _user(OBS[2]),
++                ],
++            ),
++            # Harness summary before turn 3: the whole native history, then
++            # the summary request, capped at 8,192 output tokens.
++            _body(
++                SUMMARY_SYSTEM_PROMPT,
++                [
++                    _user(OBS[1]),
++                    _replayed_thought(1),
++                    _replayed_output(_note(1)),
++                    _user(OBS[2]),
++                    _replayed_thought(2),
++                    _replayed_output(_note(2)),
++                    _user(SUMMARY_REQUEST_PROMPT),
++                ],
++                summary=True,
++            ),
++            _body(NO_NOTES_PROMPT, [bridge, _user(OBS[3])]),
++            _body(
++                NO_NOTES_PROMPT,
++                [
++                    bridge,
++                    _user(OBS[3]),
++                    _replayed_thought(3),
++                    _replayed_output(_note(3)),
++                    _user(OBS[4]),
++                ],
++            ),
++        ]
++        assert agent._compaction_counter == 1
++
++    def test_signed_thoughts_are_replayed_until_compaction(self, monkeypatch, tmp_path):
++        server = _InteractionsServer(total_tokens={2: 180_000})
++
++        bodies, _ = _play(
++            monkeypatch,
++            tmp_path,
++            _config(PROVIDER_ADAPTER),
++            actions=4,
++            server=server,
++        )
++
++        signatures = [
++            [item["signature"] for item in body["input"] if item["type"] == "thought"]
++            for body in bodies
++        ]
++        assert signatures == [
++            [],
++            ["opaque-action-1"],
++            ["opaque-action-1", "opaque-action-2"],
++            [],
++            ["opaque-action-3"],
++        ]
++        # The summary call's own thought is never carried forward.
++        assert all("opaque-summary" not in json.dumps(body) for body in bodies)
++
++    def test_no_compaction_below_trigger(self, monkeypatch, tmp_path):
++        server = _InteractionsServer(total_tokens={1: 174_999, 2: 174_999})
++
++        bodies, _ = _play(
++            monkeypatch,
++            tmp_path,
++            _config(PROVIDER_ADAPTER),
++            actions=3,
++            server=server,
++        )
++
++        assert server.summaries == 0
++        assert _input_types(bodies[2]) == [
++            "user_input",
++            "thought",
++            "model_output",
++            "user_input",
++            "thought",
++            "model_output",
++            "user_input",
++        ]
++
++
++# ── Properties across configurations ──────────────────────────────────
++
++
++@pytest.mark.parametrize(
++    ("config_id", "notes"),
++    [(STANDARD, True), (NOTES_OFF, False), (PROVIDER_ADAPTER, False)],
++)
++def test_notes_sentence_and_high_thinking_on_every_request(
++    monkeypatch, tmp_path, config_id, notes
++):
++    server = _InteractionsServer(total_tokens={2: 180_000})
++
++    bodies, _ = _play(
++        monkeypatch, tmp_path, _config(config_id), actions=3, server=server
++    )
++
++    action_bodies = [
++        body for body in bodies if body["system_instruction"] != SUMMARY_SYSTEM_PROMPT
++    ]
++    assert len(action_bodies) == 3
++    for body in action_bodies:
++        assert (NOTES_SENTENCE in body["system_instruction"]) is notes
++    for body in bodies:
++        assert body["generation_config"]["thinking_level"] == "high"
++        assert body["generation_config"]["thinking_summaries"] == "auto"
++        assert body["model"] == "gemini-3.8-flash"
++        assert body["store"] is False
++        assert "service_tier" not in body
++
++
++def test_notes_off_and_provider_adapter_send_identical_first_requests(
++    monkeypatch, tmp_path
++):
++    notes_off, _ = _play(monkeypatch, tmp_path / "s2", _config(NOTES_OFF), actions=1)
++    adapter, _ = _play(
++        monkeypatch, tmp_path / "s4", _config(PROVIDER_ADAPTER), actions=1
++    )
++
++    assert notes_off == adapter
++
++
++@pytest.mark.parametrize("config_id", [STANDARD, NOTES_OFF, PROVIDER_ADAPTER])
++@pytest.mark.parametrize("tier", ["flex", "standard"])
++def test_configured_service_tier_is_sent_on_every_request(
++    monkeypatch, tmp_path, config_id, tier
++):
++    server = _InteractionsServer(total_tokens={2: 180_000})
++    default_server = _InteractionsServer(total_tokens={2: 180_000})
++
++    bodies, agent = _play(
++        monkeypatch,
++        tmp_path / "tier",
++        _config(config_id, service_tier=tier),
++        actions=3,
++        server=server,
++    )
++    default_bodies, _ = _play(
++        monkeypatch,
++        tmp_path / "default",
++        _config(config_id),
++        actions=3,
++        server=default_server,
++    )
++
++    assert [body.pop("service_tier") for body in bodies] == [tier] * len(bodies)
++    assert bodies == default_bodies
++    run_meta = json.loads((tmp_path / "tier" / agent.run_dir / "run_meta.json").read_text())
++    assert run_meta["requested_service_tier"] == tier
++    step = json.loads((tmp_path / "tier" / agent.run_dir / "step_001.json").read_text())
++    assert step["service_tier"] == tier
++
++
++def test_snapshot_configurations_pass_config_validation(tmp_path, monkeypatch):
++    configs = [
++        _config(STANDARD),
++        _config(NOTES_OFF),
++        {**_config(NOTES_OFF, analysis_mode=True), "id": "notes-off-analysis"},
++        _config(PROVIDER_ADAPTER),
++    ]
++    configs += [
++        {**_config(config_id, service_tier="flex"), "id": f"{config_id}-flex"}
++        for config_id in (STANDARD, NOTES_OFF, PROVIDER_ADAPTER)
++    ]
++    config_path = tmp_path / "model_configs.yaml"
++    config_path.write_text(yaml.safe_dump(configs, sort_keys=False))
++    monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", config_path)
++
++    loaded = model_config.load_model_configs()
++
++    assert [entry["id"] for entry in loaded] == [entry["id"] for entry in configs]
++
++
++def test_literal_prompts_match_the_pinned_harness():
++    from benchmarking import compaction
++
++    assert compaction.SUMMARY_SYSTEM_PROMPT == SUMMARY_SYSTEM_PROMPT
++    assert compaction.SUMMARY_REQUEST_PROMPT == SUMMARY_REQUEST_PROMPT
++    assert compaction.build_summary_bridge("x") == _bridge("x")
+-- 
+2.54.0.windows.1
+

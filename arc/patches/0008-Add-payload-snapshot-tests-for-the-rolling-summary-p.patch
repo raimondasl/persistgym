@@ -1,0 +1,463 @@
+From a5cb0f47c415672f5a7ccb8bbe70b37948645904 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 00:16:17 -0400
+Subject: [PATCH 08/15] Add payload snapshot tests for the rolling-summary
+ profiles
+
+Extends the Gemini 3.8 Flash high payload snapshots to the two
+rolling-summary profiles and replaces the notes-off stand-in (the Standard
+profile with the flag off) with the checked-in
+google-gemini-3-8-flash-high-rolling-summary-notes-off.
+
+- rolling-summary and notes-off: the full request bodies through a 175k
+  trigger. Before it, only visible user/model text; at it, one summary
+  request (SUMMARY_SYSTEM_PROMPT, the whole text history, 8,192-token
+  cap); after it, the user-role bridge followed by the new observation.
+  No request carries thought steps, signatures or reasoning summaries.
+- Notes-off equals the Provider Adapter request for request, including the
+  summary request, once the Adapter's thought steps and SDK annotations
+  are removed: the last path step adds only native replay.
+- The same holds when a lost life buffers a GAME_OVER frame just before
+  the summary: both profiles summarize that unpresented frame and restart
+  from the bridge (the Google adapter at this commit does not implement
+  the later PendingCompactionInputs protocol).
+- Rolling-summary equals notes-off except the carry-forward sentence.
+- Drop-oldest never fires: with ~12k-character observations and one
+  provider token per character, Standard drops turns above 175k
+  characters while rolling-summary compacts instead; every action request
+  starts with the first observation or a bridge, and run_meta records
+  context_trims=0.
+- The cross-profile checks (notes sentence, thinking_level=high,
+  service_tier on every request, config validation) now cover all four
+  profiles.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ tests/unit/test_gemini_path_payloads.py | 315 ++++++++++++++++++++++--
+ 1 file changed, 298 insertions(+), 17 deletions(-)
+
+diff --git a/tests/unit/test_gemini_path_payloads.py b/tests/unit/test_gemini_path_payloads.py
+index a563de7..75b6f94 100644
+--- a/tests/unit/test_gemini_path_payloads.py
++++ b/tests/unit/test_gemini_path_payloads.py
+@@ -3,10 +3,14 @@
+ Each test runs BenchmarkingAgent.main() against a scripted game through the real
+ google-genai SDK over httpx.MockTransport, then compares the complete JSON body
+ of every Interactions request with a literal snapshot. Nothing leaves the
+-process. Configurations:
+-
+-- standard: google-gemini-3-8-flash-high (manual_rolling, notes instruction on)
+-- notes-off: the standard profile with agent.carry_forward_instruction=false
++process. Configurations, in path order:
++
++- standard: google-gemini-3-8-flash-high (manual_rolling, notes instruction on,
++  oldest turns dropped above MAX_CONTEXT_LENGTH)
++- rolling summary: google-gemini-3-8-flash-high-rolling-summary (standard with
++  the Provider Adapter's harness summary instead of dropping turns)
++- notes-off: google-gemini-3-8-flash-high-rolling-summary-notes-off (rolling
++  summary without the notes instruction)
+ - provider adapter: google-gemini-3-8-flash-high-provider-adapter
+ """
+ 
+@@ -31,7 +35,8 @@ pytestmark = [
+ ]
+ 
+ STANDARD = "google-gemini-3-8-flash-high"
+-NOTES_OFF = "google-gemini-3-8-flash-high-notes-off"
++ROLLING_SUMMARY = "google-gemini-3-8-flash-high-rolling-summary"
++NOTES_OFF = "google-gemini-3-8-flash-high-rolling-summary-notes-off"
+ PROVIDER_ADAPTER = "google-gemini-3-8-flash-high-provider-adapter"
+ 
+ NOTES_SENTENCE = (
+@@ -75,11 +80,7 @@ def _bridge(summary: str) -> str:
+ 
+ 
+ def _config(config_id: str, *, service_tier: str | None = None, **agent: object) -> dict:
+-    source = STANDARD if config_id == NOTES_OFF else config_id
+-    config = deepcopy(get_model_config(source))
+-    config["id"] = config_id
+-    if config_id == NOTES_OFF:
+-        config["agent"]["carry_forward_instruction"] = False
++    config = deepcopy(get_model_config(config_id))
+     config["agent"].update(agent)
+     if service_tier is not None:
+         config["request"]["service_tier"] = service_tier
+@@ -157,6 +158,9 @@ class _InteractionsServer:
+         self.action_turns = 0
+         self.summaries = 0
+ 
++    def tokens_for(self, body: dict, turn: int) -> int:
++        return self.total_tokens.get(turn, 120)
++
+     def __call__(self, request: httpx.Request) -> httpx.Response:
+         body = json.loads(request.content)
+         self.bodies.append(body)
+@@ -172,7 +176,7 @@ class _InteractionsServer:
+             signature = f"opaque-action-{turn}"
+             thinking = f"thinking {turn}"
+             text = _note(turn)
+-            total = self.total_tokens.get(turn, 120)
++            total = self.tokens_for(body, turn)
+         payload = {
+             "id": f"interaction-{len(self.bodies)}",
+             "created": "2026-09-30T00:00:00Z",
+@@ -234,6 +238,8 @@ def _play(
+     actions: int,
+     server: _InteractionsServer | None = None,
+     max_context_length: int | None = None,
++    game: "_Game | None" = None,
++    expected_actions: list[GameAction] | None = None,
+ ) -> tuple[list[dict], BenchmarkingAgent]:
+     server = server or _InteractionsServer()
+     tmp_path.mkdir(parents=True, exist_ok=True)
+@@ -247,7 +253,7 @@ def _play(
+     monkeypatch.setattr(
+         "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: client
+     )
+-    game = _Game()
++    game = game or _Game()
+     agent = BenchmarkingAgent(
+         card_id="card-id",
+         game_id="game-id",
+@@ -258,13 +264,14 @@ def _play(
+         config=config["id"],
+     )
+     agent._level_action_budgets = [actions]
++    agent.MAX_ACTIONS = max(agent.MAX_ACTIONS, actions)
+     if max_context_length is not None:
+         agent.MAX_CONTEXT_LENGTH = max_context_length
+     try:
+         agent.main()
+     finally:
+         client.close()
+-    assert game.actions == [GameAction.ACTION1] * actions
++    assert game.actions == (expected_actions or [GameAction.ACTION1] * actions)
+     return server.bodies, agent
+ 
+ 
+@@ -341,7 +348,272 @@ class TestStandardPayloads:
+         assert [body["system_instruction"] for body in bodies] == [NOTES_PROMPT] * 3
+ 
+ 
+-# ── Standard with the notes instruction off (S2 in part A) ─────────────
++# ── Rolling summary (S1) and notes-off (S2) ────────────────────────────
++
++
++def _strip_native(inputs: list[dict]) -> list[dict]:
++    """Drop thought steps and SDK-added annotations from replayed native steps."""
++    return [
++        {
++            **item,
++            "content": [
++                {key: value for key, value in part.items() if key != "annotations"}
++                for part in item["content"]
++            ],
++        }
++        for item in inputs
++        if item["type"] != "thought"
++    ]
++
++
++class _BigGame(_Game):
++    """64x64 frames: one observation renders to roughly 12k characters."""
++
++    def __init__(self) -> None:
++        super().__init__()
++        self.observation_space = self._frame()
++
++    def _frame(self) -> FrameDataRaw:
++        raw = _raw_frame(1)
++        grid = np.zeros((64, 64), dtype=np.int8)
++        grid[len(self.actions) % 64, :] = 7
++        raw.frame = [grid]
++        return raw
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        self.actions.append(action)
++        self.observation_space = self._frame()
++        return self.observation_space
++
++
++class _GameOverGame(_Game):
++    """Action ``game_over_after`` loses a life; the forced RESET resumes play."""
++
++    def __init__(self, game_over_after: int) -> None:
++        super().__init__()
++        self.game_over_after = game_over_after
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        frame = super().step(action, data=data, reasoning=reasoning)
++        if action is GameAction.ACTION1 and len(self.actions) == self.game_over_after:
++            frame.state = GameState.GAME_OVER
++        return frame
++
++
++class _OneTokenPerCharServer(_InteractionsServer):
++    """Reports provider usage as one token per character of request text."""
++
++    def tokens_for(self, body: dict, turn: int) -> int:
++        text = body["system_instruction"] + "".join(
++            part["text"] for item in body["input"] for part in item["content"]
++        )
++        return len(text) + 20
++
++
++class TestRollingSummaryPayloads:
++    @pytest.mark.parametrize(
++        ("config_id", "system"),
++        [(ROLLING_SUMMARY, NOTES_PROMPT), (NOTES_OFF, NO_NOTES_PROMPT)],
++    )
++    def test_requests_match_snapshot_through_compaction(
++        self, monkeypatch, tmp_path, config_id, system
++    ):
++        # Turn 2 reports 180k total tokens, above the 175k compaction trigger.
++        server = _InteractionsServer(total_tokens={2: 180_000})
++
++        bodies, agent = _play(
++            monkeypatch, tmp_path, _config(config_id), actions=4, server=server
++        )
++
++        bridge = _user(_bridge("summary of play 1"))
++        assert bodies == [
++            _body(system, [_user(OBS[1])]),
++            _body(system, [_user(OBS[1]), _text_turn(_note(1)), _user(OBS[2])]),
++            # Harness summary before turn 3: the whole visible-text history,
++            # then the summary request, capped at 8,192 output tokens.
++            _body(
++                SUMMARY_SYSTEM_PROMPT,
++                [
++                    _user(OBS[1]),
++                    _text_turn(_note(1)),
++                    _user(OBS[2]),
++                    _text_turn(_note(2)),
++                    _user(SUMMARY_REQUEST_PROMPT),
++                ],
++                summary=True,
++            ),
++            _body(system, [bridge, _user(OBS[3])]),
++            _body(
++                system,
++                [bridge, _user(OBS[3]), _text_turn(_note(3)), _user(OBS[4])],
++            ),
++        ]
++        meta = json.loads((tmp_path / agent.run_dir / "run_meta.json").read_text())
++        assert meta["runtime"]["compaction_count"] == 1
++        assert meta["runtime"]["context_trims"] == 0
++        step = json.loads((tmp_path / agent.run_dir / "step_003.json").read_text())
++        assert step["continuation"]["bridge"] == bridge["content"][0]["text"]
++
++    @pytest.mark.parametrize("config_id", [ROLLING_SUMMARY, NOTES_OFF])
++    def test_no_thought_items_or_reasoning_text_are_sent(
++        self, monkeypatch, tmp_path, config_id
++    ):
++        server = _InteractionsServer(total_tokens={2: 180_000})
++
++        bodies, _ = _play(
++            monkeypatch, tmp_path, _config(config_id), actions=4, server=server
++        )
++
++        assert server.summaries == 1
++        for body in bodies:
++            assert set(_input_types(body)) <= {"user_input", "model_output"}
++            serialized = json.dumps(body)
++            assert "signature" not in serialized
++            assert "opaque-" not in serialized
++            assert "thinking " not in serialized
++
++    @pytest.mark.parametrize("config_id", [ROLLING_SUMMARY, NOTES_OFF])
++    def test_no_compaction_below_trigger(self, monkeypatch, tmp_path, config_id):
++        server = _InteractionsServer(total_tokens={1: 174_999, 2: 174_999})
++
++        bodies, _ = _play(
++            monkeypatch, tmp_path, _config(config_id), actions=3, server=server
++        )
++
++        assert server.summaries == 0
++        assert _input_types(bodies[2]) == [
++            "user_input",
++            "model_output",
++            "user_input",
++            "model_output",
++            "user_input",
++        ]
++
++    def test_notes_off_equals_provider_adapter_without_thought_steps(
++        self, monkeypatch, tmp_path
++    ):
++        # S2 -> S4 adds only native replay: with thought steps removed, every
++        # request, including the summary request, is identical.
++        notes_off, _ = _play(
++            monkeypatch,
++            tmp_path / "s2",
++            _config(NOTES_OFF),
++            actions=4,
++            server=_InteractionsServer(total_tokens={2: 180_000}),
++        )
++        adapter, _ = _play(
++            monkeypatch,
++            tmp_path / "s4",
++            _config(PROVIDER_ADAPTER),
++            actions=4,
++            server=_InteractionsServer(total_tokens={2: 180_000}),
++        )
++
++        assert len(notes_off) == len(adapter) == 5
++        for s2_body, s4_body in zip(notes_off, adapter, strict=True):
++            assert s2_body == {**s4_body, "input": _strip_native(s4_body["input"])}
++
++    def test_buffered_game_over_is_summarized_like_the_provider_adapter(
++        self, monkeypatch, tmp_path
++    ):
++        # Action 2 loses a life and reports usage above the trigger. The
++        # forced RESET buffers the GAME_OVER frame before the summary runs.
++        # At 4ca00e6 the Google adapter summarizes that unpresented frame
++        # (it does not implement 09a307b's PendingCompactionInputs), and the
++        # rolling summary does the same.
++        def _play_with_game_over(config_id: str, path: str) -> list[dict]:
++            a1, reset = GameAction.ACTION1, GameAction.RESET
++            bodies, _ = _play(
++                monkeypatch,
++                tmp_path / path,
++                _config(config_id),
++                actions=5,
++                server=_InteractionsServer(total_tokens={2: 180_000}),
++                game=_GameOverGame(game_over_after=2),
++                expected_actions=[a1, a1, reset, a1, a1],
++            )
++            return bodies
++
++        notes_off = _play_with_game_over(NOTES_OFF, "s2")
++        adapter = _play_with_game_over(PROVIDER_ADAPTER, "s4")
++
++        summary = notes_off[2]
++        assert summary["system_instruction"] == SUMMARY_SYSTEM_PROMPT
++        assert [item["type"] for item in summary["input"]][-2:] == [
++            "user_input",
++            "user_input",
++        ]
++        game_over = summary["input"][-2]["content"][0]["text"]
++        assert game_over.startswith("State: GAME_OVER")
++        after = notes_off[3]["input"]
++        assert after[0] == _user(_bridge("summary of play 1"))
++        assert all("GAME_OVER" not in item["content"][0]["text"] for item in after)
++        assert len(notes_off) == len(adapter)
++        for s2_body, s4_body in zip(notes_off, adapter, strict=True):
++            assert s2_body == {**s4_body, "input": _strip_native(s4_body["input"])}
++
++    def test_rolling_summary_differs_from_notes_off_only_in_the_instruction(
++        self, monkeypatch, tmp_path
++    ):
++        rolling, _ = _play(
++            monkeypatch,
++            tmp_path / "s1",
++            _config(ROLLING_SUMMARY),
++            actions=4,
++            server=_InteractionsServer(total_tokens={2: 180_000}),
++        )
++        notes_off, _ = _play(
++            monkeypatch,
++            tmp_path / "s2",
++            _config(NOTES_OFF),
++            actions=4,
++            server=_InteractionsServer(total_tokens={2: 180_000}),
++        )
++
++        for s1_body, s2_body in zip(rolling, notes_off, strict=True):
++            if s1_body["system_instruction"] == NOTES_PROMPT:
++                s1_body = {**s1_body, "system_instruction": NO_NOTES_PROMPT}
++            assert s1_body == s2_body
++
++    def test_drop_oldest_never_fires_while_standard_trims(self, monkeypatch, tmp_path):
++        # About 12k characters per observation and one token per character:
++        # Standard starts dropping turns above 175k characters, while the
++        # rolling summary compacts at 175k provider tokens instead.
++        actions = 24
++        standard, _ = _play(
++            monkeypatch,
++            tmp_path / "s0",
++            _config(STANDARD),
++            actions=actions,
++            server=_OneTokenPerCharServer(),
++            game=_BigGame(),
++        )
++        server = _OneTokenPerCharServer()
++        rolling, agent = _play(
++            monkeypatch,
++            tmp_path / "s1",
++            _config(ROLLING_SUMMARY),
++            actions=actions,
++            server=server,
++            game=_BigGame(),
++        )
++
++        first_obs = standard[0]["input"][0]
++        assert any(body["input"][0] != first_obs for body in standard)
++        assert server.summaries >= 1
++        action_bodies = [
++            body for body in rolling if body["system_instruction"] == NOTES_PROMPT
++        ]
++        assert len(action_bodies) == actions
++        bridges = [
++            _user(_bridge(f"summary of play {n}"))
++            for n in range(1, server.summaries + 1)
++        ]
++        for body in action_bodies:
++            assert body["input"][0] == first_obs or body["input"][0] in bridges
++        meta = json.loads((tmp_path / "s1" / agent.run_dir / "run_meta.json").read_text())
++        assert meta["runtime"]["context_trims"] == 0
++        assert meta["runtime"]["compaction_count"] == server.summaries
+ 
+ 
+ class TestNotesOffPayloads:
+@@ -489,7 +761,12 @@ class TestProviderAdapterPayloads:
+ 
+ @pytest.mark.parametrize(
+     ("config_id", "notes"),
+-    [(STANDARD, True), (NOTES_OFF, False), (PROVIDER_ADAPTER, False)],
++    [
++        (STANDARD, True),
++        (ROLLING_SUMMARY, True),
++        (NOTES_OFF, False),
++        (PROVIDER_ADAPTER, False),
++    ],
+ )
+ def test_notes_sentence_and_high_thinking_on_every_request(
+     monkeypatch, tmp_path, config_id, notes
+@@ -504,6 +781,7 @@ def test_notes_sentence_and_high_thinking_on_every_request(
+         body for body in bodies if body["system_instruction"] != SUMMARY_SYSTEM_PROMPT
+     ]
+     assert len(action_bodies) == 3
++    assert server.summaries == (0 if config_id == STANDARD else 1)
+     for body in action_bodies:
+         assert (NOTES_SENTENCE in body["system_instruction"]) is notes
+     for body in bodies:
+@@ -525,7 +803,9 @@ def test_notes_off_and_provider_adapter_send_identical_first_requests(
+     assert notes_off == adapter
+ 
+ 
+-@pytest.mark.parametrize("config_id", [STANDARD, NOTES_OFF, PROVIDER_ADAPTER])
++@pytest.mark.parametrize(
++    "config_id", [STANDARD, ROLLING_SUMMARY, NOTES_OFF, PROVIDER_ADAPTER]
++)
+ @pytest.mark.parametrize("tier", ["flex", "standard"])
+ def test_configured_service_tier_is_sent_on_every_request(
+     monkeypatch, tmp_path, config_id, tier
+@@ -559,13 +839,14 @@ def test_configured_service_tier_is_sent_on_every_request(
+ def test_snapshot_configurations_pass_config_validation(tmp_path, monkeypatch):
+     configs = [
+         _config(STANDARD),
++        _config(ROLLING_SUMMARY),
+         _config(NOTES_OFF),
+         {**_config(NOTES_OFF, analysis_mode=True), "id": "notes-off-analysis"},
+         _config(PROVIDER_ADAPTER),
+     ]
+     configs += [
+         {**_config(config_id, service_tier="flex"), "id": f"{config_id}-flex"}
+-        for config_id in (STANDARD, NOTES_OFF, PROVIDER_ADAPTER)
++        for config_id in (STANDARD, ROLLING_SUMMARY, NOTES_OFF, PROVIDER_ADAPTER)
+     ]
+     config_path = tmp_path / "model_configs.yaml"
+     config_path.write_text(yaml.safe_dump(configs, sort_keys=False))
+-- 
+2.54.0.windows.1
+

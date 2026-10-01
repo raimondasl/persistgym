@@ -1,0 +1,239 @@
+From 82398a79395b005f9fc222b9cd735d7aa3b0b3d5 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 23:35:42 -0400
+Subject: [PATCH 04/15] Add Gemini 3.8 Flash high profiles for both harnesses
+
+Published Gemini 3.8 Flash high runs are tagged
+`google-gemini-3-8-flash-high` and
+`google-gemini-3-8-flash-high-provider-adapter`, but neither profile is
+checked in; only the low Provider Adapter profile is.
+
+- google-gemini-3-8-flash-high: manual_rolling on the Gemini
+  Interactions API, MAX_CONTEXT_LENGTH 175k, carry-forward instruction on.
+  Its request block matches the Provider Adapter profile (store=false,
+  thinking_summaries=auto, 65,536 max output tokens), so the two profiles
+  differ only in harness settings; summaries are recorded but not replayed.
+- google-gemini-3-8-flash-high-provider-adapter: the low Provider Adapter
+  profile with thinking_level=high (harness_summary compaction at 175k,
+  8,192-token summary cap, 1,048,576 context).
+
+These are reconstructions; they are not confirmed to match the settings
+ARC used for the published runs.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ README.md                              |   4 +
+ benchmarking/model_configs.yaml        |  53 +++++++++++
+ tests/unit/test_gemini_path_configs.py | 121 +++++++++++++++++++++++++
+ 3 files changed, 178 insertions(+)
+ create mode 100644 tests/unit/test_gemini_path_configs.py
+
+diff --git a/README.md b/README.md
+index a735e8c..5496476 100644
+--- a/README.md
++++ b/README.md
+@@ -131,6 +131,10 @@ uv run main.py --game=ls20 --config=anthropic-opus-5-low-provider-adapter
+ See [runtime state adapters](docs/runtime-state.md) for replay, compaction,
+ recording, and data-handling details.
+ 
++`google-gemini-3-8-flash-high` and `google-gemini-3-8-flash-high-provider-adapter`
++run Gemini 3.8 Flash at high thinking under each harness with the same
++Interactions API request settings.
++
+ Both harnesses use the same games, actions, limits, and scoring. The Standard
+ harness supports controlled comparisons across providers, while the Provider
+ Adapter harness measures performance using provider-native context management.
+diff --git a/benchmarking/model_configs.yaml b/benchmarking/model_configs.yaml
+index 980ab76..657e2ef 100644
+--- a/benchmarking/model_configs.yaml
++++ b/benchmarking/model_configs.yaml
+@@ -293,6 +293,59 @@
+     input: 0.75
+     output: 3.75
+ 
++# Standard harness on the same Interactions API surface: visible text only,
++# oldest turns dropped above MAX_CONTEXT_LENGTH, carry-forward instruction on.
++# store and thinking_summaries match the Provider Adapter request; summaries
++# are recorded per step but never sent back to the model.
++- id: "google-gemini-3-8-flash-high"
++  agent:
++    MAX_ACTIONS_BASELINE_MULTIPLIER: 5.0
++    MAX_CONTEXT_LENGTH: 175_000
++  runtime:
++    sdk: "google-genai"
++    api: "interactions"
++    state: "manual_rolling"
++  client:
++    api_key_env: "GOOGLE_API_KEY"
++  request:
++    model: "gemini-3.8-flash"
++    store: false
++    generation_config:
++      max_output_tokens: 65_536
++      thinking_level: "high"
++      thinking_summaries: "auto"
++  pricing:
++    input: 0.75
++    output: 3.75
++
++# google-gemini-3-8-flash-low-provider-adapter with thinking_level high.
++- id: "google-gemini-3-8-flash-high-provider-adapter"
++  agent:
++    MAX_ACTIONS_BASELINE_MULTIPLIER: 5.0
++    MAX_CONTEXT_LENGTH: 1_048_576
++  runtime:
++    adapter_id: "google.interactions.v1"
++    sdk: "google-genai"
++    api: "interactions"
++    state: "continuous_conversation"
++    compaction:
++      strategy: "harness_summary"
++      trigger_tokens: 175_000
++      summary_max_output_tokens: 8_192
++      summary_input_headroom_tokens: 8_192
++  client:
++    api_key_env: "GOOGLE_API_KEY"
++  request:
++    model: "gemini-3.8-flash"
++    store: false
++    generation_config:
++      max_output_tokens: 65_536
++      thinking_level: "high"
++      thinking_summaries: "auto"
++  pricing:
++    input: 0.75
++    output: 3.75
++
+ - id: "openai-gpt-5-6-sol-max-provider-adapter"
+   agent:
+     MAX_ACTIONS_BASELINE_MULTIPLIER: 5.0
+diff --git a/tests/unit/test_gemini_path_configs.py b/tests/unit/test_gemini_path_configs.py
+new file mode 100644
+index 0000000..804a59a
+--- /dev/null
++++ b/tests/unit/test_gemini_path_configs.py
+@@ -0,0 +1,121 @@
++"""Checked-in Gemini 3.8 Flash high profiles for both harnesses."""
++
++import json
++from copy import deepcopy
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.model_config import get_model_config
++from benchmarking.runtime_adapters import GoogleGenAIInteractionsAdapter
++from benchmarking.runtime_state import SummaryCompactionRuntimeAdapter
++
++STANDARD = "google-gemini-3-8-flash-high"
++PROVIDER_ADAPTER = "google-gemini-3-8-flash-high-provider-adapter"
++LOW_PROVIDER_ADAPTER = "google-gemini-3-8-flash-low-provider-adapter"
++CARRY_FORWARD = (
++    "Include any context you want to carry forward in your reply, "
++    "along with the action you want to take."
++)
++HIGH_REQUEST = {
++    "model": "gemini-3.8-flash",
++    "store": False,
++    "generation_config": {
++        "max_output_tokens": 65_536,
++        "thinking_level": "high",
++        "thinking_summaries": "auto",
++    },
++}
++
++
++def _agent(monkeypatch, tmp_path, config_id: str) -> BenchmarkingAgent:
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    return BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=SimpleNamespace(info=SimpleNamespace(baseline_actions=[])),
++        config=config_id,
++    )
++
++
++@pytest.mark.unit
++class TestGeminiFlashHighProfiles:
++    def test_standard_profile(self):
++        config = get_model_config(STANDARD)
++
++        assert config["agent"] == {
++            "MAX_ACTIONS_BASELINE_MULTIPLIER": 5.0,
++            "MAX_CONTEXT_LENGTH": 175_000,
++        }
++        assert config["runtime"] == {
++            "sdk": "google-genai",
++            "api": "interactions",
++            "state": "manual_rolling",
++        }
++        assert config["client"] == {"api_key_env": "GOOGLE_API_KEY"}
++        assert config["request"] == HIGH_REQUEST
++        assert config["pricing"] == {"input": 0.75, "output": 3.75}
++
++    def test_provider_adapter_profile_is_low_profile_at_high_thinking(self):
++        config = get_model_config(PROVIDER_ADAPTER)
++        expected = deepcopy(get_model_config(LOW_PROVIDER_ADAPTER))
++        expected["id"] = PROVIDER_ADAPTER
++        expected["request"]["generation_config"]["thinking_level"] = "high"
++
++        assert config == expected
++        assert config["request"] == HIGH_REQUEST
++        assert config["runtime"]["compaction"] == {
++            "strategy": "harness_summary",
++            "trigger_tokens": 175_000,
++            "summary_max_output_tokens": 8_192,
++            "summary_input_headroom_tokens": 8_192,
++        }
++
++    def test_profiles_differ_only_in_harness_settings(self):
++        standard = get_model_config(STANDARD)
++        adapter = get_model_config(PROVIDER_ADAPTER)
++
++        for section in ("client", "request", "pricing"):
++            assert standard[section] == adapter[section]
++        assert standard["agent"]["MAX_ACTIONS_BASELINE_MULTIPLIER"] == (
++            adapter["agent"]["MAX_ACTIONS_BASELINE_MULTIPLIER"]
++        )
++        assert "service_tier" not in standard["request"]
++
++    def test_standard_agent_uses_rolling_text_history(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, STANDARD)
++
++        assert isinstance(agent._adapter, GoogleGenAIInteractionsAdapter)
++        assert not hasattr(agent, "_stateful_adapter")
++        assert agent._summary_compactor is None
++        assert agent.MAX_CONTEXT_LENGTH == 175_000
++        assert agent.analysis_mode is False
++        assert agent.carry_forward_instruction is True
++        assert CARRY_FORWARD in agent._build_system_prompt()
++        meta = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++        assert "runtime" not in meta
++        assert "requested_service_tier" not in meta
++
++    def test_provider_adapter_agent_replays_native_state(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, PROVIDER_ADAPTER)
++
++        assert isinstance(agent._adapter, GoogleGenAIInteractionsAdapter)
++        assert isinstance(agent._stateful_adapter, SummaryCompactionRuntimeAdapter)
++        assert agent._runtime_state.adapter_id == "google.interactions.v1"
++        assert agent._summary_compactor is not None
++        assert agent._summary_compactor.policy.trigger_tokens == 175_000
++        assert agent._summary_compactor.policy.summary_max_output_tokens == 8_192
++        assert agent.MAX_CONTEXT_LENGTH == 1_048_576
++        assert CARRY_FORWARD not in agent._build_system_prompt()
++        meta = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++        assert meta["runtime"]["config_id"] == PROVIDER_ADAPTER
++        assert meta["runtime"]["settings"] == HIGH_REQUEST
++        assert meta["runtime"]["compaction"]["context_limit_tokens"] == 1_048_576
+-- 
+2.54.0.windows.1
+

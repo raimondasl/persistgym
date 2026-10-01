@@ -1,0 +1,513 @@
+From 70951d5503d4dd198add4ec9b4939b0338485060 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 00:33:44 -0400
+Subject: [PATCH 11/15] Honour OPERATION_MODE and local arc-agi servers
+
+Swarm hard-coded Arcade(operation_mode=OperationMode.ONLINE), and arc-agi
+gives that constructor argument precedence over OPERATION_MODE, so the
+harness could only play against ARC's hosted API.
+
+- Swarm resolves the mode from an explicit argument, else arc-agi's
+  OPERATION_MODE variable, else online (unchanged default). Non-online
+  modes log a testing-only warning. offline plays games found under
+  ENVIRONMENTS_DIR in-process with a local scorecard.
+- Online mode with ARC_BASE_URL on a loopback address and no ARC_API_KEY
+  passes a placeholder key, because a local Arcade.listen_and_serve()
+  server accepts any key but does not serve /api/games/anonkey.
+- A game that the Arcade cannot make now fails with a clear error naming
+  the mode instead of an AttributeError inside the agent.
+- main.py lists games from ENVIRONMENTS_DIR in offline mode (also for
+  --list-games) instead of calling the API.
+- run_meta.json records arc_environment (kind remote with its base_url,
+  or kind local), so test runs are distinguishable from scored runs.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ README.md                         |  17 +++
+ benchmarking/agent.py             |  14 ++
+ benchmarking/recording.py         |   3 +
+ benchmarking/swarm.py             |  65 ++++++++-
+ main.py                           |  16 ++-
+ tests/unit/test_operation_mode.py | 215 ++++++++++++++++++++++++++++++
+ 6 files changed, 324 insertions(+), 6 deletions(-)
+ create mode 100644 tests/unit/test_operation_mode.py
+
+diff --git a/README.md b/README.md
+index 6fe0f7f..752845b 100644
+--- a/README.md
++++ b/README.md
+@@ -97,6 +97,23 @@ uv run main.py --game=ls20 --config=anthropic-opus-4-7-low-thinking
+ uv run main.py --config=openai-gpt-5-4-2026-03-05
+ ```
+ 
++### Local play for testing
++
++Runs use ARC's hosted API and an online scorecard by default. For testing, the
++harness honours arc-agi's `OPERATION_MODE`:
++
++- `OPERATION_MODE=offline` plays games whose files (`metadata.json` plus the
++  game class) are under `ENVIRONMENTS_DIR` (default `environment_files`)
++  in-process, with a local scorecard and no ARC API calls. `--list-games` then
++  lists those games.
++- `ARC_BASE_URL=http://127.0.0.1:8001` points the default online mode at a local
++  arc-agi server (`Arcade.listen_and_serve()`). Without `ARC_API_KEY`, a
++  placeholder key is used for loopback URLs. That server does not publish
++  `baseline_actions`, so the agent falls back to `MAX_ACTIONS`.
++
++`run_meta.json` records `arc_environment` (`local`, or `remote` with its
++`base_url`), so local test runs can be told apart from scored runs.
++
+ ## Standard and Provider Adapter harnesses
+ 
+ ARC-AGI-3 games span many model calls, so the harness must determine what
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 348c21e..20e556a 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -9,6 +9,10 @@ import uuid
+ from datetime import datetime, timezone
+ from typing import Any, Optional
+ 
++from arc_agi import (  # type: ignore[import-untyped]
++    LocalEnvironmentWrapper,
++    RemoteEnvironmentWrapper,
++)
+ from arcengine import FrameData, GameAction, GameState
+ 
+ from .action_metadata import fit_action_metadata_payload
+@@ -301,6 +305,7 @@ class BenchmarkingAgent(Agent):
+             run_dir=self.run_dir,
+             runtime=runtime_metadata,
+             requested_service_tier=request_cfg.get("service_tier"),
++            arc_environment=self._describe_arc_environment(),
+         )
+         self._write_run_meta()
+ 
+@@ -559,6 +564,14 @@ class BenchmarkingAgent(Agent):
+             return {"action": action.name, **action.action_data.model_dump()}
+         return str(action.name)
+ 
++    def _describe_arc_environment(self) -> dict[str, Any] | None:
++        """Where the game runs: ARC's API (or a server at base_url) or in-process."""
++        if isinstance(self.arc_env, RemoteEnvironmentWrapper):
++            return {"kind": "remote", "base_url": self.arc_env.base_url}
++        if isinstance(self.arc_env, LocalEnvironmentWrapper):
++            return {"kind": "local"}
++        return None
++
+     def _estimated_cost_usd(self) -> float:
+         """Run spend so far at the configured per-million prices.
+ 
+@@ -612,6 +625,7 @@ class BenchmarkingAgent(Agent):
+                     "requested_service_tier",
+                     "transport_retry",
+                     "cost_guard",
++                    "arc_environment",
+                 )
+                 if getattr(self.run_record, field) is None
+             }
+diff --git a/benchmarking/recording.py b/benchmarking/recording.py
+index 138d27f..eb27050 100644
+--- a/benchmarking/recording.py
++++ b/benchmarking/recording.py
+@@ -154,5 +154,8 @@ class RunRecord(BaseModel):
+     # agent.MAX_RUN_COST_USD and the spend estimate it is compared with;
+     # None when the guard is off.
+     cost_guard: dict[str, Any] | None = None
++    # {"kind": "remote", "base_url": ...} for an ARC API or local server, or
++    # {"kind": "local"} for in-process play; None for other environments.
++    arc_environment: dict[str, Any] | None = None
+     run_dir: str
+     runtime: dict[str, Any] | None = None
+diff --git a/benchmarking/swarm.py b/benchmarking/swarm.py
+index 32924a9..60324f3 100644
+--- a/benchmarking/swarm.py
++++ b/benchmarking/swarm.py
+@@ -1,10 +1,12 @@
+ from __future__ import annotations
+ 
++import ipaddress
+ import json
+ import logging
+ import os
+ from threading import Thread
+-from typing import TYPE_CHECKING, Optional, Type
++from typing import TYPE_CHECKING, Any, Optional, Type
++from urllib.parse import urlparse
+ 
+ import requests
+ from arc_agi import Arcade, OperationMode, RemoteEnvironmentWrapper
+@@ -19,6 +21,44 @@ if TYPE_CHECKING:
+ 
+ logger = logging.getLogger()
+ DEFAULT_AGENT_NAME = BenchmarkingAgent.__name__.lower()
++# A local arc-agi server (Arcade.listen_and_serve) accepts any API key; this
++# placeholder stops Arcade from requesting an anonymous key it does not serve.
++LOCAL_SERVER_API_KEY = "local-test-key"
++
++
++def resolve_operation_mode(value: Optional[str] = None) -> OperationMode:
++    """Read arc-agi's OPERATION_MODE; online (ARC's hosted API) when unset.
++
++    ``offline`` plays games found under ENVIRONMENTS_DIR in-process with a
++    local scorecard; ``normal`` downloads game sources from the API and runs
++    them locally. Both are for testing: published results use ``online``.
++    """
++    raw = value if value is not None else os.environ.get("OPERATION_MODE", "")
++    raw = raw.strip().lower()
++    if not raw:
++        return OperationMode.ONLINE
++    try:
++        return OperationMode(raw)
++    except ValueError:
++        allowed = ", ".join(mode.value for mode in OperationMode)
++        raise ValueError(
++            f"OPERATION_MODE={raw!r} is not supported; use one of {allowed}."
++        ) from None
++
++
++def is_local_url(url: Optional[str]) -> bool:
++    """True for http(s) URLs on localhost or a loopback address."""
++    if not url:
++        return False
++    host = urlparse(url).hostname
++    if host is None:
++        return False
++    if host == "localhost" or host.endswith(".localhost"):
++        return True
++    try:
++        return ipaddress.ip_address(host).is_loopback
++    except ValueError:
++        return False
+ 
+ 
+ class Swarm:
+@@ -43,6 +83,7 @@ class Swarm:
+         games: list[str],
+         tags: Optional[list[str]] = None,
+         config: Optional[str] = None,
++        operation_mode: Optional[OperationMode] = None,
+     ) -> None:
+         self.GAMES = games
+         self.ROOT_URL = ROOT_URL
+@@ -57,7 +98,19 @@ class Swarm:
+         }
+         self.tags = tags.copy() if tags is not None else []
+         self.config = config
+-        self._arc = Arcade(operation_mode=OperationMode.ONLINE)
++        self.operation_mode = operation_mode or resolve_operation_mode()
++        arcade_kwargs: dict[str, Any] = {}
++        if self.operation_mode != OperationMode.ONLINE:
++            logger.warning(
++                "OPERATION_MODE=%s: games run locally with a local scorecard; "
++                "use this for testing only.",
++                self.operation_mode.value,
++            )
++        elif is_local_url(os.environ.get("ARC_BASE_URL")) and not os.environ.get(
++            "ARC_API_KEY"
++        ):
++            arcade_kwargs["arc_api_key"] = LOCAL_SERVER_API_KEY
++        self._arc = Arcade(operation_mode=self.operation_mode, **arcade_kwargs)
+         self.tags.extend(["agent", self.agent_name])
+ 
+     def main(self) -> EnvironmentScorecard | None:
+@@ -71,13 +124,19 @@ class Swarm:
+         # create all the agents
+         for i in range(len(self.GAMES)):
+             g = self.GAMES[i % len(self.GAMES)]
++            arc_env = self._arc.make(g, scorecard_id=self.card_id)
++            if arc_env is None:
++                raise ValueError(
++                    f"Game {g!r} is not available in operation mode "
++                    f"{OperationMode(self._arc.operation_mode).value!r}."
++                )
+             a = self.agent_class(
+                 card_id=self.card_id,
+                 game_id=g,
+                 agent_name=self.agent_name,
+                 ROOT_URL=self.ROOT_URL,
+                 record=True,
+-                arc_env=self._arc.make(g, scorecard_id=self.card_id),
++                arc_env=arc_env,
+                 config=self.config,
+             )
+             self.agents.append(a)
+diff --git a/main.py b/main.py
+index d13783b..415cc79 100644
+--- a/main.py
++++ b/main.py
+@@ -16,6 +16,7 @@ from typing import Optional
+ from urllib.parse import urlparse
+ 
+ import requests
++from arc_agi import Arcade, OperationMode
+ 
+ from benchmarking import BenchmarkingAgent, Swarm
+ from benchmarking.cli_list import print_requested_resource_lists
+@@ -25,6 +26,7 @@ from benchmarking.model_config import (
+ from benchmarking.model_config import (
+     list_model_config_ids as _list_model_config_ids,
+ )
++from benchmarking.swarm import resolve_operation_mode
+ 
+ logger = logging.getLogger()
+ 
+@@ -101,6 +103,14 @@ def fetch_available_games(root_url: str) -> list[str]:
+         return []
+ 
+ 
++def list_games(root_url: str) -> list[str]:
++    """Game IDs to play: local environments offline, otherwise from the API."""
++    if resolve_operation_mode() == OperationMode.OFFLINE:
++        arcade = Arcade(operation_mode=OperationMode.OFFLINE)
++        return [env.game_id for env in arcade.get_environments()]
++    return fetch_available_games(root_url)
++
++
+ def validate_required_model_api_key(config_id: Optional[str]) -> None:
+     selected_config_id = config_id or BenchmarkingAgent.MODEL_CONFIG_ID
+     entry = get_model_config(selected_config_id)
+@@ -215,7 +225,7 @@ def main() -> None:
+     if print_requested_resource_lists(
+         args,
+         root_url=ROOT_URL,
+-        fetch_available_games=fetch_available_games,
++        fetch_available_games=list_games,
+     ):
+         return
+ 
+@@ -227,8 +237,8 @@ def main() -> None:
+ 
+     print(f"{ROOT_URL}/api/games")
+ 
+-    # Get the list of games from the API
+-    full_games = fetch_available_games(ROOT_URL)
++    # Get the list of games from the API (or ENVIRONMENTS_DIR when offline)
++    full_games = list_games(ROOT_URL)
+ 
+     games = full_games[:]
+     if args.game:
+diff --git a/tests/unit/test_operation_mode.py b/tests/unit/test_operation_mode.py
+new file mode 100644
+index 0000000..fe4b5f8
+--- /dev/null
++++ b/tests/unit/test_operation_mode.py
+@@ -0,0 +1,215 @@
++"""OPERATION_MODE and local-server support for testing without ARC's API."""
++
++import json
++from pathlib import Path
++from types import SimpleNamespace
++from unittest.mock import Mock, patch
++
++import pytest
++from arc_agi import (
++    EnvironmentInfo,
++    LocalEnvironmentWrapper,
++    OperationMode,
++    RemoteEnvironmentWrapper,
++)
++
++import main as cli_main
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.swarm import (
++    LOCAL_SERVER_API_KEY,
++    Swarm,
++    is_local_url,
++    resolve_operation_mode,
++)
++
++pytestmark = pytest.mark.unit
++
++
++class _RecordingArcade:
++    instances: list["_RecordingArcade"] = []
++
++    def __init__(self, operation_mode=None, **kwargs) -> None:  # noqa: ANN001
++        self.operation_mode = operation_mode
++        self.kwargs = kwargs
++        self.make = Mock(return_value=None)
++        _RecordingArcade.instances.append(self)
++
++
++@pytest.fixture(autouse=True)
++def _clean_env(monkeypatch):
++    for name in ("OPERATION_MODE", "ARC_BASE_URL", "ARC_API_KEY"):
++        monkeypatch.delenv(name, raising=False)
++    _RecordingArcade.instances.clear()
++
++
++def _swarm(**kwargs) -> Swarm:
++    with patch("benchmarking.swarm.Arcade", _RecordingArcade):
++        return Swarm(ROOT_URL="https://example.com", games=["ab12"], **kwargs)
++
++
++class TestResolveOperationMode:
++    def test_defaults_to_online(self):
++        assert resolve_operation_mode() is OperationMode.ONLINE
++
++    @pytest.mark.parametrize(
++        ("value", "mode"),
++        [
++            ("offline", OperationMode.OFFLINE),
++            (" OFFLINE ", OperationMode.OFFLINE),
++            ("online", OperationMode.ONLINE),
++            ("normal", OperationMode.NORMAL),
++        ],
++    )
++    def test_reads_operation_mode(self, monkeypatch, value, mode):
++        monkeypatch.setenv("OPERATION_MODE", value)
++
++        assert resolve_operation_mode() is mode
++
++    def test_rejects_unknown_modes(self):
++        with pytest.raises(ValueError, match="OPERATION_MODE='local' is not supported"):
++            resolve_operation_mode("local")
++
++
++class TestIsLocalUrl:
++    @pytest.mark.parametrize(
++        "url",
++        [
++            "http://localhost:8001",
++            "http://127.0.0.1:8001/",
++            "http://[::1]:8001",
++            "http://arc.localhost",
++        ],
++    )
++    def test_loopback_urls(self, url):
++        assert is_local_url(url)
++
++    @pytest.mark.parametrize(
++        "url", [None, "", "https://three.arcprize.org", "http://10.0.0.5:8001", "x"]
++    )
++    def test_other_urls(self, url):
++        assert not is_local_url(url)
++
++
++class TestSwarmOperationMode:
++    def test_online_by_default(self):
++        swarm = _swarm()
++
++        assert swarm.operation_mode is OperationMode.ONLINE
++        assert _RecordingArcade.instances[0].operation_mode is OperationMode.ONLINE
++        assert _RecordingArcade.instances[0].kwargs == {}
++
++    def test_honours_operation_mode(self, monkeypatch):
++        monkeypatch.setenv("OPERATION_MODE", "offline")
++
++        swarm = _swarm()
++
++        assert swarm.operation_mode is OperationMode.OFFLINE
++        assert _RecordingArcade.instances[0].operation_mode is OperationMode.OFFLINE
++
++    def test_constructor_argument_wins(self, monkeypatch):
++        monkeypatch.setenv("OPERATION_MODE", "offline")
++
++        swarm = _swarm(operation_mode=OperationMode.ONLINE)
++
++        assert _RecordingArcade.instances[0].operation_mode is OperationMode.ONLINE
++        assert swarm.operation_mode is OperationMode.ONLINE
++
++    def test_local_server_gets_a_placeholder_key(self, monkeypatch):
++        monkeypatch.setenv("ARC_BASE_URL", "http://127.0.0.1:8001")
++
++        _swarm()
++
++        assert _RecordingArcade.instances[0].kwargs == {
++            "arc_api_key": LOCAL_SERVER_API_KEY
++        }
++
++    @pytest.mark.parametrize(
++        ("base_url", "api_key"),
++        [("https://three.arcprize.org", None), ("http://127.0.0.1:8001", "real")],
++    )
++    def test_no_placeholder_for_remote_urls_or_set_keys(
++        self, monkeypatch, base_url, api_key
++    ):
++        monkeypatch.setenv("ARC_BASE_URL", base_url)
++        if api_key:
++            monkeypatch.setenv("ARC_API_KEY", api_key)
++
++        _swarm()
++
++        assert _RecordingArcade.instances[0].kwargs == {}
++
++    def test_missing_game_fails_with_the_mode(self, monkeypatch):
++        monkeypatch.setenv("OPERATION_MODE", "offline")
++        swarm = _swarm()
++        swarm.open_scorecard = lambda: "card-1"  # type: ignore[method-assign]
++
++        with pytest.raises(ValueError, match="'ab12' is not available in operation mode 'offline'"):
++            swarm.main()
++
++
++class TestOfflineGameList:
++    def test_lists_local_environments_without_the_api(self, monkeypatch, tmp_path):
++        game_dir = tmp_path / "environment_files" / "ab12" / "v1"
++        game_dir.mkdir(parents=True)
++        (game_dir / "metadata.json").write_text(
++            json.dumps({"game_id": "ab12-v1", "baseline_actions": [3]})
++        )
++        monkeypatch.setenv("OPERATION_MODE", "offline")
++        monkeypatch.setenv("ENVIRONMENTS_DIR", str(tmp_path / "environment_files"))
++        fetch = Mock(side_effect=AssertionError("no API call offline"))
++        monkeypatch.setattr(cli_main, "fetch_available_games", fetch)
++
++        assert cli_main.list_games("https://arcprize.org") == ["ab12-v1"]
++
++    def test_online_still_uses_the_api(self, monkeypatch):
++        fetch = Mock(return_value=["ab12-v1"])
++        monkeypatch.setattr(cli_main, "fetch_available_games", fetch)
++
++        assert cli_main.list_games("https://arcprize.org") == ["ab12-v1"]
++        fetch.assert_called_once_with("https://arcprize.org")
++
++
++class TestRunMetaRecordsTheEnvironment:
++    @staticmethod
++    def _agent(monkeypatch, tmp_path, arc_env) -> dict:
++        monkeypatch.chdir(tmp_path)
++        monkeypatch.setattr(
++            "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++        )
++        agent = BenchmarkingAgent(
++            card_id="card-id",
++            game_id="ab12",
++            agent_name="agent-name",
++            ROOT_URL="https://arcprize.org",
++            record=False,
++            arc_env=arc_env,
++            config="google-gemini-3-8-flash-high",
++        )
++        return json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++
++    def test_remote_environment_records_its_base_url(self, monkeypatch, tmp_path):
++        env = RemoteEnvironmentWrapper.__new__(RemoteEnvironmentWrapper)
++        env.base_url = "https://three.arcprize.org"
++        env.environment_info = EnvironmentInfo(game_id="ab12", baseline_actions=[2])
++
++        meta = self._agent(monkeypatch, tmp_path, env)
++
++        assert meta["arc_environment"] == {
++            "kind": "remote",
++            "base_url": "https://three.arcprize.org",
++        }
++
++    def test_local_environment_is_marked_local(self, monkeypatch, tmp_path):
++        env = LocalEnvironmentWrapper.__new__(LocalEnvironmentWrapper)
++        env.environment_info = EnvironmentInfo(game_id="ab12", baseline_actions=[2])
++
++        meta = self._agent(monkeypatch, tmp_path, env)
++
++        assert meta["arc_environment"] == {"kind": "local"}
++
++    def test_other_environments_are_not_recorded(self, monkeypatch, tmp_path):
++        env = SimpleNamespace(info=SimpleNamespace(baseline_actions=[]))
++
++        meta = self._agent(monkeypatch, tmp_path, env)
++
++        assert "arc_environment" not in meta
+-- 
+2.54.0.windows.1
+

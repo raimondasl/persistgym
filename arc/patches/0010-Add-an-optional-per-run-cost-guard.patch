@@ -1,0 +1,472 @@
+From c70cb17b380c9a1ef24b2ef33e2832cd37f83546 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 00:29:36 -0400
+Subject: [PATCH 10/15] Add an optional per-run cost guard
+
+agent.MAX_RUN_COST_USD (off unless set; no checked-in profile sets it)
+ends a run with the new exit reason COST_CAP once its estimated spend
+exceeds the limit.
+
+- The estimate is the run's recorded usage (accepted and retried action
+  attempts plus harness summaries) at the configured per-million pricing,
+  with no cache or service-tier discount, matching how ARC reconstructs
+  published costs. Under a discounted tier it overstates the bill.
+- is_done checks it before each action, after GAME_WIN and the per-level
+  action budget, so those endings take precedence. The action whose
+  request crossed the limit is still executed; overshoot is at most one
+  step's requests.
+- run_meta.json records cost_guard {max_usd, estimated_cost_usd} when the
+  guard is on and omits it otherwise.
+- Config validation requires a positive number and numeric
+  pricing.input/pricing.output.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py         |  48 ++++++-
+ benchmarking/base.py          |   1 +
+ benchmarking/model_config.py  |  21 +++
+ benchmarking/recording.py     |   3 +
+ docs/runtime-state.md         |  19 ++-
+ tests/unit/test_cost_guard.py | 238 ++++++++++++++++++++++++++++++++++
+ 6 files changed, 327 insertions(+), 3 deletions(-)
+ create mode 100644 tests/unit/test_cost_guard.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 55e33e4..348c21e 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -27,6 +27,7 @@ from .exceptions import (
+     EmptyResponseError,
+ )
+ from .model_config import get_model_config
++from .models import calculate_cost
+ from .recording import (
+     CompactionContinuationRecord,
+     CompactionRecord,
+@@ -85,6 +86,8 @@ class BenchmarkingAgent(Agent):
+     MAX_RETRIES: int = 3
+     MAX_CONTEXT_LENGTH: int = 100000
+     MAX_ANIMATION_FRAMES: int = 7
++    # Optional per-run spend limit in USD at the configured prices; None is off.
++    MAX_RUN_COST_USD: float | None = None
+     analysis_mode: bool = False
+     # When false, the system prompt omits CARRY_FORWARD_INSTRUCTION, including
+     # in analysis_mode. Continuous conversation always omits it.
+@@ -158,6 +161,9 @@ class BenchmarkingAgent(Agent):
+             "MAX_ANIMATION_FRAMES", self.MAX_ANIMATION_FRAMES
+         )
+         self.MAX_RETRIES = agent_cfg.get("MAX_RETRIES", self.MAX_RETRIES)
++        self.MAX_RUN_COST_USD = agent_cfg.get(
++            "MAX_RUN_COST_USD", self.MAX_RUN_COST_USD
++        )
+         self.analysis_mode = agent_cfg.get("analysis_mode", self.analysis_mode)
+         self.carry_forward_instruction = agent_cfg.get(
+             "carry_forward_instruction", self.carry_forward_instruction
+@@ -553,6 +559,32 @@ class BenchmarkingAgent(Agent):
+             return {"action": action.name, **action.action_data.model_dump()}
+         return str(action.name)
+ 
++    def _estimated_cost_usd(self) -> float:
++        """Run spend so far at the configured per-million prices.
++
++        Covers every recorded model request: accepted and retried action
++        attempts and harness summaries. Like ARC's published costs, it applies
++        no cache or service-tier discount.
++        """
++        usage = self.run_record.total_usage
++        pricing = getattr(self, "_pricing", {}) or {}
++        return calculate_cost(usage.prompt_tokens, pricing.get("input", 0.0)) + (
++            calculate_cost(usage.completion_tokens, pricing.get("output", 0.0))
++        )
++
++    def _cost_cap_reached(self) -> bool:
++        cap = getattr(self, "MAX_RUN_COST_USD", None)
++        if cap is None or not hasattr(self, "run_record"):
++            return False
++        estimated = self._estimated_cost_usd()
++        if estimated <= cap:
++            return False
++        logger.info(
++            f"{self.game_id} - Estimated spend ${estimated:.4f} exceeds "
++            f"MAX_RUN_COST_USD ${cap:.4f}. Stopping."
++        )
++        return True
++
+     def _run_deadline(self) -> float | None:
+         """Wall-clock time (time.time()) at which MAX_RUNTIME_SECONDS runs out."""
+         timer = getattr(self, "timer", 0)
+@@ -565,11 +597,22 @@ class BenchmarkingAgent(Agent):
+         transport_retry = getattr(self, "_transport_retry", None)
+         if transport_retry is not None:
+             self.run_record.transport_retry = transport_retry.summary()
++        cost_cap = getattr(self, "MAX_RUN_COST_USD", None)
++        if cost_cap is not None:
++            self.run_record.cost_guard = {
++                "max_usd": cost_cap,
++                "estimated_cost_usd": round(self._estimated_cost_usd(), 6),
++            }
+         path = os.path.join(self.run_dir, "run_meta.json")
+         with open(path, "w") as f:
+             exclude = {
+                 field
+-                for field in ("runtime", "requested_service_tier", "transport_retry")
++                for field in (
++                    "runtime",
++                    "requested_service_tier",
++                    "transport_retry",
++                    "cost_guard",
++                )
+                 if getattr(self.run_record, field) is None
+             }
+             f.write(self.run_record.model_dump_json(indent=2, exclude=exclude))
+@@ -893,6 +936,9 @@ class BenchmarkingAgent(Agent):
+                     )
+                     self.exit_reason = ExitReason.ACTION_BUDGET
+                     return True
++        if self._cost_cap_reached():
++            self.exit_reason = ExitReason.COST_CAP
++            return True
+         return False
+ 
+     def choose_action(
+diff --git a/benchmarking/base.py b/benchmarking/base.py
+index 20b2411..5204593 100644
+--- a/benchmarking/base.py
++++ b/benchmarking/base.py
+@@ -23,6 +23,7 @@ class ExitReason(str, Enum):
+     SCORECARD_CLOSED = "SCORECARD_CLOSED"
+     API_ERROR        = "API_ERROR"
+     AGENT_ERROR      = "AGENT_ERROR"
++    COST_CAP         = "COST_CAP"
+ 
+ class Agent(ABC):
+     """Interface for an agent that plays one ARC-AGI-3 game."""
+diff --git a/benchmarking/model_config.py b/benchmarking/model_config.py
+index d3d60d9..28f9c32 100644
+--- a/benchmarking/model_config.py
++++ b/benchmarking/model_config.py
+@@ -363,6 +363,27 @@ def _validate_model_config_entry(
+                 f"Model config '{config_id}' agent.carry_forward_instruction must be "
+                 "a boolean."
+             )
++    if isinstance(agent, dict) and "MAX_RUN_COST_USD" in agent:
++        cost_cap = agent["MAX_RUN_COST_USD"]
++        if (
++            isinstance(cost_cap, bool)
++            or not isinstance(cost_cap, (int, float))
++            or cost_cap <= 0
++        ):
++            raise ValueError(
++                f"Model config '{config_id}' agent.MAX_RUN_COST_USD must be "
++                "a positive number (USD)."
++            )
++        pricing = entry.get("pricing")
++        if not isinstance(pricing, dict) or not all(
++            isinstance(pricing.get(key), (int, float))
++            and not isinstance(pricing.get(key), bool)
++            for key in ("input", "output")
++        ):
++            raise ValueError(
++                f"Model config '{config_id}' sets agent.MAX_RUN_COST_USD and must "
++                "set numeric pricing.input and pricing.output."
++            )
+     if isinstance(agent, dict) and "MAX_RUNTIME_SECONDS" in agent:
+         max_runtime = agent["MAX_RUNTIME_SECONDS"]
+         if (
+diff --git a/benchmarking/recording.py b/benchmarking/recording.py
+index 40cd388..138d27f 100644
+--- a/benchmarking/recording.py
++++ b/benchmarking/recording.py
+@@ -151,5 +151,8 @@ class RunRecord(BaseModel):
+     requested_service_tier: Optional[str] = None
+     # client.transport_retry policy and counters; None when not configured.
+     transport_retry: dict[str, Any] | None = None
++    # agent.MAX_RUN_COST_USD and the spend estimate it is compared with;
++    # None when the guard is off.
++    cost_guard: dict[str, Any] | None = None
+     run_dir: str
+     runtime: dict[str, Any] | None = None
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index e9e828b..98b39bd 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -368,6 +368,21 @@ rather than `AGENT_ERROR`. `run_meta.json` records the policy and counters as
+ are then built exactly as before. Requests that httpx routes through an
+ environment proxy mount bypass the wrapper.
+ 
++## Cost guard
++
++`agent.MAX_RUN_COST_USD` is an optional per-run spend limit; it is off unless a
++configuration sets it, and none of the checked-in profiles does. The estimate
++is the run's recorded usage (accepted and retried action attempts plus harness
++summaries) at the configured `pricing` per million input and output tokens.
++Like ARC's published costs, it applies no cache or service-tier discount, so
++under a discounted tier it overstates the bill. Before each action the agent
++compares the estimate with the limit; once it exceeds the limit, the run ends
++with exit reason `COST_CAP`. The action whose request crossed the limit has
++already been paid for and is executed first, so a run can overshoot by one
++step's requests. A win or an exhausted action budget at the same point takes
++precedence. `run_meta.json` records `cost_guard` with the limit and the current
++estimate; the field is omitted when the guard is off.
++
+ ## Recording and provenance
+ 
+ ### xAI Responses
+@@ -397,8 +412,8 @@ is absent; runtime metadata never depends on `.git` being present in a Docker
+ image.
+ 
+ Every `run_meta.json` records `exit_reason`: `GAME_WIN`, `ACTION_BUDGET`,
+-`TIME_BUDGET`, `SCORECARD_CLOSED`, `API_ERROR`, `AGENT_ERROR`, or `UNKNOWN`
+-while a run is in progress or after a stop that recorded no ending. The agent
++`TIME_BUDGET`, `SCORECARD_CLOSED`, `API_ERROR`, `AGENT_ERROR`, `COST_CAP`, or
++`UNKNOWN` while a run is in progress or after a stop that recorded no ending. The agent
+ writes it when its loop ends, including before an error propagates, and
+ rewrites it when the swarm reclassifies an ending after closing the scorecard.
+ 
+diff --git a/tests/unit/test_cost_guard.py b/tests/unit/test_cost_guard.py
+new file mode 100644
+index 0000000..83a94c1
+--- /dev/null
++++ b/tests/unit/test_cost_guard.py
+@@ -0,0 +1,238 @@
++"""Optional per-run cost guard (agent.MAX_RUN_COST_USD, exit COST_CAP)."""
++
++import json
++from copy import deepcopy
++from pathlib import Path
++from types import SimpleNamespace
++
++import numpy as np
++import pytest
++import yaml
++from arcengine import FrameDataRaw, GameAction, GameState
++
++import benchmarking.model_config as model_config
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.base import ExitReason
++from benchmarking.compaction import SUMMARY_SYSTEM_PROMPT
++from benchmarking.model_config import get_model_config
++from benchmarking.runtime_models import ModelRequest, ModelResponse, NormalizedUsage
++
++pytestmark = pytest.mark.unit
++
++PATH_PROFILES = [
++    "google-gemini-3-8-flash-high",
++    "google-gemini-3-8-flash-high-rolling-summary",
++    "google-gemini-3-8-flash-high-rolling-summary-notes-off",
++    "google-gemini-3-8-flash-high-provider-adapter",
++]
++
++
++def _config(**agent: object) -> dict:
++    return {
++        "id": "cost-guard-test",
++        "agent": {"MAX_CONTEXT_LENGTH": 100_000_000, **agent},
++        "runtime": {
++            "sdk": "openai-python",
++            "api": "chat_completions",
++            "state": "manual_rolling",
++        },
++        "client": {"api_key_env": "OPENAI_API_KEY"},
++        "request": {"model": "test-model", "max_completion_tokens": 512},
++        # $1 per million input tokens, $2 per million output tokens.
++        "pricing": {"input": 1.0, "output": 2.0},
++    }
++
++
++class _Adapter:
++    """Each action call costs $1.00 at the test prices; summaries $0.50."""
++
++    def __init__(
++        self, trigger_on: int | None = None, unparseable_on: int | None = None
++    ) -> None:
++        self.calls = 0
++        self.summaries = 0
++        self.trigger_on = trigger_on
++        self.unparseable_on = unparseable_on
++
++    def invoke(self, request: ModelRequest) -> ModelResponse:
++        if request.messages[0].content == SUMMARY_SYSTEM_PROMPT:
++            self.summaries += 1
++            return ModelResponse(
++                output_text="summary",
++                usage=NormalizedUsage(
++                    input_tokens=500_000, output_tokens=0, total_tokens=500_000
++                ),
++            )
++        self.calls += 1
++        # $0.50 input + $0.50 output; the reported total only drives compaction.
++        total = 2_000_000 if self.calls == self.trigger_on else 750_000
++        return ModelResponse(
++            output_text="no action" if self.calls == self.unparseable_on else "ACTION1",
++            usage=NormalizedUsage(
++                input_tokens=500_000, output_tokens=250_000, total_tokens=total
++            ),
++        )
++
++
++def _raw_frame(value: int, state: GameState = GameState.NOT_FINISHED) -> FrameDataRaw:
++    raw = FrameDataRaw()
++    raw.game_id = "game-id"
++    raw.frame = [np.array([[value, 0], [0, value]], dtype=np.int8)]
++    raw.state = state
++    raw.levels_completed = 0
++    raw.win_levels = 1
++    raw.action_input = None
++    raw.guid = "guid-1"
++    raw.full_reset = False
++    raw.available_actions = [GameAction.ACTION1.value]
++    return raw
++
++
++class _Game:
++    def __init__(self, win_after: int | None = None) -> None:
++        self.info = SimpleNamespace(baseline_actions=[])
++        self.observation_space = _raw_frame(1)
++        self.actions: list[GameAction] = []
++        self.win_after = win_after
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        self.actions.append(action)
++        won = len(self.actions) == self.win_after
++        self.observation_space = _raw_frame(
++            len(self.actions) + 1, GameState.WIN if won else GameState.NOT_FINISHED
++        )
++        return self.observation_space
++
++
++def _run(monkeypatch, tmp_path, config, *, budget=10, adapter=None, game=None):
++    adapter = adapter or _Adapter()
++    game = game or _Game()
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_adapter", lambda **_kwargs: adapter
++    )
++    agent = BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=game,
++        config=config["id"],
++    )
++    agent._level_action_budgets = [budget]
++    agent.MAX_ACTIONS = budget
++    agent.main()
++    meta = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++    return agent, game, meta
++
++
++def _write(tmp_path, monkeypatch, config) -> None:
++    path = tmp_path / "model_configs.yaml"
++    path.write_text(yaml.safe_dump([config]))
++    monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", path)
++
++
++class TestCostGuard:
++    def test_is_off_in_the_path_profiles_and_by_default(self, monkeypatch, tmp_path):
++        for config_id in PATH_PROFILES:
++            assert "MAX_RUN_COST_USD" not in get_model_config(config_id)["agent"]
++
++        agent, game, meta = _run(monkeypatch, tmp_path, _config(), budget=4)
++
++        assert agent.MAX_RUN_COST_USD is None
++        assert len(game.actions) == 4
++        assert meta["exit_reason"] == ExitReason.ACTION_BUDGET.value
++        assert "cost_guard" not in meta
++
++    def test_run_ends_with_cost_cap_once_spend_exceeds_the_cap(
++        self, monkeypatch, tmp_path
++    ):
++        agent, game, meta = _run(
++            monkeypatch, tmp_path, _config(MAX_RUN_COST_USD=2.5)
++        )
++
++        # Each step costs $1.00; the action whose call crossed $2.50 still runs.
++        assert len(game.actions) == 3
++        assert meta["exit_reason"] == ExitReason.COST_CAP.value
++        assert meta["cost_guard"] == {"max_usd": 2.5, "estimated_cost_usd": 3.0}
++
++    def test_spend_equal_to_the_cap_does_not_stop(self, monkeypatch, tmp_path):
++        _, game, meta = _run(monkeypatch, tmp_path, _config(MAX_RUN_COST_USD=3))
++
++        assert len(game.actions) == 4
++        assert meta["exit_reason"] == ExitReason.COST_CAP.value
++        assert meta["cost_guard"]["estimated_cost_usd"] == 4.0
++
++    def test_retried_attempts_count(self, monkeypatch, tmp_path):
++        adapter = _Adapter(unparseable_on=1)
++
++        _, game, meta = _run(
++            monkeypatch, tmp_path, _config(MAX_RUN_COST_USD=1.5), adapter=adapter
++        )
++
++        assert len(game.actions) == 1
++        assert meta["exit_reason"] == ExitReason.COST_CAP.value
++        assert meta["cost_guard"]["estimated_cost_usd"] == 2.0
++
++    def test_harness_summaries_count(self, monkeypatch, tmp_path):
++        config = _config(MAX_RUN_COST_USD=2.4)
++        config["runtime"]["compaction"] = {
++            "strategy": "harness_summary",
++            "trigger_tokens": 1_500_000,
++        }
++        adapter = _Adapter(trigger_on=1)
++
++        _, game, meta = _run(monkeypatch, tmp_path, config, adapter=adapter)
++
++        # $1.00 + summary $0.50 + $1.00 = $2.50 after two actions.
++        assert adapter.summaries == 1
++        assert len(game.actions) == 2
++        assert meta["exit_reason"] == ExitReason.COST_CAP.value
++        assert meta["cost_guard"]["estimated_cost_usd"] == 2.5
++
++    def test_win_takes_precedence(self, monkeypatch, tmp_path):
++        _, _, meta = _run(
++            monkeypatch,
++            tmp_path,
++            _config(MAX_RUN_COST_USD=1.5),
++            game=_Game(win_after=2),
++        )
++
++        assert meta["exit_reason"] == ExitReason.GAME_WIN.value
++
++    def test_action_budget_takes_precedence(self, monkeypatch, tmp_path):
++        _, game, meta = _run(
++            monkeypatch, tmp_path, _config(MAX_RUN_COST_USD=1.5), budget=2
++        )
++
++        assert len(game.actions) == 2
++        assert meta["exit_reason"] == ExitReason.ACTION_BUDGET.value
++
++
++class TestCostGuardValidation:
++    @pytest.mark.parametrize("value", [0, -1, True, "5"])
++    def test_rejects_non_positive_or_non_numeric_caps(self, tmp_path, monkeypatch, value):
++        _write(tmp_path, monkeypatch, _config(MAX_RUN_COST_USD=value))
++
++        with pytest.raises(ValueError, match="MAX_RUN_COST_USD must be a positive"):
++            model_config.load_model_configs()
++
++    def test_requires_pricing(self, tmp_path, monkeypatch):
++        config = _config(MAX_RUN_COST_USD=5)
++        del config["pricing"]
++        _write(tmp_path, monkeypatch, config)
++
++        with pytest.raises(ValueError, match="numeric pricing.input and pricing.output"):
++            model_config.load_model_configs()
++
++    def test_accepts_a_positive_cap(self, tmp_path, monkeypatch):
++        config = deepcopy(get_model_config(PATH_PROFILES[0]))
++        config["agent"]["MAX_RUN_COST_USD"] = 25.0
++        _write(tmp_path, monkeypatch, config)
++
++        assert model_config.load_model_configs()[0]["agent"]["MAX_RUN_COST_USD"] == 25.0
+-- 
+2.54.0.windows.1
+

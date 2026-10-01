@@ -1,7 +1,8 @@
 """Append-only cost log (results/costs.csv) and phase-cap checks.
 
 Every paid call batch gets one row. Before each paid block, run
-`uv run python -m common.costs` and compare the sums with the caps in PLAN.md §12.
+`uv run python -m common.costs` and compare the sums with the caps in PLAN.md §12 (as amended
+by A2, §17.3).
 Exceeding a cap requires the researcher's explicit approval first.
 """
 
@@ -26,8 +27,10 @@ COLUMNS = [
 # the provider does not report them, so writers built before the change keep working.
 OPTIONAL_COLUMNS = {"service_tier_served", "cache_write_tokens", "latency_s"}
 
-# Hard caps per budget phase, PLAN.md §12 (USD). Stop and ask the researcher before exceeding.
-PHASE_CAPS = {"0": 100.0, "1a": 450.0, "1b": 900.0, "2": 950.0}
+# Hard caps per budget phase (USD): PLAN.md §12 as amended by A2 (§17.3, 2026-10-01): 1a 450 -> 500,
+# 2 950 -> 1150. Stop and ask the researcher before exceeding. tests/test_common.py checks that
+# this matches the §17.3 table.
+PHASE_CAPS = {"0": 100.0, "1a": 500.0, "1b": 900.0, "2": 1150.0}
 
 # Which budget phase each `experiment` value counts toward (PLAN.md §12 and amendment A1).
 EXPERIMENT_PHASE = {

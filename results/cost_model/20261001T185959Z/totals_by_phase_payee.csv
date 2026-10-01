@@ -1,0 +1,46 @@
+scenario,phase,Google,OpenAI,ARC Prize,GPU,total,cap,over_cap
+central / ARC flex_cached,0,13.0819,1.46475,0,0,14.5467,100,False
+central / ARC flex_cached,1a,0,480.663,0,0,480.663,450,True
+central / ARC flex_cached,1b,416.413,0,0,0,416.413,900,False
+central / ARC flex_cached,2,485.811,13.7274,0,0,499.538,950,False
+central / ARC flex_cached,total,915.306,495.855,0,0,1411.16,,False
+central / ARC standard_cached,0,22.8272,1.46475,0,0,24.292,100,False
+central / ARC standard_cached,1a,0,480.663,0,0,480.663,450,True
+central / ARC standard_cached,1b,832.826,0,0,0,832.826,900,False
+central / ARC standard_cached,2,821.622,13.7274,0,0,835.349,950,False
+central / ARC standard_cached,total,1677.27,495.855,0,0,2173.13,,False
+central / ARC list_nocache,0,28.0027,1.46475,0,0,29.4674,100,False
+central / ARC list_nocache,1a,0,480.663,0,0,480.663,450,True
+central / ARC list_nocache,1b,1074.72,0,0,0,1074.72,900,True
+central / ARC list_nocache,2,1024.48,13.7274,0,0,1038.2,950,True
+central / ARC list_nocache,total,2127.2,495.855,0,0,2623.05,,False
+"everything at list (ARC no-cache list, OpenAI standard tier)",0,28.0027,2.9295,0,0,30.9322,100,False
+"everything at list (ARC no-cache list, OpenAI standard tier)",1a,0,961.326,0,0,961.326,450,True
+"everything at list (ARC no-cache list, OpenAI standard tier)",1b,1074.72,0,0,0,1074.72,900,True
+"everything at list (ARC no-cache list, OpenAI standard tier)",2,1024.48,27.4548,0,0,1051.93,950,True
+"everything at list (ARC no-cache list, OpenAI standard tier)",total,2127.2,991.71,0,0,3118.91,,False
+"pessimistic (everything at list, 3k output, costliest draw, published re-run rate)",0,28.0027,6.8355,0,0,34.8382,100,False
+"pessimistic (everything at list, 3k output, costliest draw, published re-run rate)",1a,0,1768.23,0,0,1768.23,450,True
+"pessimistic (everything at list, 3k output, costliest draw, published re-run rate)",1b,1390.96,0,0,0,1390.96,900,True
+"pessimistic (everything at list, 3k output, costliest draw, published re-run rate)",2,972.254,54.7348,0,0,1026.99,950,True
+"pessimistic (everything at list, 3k output, costliest draw, published re-run rate)",total,2391.22,1829.8,0,0,4221.02,,False
+"like-for-like / ARC flex_cached: no §5 repeat subset, no held-out re-runs",0,13.0819,1.46475,0,0,14.5467,100,False
+"like-for-like / ARC flex_cached: no §5 repeat subset, no held-out re-runs",1a,0,440.144,0,0,440.144,450,False
+"like-for-like / ARC flex_cached: no §5 repeat subset, no held-out re-runs",1b,416.413,0,0,0,416.413,900,False
+"like-for-like / ARC flex_cached: no §5 repeat subset, no held-out re-runs",2,429.842,12.4794,0,0,442.322,950,False
+"like-for-like / ARC flex_cached: no §5 repeat subset, no held-out re-runs",total,859.337,454.088,0,0,1313.43,,False
+"like-for-like / ARC standard_cached: no §5 repeat subset, no held-out re-runs",0,22.8272,1.46475,0,0,24.292,100,False
+"like-for-like / ARC standard_cached: no §5 repeat subset, no held-out re-runs",1a,0,440.144,0,0,440.144,450,False
+"like-for-like / ARC standard_cached: no §5 repeat subset, no held-out re-runs",1b,832.826,0,0,0,832.826,900,False
+"like-for-like / ARC standard_cached: no §5 repeat subset, no held-out re-runs",2,709.685,12.4794,0,0,722.164,950,False
+"like-for-like / ARC standard_cached: no §5 repeat subset, no held-out re-runs",total,1565.34,454.088,0,0,2019.43,,False
+"like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",0,28.0027,1.46475,0,0,29.4674,100,False
+"like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",1a,0,440.144,0,0,440.144,450,False
+"like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",1b,1074.72,0,0,0,1074.72,900,True
+"like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",2,878.73,12.4794,0,0,891.209,950,False
+"like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",total,1981.45,454.088,0,0,2435.54,,False
+"sensitivity: central / ARC flex_cached, 1a sized to its cap",0,13.0819,1.46475,0,0,14.5467,100,False
+"sensitivity: central / ARC flex_cached, 1a sized to its cap",1a,0,450,0,0,450,450,False
+"sensitivity: central / ARC flex_cached, 1a sized to its cap",1b,416.413,0,0,0,416.413,900,False
+"sensitivity: central / ARC flex_cached, 1a sized to its cap",2,485.811,13.7274,0,0,499.538,950,False
+"sensitivity: central / ARC flex_cached, 1a sized to its cap",total,915.306,465.192,0,0,1380.5,,False

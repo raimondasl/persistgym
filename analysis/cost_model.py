@@ -22,6 +22,11 @@ What it produces (printed, and written to ``results/cost_model/<run_id>/`` with 
 (e) the cost of each staged approval block of amendment §16.2;
 plus a comparison with the numbers stated in the plan.
 
+Option A (the researcher's decisions of 2026-10-01; section "Option A" below) adds its own
+tables (``optA_*.csv`` and ``option_a_summary.md``) from ``analysis/data/option_a.csv`` and the
+committed ``results/arc_public_ops/<run>/recordings_per_action.csv`` that file names. It leaves
+every table above unchanged.
+
 Run: ``uv run python -m analysis.cost_model`` (``--no-write`` only prints).
 """
 
@@ -888,16 +893,428 @@ def comparison_table(m: CostModel, threshold: float = 0.05,
 
 
 # --------------------------------------------------------------------------------------------
+# Option A: the researcher's decisions of 2026-10-01 (D7, D11, D14, D21, D23, D24, D27)
+# --------------------------------------------------------------------------------------------
+# Everything above is unchanged; option A is an extra scenario with its own inputs
+# (``analysis/data/option_a.csv`` plus the committed ops run it names) and its own tables.
+#
+# - ARC games are fixed (no draw): path FT09, SB26, R11L, CD82; held out SP80, VC33, TN36.
+# - Every ARC cost comes from the published high-effort recordings of that game: S0 = the
+#   Standard run, S4 = the Adapter run. Primary basis: Gemini standard tier, billed estimate
+#   (each recording's cached input at the cached price; D21, D23). Reference: ARC's no-cache
+#   list accounting.
+# - S1, S2 and S0+StateCarry (SC) at the S0/S4 midpoint (D27 rule 1, the G0 forecast). The
+#   Checkpoint C rule prices them at S0's cost per model call x max(S0, S4 actions).
+# - 20% re-run reserve on every counted ARC run. G3's 4 runs are a phase-2 line of their own,
+#   outside the $150 dev cap.
+# - PersistGym: sol runs F-r vs F-0 on derived-far cells (T_d templates x 2) and observed-far
+#   cells (T_o = T_d / 3 templates x 2), no near cells (D11 A). Repeats (template seeds from 0,
+#   one extra repeat for every seed divisible by 10) on BOTH luna and sol (D7).
+OPTION_A_FILE = "option_a.csv"
+OA_BASES = ("billed_standard", "list_nocache")
+OA_BASIS_LABELS = {
+    "billed_standard": "Gemini standard tier, billed estimate from the recordings' cached input",
+    "list_nocache": "ARC's no-cache list accounting (recordings' cost.total_cost), reference",
+}
+OA_RULES = ("midpoint", "checkpoint_c")
+OA_RULE_LABELS = {
+    "midpoint": "S1, S2 and S0+StateCarry at the S0/S4 midpoint (D27 rule 1)",
+    "checkpoint_c": "S1, S2 and S0+StateCarry at S0 cost per call x max(S0, S4 actions)",
+}
+
+
+@dataclass(frozen=True)
+class OptionAInputs:
+    params: dict[str, float | str]
+    recordings: pd.DataFrame  # recordings_per_action.csv of the ops run named in option_a.csv
+    ops_dir: Path
+
+    def num(self, name: str) -> float:
+        value = self.params[name]
+        if isinstance(value, str):
+            raise TypeError(f"option-A parameter {name!r} is not numeric: {value!r}")
+        return value
+
+    def names(self, name: str) -> list[str]:
+        return [x for x in str(self.params[name]).split(";") if x]
+
+
+def load_option_a(data_dir: Path = DATA_DIR, repo_root: Path = REPO_ROOT) -> OptionAInputs:
+    params = load_parameters(data_dir / OPTION_A_FILE)
+    ops_dir = repo_root / str(params["ops_results_dir"])
+    return OptionAInputs(params, pd.read_csv(ops_dir / "recordings_per_action.csv"), ops_dir)
+
+
+def option_a_hashes(oa: OptionAInputs, data_dir: Path = DATA_DIR) -> dict[str, str]:
+    rec = oa.ops_dir / "recordings_per_action.csv"
+    return {OPTION_A_FILE: hashlib.sha256((data_dir / OPTION_A_FILE).read_bytes()).hexdigest(),
+            str(rec.relative_to(REPO_ROOT)).replace("\\", "/"):
+                hashlib.sha256(rec.read_bytes()).hexdigest()}
+
+
+def option_a_arc_costs(oa: OptionAInputs) -> pd.DataFrame:
+    """One row per basis and game: S0 and S4 from the recordings, the midpoint, and the
+    Checkpoint C price of S1/S2 (S0 cost per model call x max(S0, S4 actions))."""
+    rec = oa.recordings.set_index(["game", "harness"])
+    roles = {**{g: "path" for g in oa.names("path_games")},
+             **{g: "heldout" for g in oa.names("heldout_games")}}
+    missing = [g for g in roles for h in ("standard", "provider_adapter") if (g, h) not in rec.index]
+    if missing:
+        raise KeyError(f"no recording for option-A games {sorted(set(missing))}; re-run the pull")
+    rows = []
+    for basis in OA_BASES:
+        col = "cost_cached_price_usd" if basis == "billed_standard" else "cost_total_usd"
+        for game, role in roles.items():
+            std, pa = rec.loc[(game, "standard")], rec.loc[(game, "provider_adapter")]
+            s0, s4 = float(std[col]), float(pa[col])
+            per_call = s0 / float(std.n_model_steps)
+            max_actions = max(int(std.n_steps), int(pa.n_steps))
+            rows.append({"basis": basis, "game": game, "role": role, "S0": s0, "S4": s4,
+                         "midpoint": (s0 + s4) / 2, "S0_model_calls": int(std.n_model_steps),
+                         "S4_model_calls": int(pa.n_model_steps),
+                         "S0_actions": int(std.n_steps), "S4_actions": int(pa.n_steps),
+                         "S0_usd_per_call": per_call, "max_actions": max_actions,
+                         "checkpoint_c": per_call * max_actions,
+                         "S0_cached_share": float(std.cached_share),
+                         "S4_cached_share": float(pa.cached_share)})
+    return pd.DataFrame(rows)
+
+
+@dataclass(frozen=True)
+class OptionAScenario:
+    name: str = "option_a"
+    arc_basis: str = "billed_standard"
+    rule: str = "midpoint"  # how S1, S2 and SC are priced (OA_RULES)
+    output_tokens: int = 1000
+    luna_cells: str = "all"  # "all" (8 cells) or "replay_off" (4 cells)
+    sol_td: int | None = None  # None = sol_td_central
+    repeats: bool = True  # D7 repeat subset on luna and sol
+    sol_repeats: bool = True  # switch off to price the rejected luna-only change
+    openai_flex: bool = True
+    cache_writes: bool = True
+
+
+OPTION_A_CENTRAL = OptionAScenario()
+
+
+class OptionAModel:
+    def __init__(self, m: CostModel | None = None, oa: OptionAInputs | None = None):
+        self.m = m or CostModel()
+        self.oa = oa or load_option_a()
+        self.arc = option_a_arc_costs(self.oa)
+        self.caps = {p: self.oa.num(f"cap_phase_{p}") for p in PHASES}
+        self.reserve = self.oa.num("rerun_reserve")
+
+    # ---- ARC ------------------------------------------------------------------------------
+    def arc_rows(self, basis: str, role: str) -> pd.DataFrame:
+        a = self.arc
+        return a.loc[(a.basis == basis) & (a.role == role)]
+
+    def arc_s12(self, basis: str, rule: str, role: str = "path") -> pd.Series:
+        """Per-game price of one S1, S2 or S0+StateCarry run under a rule."""
+        if rule not in OA_RULES:
+            raise ValueError(f"unknown option-A rule {rule!r}")
+        return self.arc_rows(basis, role)["midpoint" if rule == "midpoint" else "checkpoint_c"]
+
+    def arc_path(self, basis: str, rule: str) -> dict[str, float]:
+        """Phase 1b without re-runs: 4 path games x {S0, S1, S2, S4} x seeds."""
+        p = self.arc_rows(basis, "path")
+        seed1_s0s4 = float((p.S0 + p.S4).sum())
+        seed1_s1s2 = 2 * float(self.arc_s12(basis, rule).sum())
+        path = self.oa.num("arc_seeds") * (seed1_s0s4 + seed1_s1s2)
+        return {"seed1_s0s4": seed1_s0s4, "seed1_s1s2": seed1_s1s2, "path_1b": path,
+                "remainder_1b": path - seed1_s0s4}
+
+    def arc_heldout(self, basis: str, rule: str) -> float:
+        """18 held-out runs: 3 games x {S0, S4, S0+StateCarry} x seeds, no re-runs."""
+        h = self.arc_rows(basis, "heldout")
+        sc = self.arc_s12(basis, rule, "heldout")
+        return self.oa.num("heldout_seeds") * float((h.S0 + h.S4 + sc).sum())
+
+    def arc_g3(self, basis: str, rule: str) -> float:
+        """G3: the frozen v0 (S0+StateCarry) once per dev game, no re-runs."""
+        return self.oa.num("g3_runs_per_dev_game") * float(self.arc_s12(basis, rule).sum())
+
+    def arc_pilot(self, basis: str, rule: str) -> float:
+        """Truncated pilot (§16.3) on a path game, at the path games' pooled cost per call."""
+        p = self.arc_rows(basis, "path")
+        r0 = float(p.S0.sum()) / float(p.S0_model_calls.sum())
+        r4 = float(p.S4.sum()) / float(p.S4_model_calls.sum())
+        r12 = (r0 + r4) / 2 if rule == "midpoint" else r0
+        rate = {"S0": r0, "S1": r12, "S2": r12, "S4": r4}
+        return sum(n * rate[c] for c, n in arc_pilot_actions(self.m.inp).items())
+
+    def gemini_probe(self) -> float:
+        """Acceptance calls only: the Flex latency calls are dropped (D21)."""
+        params = {**self.m.inp.params,
+                  "gemini_probe_flex_calls": self.oa.num("gemini_probe_flex_calls")}
+        return gemini_probe_cost(Inputs(self.m.inp.games, self.m.inp.prices, params))
+
+    # ---- PersistGym -----------------------------------------------------------------------
+    def with_repeats(self, templates: int, on: bool) -> int:
+        """Episodes per cell: seeds 0..T-1, plus one repeat for every seed divisible by 10."""
+        return templates + (math.ceil(templates / self.oa.num("repeat_every")) if on else 0)
+
+    def sol_templates(self, s: OptionAScenario) -> tuple[int, int]:
+        td = int(self.oa.num("sol_td_central")) if s.sol_td is None else s.sol_td
+        return td, math.ceil(td / self.oa.num("sol_to_divisor"))
+
+    def sol_lines(self, s: OptionAScenario) -> tuple[float, float]:
+        """(derived-far, observed-far) sol cost: F-r and F-0 on each cell's templates."""
+        m, inp, oa = self.m, self.m.inp, self.oa
+        arms = sum(m.episode(SOL, c, s.output_tokens, s.openai_flex, s.cache_writes)
+                   for c in inp.names("pg_sol_core_cells"))
+        td, to = self.sol_templates(s)
+        rep = s.repeats and s.sol_repeats
+        return (self.with_repeats(td, rep) * oa.num("sol_derived_far_cells") * arms,
+                self.with_repeats(to, rep) * oa.num("sol_observed_far_cells") * arms)
+
+    # ---- line items -----------------------------------------------------------------------
+    def items(self, s: OptionAScenario) -> list[Item]:
+        if s.arc_basis not in OA_BASES:
+            raise ValueError(f"unknown option-A ARC basis {s.arc_basis!r}")
+        m, inp, oa = self.m, self.m.inp, self.oa
+        o, fx, wr = s.output_tokens, s.openai_flex, s.cache_writes
+
+        def ep(model: str, cell: str) -> float:
+            return m.episode(model, cell, o, fx, wr)
+
+        # OpenAI pilot and validity items are the unchanged formulas of CostModel._items; they
+        # do not depend on the ARC draw, third game or billing case, so any combo will do.
+        base = replace(CENTRAL, output_tokens=o, luna_cells=s.luna_cells, openai_flex=fx,
+                       cache_writes=wr)
+        openai_b1 = [i for i in m._items(base, *m.combos()[0]) if i[1] == B1 and i[2] == "OpenAI"]
+        b, r = s.arc_basis, s.rule
+        path = self.arc_path(b, r)
+        g3, heldout, res = self.arc_g3(b, r), self.arc_heldout(b, r), self.reserve
+        luna_eps = (self.with_repeats(int(inp.num("pg_templates_luna")), s.repeats)
+                    * inp.num("pg_task_cells"))
+        sol_d, sol_o = self.sol_lines(s)
+        td, to = self.sol_templates(s)
+        path_games = "+".join(oa.names("path_games"))
+        held_games = "+".join(oa.names("heldout_games"))
+        items: list[Item] = [
+            *[i for i in openai_b1 if i[0] == "0"],
+            ("0", B1, "Google", "Gemini acceptance probe (standard tier; no Flex probe, D21)",
+             self.gemini_probe()),
+            ("0", B1, "Google", "truncated ARC pilot (a path game)", self.arc_pilot(b, r)),
+            *[i for i in openai_b1 if i[0] == "1a"],
+            ("1b", B2, "Google", f"seed-1 S0+S4 (8 runs; {path_games})", path["seed1_s0s4"]),
+            ("1b", B2, "Google", "seed-1 re-run reserve", res * path["seed1_s0s4"]),
+            ("1b", B3, "Google", "path remainder (24 runs)", path["remainder_1b"]),
+            ("1b", B3, "Google", "remainder re-run reserve", res * path["remainder_1b"]),
+            ("1a", B3, "OpenAI", "luna sweep",
+             luna_eps * sum(ep(LUNA, c) for c in m.luna_cells(s.luna_cells))),
+            ("1a", B3, "OpenAI", "luna control prompts",
+             inp.num("pg_control_prompts") * m.control_prompt(LUNA, o, fx, wr)),
+            ("1a", B3, "OpenAI", f"sol H2 derived-far (T_d={td} x 2 cells)", sol_d),
+            ("1a", B3, "OpenAI", f"sol H2 observed-far (T_o={to} x 2 cells)", sol_o),
+            ("2", B4, "OpenAI", "StateCarry PersistGym cell (luna)",
+             luna_eps * ep(LUNA, "StateCarry")),
+            ("2", B4, "Google", "ARC dev games (at the dev cap)", inp.num("arc_dev_cap_usd")),
+            ("2", B4, "Google", "G3 v0 runs (4, outside the dev cap)", g3),
+            ("2", B4, "Google", "G3 re-run reserve", res * g3),
+            ("2", B4, "Google", f"held-out runs (18; {held_games})", heldout),
+            ("2", B4, "Google", "held-out re-run reserve", res * heldout),
+            ("1b", B2, "ARC Prize", "ARC API (free research preview)", 0.0),
+            ("2", B4, "GPU", "GPU (E1 not in this scenario)", 0.0),
+        ]
+        return items
+
+    # ---- report tables --------------------------------------------------------------------
+    def forecasts_table(self) -> pd.DataFrame:
+        """Block 2, the G0 forecast (D27 rule 1), the Checkpoint C conservative forecast, G3
+        and the held-out runs, per ARC basis, with the 20% reserve and the proposed caps."""
+        cap1b, cap2 = self.caps["1b"], self.caps["2"]
+        rows = []
+
+        def row(basis, metric, usd, cap=None, note=""):
+            with_res = usd * (1 + self.reserve)
+            rows.append({"basis": basis, "metric": metric, "usd": usd,
+                         "usd_with_reserve": with_res, "cap": cap,
+                         "headroom_usd": None if cap is None else cap - with_res,
+                         "note": note})
+
+        n_runs = (len(self.oa.names("path_games")) * self.m.inp.num("arc_path_configs")
+                  * self.oa.num("arc_seeds"))
+        for b in OA_BASES:
+            mid, cons = self.arc_path(b, "midpoint"), self.arc_path(b, "checkpoint_c")
+            row(b, "block 2: seed-1 S0+S4 on the 4 path games (8 runs)", mid["seed1_s0s4"])
+            row(b, "G0 forecast, phase 1b (D27 rule 1: S1/S2 at the S0/S4 midpoint)",
+                mid["path_1b"], cap1b, f"{mid['path_1b'] * (1 + self.reserve) / n_runs:.2f} "
+                f"USD per counted run with reserve ({n_runs:.0f} runs)")
+            row(b, "Checkpoint C conservative forecast, phase 1b (S1/S2 at S0 cost per call "
+                "x max(S0, S4 actions))", cons["path_1b"], cap1b,
+                "a negative headroom is the 1b cap increase this rule would ask for")
+            row(b, "Checkpoint C: remaining 24 runs (S1/S2 conservative)", cons["remainder_1b"],
+                cap1b - mid["seed1_s0s4"] * (1 + self.reserve),
+                "cap = 1b cap minus block 2 with its reserve")
+            for rule in OA_RULES:
+                tag = "midpoint" if rule == "midpoint" else "Checkpoint C rule"
+                row(b, f"G3 v0 runs (4), SC at the {tag}", self.arc_g3(b, rule))
+                row(b, f"held-out runs (18), SC at the {tag}", self.arc_heldout(b, rule))
+                items = self.items(replace(OPTION_A_CENTRAL, arc_basis=b, rule=rule))
+                ph2 = total(items, phase="2")
+                reserves = sum(u for p, *_, n, u in items if p == "2" and "reserve" in n)
+                rows.append({"basis": b, "metric": f"phase 2 total (1k output), SC at the {tag}",
+                             "usd": ph2 - reserves, "usd_with_reserve": ph2, "cap": cap2,
+                             "headroom_usd": cap2 - ph2,
+                             "note": "dev at its $150 cap; StateCarry PersistGym cell; G3 and "
+                                     "held-out runs (reserve on those two only)"})
+        return pd.DataFrame(rows)
+
+    def scenarios(self) -> dict[str, OptionAScenario]:
+        out = {}
+        for b in OA_BASES:
+            for o in self.m.output_grid:
+                out[f"option A / ARC {b} / {o // 1000}k output"] = replace(
+                    OPTION_A_CENTRAL, name=f"optA_{b}_{o // 1000}k", arc_basis=b, output_tokens=o)
+        for o in (min(self.m.output_grid), max(self.m.output_grid)):
+            out[f"option A / ARC billed_standard / {o // 1000}k output / S1, S2, SC at the "
+                "Checkpoint C rule"] = replace(OPTION_A_CENTRAL, name=f"optA_cpc_{o // 1000}k",
+                                               rule="checkpoint_c", output_tokens=o)
+        out["option A / ARC billed_standard / 1k output / luna replay-off cells only"] = replace(
+            OPTION_A_CENTRAL, name="optA_luna4_1k", luna_cells="replay_off")
+        return out
+
+    def totals_table(self) -> pd.DataFrame:
+        frames = []
+        for label, s in self.scenarios().items():
+            df = pivot_payee(self.items(s), "phase")
+            df.insert(0, "scenario", label)
+            df["cap"] = df["phase"].map(self.caps)
+            df["over_cap"] = above_cap(df["total"], df["cap"])
+            frames.append(df)
+        return pd.concat(frames, ignore_index=True)
+
+    def blocks_table(self) -> pd.DataFrame:
+        rows = []
+        for label, s in self.scenarios().items():
+            for (block, payee), usd in block_metrics(self.items(s)).items():
+                rows.append({"scenario": label, "block": block, "payee": payee, "usd": usd})
+        return pd.DataFrame(rows)
+
+    def sizing_1a_table(self) -> pd.DataFrame:
+        """Phase 1a by T_d, output per call and luna cells, with the cost of sol's repeats."""
+        rows = []
+        for td in (int(float(x)) for x in self.oa.names("sol_td_grid")):
+            for o in self.m.output_grid:
+                for cells in ("replay_off", "all"):
+                    s = replace(OPTION_A_CENTRAL, sol_td=td, output_tokens=o, luna_cells=cells)
+                    items = self.items(s)
+                    no_sol_rep = self.items(replace(s, sol_repeats=False))
+                    sol = sum(u for p, _, _, n, u in items if p == "1a" and n.startswith("sol H2"))
+                    p1a = total(items, phase="1a")
+                    _, to = self.sol_templates(s)
+                    per_arm = (self.with_repeats(td, s.repeats) * self.oa.num("sol_derived_far_cells")
+                               + self.with_repeats(to, s.repeats)
+                               * self.oa.num("sol_observed_far_cells"))
+                    rows.append({
+                        "T_d": td, "T_o": to, "output_per_call": o,
+                        "luna_cells": len(self.m.luna_cells(cells)),
+                        "sol_episodes": int(2 * per_arm),  # F-r and F-0
+                        "sol_h2_usd": sol,
+                        "sol_repeats_usd": p1a - total(no_sol_rep, phase="1a"),
+                        "luna_sweep_usd": sum(u for *_, n, u in items if n == "luna sweep"),
+                        "phase_1a_usd": p1a, "cap_1a": self.caps["1a"],
+                        "fits_cap": not above_cap(p1a, self.caps["1a"])})
+        return pd.DataFrame(rows)
+
+    def summary_lines(self, tables: dict[str, pd.DataFrame]) -> list[str]:
+        f = tables["optA_forecasts"].set_index(["basis", "metric"])
+        t = tables["optA_totals_by_phase_payee"]
+        z = tables["optA_sizing_1a"]
+
+        def fc(b: str, start: str, col: str = "usd_with_reserve") -> float:
+            rows = f.loc[b]
+            return float(rows.loc[next(k for k in rows.index if k.startswith(start)), col])
+
+        def ph(label: str, phase: str) -> float:
+            return float(t.loc[(t.scenario == label) & (t.phase == phase), "total"].item())
+
+        bs, ls = "billed_standard", "list_nocache"
+        mid, cpc = "SC at the midpoint", "SC at the Checkpoint"
+        L = ["# Option A cost forecast (generated by analysis/cost_model.py)\n"]
+        L.append(f"Path games {', '.join(self.oa.names('path_games'))}; held out "
+                 f"{', '.join(self.oa.names('heldout_games'))}. ARC costs from "
+                 f"`{self.oa.params['ops_results_dir']}/recordings_per_action.csv`. Primary "
+                 f"basis: {OA_BASIS_LABELS[bs]}; list for reference. OpenAI on Flex with cache "
+                 f"writes. Re-run reserve {self.reserve:.0%} on every counted ARC run.\n")
+        L.append("## ARC (USD; billed / list)\n")
+        L.append(f"- Block 2 (seed-1 S0+S4, 8 runs): {fc(bs, 'block 2', 'usd'):.2f} / "
+                 f"{fc(ls, 'block 2', 'usd'):.2f} without the reserve; "
+                 f"{fc(bs, 'block 2'):.2f} / {fc(ls, 'block 2'):.2f} with it.")
+        L.append(f"- G0 forecast, phase 1b with the reserve (D27 rule 1): {fc(bs, 'G0'):.2f} / "
+                 f"{fc(ls, 'G0'):.2f} against the ${self.caps['1b']:.0f} cap (headroom "
+                 f"{fc(bs, 'G0', 'headroom_usd'):.2f} / {fc(ls, 'G0', 'headroom_usd'):.2f}).")
+        L.append(f"- Checkpoint C conservative forecast, phase 1b with the reserve: "
+                 f"{fc(bs, 'Checkpoint C cons'):.2f} / {fc(ls, 'Checkpoint C cons'):.2f}; "
+                 f"headroom {fc(bs, 'Checkpoint C cons', 'headroom_usd'):.2f} / "
+                 f"{fc(ls, 'Checkpoint C cons', 'headroom_usd'):.2f} (negative = the 1b cap "
+                 "increase this rule would ask for).")
+        L.append(f"- Held-out runs (18), billed with the reserve: "
+                 f"{fc(bs, f'held-out runs (18), {mid}'):.2f} with SC at the midpoint, "
+                 f"{fc(bs, f'held-out runs (18), {cpc}'):.2f} with SC at the Checkpoint C rule.")
+        L.append(f"- G3 (4 runs), billed with the reserve: "
+                 f"{fc(bs, f'G3 v0 runs (4), {mid}'):.2f} (midpoint), "
+                 f"{fc(bs, f'G3 v0 runs (4), {cpc}'):.2f} (Checkpoint C rule).")
+        ph2 = f"phase 2 total (1k output), {mid}"
+        L.append(f"- Phase 2 (1k output, billed, SC at the midpoint): {fc(bs, ph2):.2f} with the "
+                 f"G3 and held-out reserves, {fc(bs, ph2, 'usd'):.2f} without them, against the "
+                 f"proposed ${self.caps['2']:,.0f} cap (headroom "
+                 f"{fc(bs, ph2, 'headroom_usd'):.2f}).\n")
+        L.append("## Totals by phase (USD; OpenAI on Flex with cache writes)\n")
+        L.append("| scenario | 0 | 1a | 1b | 2 | total |")
+        L.append("|---|---|---|---|---|---|")
+        for label in self.scenarios():
+            L.append(f"| {label} | " + " | ".join(f"{ph(label, p):.2f}" for p in
+                                                 (*PHASES, "total")) + " |")
+        caps = ", ".join(f"{p} ${c:,.0f}" for p, c in self.caps.items())
+        L.append(f"\nProposed caps: {caps}.\n")
+        L.append("## Phase 1a sizing (8 luna cells; sol F-r vs F-0, repeats on luna and sol)\n")
+        L.append("| T_d | T_o | 1k | 2k | 3k | sol repeats at 1k |")
+        L.append("|---|---|---|---|---|---|")
+        z8 = z.loc[z.luna_cells == 8]
+        for td, g in z8.groupby("T_d"):
+            by_o = g.set_index("output_per_call")
+            L.append(f"| {td} | {int(by_o.T_o.iloc[0])} | " + " | ".join(
+                f"{by_o.loc[o, 'phase_1a_usd']:.2f}" for o in self.m.output_grid)
+                + f" | {by_o.loc[min(self.m.output_grid), 'sol_repeats_usd']:.2f} |")
+        L.append("\n## What this does not show\n")
+        L.append("- These are forecasts from one published run per game and harness, not "
+                 "measured costs of our configs; S1, S2 and S0+StateCarry have no published run "
+                 "and are priced by rule (midpoint, or the Checkpoint C rule).\n"
+                 "- Billed estimates assume our runs cache like the published runs did; our S0 "
+                 "runs on the Interactions API may cache differently.\n"
+                 "- StateCarry's own extra calls (promotion, digest) are not priced beyond the "
+                 "rule above; the dev line is the $150 cap, not a forecast.\n"
+                 "- PersistGym costs use the PLAN §12 token profile for every task cell; observed "
+                 "and derived episodes are priced the same.")
+        return L
+
+
+def option_a_tables(oam: OptionAModel) -> dict[str, pd.DataFrame]:
+    return {
+        "optA_arc_run_costs": oam.arc,
+        "optA_forecasts": oam.forecasts_table(),
+        "optA_central_line_items": items_frame(oam.items(OPTION_A_CENTRAL)),
+        "optA_totals_by_phase_payee": oam.totals_table(),
+        "optA_approval_blocks": oam.blocks_table(),
+        "optA_sizing_1a": oam.sizing_1a_table(),
+    }
+
+
+# --------------------------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------------------------
-def build_report(m: CostModel) -> dict[str, pd.DataFrame]:
+def build_report(m: CostModel, oam: OptionAModel | None = None) -> dict[str, pd.DataFrame]:
     games = m.run_costs.reset_index()
     games = games.loc[games.game.isin(m.eligible)]
     common, exact = overcap_games(m)
     summary = draws_summary(m)
     summary.attrs["note"] = (f"1b above cap at no-cache list exactly when the draw contains "
                              f"{' and '.join(common)}: {exact}")
-    return {
+    tables = {
         "arc_case_factors": pd.DataFrame(m.factors).T.rename_axis("case").reset_index(),
         "arc_eligible_run_costs": games,
         "arc_draws": draws_table(m),
@@ -910,6 +1327,9 @@ def build_report(m: CostModel) -> dict[str, pd.DataFrame]:
         "approval_blocks": blocks_table(m),
         "compare_plan_a1": comparison_table(m),
     }
+    if oam is not None:
+        tables.update(option_a_tables(oam))
+    return tables
 
 
 def _print(name: str, df: pd.DataFrame) -> None:
@@ -922,7 +1342,7 @@ def _print(name: str, df: pd.DataFrame) -> None:
 
 
 def write_report(tables: dict[str, pd.DataFrame], out_dir: Path, run_id: str, started: str,
-                 m: CostModel) -> Path:
+                 m: CostModel, oam: OptionAModel | None = None) -> Path:
     from common import runmeta
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -933,13 +1353,23 @@ def write_report(tables: dict[str, pd.DataFrame], out_dir: Path, run_id: str, st
     config = {"parameters": m.inp.params, "input_sha256": input_hashes(),
               "reference_sha256": hashlib.sha256(ref_bytes).hexdigest(),
               "central_scenario": asdict(CENTRAL)}
+    outputs = sorted(f"{n}.csv" for n in tables)
+    if oam is not None:
+        config["option_a"] = {"parameters": oam.oa.params,
+                              "input_sha256": option_a_hashes(oam.oa),
+                              "central_scenario": asdict(OPTION_A_CENTRAL),
+                              "arc_bases": OA_BASIS_LABELS, "rules": OA_RULE_LABELS}
+        (out_dir / "option_a_summary.md").write_text(
+            "\n".join(oam.summary_lines(tables)) + "\n", encoding="utf-8", newline="\n")
+        outputs.append("option_a_summary.md")
     return runmeta.write_meta(
-        out_dir, experiment="cost_model", run_id=run_id, cell_or_config="cost_model_v1",
+        out_dir, experiment="cost_model", run_id=run_id,
+        cell_or_config="cost_model_v1" if oam is None else "cost_model_v1+option_a",
         config=config, model_requested=None, model_returned=None, reasoning_effort=None,
         reasoning_context_requested=None, reasoning_context_echoed=None, template_id=None,
         repeat_index=None, seeds=None, started_utc=started, finished_utc=runmeta.utc_now(),
         exit_reason="completed", tokens=None, cost_usd=0.0, raw_transcript_path=None,
-        outputs=sorted(f"{n}.csv" for n in tables), paid_calls=0)
+        outputs=outputs, paid_calls=0)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -953,7 +1383,8 @@ def main(argv: list[str] | None = None) -> int:
     started = datetime.now(UTC)
     run_id = started.strftime("%Y%m%dT%H%M%SZ")
     m = CostModel()
-    tables = build_report(m)
+    oam = OptionAModel(m)
+    tables = build_report(m, oam)
     for name, df in tables.items():
         _print(name, df)
     flagged = tables["compare_plan_a1"]
@@ -961,7 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n{len(flagged)} reference numbers differ by more than 5%: {', '.join(flagged)}")
     if not args.no_write:
         out = args.out_dir or REPO_ROOT / "results" / "cost_model" / run_id
-        meta = write_report(tables, out, run_id, started.isoformat(timespec="seconds"), m)
+        meta = write_report(tables, out, run_id, started.isoformat(timespec="seconds"), m, oam)
         print(f"\nwrote {out} ({meta.name})")
     return 0
 

@@ -1,0 +1,21 @@
+basis,metric,usd,usd_with_reserve,cap,headroom_usd,note
+billed_standard,block 2: seed-1 S0+S4 on the 4 path games (8 runs),169.138,202.966,,,
+billed_standard,"G0 forecast, phase 1b (D27 rule 1: S1/S2 at the S0/S4 midpoint)",676.553,811.863,900,88.1366,25.37 USD per counted run with reserve (32 runs)
+billed_standard,"Checkpoint C conservative forecast, phase 1b (S1/S2 at S0 cost per call x max(S0, S4 actions))",869.102,1042.92,900,-142.922,a negative headroom is the 1b cap increase this rule would ask for
+billed_standard,Checkpoint C: remaining 24 runs (S1/S2 conservative),699.964,839.956,697.034,-142.922,cap = 1b cap minus block 2 with its reserve
+billed_standard,"G3 v0 runs (4), SC at the midpoint",84.5691,101.483,,,
+billed_standard,"held-out runs (18), SC at the midpoint",806.647,967.977,,,
+billed_standard,"phase 2 total (1k output), SC at the midpoint",1054.94,1233.19,1150,-83.187,dev at its $150 cap; StateCarry PersistGym cell; G3 and held-out runs (reserve on those two only)
+billed_standard,"G3 v0 runs (4), SC at the Checkpoint C rule",132.706,159.248,,,
+billed_standard,"held-out runs (18), SC at the Checkpoint C rule",1150.93,1381.11,,,
+billed_standard,"phase 2 total (1k output), SC at the Checkpoint C rule",1447.36,1704.09,1150,-554.086,dev at its $150 cap; StateCarry PersistGym cell; G3 and held-out runs (reserve on those two only)
+list_nocache,block 2: seed-1 S0+S4 on the 4 path games (8 runs),213.489,256.187,,,
+list_nocache,"G0 forecast, phase 1b (D27 rule 1: S1/S2 at the S0/S4 midpoint)",853.955,1024.75,900,-124.746,32.02 USD per counted run with reserve (32 runs)
+list_nocache,"Checkpoint C conservative forecast, phase 1b (S1/S2 at S0 cost per call x max(S0, S4 actions))",1043.16,1251.8,900,-351.798,a negative headroom is the 1b cap increase this rule would ask for
+list_nocache,Checkpoint C: remaining 24 runs (S1/S2 conservative),829.676,995.611,643.813,-351.798,cap = 1b cap minus block 2 with its reserve
+list_nocache,"G3 v0 runs (4), SC at the midpoint",106.744,128.093,,,
+list_nocache,"held-out runs (18), SC at the midpoint",1069.15,1282.98,,,
+list_nocache,"phase 2 total (1k output), SC at the midpoint",1339.62,1574.8,1150,-424.797,dev at its $150 cap; StateCarry PersistGym cell; G3 and held-out runs (reserve on those two only)
+list_nocache,"G3 v0 runs (4), SC at the Checkpoint C rule",154.047,184.856,,,
+list_nocache,"held-out runs (18), SC at the Checkpoint C rule",1405.78,1686.94,,,
+list_nocache,"phase 2 total (1k output), SC at the Checkpoint C rule",1723.56,2035.52,1150,-885.523,dev at its $150 cap; StateCarry PersistGym cell; G3 and held-out runs (reserve on those two only)

@@ -417,7 +417,8 @@ def main(argv: list[str] | None = None) -> int:
         out = args.out_dir or REPO_ROOT / "results" / "power_sim" / run_id
         out.mkdir(parents=True, exist_ok=True)
         for name, df in tables.items():
-            df.to_csv(out / f"{name}.csv", index=False, float_format="%.6g")
+            df.to_csv(out / f"{name}.csv", index=False, float_format="%.6g",
+                      lineterminator="\n")
         config = {**{k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
                   "h2_setup": asdict(setup), "template_sd": TEMPLATE_SD, "alpha": ALPHA,
                   "sec10_designs": [asdict(d) for d in SEC10_DESIGNS]}

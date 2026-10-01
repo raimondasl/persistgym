@@ -919,7 +919,8 @@ def write_report(tables: dict[str, pd.DataFrame], out_dir: Path, run_id: str, st
 
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, df in tables.items():
-        df.to_csv(out_dir / f"{name}.csv", index=False, float_format="%.6g")
+        df.to_csv(out_dir / f"{name}.csv", index=False, float_format="%.6g",
+                  lineterminator="\n")
     ref_bytes = (DATA_DIR / REFERENCE_FILE).read_bytes()
     config = {"parameters": m.inp.params, "input_sha256": input_hashes(),
               "reference_sha256": hashlib.sha256(ref_bytes).hexdigest(),

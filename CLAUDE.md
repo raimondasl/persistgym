@@ -12,7 +12,8 @@
   - The researcher creates the keys and accounts; Claude never does.
 - **Reported runs use API keys, never consumer subscriptions.** Claude Code, Codex and Gemini subscriptions are fine for writing code, not as the model under test.
 - **Log every paid call batch to `results/costs.csv`** (append-only, committed). One row per run, with these columns:
-  `timestamp_utc, run_id, milestone, experiment, cell_or_config, model_requested, model_returned, provider, api, service_tier, n_calls, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, cost_usd_list, cost_usd_billed_est, price_source_date, git_commit, notes`.
+  `timestamp_utc, run_id, milestone, experiment, cell_or_config, model_requested, model_returned, provider, api, service_tier, service_tier_served, n_calls, input_tokens, cached_input_tokens, cache_write_tokens, output_tokens, reasoning_tokens, latency_s, cost_usd_list, cost_usd_billed_est, price_source_date, git_commit, notes`.
+  - `service_tier_served` is the tier the provider reports it used (Flex can be refused or served differently from the request). `cache_write_tokens` counts input billed at OpenAI's 1.25× cache-write rate. `latency_s` is the median seconds per call in the batch. These three were added 2026-10-01 with the researcher's approval; leave them empty when the provider does not report them.
   - Before each milestone's sweep, sum the file and compare it with the phase cap in `PLAN.md` §12.
   - **Stop and ask the researcher before exceeding a cap.**
 - **Results are files with metadata.**

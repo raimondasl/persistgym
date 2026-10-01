@@ -1,0 +1,1 @@
+timestamp_utc,run_id,milestone,experiment,cell_or_config,model_requested,model_returned,provider,api,service_tier,service_tier_served,n_calls,input_tokens,cached_input_tokens,cache_write_tokens,output_tokens,reasoning_tokens,latency_s,cost_usd_list,cost_usd_billed_est,price_source_date,git_commit,notes

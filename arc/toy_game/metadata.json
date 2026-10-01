@@ -1,0 +1,6 @@
+{
+  "game_id": "toyg-v1",
+  "title": "Toy game for offline harness tests (not an ARC game)",
+  "class_name": "Toyg",
+  "baseline_actions": [3, 3]
+}

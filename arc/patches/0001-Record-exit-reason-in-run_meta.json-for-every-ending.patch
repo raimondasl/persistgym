@@ -1,0 +1,319 @@
+From 0350a8164e1565121d57d30dd9c5c1657d7468ce Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 23:26:29 -0400
+Subject: [PATCH 01/16] Record exit reason in run_meta.json for every ending
+
+ExitReason was only logged by Swarm, so run_meta.json could not tell a
+per-level action budget from an error or a timeout: `outcome` stays null
+when the per-level budget ends a run before the total action count.
+
+- RunRecord gains `exit_reason`; `_write_run_meta` syncs it from the
+  agent, so a new or interrupted run reads UNKNOWN.
+- BenchmarkingAgent.main persists API_ERROR / AGENT_ERROR before the
+  exception propagates (Agent.main re-raises without cleanup()).
+- cleanup() rewrites run_meta.json when Swarm.close_scorecard revises the
+  reason after the agent already cleaned up (SCORECARD_CLOSED, API_ERROR).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py                   |  16 ++
+ benchmarking/recording.py               |   3 +
+ docs/runtime-state.md                   |   6 +
+ tests/unit/test_exit_reason_run_meta.py | 216 ++++++++++++++++++++++++
+ 4 files changed, 241 insertions(+)
+ create mode 100644 tests/unit/test_exit_reason_run_meta.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 7d6d1c3..989a04a 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -491,6 +491,9 @@ class BenchmarkingAgent(Agent):
+         return str(action.name)
+ 
+     def _write_run_meta(self) -> None:
++        self.run_record.exit_reason = ExitReason(
++            getattr(self, "exit_reason", ExitReason.UNKNOWN)
++        ).value
+         path = os.path.join(self.run_dir, "run_meta.json")
+         with open(path, "w") as f:
+             exclude = {"runtime"} if self.run_record.runtime is None else None
+@@ -720,6 +723,15 @@ class BenchmarkingAgent(Agent):
+ 
+     # ── Core loop ────────────────────────────────────────────────────────
+ 
++    def main(self) -> None:
++        try:
++            super().main()
++        finally:
++            # Agent.main records API_ERROR or AGENT_ERROR and re-raises without
++            # calling cleanup(), so persist that ending before it propagates.
++            if hasattr(self, "run_record"):
++                self._write_run_meta()
++
+     def _sync_level_progress(self, latest_frame: FrameData) -> None:
+         current_level = latest_frame.levels_completed
+         if current_level > self._last_levels_completed:
+@@ -1168,4 +1180,8 @@ class BenchmarkingAgent(Agent):
+                         "total_tokens": self.token_counter,
+                     }
+                 )
++        elif hasattr(self, "run_record"):
++            # Swarm.close_scorecard can revise exit_reason after this agent's
++            # own cleanup ran (SCORECARD_CLOSED, API_ERROR); keep the file in sync.
++            self._write_run_meta()
+         super().cleanup(*args, **kwargs)
+diff --git a/benchmarking/recording.py b/benchmarking/recording.py
+index f4a4b6c..9f4af06 100644
+--- a/benchmarking/recording.py
++++ b/benchmarking/recording.py
+@@ -142,5 +142,8 @@ class RunRecord(BaseModel):
+     total_steps: int = 0
+     total_usage: StepUsage = Field(default_factory=StepUsage)
+     outcome: Optional[str] = None
++    # Why the agent loop ended (``ExitReason`` value). ``UNKNOWN`` while the run
++    # is in progress, or if the process stopped before recording an ending.
++    exit_reason: Optional[str] = None
+     run_dir: str
+     runtime: dict[str, Any] | None = None
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index 868f755..fee4a4e 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -337,6 +337,12 @@ immutable source permalink. The value is `null` when the environment variable
+ is absent; runtime metadata never depends on `.git` being present in a Docker
+ image.
+ 
++Every `run_meta.json` records `exit_reason`: `GAME_WIN`, `ACTION_BUDGET`,
++`TIME_BUDGET`, `SCORECARD_CLOSED`, `API_ERROR`, `AGENT_ERROR`, or `UNKNOWN`
++while a run is in progress or after a stop that recorded no ending. The agent
++writes it when its loop ends, including before an error propagates, and
++rewrites it when the swarm reclassifies an ending after closing the scorecard.
++
+ ## Adding or reviewing a provider
+ 
+ New provider implementations should add a stable ID and descriptor to the local
+diff --git a/tests/unit/test_exit_reason_run_meta.py b/tests/unit/test_exit_reason_run_meta.py
+new file mode 100644
+index 0000000..814dbe9
+--- /dev/null
++++ b/tests/unit/test_exit_reason_run_meta.py
+@@ -0,0 +1,216 @@
++"""run_meta.json records why each run ended."""
++
++import json
++from pathlib import Path
++from types import SimpleNamespace
++from unittest.mock import Mock, patch
++
++import numpy as np
++import pytest
++from arcengine import FrameDataRaw, GameAction, GameState
++from requests import HTTPError
++
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.base import ExitReason
++from benchmarking.runtime_models import ModelResponse, NormalizedUsage
++from benchmarking.swarm import Swarm
++
++CONFIG_ID = "openai-gpt-5-4-2026-03-05-responses"
++
++
++def _raw_frame(state: GameState, levels_completed: int = 0) -> FrameDataRaw:
++    raw = FrameDataRaw()
++    raw.game_id = "game-id"
++    raw.frame = [np.array([[0, 1], [1, 0]], dtype=np.int8)]
++    raw.state = state
++    raw.levels_completed = levels_completed
++    raw.win_levels = 1
++    raw.action_input = None
++    raw.guid = "guid-1"
++    raw.full_reset = False
++    raw.available_actions = [GameAction.ACTION1.value]
++    return raw
++
++
++class _ScriptedEnv:
++    """Minimal ARC environment: returns `next_state` after every step."""
++
++    def __init__(
++        self,
++        next_state: GameState = GameState.NOT_FINISHED,
++        *,
++        baseline_actions: list[int] | None = None,
++        step_error: Exception | None = None,
++    ) -> None:
++        self.info = SimpleNamespace(baseline_actions=baseline_actions or [])
++        self.observation_space = _raw_frame(GameState.NOT_FINISHED)
++        self.next_state = next_state
++        self.step_error = step_error
++        self.steps = 0
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        if self.step_error is not None:
++            raise self.step_error
++        self.steps += 1
++        self.observation_space = _raw_frame(self.next_state)
++        return self.observation_space
++
++
++class _ActionAdapter:
++    def __init__(self, error: Exception | None = None) -> None:
++        self.error = error
++        self.calls = 0
++
++    def invoke(self, request: object) -> ModelResponse:
++        self.calls += 1
++        if self.error is not None:
++            raise self.error
++        return ModelResponse(
++            output_text="ACTION1",
++            usage=NormalizedUsage(input_tokens=3, output_tokens=2, total_tokens=5),
++        )
++
++
++def _agent(
++    monkeypatch: pytest.MonkeyPatch,
++    tmp_path: Path,
++    env: _ScriptedEnv,
++    adapter: _ActionAdapter | None = None,
++) -> BenchmarkingAgent:
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_adapter",
++        lambda **_kwargs: adapter or _ActionAdapter(),
++    )
++    return BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=env,
++        config=CONFIG_ID,
++    )
++
++
++def _run_meta(agent: BenchmarkingAgent) -> dict:
++    return json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++
++
++def _http_error(status_code: int) -> HTTPError:
++    return HTTPError(response=SimpleNamespace(status_code=status_code))
++
++
++def _swarm_for(agents: list[BenchmarkingAgent], close_error: HTTPError) -> Swarm:
++    with patch("benchmarking.swarm.Arcade"):
++        swarm = Swarm(ROOT_URL="https://example.com", games=["game-id"])
++    swarm.agents = list(agents)
++    swarm._arc.close_scorecard = Mock(side_effect=close_error)
++    return swarm
++
++
++@pytest.mark.unit
++class TestRunMetaExitReason:
++    def test_new_run_is_recorded_as_unknown_until_it_ends(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, _ScriptedEnv())
++
++        meta = _run_meta(agent)
++
++        assert meta["exit_reason"] == "UNKNOWN"
++        assert meta["ended_at"] is None
++
++    def test_game_win_is_recorded(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, _ScriptedEnv(GameState.WIN))
++
++        agent.main()
++
++        meta = _run_meta(agent)
++        assert agent.exit_reason is ExitReason.GAME_WIN
++        assert meta["exit_reason"] == "GAME_WIN"
++        assert meta["outcome"] == "WIN"
++        assert meta["ended_at"] is not None
++
++    def test_per_level_action_budget_is_recorded(self, monkeypatch, tmp_path):
++        # Two levels, baseline 1 action x 5.0 multiplier = 5 actions per level.
++        env = _ScriptedEnv(baseline_actions=[1, 1])
++        agent = _agent(monkeypatch, tmp_path, env)
++
++        agent.main()
++
++        meta = _run_meta(agent)
++        assert env.steps == 5
++        assert meta["exit_reason"] == "ACTION_BUDGET"
++        # The per-level budget ends the run before the total-action counter,
++        # so the legacy outcome field cannot tell this ending apart.
++        assert meta["outcome"] is None
++
++    def test_time_budget_is_recorded(self, monkeypatch, tmp_path):
++        env = _ScriptedEnv()
++        agent = _agent(monkeypatch, tmp_path, env)
++        agent.MAX_RUNTIME_SECONDS = 0
++
++        agent.main()
++
++        meta = _run_meta(agent)
++        assert env.steps == 0
++        assert meta["exit_reason"] == "TIME_BUDGET"
++        assert meta["outcome"] == "TIMEOUT"
++
++    def test_model_failure_is_recorded_as_agent_error_before_raising(
++        self, monkeypatch, tmp_path
++    ):
++        env = _ScriptedEnv()
++        adapter = _ActionAdapter(error=RuntimeError("model unavailable"))
++        agent = _agent(monkeypatch, tmp_path, env, adapter)
++
++        with pytest.raises(RuntimeError, match="Failed to get a valid action"):
++            agent.main()
++
++        meta = _run_meta(agent)
++        assert adapter.calls == agent.MAX_RETRIES + 1
++        assert env.steps == 0
++        assert meta["exit_reason"] == "AGENT_ERROR"
++
++    def test_arc_step_failure_is_recorded_as_api_error_before_raising(
++        self, monkeypatch, tmp_path
++    ):
++        env = _ScriptedEnv(step_error=RuntimeError("arc api down"))
++        agent = _agent(monkeypatch, tmp_path, env)
++
++        with pytest.raises(RuntimeError, match="arc api down"):
++            agent.main()
++
++        assert _run_meta(agent)["exit_reason"] == "API_ERROR"
++
++    def test_closed_scorecard_reclassification_is_persisted(self, monkeypatch, tmp_path):
++        env = _ScriptedEnv(step_error=RuntimeError("scorecard closed"))
++        agent = _agent(monkeypatch, tmp_path, env)
++        with pytest.raises(RuntimeError):
++            agent.main()
++        swarm = _swarm_for([agent], _http_error(404))
++
++        with patch.object(Swarm, "_scorecard_exists", return_value=True):
++            scorecard = swarm.close_scorecard("card-id")
++        swarm.cleanup(scorecard)
++
++        meta = _run_meta(agent)
++        assert agent.exit_reason is ExitReason.SCORECARD_CLOSED
++        assert meta["exit_reason"] == "SCORECARD_CLOSED"
++        assert meta["ended_at"] is not None
++
++    def test_swarm_revision_after_agent_cleanup_is_persisted(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, _ScriptedEnv(GameState.WIN))
++        agent.main()
++        assert _run_meta(agent)["exit_reason"] == "GAME_WIN"
++        swarm = _swarm_for([agent], _http_error(500))
++
++        scorecard = swarm.close_scorecard("card-id")
++        swarm.cleanup(scorecard)
++
++        # Upstream marks every agent API_ERROR when closing the scorecard fails;
++        # run_meta.json now reflects the final reason the swarm logs.
++        assert agent.exit_reason is ExitReason.API_ERROR
++        assert _run_meta(agent)["exit_reason"] == "API_ERROR"
+-- 
+2.54.0.windows.1
+

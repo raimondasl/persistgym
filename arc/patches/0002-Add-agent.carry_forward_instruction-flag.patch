@@ -1,0 +1,329 @@
+From 727d8b492b0af160f5b5622eef447118c96596ec Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 23:29:16 -0400
+Subject: [PATCH 02/16] Add agent.carry_forward_instruction flag
+
+The manual carry-forward sentence ("Include any context you want to carry
+forward in your reply, along with the action you want to take.") was tied
+to provides_continuous_conversation in _build_system_prompt, so it could
+not be ablated in manual_rolling. analysis_mode also re-added it.
+
+- New optional boolean agent.carry_forward_instruction (default true).
+  When false, the manual_rolling / previous_response_id system prompt
+  omits the sentence, including the analysis_mode prompt. With the flag
+  off, the normal prompt equals the continuous-conversation prompt.
+- Defaults are byte-identical to the previous prompts.
+- Config validation requires a boolean and rejects `true` with
+  continuous_conversation, which always omits the sentence.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py                        |  23 ++-
+ benchmarking/model_config.py                 |  12 ++
+ docs/runtime-state.md                        |   6 +-
+ tests/unit/test_carry_forward_instruction.py | 187 +++++++++++++++++++
+ 4 files changed, 223 insertions(+), 5 deletions(-)
+ create mode 100644 tests/unit/test_carry_forward_instruction.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 989a04a..647d2ba 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -55,6 +55,12 @@ from .runtime_state import (
+ 
+ logger = logging.getLogger()
+ 
++# Visible-text state guidance for runtimes that do not replay native reasoning.
++CARRY_FORWARD_INSTRUCTION = (
++    "Include any context you want to carry forward in your reply, "
++    "along with the action you want to take. "
++)
++
+ 
+ class BenchmarkingAgent(Agent):
+     """An agent that maintains a growing conversation with a model runtime.
+@@ -71,6 +77,9 @@ class BenchmarkingAgent(Agent):
+     MAX_CONTEXT_LENGTH: int = 100000
+     MAX_ANIMATION_FRAMES: int = 7
+     analysis_mode: bool = False
++    # When false, the system prompt omits CARRY_FORWARD_INSTRUCTION, including
++    # in analysis_mode. Continuous conversation always omits it.
++    carry_forward_instruction: bool = True
+     _continuous_conversation: bool = False
+     # Empirically, rendered ARC grid payloads are close to 1 char per token.
+     # Using 1.0 is intentionally conservative relative to observed runs.
+@@ -136,6 +145,9 @@ class BenchmarkingAgent(Agent):
+         )
+         self.MAX_RETRIES = agent_cfg.get("MAX_RETRIES", self.MAX_RETRIES)
+         self.analysis_mode = agent_cfg.get("analysis_mode", self.analysis_mode)
++        self.carry_forward_instruction = agent_cfg.get(
++            "carry_forward_instruction", self.carry_forward_instruction
++        )
+ 
+         # Per-level action budgets from baseline_actions * multiplier.
+         # MAX_ACTIONS becomes the derived total budget across all levels.
+@@ -287,14 +299,17 @@ class BenchmarkingAgent(Agent):
+             return textwrap.dedent("""\
+                 You are playing a game. Your goal is to win. The final action mentioned in your reply will be executed next turn.
+             """)
++        carry_forward = (
++            CARRY_FORWARD_INSTRUCTION if self.carry_forward_instruction else ""
++        )
+         if self.analysis_mode:
+-            return textwrap.dedent("""\
+-                You are playing a game. Your goal is to win. Include any context you want to carry forward in your reply, along with the action you want to take. The final action mentioned in your reply will be executed next turn.
++            return textwrap.dedent(f"""\
++                You are playing a game. Your goal is to win. {carry_forward}The final action mentioned in your reply will be executed next turn.
+ 
+                 Prior assistant turns may include a <reasoning_summary> block before the prior action text. Treat those summaries as compact helper context about the earlier decision process, then continue by choosing the next action normally.
+             """)
+-        return textwrap.dedent("""\
+-            You are playing a game. Your goal is to win. Include any context you want to carry forward in your reply, along with the action you want to take. The final action mentioned in your reply will be executed next turn.
++        return textwrap.dedent(f"""\
++            You are playing a game. Your goal is to win. {carry_forward}The final action mentioned in your reply will be executed next turn.
+         """)
+ 
+     def _build_assistant_turn_content(
+diff --git a/benchmarking/model_config.py b/benchmarking/model_config.py
+index 16ec8c9..a9c0f97 100644
+--- a/benchmarking/model_config.py
++++ b/benchmarking/model_config.py
+@@ -301,6 +301,12 @@ def _validate_model_config_entry(
+             raise ValueError(
+                 f"Model config '{config_id}' agent.analysis_mode must be a boolean."
+             )
++    if isinstance(agent, dict) and "carry_forward_instruction" in agent:
++        if not isinstance(agent["carry_forward_instruction"], bool):
++            raise ValueError(
++                f"Model config '{config_id}' agent.carry_forward_instruction must be "
++                "a boolean."
++            )
+     if isinstance(agent, dict) and "MAX_RUNTIME_SECONDS" in agent:
+         max_runtime = agent["MAX_RUNTIME_SECONDS"]
+         if (
+@@ -369,6 +375,12 @@ def _validate_model_config_entry(
+             f"api={runtime['api']!r}."
+         )
+     if runtime_state == CONTINUOUS_CONVERSATION_RUNTIME_STATE:
++        if isinstance(agent, dict) and agent.get("carry_forward_instruction") is True:
++            raise ValueError(
++                f"Model config '{config_id}' sets agent.carry_forward_instruction=true, "
++                f"but runtime.state={CONTINUOUS_CONVERSATION_RUNTIME_STATE!r} always "
++                "omits the carry-forward instruction."
++            )
+         _validate_continuous_conversation_config(config_id, entry)
+     if runtime_pair == ("anthropic-python", "messages"):
+         _validate_anthropic_messages_config(config_id, entry)
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index fee4a4e..ef99086 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -75,7 +75,11 @@ The checked-in profile uses max reasoning. The harness automatically removes
+ the manual carry-forward instruction when the
+ selected adapter provides continuous conversation. This is not a configurable
+ model setting. Existing `manual_rolling` configurations keep the instruction
+-because their visible replies are the state carried across turns.
++because their visible replies are the state carried across turns. For ablations,
++a `manual_rolling` or `previous_response_id` configuration can set
++`agent.carry_forward_instruction: false` to omit it; the flag also overrides
++the `analysis_mode` prompt. Continuous-conversation configurations reject
++`agent.carry_forward_instruction: true`.
+ 
+ This flow is ZDR-compatible, but it does not enable Zero Data Retention for an
+ organization. OpenAI must separately approve and configure ZDR for the
+diff --git a/tests/unit/test_carry_forward_instruction.py b/tests/unit/test_carry_forward_instruction.py
+new file mode 100644
+index 0000000..b15e81b
+--- /dev/null
++++ b/tests/unit/test_carry_forward_instruction.py
+@@ -0,0 +1,187 @@
++"""agent.carry_forward_instruction removes the manual carry-forward sentence."""
++
++from copy import deepcopy
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++import yaml
++from arcengine import FrameData, GameAction, GameState
++
++import benchmarking.model_config as model_config
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.model_config import get_model_config
++from benchmarking.runtime_models import ModelRequest, ModelResponse, NormalizedUsage
++
++SENTENCE = (
++    "Include any context you want to carry forward in your reply, "
++    "along with the action you want to take."
++)
++# System prompts at 4ca00e6, before the flag existed.
++BASELINE_PROMPT = (
++    "You are playing a game. Your goal is to win. Include any context you want to "
++    "carry forward in your reply, along with the action you want to take. The final "
++    "action mentioned in your reply will be executed next turn.\n"
++)
++BASELINE_ANALYSIS_PROMPT = (
++    "You are playing a game. Your goal is to win. Include any context you want to "
++    "carry forward in your reply, along with the action you want to take. The final "
++    "action mentioned in your reply will be executed next turn.\n"
++    "\n"
++    "Prior assistant turns may include a <reasoning_summary> block before the prior "
++    "action text. Treat those summaries as compact helper context about the earlier "
++    "decision process, then continue by choosing the next action normally.\n"
++)
++CONTINUOUS_PROMPT = (
++    "You are playing a game. Your goal is to win. The final action mentioned in "
++    "your reply will be executed next turn.\n"
++)
++
++
++def _write_model_configs(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    configs: list[dict],
++) -> Path:
++    config_path = tmp_path / "model_configs.yaml"
++    config_path.write_text(yaml.safe_dump(configs, sort_keys=False))
++    monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", config_path)
++    return config_path
++
++
++class _FakeAdapter:
++    def __init__(self) -> None:
++        self.requests: list[ModelRequest] = []
++
++    def invoke(self, request: ModelRequest) -> ModelResponse:
++        self.requests.append(request)
++        return ModelResponse(output_text="ACTION1", usage=NormalizedUsage())
++
++
++def _prompt_agent(*, analysis_mode: bool, carry_forward: bool | None) -> BenchmarkingAgent:
++    agent = BenchmarkingAgent.__new__(BenchmarkingAgent)
++    agent.analysis_mode = analysis_mode
++    if carry_forward is not None:
++        agent.carry_forward_instruction = carry_forward
++    return agent
++
++
++def _config_agent(monkeypatch, tmp_path, agent_section: dict) -> BenchmarkingAgent:
++    config = deepcopy(get_model_config("openai-gpt-5-4-2026-03-05-responses"))
++    config["agent"].update(agent_section)
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_adapter",
++        lambda **_kwargs: _FakeAdapter(),
++    )
++    return BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=SimpleNamespace(info=SimpleNamespace(baseline_actions=[])),
++        config=config["id"],
++    )
++
++
++def _frame() -> FrameData:
++    return FrameData(
++        frame=[[[0, 1], [1, 0]]],
++        state=GameState.NOT_FINISHED,
++        levels_completed=0,
++        available_actions=[GameAction.ACTION1.value],
++    )
++
++
++@pytest.mark.unit
++class TestCarryForwardInstructionPrompt:
++    @pytest.mark.parametrize(
++        ("analysis_mode", "expected"),
++        [(False, BASELINE_PROMPT), (True, BASELINE_ANALYSIS_PROMPT)],
++    )
++    def test_default_prompts_are_unchanged(self, analysis_mode, expected):
++        for carry_forward in (None, True):
++            agent = _prompt_agent(analysis_mode=analysis_mode, carry_forward=carry_forward)
++
++            assert agent._build_system_prompt() == expected
++
++    def test_flag_off_matches_continuous_conversation_prompt(self):
++        agent = _prompt_agent(analysis_mode=False, carry_forward=False)
++
++        assert agent._build_system_prompt() == CONTINUOUS_PROMPT
++        assert SENTENCE not in agent._build_system_prompt()
++
++    def test_flag_off_wins_over_analysis_mode(self):
++        agent = _prompt_agent(analysis_mode=True, carry_forward=False)
++
++        prompt = agent._build_system_prompt()
++
++        assert SENTENCE not in prompt
++        assert "carry forward" not in prompt
++        assert prompt == BASELINE_ANALYSIS_PROMPT.replace(SENTENCE + " ", "")
++        assert "<reasoning_summary>" in prompt
++
++    def test_continuous_conversation_ignores_flag_default(self):
++        agent = _prompt_agent(analysis_mode=True, carry_forward=None)
++        agent._stateful_adapter = SimpleNamespace(provides_continuous_conversation=True)
++
++        assert agent._build_system_prompt() == CONTINUOUS_PROMPT
++
++
++@pytest.mark.unit
++class TestCarryForwardInstructionConfig:
++    def test_agent_reads_flag_and_sends_prompt_without_sentence(
++        self, monkeypatch, tmp_path
++    ):
++        agent = _config_agent(
++            monkeypatch,
++            tmp_path,
++            {"carry_forward_instruction": False, "analysis_mode": True},
++        )
++
++        agent.choose_action([], _frame())
++
++        assert agent.carry_forward_instruction is False
++        system_message = agent._adapter.requests[0].messages[0]
++        assert system_message.role == "system"
++        assert SENTENCE not in system_message.content
++        assert "carry forward" not in system_message.content
++
++    def test_agent_defaults_to_sending_sentence(self, monkeypatch, tmp_path):
++        agent = _config_agent(monkeypatch, tmp_path, {})
++
++        agent.choose_action([], _frame())
++
++        assert agent.carry_forward_instruction is True
++        assert agent._adapter.requests[0].messages[0].content == BASELINE_PROMPT
++
++    @pytest.mark.parametrize("value", ["false", 0, None])
++    def test_non_boolean_flag_is_rejected(self, tmp_path, monkeypatch, value):
++        entry = deepcopy(get_model_config("openai-gpt-5-4-2026-03-05-responses"))
++        entry["agent"]["carry_forward_instruction"] = value
++        _write_model_configs(tmp_path, monkeypatch, [entry])
++
++        with pytest.raises(ValueError, match="carry_forward_instruction must be a boolean"):
++            model_config.load_model_configs()
++
++    def test_continuous_conversation_rejects_flag_on(self, tmp_path, monkeypatch):
++        entry = deepcopy(get_model_config("google-gemini-3-8-flash-low-provider-adapter"))
++        entry["agent"]["carry_forward_instruction"] = True
++        _write_model_configs(tmp_path, monkeypatch, [entry])
++
++        with pytest.raises(ValueError, match="always omits the carry-forward"):
++            model_config.load_model_configs()
++
++    def test_continuous_conversation_accepts_flag_off(self, tmp_path, monkeypatch):
++        entry = deepcopy(get_model_config("google-gemini-3-8-flash-low-provider-adapter"))
++        entry["agent"]["carry_forward_instruction"] = False
++        _write_model_configs(tmp_path, monkeypatch, [entry])
++
++        configs = model_config.load_model_configs()
++
++        assert configs[0]["agent"]["carry_forward_instruction"] is False
+-- 
+2.54.0.windows.1
+

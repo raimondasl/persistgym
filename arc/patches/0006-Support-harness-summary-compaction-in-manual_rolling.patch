@@ -1,0 +1,1033 @@
+From 3c091e4d1242b8d3289a724b12920c9a6c729465 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 00:10:19 -0400
+Subject: [PATCH 06/16] Support harness summary compaction in manual_rolling
+
+manual_rolling drops the oldest user/assistant pair once the estimated
+transcript size exceeds MAX_CONTEXT_LENGTH, and config validation rejected
+runtime.compaction outside continuous_conversation, so a Standard
+(visible-text) run could not use the Provider Adapter's loss policy.
+
+- ManualRollingSummaryAdapter presents the agent-owned text transcript to
+  the existing SummaryCompactor through the configured plain API adapter.
+  A user message followed by its assistant reply is one accepted turn;
+  buffered observations (GAME_OVER before a forced RESET) and the bridge
+  sit between turns, as in the Google adapter, so summary-overflow
+  unwinding works unchanged.
+- The agent schedules compaction from the accepted request's own
+  provider-reported total_tokens (not the retry sum), runs it before the
+  next model turn, and replaces the transcript with the system prompt and
+  the user-role bridge. Action-request context overflow compacts the
+  accepted history and keeps the current observation pending, once.
+- Compaction usage, compaction_NNN.json, the step continuation record and
+  action-metadata attribution reuse the continuous-conversation code.
+- Config validation accepts harness_summary on manual_rolling with the
+  same trigger/output/headroom reserve check; previous_response_id still
+  rejects runtime.compaction.
+- run_meta.json gains a runtime block for these configs, including
+  context_trims, which counts oldest-turn drops (the backstop that should
+  not fire when MAX_CONTEXT_LENGTH is the provider's context capacity).
+
+Configs without runtime.compaction are unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py                        | 102 ++++-
+ benchmarking/compaction.py                   | 139 +++++-
+ benchmarking/model_config.py                 |  20 +-
+ docs/runtime-state.md                        |  15 +
+ tests/unit/test_manual_rolling_compaction.py | 459 +++++++++++++++++++
+ tests/unit/test_model_config.py              |  31 +-
+ 6 files changed, 746 insertions(+), 20 deletions(-)
+ create mode 100644 tests/unit/test_manual_rolling_compaction.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index cf274b0..3199353 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -15,6 +15,7 @@ from .action_metadata import fit_action_metadata_payload
+ from .base import Agent, ExitReason
+ from .compaction import (
+     HARNESS_SUMMARY_COMPACTION,
++    ManualRollingSummaryAdapter,
+     SummaryCompactionPolicy,
+     SummaryCompactor,
+     build_summary_bridge,
+@@ -45,6 +46,7 @@ from .runtime_models import (
+ from .runtime_registry import build_stateful_runtime_adapter
+ from .runtime_state import (
+     CONTINUOUS_CONVERSATION_RUNTIME_STATE,
++    DEFAULT_RUNTIME_STATE,
+     SERVER_RUNTIME_STATE,
+     ModelTurnRequest,
+     ModelTurnResult,
+@@ -67,7 +69,9 @@ class BenchmarkingAgent(Agent):
+ 
+     Each turn appends a user message (frame data as text) and an assistant
+     message (reasoning + chosen action). On context overflow, the oldest
+-    turns are trimmed from the front of the conversation.
++    turns are trimmed from the front of the conversation, unless the config
++    selects harness summary compaction, which replaces the transcript with a
++    model-written summary once provider usage reaches its trigger.
+     """
+ 
+     MODEL_CONFIG_ID: str = ""
+@@ -113,14 +117,19 @@ class BenchmarkingAgent(Agent):
+         )
+         self._summary_compactor: SummaryCompactor | None = None
+         compaction_cfg = runtime_cfg.get("compaction")
++        manual_rolling = runtime_cfg.get("state") == DEFAULT_RUNTIME_STATE
+         if (
+-            self._continuous_conversation
++            (self._continuous_conversation or manual_rolling)
+             and isinstance(compaction_cfg, dict)
+             and compaction_cfg.get("strategy") == HARNESS_SUMMARY_COMPACTION
+         ):
+             self._summary_compactor = SummaryCompactor(
+                 SummaryCompactionPolicy.model_validate(compaction_cfg)
+             )
++        # manual_rolling with harness summary compaction: the agent-owned text
++        # transcript is summarized instead of losing its oldest turns.
++        self._rolling_summary_adapter: ManualRollingSummaryAdapter | None = None
++        self._last_call_usage: NormalizedUsage | None = None
+         self._pending_compaction_trigger_tokens: int | None = None
+         self._pending_compaction_usage: NormalizedUsage | None = None
+         self._pending_compaction_continuation: CompactionContinuationRecord | None = (
+@@ -191,6 +200,10 @@ class BenchmarkingAgent(Agent):
+             config_id=self.MODEL_CONFIG_ID,
+         )
+         self._last_turn_result: ModelTurnResult | None = None
++        if manual_rolling and self._summary_compactor is not None:
++            self._rolling_summary_adapter = ManualRollingSummaryAdapter(
++                model_adapter=self._adapter
++            )
+         if self._continuous_conversation:
+             self._stateful_adapter = build_stateful_runtime_adapter(
+                 model_adapter=self._adapter,
+@@ -239,6 +252,23 @@ class BenchmarkingAgent(Agent):
+                     **native_policy.model_dump(),
+                     "context_limit_tokens": self.MAX_CONTEXT_LENGTH,
+                 }
++        elif (
++            self._rolling_summary_adapter is not None
++            and self._summary_compactor is not None
++        ):
++            runtime_metadata = {
++                "state_strategy": DEFAULT_RUNTIME_STATE,
++                "config_id": self.MODEL_CONFIG_ID,
++                "settings": sanitize_settings(request_cfg),
++                "compaction": {
++                    **self._summary_compactor.policy.model_dump(),
++                    "context_limit_tokens": self.MAX_CONTEXT_LENGTH,
++                },
++                "compaction_count": 0,
++                # Oldest-turn drops by _trim_to_fit_context; summary compaction
++                # replaces that loss policy, so this should stay 0.
++                "context_trims": 0,
++            }
+         self.run_record = RunRecord(
+             run_id=str(run_id),
+             game_id=self.game_id,
+@@ -594,17 +624,41 @@ class BenchmarkingAgent(Agent):
+             compaction.before_step,
+         )
+ 
+-    def _run_pending_compaction(self) -> None:
++    def _run_pending_compaction(self, pending_messages: int = 0) -> None:
++        """Run a scheduled harness summary compaction.
++
++        ``pending_messages`` counts the newest manual_rolling transcript
++        messages that belong to the current, not yet answered turn. They are
++        kept out of the summary and re-appended after the bridge, as pending
++        turn messages are in continuous conversation.
++        """
+         trigger_tokens = getattr(self, "_pending_compaction_trigger_tokens", None)
+         summary_compactor = getattr(self, "_summary_compactor", None)
+         if trigger_tokens is None or summary_compactor is None:
+             return
+ 
++        rolling_adapter = getattr(self, "_rolling_summary_adapter", None)
++        rolling_head: list[dict[str, Any]] = []
++        rolling_pending: list[dict[str, Any]] = []
++        if rolling_adapter is not None:
++            history = list(self.conversation)
++            if history and history[0].get("role") == "system":
++                rolling_head = history[:1]
++                history = history[1:]
++            if pending_messages:
++                rolling_pending = history[-pending_messages:]
++                history = history[:-pending_messages]
++            compaction_adapter: Any = rolling_adapter
++            compaction_state = rolling_adapter.state_from_messages(history)
++        else:
++            compaction_adapter = self._stateful_adapter
++            compaction_state = self._runtime_state
++
+         started = time.monotonic()
+         try:
+             result = summary_compactor.compact(
+-                adapter=self._stateful_adapter,
+-                state=self._runtime_state,
++                adapter=compaction_adapter,
++                state=compaction_state,
+                 request_config=dict(self._request_kwargs),
+                 trigger_tokens=trigger_tokens,
+                 max_context_length=self.MAX_CONTEXT_LENGTH,
+@@ -627,7 +681,14 @@ class BenchmarkingAgent(Agent):
+             )
+             raise
+         duration = round(time.monotonic() - started, 3)
+-        self._runtime_state = result.state
++        if rolling_adapter is not None:
++            self.conversation = [
++                *rolling_head,
++                *rolling_adapter.messages_from_state(result.state),
++                *rolling_pending,
++            ]
++        else:
++            self._runtime_state = result.state
+         self._pending_compaction_trigger_tokens = None
+         self.track_tokens(result.usage.total_tokens)
+         compaction_usage = StepUsage.from_normalized_usage(result.usage)
+@@ -863,6 +924,14 @@ class BenchmarkingAgent(Agent):
+         elif self._server_state:
+             self._previous_response_id = model_response.response_id
+             self._pending_user_messages = []
++        last_call_usage = getattr(self, "_last_call_usage", None)
++        if (
++            getattr(self, "_rolling_summary_adapter", None) is not None
++            and last_call_usage is not None
++        ):
++            # Same trigger as continuous conversation: the provider-reported
++            # total of the accepted request, not the sum over retries.
++            self._schedule_compaction(last_call_usage)
+ 
+         self.conversation.append(
+             {
+@@ -965,6 +1034,13 @@ class BenchmarkingAgent(Agent):
+                     f"still exceed MAX_CONTEXT_LENGTH ({self.MAX_CONTEXT_LENGTH})."
+                 )
+                 break
++            runtime = getattr(getattr(self, "run_record", None), "runtime", None)
++            if isinstance(runtime, dict) and "context_trims" in runtime:
++                runtime["context_trims"] += 1
++                logger.warning(
++                    "Dropped the oldest turn although summary compaction is "
++                    "configured; raise MAX_CONTEXT_LENGTH if this repeats."
++                )
+             estimated = self._estimate_conversation_tokens()
+             logger.info(
+                 f"Proactive context trim: ~{estimated} tokens "
+@@ -987,6 +1063,7 @@ class BenchmarkingAgent(Agent):
+         accumulated_usage = NormalizedUsage()
+         accumulated_native_compaction_usage: NormalizedUsage | None = None
+         self._last_turn_result = None
++        self._last_call_usage = None
+         attempt = 0
+         max_attempts = self.MAX_RETRIES + 1
+         action_overflow_recoveries = 0
+@@ -1014,8 +1091,11 @@ class BenchmarkingAgent(Agent):
+                     model_response = self._call_api(model_request)
+             except ContextOverflowError as e:
+                 summary_compactor = getattr(self, "_summary_compactor", None)
++                rolling_summary = (
++                    getattr(self, "_rolling_summary_adapter", None) is not None
++                )
+                 can_recover = (
+-                    hasattr(self, "_stateful_adapter")
++                    (hasattr(self, "_stateful_adapter") or rolling_summary)
+                     and summary_compactor is not None
+                     and action_overflow_recoveries == 0
+                 )
+@@ -1024,7 +1104,11 @@ class BenchmarkingAgent(Agent):
+                         self.MAX_CONTEXT_LENGTH,
+                         1,
+                     )
+-                    self._run_pending_compaction()
++                    # In manual_rolling the current observation is already the
++                    # newest transcript message; keep it out of the summary.
++                    self._run_pending_compaction(
++                        pending_messages=1 if rolling_summary else 0
++                    )
+                     action_overflow_recoveries += 1
+                     max_attempts += 1
+                     logger.warning(
+@@ -1068,6 +1152,7 @@ class BenchmarkingAgent(Agent):
+ 
+             self.track_tokens(model_response.usage.total_tokens)
+             accumulated_usage = accumulated_usage + model_response.usage
++            call_usage = model_response.usage
+             if hasattr(self, "_stateful_adapter"):
+                 native_compaction = (turn_result.action_state or {}).get(
+                     "native_compaction"
+@@ -1127,6 +1212,7 @@ class BenchmarkingAgent(Agent):
+                     messages_sent = [
+                         message.model_dump() for message in model_request.messages
+                     ]
++                    self._last_call_usage = call_usage
+                 return (
+                     model_response,
+                     action,
+diff --git a/benchmarking/compaction.py b/benchmarking/compaction.py
+index fe7848b..776940f 100644
+--- a/benchmarking/compaction.py
++++ b/benchmarking/compaction.py
+@@ -20,17 +20,28 @@ from .exceptions import (
+     EmptyResponseError,
+     TransientProviderError,
+ )
+-from .runtime_models import Message, NormalizedUsage
++from .runtime_models import Message, ModelRequest, NormalizedUsage
+ from .runtime_state import (
++    DEFAULT_RUNTIME_STATE,
++    AcceptedTurn,
++    AdapterDescriptor,
+     CompactionUnwindResult,
+     ModelTurnRequest,
++    ModelTurnResult,
+     RuntimeState,
+     StatefulRuntimeAdapter,
++    StateTransitionTelemetry,
+     SummaryCompactionRuntimeAdapter,
++    append_accepted_turn,
++    replace_runtime_payload,
++    restore_unwound_runtime_state_items,
++    runtime_payload_items,
+     sanitize_settings,
++    unwind_runtime_state_items,
+ )
+ 
+ HARNESS_SUMMARY_COMPACTION = "harness_summary"
++MANUAL_ROLLING_SUMMARY_ADAPTER_ID = "manual_rolling.text.v1"
+ 
+ SUMMARY_SYSTEM_PROMPT = (
+     "You create concise conversation summaries for reliable continuation. "
+@@ -116,6 +127,132 @@ def build_summary_prompt_record(state: RuntimeState) -> dict[str, Any]:
+     }
+ 
+ 
++class ManualRollingSummaryAdapter:
++    """Present a ``manual_rolling`` transcript to ``SummaryCompactor``.
++
++    The state payload holds the normalized messages after the system prompt.
++    An accepted turn is a user message immediately followed by its assistant
++    reply. Any other user message, such as a buffered GAME_OVER observation or
++    a summary bridge, sits between turns, as buffered inputs do in the Google
++    continuous-conversation adapter. Requests carry visible text only and go
++    through the configured plain model adapter, so a summary request has the
++    same API surface and settings as an action request.
++    """
++
++    strategy = DEFAULT_RUNTIME_STATE
++    provides_continuous_conversation = False
++
++    def __init__(self, *, model_adapter: Any) -> None:
++        self._model_adapter = model_adapter
++        self.descriptor = AdapterDescriptor(
++            adapter_id=MANUAL_ROLLING_SUMMARY_ADAPTER_ID,
++            provider="any",
++            api_surface="normalized messages",
++            implementation_path="benchmarking/compaction.py",
++            version="1",
++            approval_status="harness",
++        )
++
++    def initial_state(self) -> RuntimeState:
++        return RuntimeState(
++            adapter_id=self.descriptor.adapter_id,
++            strategy=self.strategy,
++            payload={"messages": []},
++        )
++
++    def state_from_messages(self, messages: list[dict[str, Any]]) -> RuntimeState:
++        """Build a state from transcript messages that follow the system prompt."""
++        items = [Message.model_validate(message).model_dump() for message in messages]
++        turns = [
++            AcceptedTurn(
++                start_item=index,
++                end_item=index + 2,
++                messages=[
++                    Message.model_validate(items[index]),
++                    Message.model_validate(items[index + 1]),
++                ],
++            )
++            for index in range(len(items) - 1)
++            if items[index]["role"] == "user"
++            and items[index + 1]["role"] == "assistant"
++        ]
++        return RuntimeState(
++            adapter_id=self.descriptor.adapter_id,
++            strategy=self.strategy,
++            payload={"messages": items},
++            accepted_turns=turns,
++        )
++
++    @staticmethod
++    def messages_from_state(state: RuntimeState) -> list[dict[str, Any]]:
++        return [dict(item) for item in runtime_payload_items(state, "messages")]
++
++    def buffer_inputs(
++        self, state: RuntimeState, messages: list[Message]
++    ) -> RuntimeState:
++        state.validate_for(
++            adapter_id=self.descriptor.adapter_id, strategy=self.strategy
++        )
++        items = runtime_payload_items(state, "messages")
++        items.extend(message.model_dump() for message in messages)
++        return replace_runtime_payload(state, {"messages": items})
++
++    def invoke_turn(self, request: ModelTurnRequest) -> ModelTurnResult:
++        request.previous_state.validate_for(
++            adapter_id=self.descriptor.adapter_id, strategy=self.strategy
++        )
++        previous = runtime_payload_items(request.previous_state, "messages")
++        sent = [*previous, *(message.model_dump() for message in request.new_messages)]
++        model_request = ModelRequest(
++            messages=[
++                Message(role="system", content=request.system_prompt),
++                *(Message.model_validate(message) for message in sent),
++            ],
++            request_config=dict(request.request_config),
++        )
++        response = self._model_adapter.invoke(model_request)
++        next_items = [*sent, {"role": "assistant", "content": response.output_text}]
++        return ModelTurnResult(
++            response=response,
++            state=append_accepted_turn(
++                state=request.previous_state,
++                payload={"messages": next_items},
++                start_item=len(previous),
++                end_item=len(next_items),
++                request_messages=request.new_messages,
++                response=response,
++            ),
++            sanitized_request={
++                "messages": [message.model_dump() for message in model_request.messages],
++                "settings": sanitize_settings(request.request_config),
++            },
++            transition=StateTransitionTelemetry(
++                input_items_sent=len(sent),
++                history_items_before_prune=len(next_items),
++                history_items_after_prune=len(next_items),
++            ),
++        )
++
++    def unwind_latest_accepted_turn(
++        self, state: RuntimeState
++    ) -> CompactionUnwindResult | None:
++        state.validate_for(
++            adapter_id=self.descriptor.adapter_id, strategy=self.strategy
++        )
++        return unwind_runtime_state_items(state, payload_key="messages")
++
++    def rebuild_after_compaction(
++        self,
++        summary_message: Message,
++        retained_turns: list[CompactionUnwindResult],
++    ) -> RuntimeState:
++        return restore_unwound_runtime_state_items(
++            self.buffer_inputs(self.initial_state(), [summary_message]),
++            payload_key="messages",
++            retained_turns=retained_turns,
++        )
++
++
+ class SummaryCompactor:
+     TRANSIENT_RETRY_BASE_SECONDS = 0.25
+ 
+diff --git a/benchmarking/model_config.py b/benchmarking/model_config.py
+index 1e58bdd..32fd7ee 100644
+--- a/benchmarking/model_config.py
++++ b/benchmarking/model_config.py
+@@ -253,7 +253,13 @@ def _validate_continuous_conversation_config(
+                 "must set request.generation_config.thinking_summaries='auto'."
+             )
+ 
+-    compaction = runtime.get("compaction")
++    _validate_harness_summary_compaction(config_id, entry)
++
++
++def _validate_harness_summary_compaction(
++    config_id: str, entry: dict[str, Any]
++) -> None:
++    compaction = entry["runtime"].get("compaction")
+     if compaction is not None:
+         if not isinstance(compaction, dict):
+             raise ValueError(
+@@ -380,14 +386,18 @@ def _validate_model_config_entry(
+             f"Model config '{config_id}' uses runtime.state={runtime_state!r}, "
+             f"but only {supported} are supported."
+         )
+-    if (
+-        runtime.get("compaction") is not None
+-        and runtime_state != CONTINUOUS_CONVERSATION_RUNTIME_STATE
++    if runtime.get("compaction") is not None and runtime_state not in (
++        CONTINUOUS_CONVERSATION_RUNTIME_STATE,
++        DEFAULT_RUNTIME_STATE,
+     ):
+         raise ValueError(
+             f"Model config '{config_id}' uses runtime.compaction, which requires "
+-            f"runtime.state={CONTINUOUS_CONVERSATION_RUNTIME_STATE!r}."
++            f"runtime.state={CONTINUOUS_CONVERSATION_RUNTIME_STATE!r} or "
++            f"{DEFAULT_RUNTIME_STATE!r}."
+         )
++    if runtime_state == DEFAULT_RUNTIME_STATE:
++        # manual_rolling supports only harness summaries of its text transcript.
++        _validate_harness_summary_compaction(config_id, entry)
+     if (
+         runtime_state == SERVER_RUNTIME_STATE
+         and runtime_pair not in SERVER_STATE_RUNTIME_PAIRS
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index bed7510..6c9ac16 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -292,6 +292,21 @@ The accepted state is not replaced until compaction succeeds. Reaching the
+ protected continuation boundary, producing an oversized continuation state, or
+ exhausting summary-response retries fails closed.
+ 
++`manual_rolling` configurations can also select `harness_summary`. The summary
++request then carries the agent-owned visible-text transcript, never reasoning
++items, through the configured API adapter with the same request settings,
++prompts, trigger, and output cap. The trigger compares the accepted action
++request's provider-reported `total_tokens`, not the sum over retries. A user
++message immediately followed by its assistant reply is one accepted turn;
++buffered observations, such as the GAME_OVER frame before a forced RESET, are
++summarized like buffered inputs in the Google adapter. After compaction the
++transcript is the system prompt, the user-role bridge, and any unwound turns.
++Context overflow recovery works as above, with the current observation kept
++pending. The estimated-token limit `agent.MAX_CONTEXT_LENGTH` still drops the
++oldest turns as a backstop, so set it to the provider's context capacity.
++Run metadata then records `state_strategy`, the compaction policy,
++`compaction_count`, and `context_trims`, the number of oldest-turn drops.
++
+ Each harness compaction is written to `compaction_NNN.json` with its summary,
+ trigger, item counts, attempts, overflow recoveries, excluded-turn counts, and
+ token usage. The first subsequent `step_NNN.json` also records a safe
+diff --git a/tests/unit/test_manual_rolling_compaction.py b/tests/unit/test_manual_rolling_compaction.py
+new file mode 100644
+index 0000000..618ac34
+--- /dev/null
++++ b/tests/unit/test_manual_rolling_compaction.py
+@@ -0,0 +1,459 @@
++"""Harness summary compaction for the manual_rolling (visible-text) transcript."""
++
++import json
++from copy import deepcopy
++from pathlib import Path
++from types import SimpleNamespace
++
++import numpy as np
++import pytest
++import yaml
++from arcengine import FrameDataRaw, GameAction, GameState
++
++import benchmarking.model_config as model_config
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.base import ExitReason
++from benchmarking.compaction import (
++    MANUAL_ROLLING_SUMMARY_ADAPTER_ID,
++    SUMMARY_REQUEST_PROMPT,
++    SUMMARY_SYSTEM_PROMPT,
++    ManualRollingSummaryAdapter,
++    SummaryCompactionPolicy,
++    SummaryCompactor,
++    build_summary_bridge,
++)
++from benchmarking.exceptions import ContextOverflowError
++from benchmarking.runtime_models import (
++    Message,
++    ModelRequest,
++    ModelResponse,
++    NormalizedUsage,
++)
++from benchmarking.runtime_state import ModelTurnRequest, SummaryCompactionRuntimeAdapter
++
++pytestmark = pytest.mark.unit
++
++SYSTEM = "system prompt"
++POLICY = {
++    "strategy": "harness_summary",
++    "trigger_tokens": 1_000,
++    "summary_max_output_tokens": 64,
++    "summary_input_headroom_tokens": 64,
++}
++
++
++def _config(**agent: object) -> dict:
++    config = {
++        "id": "rolling-summary-test",
++        "agent": {"MAX_CONTEXT_LENGTH": 100_000, **agent},
++        "runtime": {
++            "sdk": "openai-python",
++            "api": "chat_completions",
++            "state": "manual_rolling",
++            "compaction": dict(POLICY),
++        },
++        "client": {"api_key_env": "OPENAI_API_KEY"},
++        "request": {"model": "test-model", "max_completion_tokens": 512},
++        "pricing": {"input": 1.0, "output": 2.0},
++    }
++    return config
++
++
++def _usage(total: int) -> NormalizedUsage:
++    return NormalizedUsage(
++        input_tokens=total - 10, output_tokens=10, total_tokens=total
++    )
++
++
++class _ScriptedAdapter:
++    """Plain adapter: numbered notes for actions, numbered summaries otherwise."""
++
++    def __init__(
++        self,
++        total_tokens: dict[int, int] | None = None,
++        overflow_calls: set[int] | None = None,
++        unparseable_calls: set[int] | None = None,
++    ) -> None:
++        self.total_tokens = total_tokens or {}
++        self.overflow_calls = overflow_calls or set()
++        self.unparseable_calls = unparseable_calls or set()
++        self.requests: list[ModelRequest] = []
++        self.action_calls = 0
++        self.action_turns = 0
++        self.summaries = 0
++
++    def invoke(self, request: ModelRequest) -> ModelResponse:
++        self.requests.append(deepcopy(request))
++        if request.messages[0].content == SUMMARY_SYSTEM_PROMPT:
++            self.summaries += 1
++            return ModelResponse(
++                output_text=f"summary {self.summaries}", usage=_usage(300)
++            )
++        self.action_calls += 1
++        if self.action_calls in self.overflow_calls:
++            raise ContextOverflowError("input token count exceeds the maximum")
++        if self.action_calls in self.unparseable_calls:
++            return ModelResponse(output_text="no action", usage=_usage(600))
++        self.action_turns += 1
++        turn = self.action_turns
++        return ModelResponse(
++            output_text=f"note {turn}: ACTION1",
++            reasoning_text=f"thinking {turn}",
++            usage=_usage(self.total_tokens.get(turn, 100)),
++        )
++
++
++def _raw_frame(value: int, state: GameState = GameState.NOT_FINISHED) -> FrameDataRaw:
++    raw = FrameDataRaw()
++    raw.game_id = "game-id"
++    raw.frame = [np.array([[value, 0], [0, value]], dtype=np.int8)]
++    raw.state = state
++    raw.levels_completed = 0
++    raw.win_levels = 1
++    raw.action_input = None
++    raw.guid = "guid-1"
++    raw.full_reset = False
++    raw.available_actions = [GameAction.ACTION1.value]
++    return raw
++
++
++class _Game:
++    """Frame n follows the n-th action; ``game_over_after`` ends a life once."""
++
++    def __init__(self, game_over_after: int | None = None) -> None:
++        self.info = SimpleNamespace(baseline_actions=[])
++        self.observation_space = _raw_frame(1)
++        self.actions: list[GameAction] = []
++        self.game_over_after = game_over_after
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        self.actions.append(action)
++        value = len(self.actions) + 1
++        state = GameState.NOT_FINISHED
++        if action is GameAction.ACTION1 and len(self.actions) == self.game_over_after:
++            state = GameState.GAME_OVER
++        self.observation_space = _raw_frame(value, state)
++        return self.observation_space
++
++
++def _agent(monkeypatch, tmp_path, config, adapter, game) -> BenchmarkingAgent:
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_adapter", lambda **_kwargs: adapter
++    )
++    agent = BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=game,
++        config=config["id"],
++    )
++    agent._build_system_prompt = lambda: SYSTEM  # type: ignore[method-assign]
++    return agent
++
++
++def _play(monkeypatch, tmp_path, *, actions, adapter, config=None, game=None):
++    game = game or _Game()
++    agent = _agent(monkeypatch, tmp_path, config or _config(), adapter, game)
++    agent._level_action_budgets = [actions]
++    agent.main()
++    return agent, game
++
++
++def _messages(request: ModelRequest) -> list[tuple[str, str]]:
++    return [(message.role, message.content) for message in request.messages]
++
++
++def _obs(agent_or_value) -> str:
++    value = agent_or_value
++    actions = "- ACTION1" if value == 1 else "- RESET\n- ACTION1"
++    return (
++        "State: NOT_FINISHED\nLevels completed: 0\n\n"
++        f"Frame 0:\n  [{value}, 0]\n  [0, {value}]\n\n"
++        f"Available actions:\n{actions}"
++    )
++
++
++def _read(agent: BenchmarkingAgent, name: str) -> dict:
++    return json.loads((Path(agent.run_dir) / name).read_text())
++
++
++# ── Adapter ────────────────────────────────────────────────────────────
++
++
++class TestManualRollingSummaryAdapter:
++    def test_satisfies_the_summary_compaction_contract(self):
++        adapter = ManualRollingSummaryAdapter(model_adapter=_ScriptedAdapter())
++
++        assert isinstance(adapter, SummaryCompactionRuntimeAdapter)
++        assert adapter.provides_continuous_conversation is False
++        assert adapter.initial_state().adapter_id == MANUAL_ROLLING_SUMMARY_ADAPTER_ID
++        assert adapter.initial_state().strategy == "manual_rolling"
++
++    def test_turns_are_user_assistant_pairs_and_buffered_inputs_are_gaps(self):
++        adapter = ManualRollingSummaryAdapter(model_adapter=_ScriptedAdapter())
++        messages = [
++            {"role": "user", "content": "bridge"},
++            {"role": "user", "content": "obs 1"},
++            {"role": "assistant", "content": "out 1"},
++            {"role": "user", "content": "game over"},
++            {"role": "user", "content": "obs 2"},
++            {"role": "assistant", "content": "out 2"},
++        ]
++
++        state = adapter.state_from_messages(messages)
++
++        assert [(t.start_item, t.end_item) for t in state.accepted_turns] == [
++            (1, 3),
++            (4, 6),
++        ]
++        assert adapter.messages_from_state(state) == messages
++
++    def test_invoke_turn_sends_visible_text_through_the_plain_adapter(self):
++        plain = _ScriptedAdapter()
++        adapter = ManualRollingSummaryAdapter(model_adapter=plain)
++        state = adapter.state_from_messages(
++            [{"role": "user", "content": "obs 1"}, {"role": "assistant", "content": "out 1"}]
++        )
++
++        result = adapter.invoke_turn(
++            ModelTurnRequest(
++                system_prompt=SUMMARY_SYSTEM_PROMPT,
++                new_messages=[Message(role="user", content=SUMMARY_REQUEST_PROMPT)],
++                request_config={"model": "m", "max_output_tokens": 64},
++                previous_state=state,
++            )
++        )
++
++        assert _messages(plain.requests[0]) == [
++            ("system", SUMMARY_SYSTEM_PROMPT),
++            ("user", "obs 1"),
++            ("assistant", "out 1"),
++            ("user", SUMMARY_REQUEST_PROMPT),
++        ]
++        assert plain.requests[0].native_input is None
++        assert result.response.output_text == "summary 1"
++        assert len(result.state.accepted_turns) == 2
++
++    def test_summary_overflow_unwinds_and_restores_the_latest_turn(self):
++        class _OverflowOnce(_ScriptedAdapter):
++            def invoke(self, request: ModelRequest) -> ModelResponse:
++                if not self.requests:
++                    self.requests.append(deepcopy(request))
++                    raise ContextOverflowError("too many tokens")
++                return super().invoke(request)
++
++        plain = _OverflowOnce()
++        adapter = ManualRollingSummaryAdapter(model_adapter=plain)
++        messages = [
++            {"role": "user", "content": "obs 1"},
++            {"role": "assistant", "content": "out 1"},
++            {"role": "user", "content": "obs 2"},
++            {"role": "assistant", "content": "out 2"},
++        ]
++
++        result = SummaryCompactor(SummaryCompactionPolicy(**POLICY)).compact(
++            adapter=adapter,
++            state=adapter.state_from_messages(messages),
++            request_config={"model": "m"},
++            trigger_tokens=1_000,
++            max_context_length=100_000,
++            max_retries=1,
++        )
++
++        assert _messages(plain.requests[1])[1:3] == [("user", "obs 1"), ("assistant", "out 1")]
++        assert adapter.messages_from_state(result.state) == [
++            {"role": "user", "content": build_summary_bridge("summary 1")},
++            *messages[2:],
++        ]
++        assert result.excluded_turns == 1
++        assert result.overflow_recoveries == 1
++
++
++# ── Agent ──────────────────────────────────────────────────────────────
++
++
++class TestAgentWithRollingSummary:
++    def test_config_validation_accepts_manual_rolling_summary(self, tmp_path, monkeypatch):
++        path = tmp_path / "model_configs.yaml"
++        path.write_text(yaml.safe_dump([_config()]))
++        monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", path)
++
++        assert model_config.load_model_configs()[0]["runtime"]["compaction"] == POLICY
++
++    def test_reserve_must_fit_the_context_length(self, tmp_path, monkeypatch):
++        path = tmp_path / "model_configs.yaml"
++        path.write_text(yaml.safe_dump([_config(MAX_CONTEXT_LENGTH=1_128)]))
++        monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", path)
++
++        with pytest.raises(ValueError, match="must total less than"):
++            model_config.load_model_configs()
++
++    def test_agent_records_rolling_summary_runtime(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, _config(), _ScriptedAdapter(), _Game())
++
++        assert isinstance(agent._rolling_summary_adapter, ManualRollingSummaryAdapter)
++        assert not hasattr(agent, "_stateful_adapter")
++        assert _read(agent, "run_meta.json")["runtime"] == {
++            "state_strategy": "manual_rolling",
++            "config_id": "rolling-summary-test",
++            "settings": {"model": "test-model", "max_completion_tokens": 512},
++            "compaction": {**POLICY, "context_limit_tokens": 100_000},
++            "compaction_count": 0,
++            "context_trims": 0,
++        }
++
++    def test_summary_replaces_history_at_the_trigger(self, monkeypatch, tmp_path):
++        adapter = _ScriptedAdapter(total_tokens={2: 1_000})
++
++        agent, _ = _play(monkeypatch, tmp_path, actions=4, adapter=adapter)
++
++        summary, turn3, turn4 = adapter.requests[2], adapter.requests[3], adapter.requests[4]
++        assert _messages(summary) == [
++            ("system", SUMMARY_SYSTEM_PROMPT),
++            ("user", _obs(1)),
++            ("assistant", "note 1: ACTION1"),
++            ("user", _obs(2)),
++            ("assistant", "note 2: ACTION1"),
++            ("user", SUMMARY_REQUEST_PROMPT),
++        ]
++        assert summary.request_config == {"model": "test-model", "max_completion_tokens": 64}
++        bridge = build_summary_bridge("summary 1")
++        assert _messages(turn3) == [("system", SYSTEM), ("user", bridge), ("user", _obs(3))]
++        assert _messages(turn4) == [
++            ("system", SYSTEM),
++            ("user", bridge),
++            ("user", _obs(3)),
++            ("assistant", "note 3: ACTION1"),
++            ("user", _obs(4)),
++        ]
++        assert len(adapter.requests) == 5
++        compaction = _read(agent, "compaction_001.json")
++        assert compaction["before_step"] == 3
++        assert compaction["trigger_tokens"] == 1_000
++        assert compaction["summary"] == "summary 1"
++        assert compaction["prompt"]["context"]["messages"][0] == {
++            "role": "user",
++            "content": _obs(1),
++        }
++        step3 = _read(agent, "step_003.json")
++        assert step3["continuation"]["bridge"] == bridge
++        assert "continuation" not in _read(agent, "step_004.json")
++        meta = _read(agent, "run_meta.json")
++        assert meta["runtime"]["compaction_count"] == 1
++        assert meta["runtime"]["context_trims"] == 0
++        assert meta["total_usage"]["total_tokens"] == 100 + 1_000 + 300 + 100 + 100
++
++    def test_compaction_cost_is_attributed_to_the_next_action(self, monkeypatch, tmp_path):
++        adapter = _ScriptedAdapter(total_tokens={1: 1_000})
++        game = _Game()
++        sent: list[dict] = []
++        original_step = game.step
++
++        def _step(action, *, data, reasoning):
++            sent.append(reasoning)
++            return original_step(action, data=data, reasoning=reasoning)
++
++        game.step = _step  # type: ignore[method-assign]
++
++        _play(monkeypatch, tmp_path, actions=2, adapter=adapter, game=game)
++
++        assert "harness_compaction" not in sent[0].get("state", {})
++        assert sent[1]["usage"]["total_tokens"] == 100 + 300
++        assert sent[1]["state"]["harness_compaction"]["usage"]["total_tokens"] == 300
++
++    def test_trigger_uses_the_accepted_call_not_retry_totals(self, monkeypatch, tmp_path):
++        # Call 2 cannot be parsed (600 tokens); the accepted retry reports 600.
++        adapter = _ScriptedAdapter(total_tokens={2: 600}, unparseable_calls={2})
++
++        agent, _ = _play(monkeypatch, tmp_path, actions=3, adapter=adapter)
++
++        assert adapter.summaries == 0
++        assert _read(agent, "step_002.json")["usage"]["total_tokens"] == 1_200
++
++    def test_no_compaction_below_trigger(self, monkeypatch, tmp_path):
++        adapter = _ScriptedAdapter(total_tokens={1: 999, 2: 999})
++
++        _play(monkeypatch, tmp_path, actions=3, adapter=adapter)
++
++        assert adapter.summaries == 0
++        assert len(adapter.requests[2].messages) == 6
++
++    def test_buffered_game_over_is_summarized_not_resent(self, monkeypatch, tmp_path):
++        # Action 2 loses a life and reports usage at the trigger. The forced
++        # RESET buffers the GAME_OVER frame, which the summary then covers.
++        adapter = _ScriptedAdapter(total_tokens={2: 1_000})
++        game = _Game(game_over_after=2)
++
++        agent, game = _play(monkeypatch, tmp_path, actions=4, adapter=adapter, game=game)
++
++        summary = adapter.requests[2]
++        game_over = _messages(summary)[-2]
++        assert game_over[0] == "user"
++        assert game_over[1].startswith("State: GAME_OVER")
++        after = _messages(adapter.requests[3])
++        assert after[1] == ("user", build_summary_bridge("summary 1"))
++        assert all(not text.startswith("State: GAME_OVER") for _, text in after)
++        assert game.actions[2] is GameAction.RESET
++
++    def test_action_overflow_compacts_and_keeps_the_current_observation(
++        self, monkeypatch, tmp_path
++    ):
++        adapter = _ScriptedAdapter(overflow_calls={3})
++
++        agent, _ = _play(monkeypatch, tmp_path, actions=3, adapter=adapter)
++
++        summary, retry = adapter.requests[3], adapter.requests[4]
++        assert _messages(summary)[-2:] == [
++            ("assistant", "note 2: ACTION1"),
++            ("user", SUMMARY_REQUEST_PROMPT),
++        ]
++        assert _messages(retry) == [
++            ("system", SYSTEM),
++            ("user", build_summary_bridge("summary 1")),
++            ("user", _obs(3)),
++        ]
++        compaction = _read(agent, "compaction_001.json")
++        assert compaction["trigger_tokens"] == 100_000
++
++    def test_second_overflow_fails_the_run(self, monkeypatch, tmp_path):
++        adapter = _ScriptedAdapter(overflow_calls={2, 3})
++        game = _Game()
++        agent = _agent(monkeypatch, tmp_path, _config(), adapter, game)
++        agent._level_action_budgets = [3]
++
++        with pytest.raises(ContextOverflowError):
++            agent.main()
++
++        assert adapter.summaries == 1
++        assert _read(agent, "run_meta.json")["exit_reason"] == ExitReason.AGENT_ERROR.value
++
++    def test_drop_oldest_is_counted_if_it_ever_fires(self, monkeypatch, tmp_path):
++        adapter = _ScriptedAdapter()
++        limit = len(SYSTEM) + len(_obs(2)) + len("note 2: ACTION1") + len(_obs(3))
++
++        agent = _agent(monkeypatch, tmp_path, _config(), adapter, _Game())
++        agent._level_action_budgets = [3]
++        agent.MAX_CONTEXT_LENGTH = limit
++        agent.main()
++
++        assert _messages(adapter.requests[2])[1] == ("user", _obs(2))
++        assert _read(agent, "run_meta.json")["runtime"]["context_trims"] == 1
++
++    def test_without_compaction_manual_rolling_is_unchanged(self, monkeypatch, tmp_path):
++        config = _config()
++        del config["runtime"]["compaction"]
++        adapter = _ScriptedAdapter(total_tokens={1: 50_000, 2: 50_000})
++
++        agent, _ = _play(monkeypatch, tmp_path, actions=3, adapter=adapter, config=config)
++
++        assert agent._rolling_summary_adapter is None
++        assert agent._summary_compactor is None
++        assert adapter.summaries == 0
++        assert "runtime" not in _read(agent, "run_meta.json")
+diff --git a/tests/unit/test_model_config.py b/tests/unit/test_model_config.py
+index 69cee91..d575efb 100644
+--- a/tests/unit/test_model_config.py
++++ b/tests/unit/test_model_config.py
+@@ -276,18 +276,18 @@ class TestModelConfig:
+         ):
+             model_config.load_model_configs()
+ 
+-    def test_manual_rolling_rejects_harness_compaction(
++    def test_server_state_rejects_harness_compaction(
+         self,
+         tmp_path,
+         monkeypatch,
+     ):
+         config = _valid_config(
+-            "manual-compaction",
++            "server-state-compaction",
+             runtime={
+                 "sdk": "openai-python",
+-                "api": "chat_completions",
+-                "state": "manual_rolling",
+-                "compaction": {"strategy": "harness_summary"},
++                "api": "responses",
++                "state": "previous_response_id",
++                "compaction": {"strategy": "harness_summary", "trigger_tokens": 1_000},
+             },
+         )
+         _write_model_configs(tmp_path, monkeypatch, [config])
+@@ -296,11 +296,30 @@ class TestModelConfig:
+             ValueError,
+             match=(
+                 "runtime.compaction, which requires "
+-                "runtime.state='continuous_conversation'"
++                "runtime.state='continuous_conversation' or 'manual_rolling'"
+             ),
+         ):
+             model_config.load_model_configs()
+ 
++    def test_manual_rolling_validates_harness_compaction(
++        self,
++        tmp_path,
++        monkeypatch,
++    ):
++        config = _valid_config(
++            "manual-compaction",
++            runtime={
++                "sdk": "openai-python",
++                "api": "chat_completions",
++                "state": "manual_rolling",
++                "compaction": {"strategy": "harness_summary"},
++            },
++        )
++        _write_model_configs(tmp_path, monkeypatch, [config])
++
++        with pytest.raises(ValueError, match="invalid runtime.compaction"):
++            model_config.load_model_configs()
++
+     def test_load_model_configs_accepts_server_state_for_responses_runtime(
+         self,
+         tmp_path,
+-- 
+2.54.0.windows.1
+

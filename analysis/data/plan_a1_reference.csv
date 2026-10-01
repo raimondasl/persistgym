@@ -1,0 +1,86 @@
+key,ref_low,ref_high,unit,source,stated_as
+arc_1b_list,638,1054,usd,PLAN.md §16.1,1b ARC path at no-cache list over the 15 draws
+arc_1b_list_mean,896,896,usd,PLAN.md §16.1,1b mean over draws
+arc_draws_above_900_list,6,6,count,PLAN.md §16.1,draws with 1b above $900 at no-cache list (those with both R11L and SC25)
+arc_1b_flex,319,527,usd,PLAN.md §16.1,1b at Flex
+arc_pooled_usd_per_action_s0,0.203,0.203,usd,review step 2a,published pooled $/action S0 (eligible games)
+arc_pooled_usd_per_action_s4,0.128,0.128,usd,review step 2a,published pooled $/action S4 (eligible games)
+arc_seed1_s0s4_flex_cached,62,102,usd,review step 3a,seed-1 S0+S4 (8 runs) Flex cache-billed
+arc_seed1_s0s4_flex_nocache,80,132,usd,review step 3a,seed-1 S0+S4 Flex no-cache
+arc_seed1_s0s4_standard_cached,125,203,usd,review step 3a,seed-1 S0+S4 standard tier cache-billed
+arc_seed1_s0s4_list,159,263,usd,review step 3a,seed-1 S0+S4 no-cache list
+arc_remainder_flex_cached,187,305,usd,review step 4a,24-run remainder Flex cache-billed
+arc_remainder_flex_nocache,239,395,usd,review step 4a,24-run remainder Flex no-cache
+arc_remainder_standard_cached,375,610,usd,review step 4a,24-run remainder standard tier cache-billed
+arc_remainder_list,478,790,usd,review step 4a,24-run remainder no-cache list
+arc_seed1_path_flex_nocache_max,263,263,usd,review step 0a,seed-1 full path (S0-S4) at Flex for the costliest draws
+rerun_reserve_flex,60,80,usd,PLAN.md §16.1,1b error re-runs at Flex (moderate)
+rerun_reserve_standard,120,160,usd,PLAN.md §16.1,1b error re-runs at standard tier (moderate)
+g0_rule_usd_per_run_reserve,23.44,23.44,usd,PLAN.md §16.3,$900 / (32 runs x 1.2)
+g0_rule_usd_per_run_no_reserve,28.12,28.12,usd,review plan_changes,$900 / 32 runs
+heldout_list,597,935,usd,PLAN.md §16.1,18 held-out runs at no-cache list
+heldout_flex,299,467,usd,PLAN.md §16.1,18 held-out runs at Flex
+heldout_standard_cached,560,560,usd,review step 5a,18 held-out runs at standard tier with caching
+arc_1b_plus_heldout_list,1560,1664,usd,review plan_changes,1b plus held-out at list over draws
+phase2_overcap_cell10,5,5,count of 30,review step 5a,phase 2 above $950 at list with a $10 PersistGym cell
+phase2_overcap_cell25,11,11,count of 30,review step 5a,phase 2 above $950 at list with a $25 PersistGym cell
+phase2_overcap_cell40,14,14,count of 30,review step 5a,phase 2 above $950 at list with a $40 PersistGym cell
+statecarry_pg_cell,10,40,usd,PLAN.md §12,StateCarry PersistGym cell on luna
+sol_output_per_episode_flex_1k,0.14,0.14,usd,PLAN.md §16.1,sol output cost per episode at Flex and 1k output per call
+sol_F0_flex_1k_nowrites,0.319,0.319,usd,review step 0g,sol F-0 per episode Flex 1k without cache writes
+sol_F0_flex_1k_writes,0.354,0.354,usd,review step 0g,sol F-0 per episode Flex 1k with cache writes
+sol_Fr_flex_1k_nowrites,0.370,0.370,usd,review step 0g,sol F-r per episode Flex 1k without cache writes
+sol_Fr_flex_1k_writes,0.415,0.415,usd,review step 0g,sol F-r per episode Flex 1k with cache writes
+sol_W_flex_1k_nowrites,0.571,0.571,usd,review step 0g,sol window cell per episode Flex 1k without cache writes
+sol_W_flex_1k_writes,0.677,0.677,usd,review step 0g,sol window cell per episode Flex 1k with cache writes
+cache_write_uplift_sol_F,0.11,0.11,fraction,review plan_changes,cache writes add about 11% to sol F cells
+cache_write_uplift_sol_W,0.19,0.19,fraction,review plan_changes,cache writes add about 19% to window cells
+sol_core_flex_1k,250,250,usd,PLAN.md §16.1,sol H2 core (640 episodes) Flex with cache writes at 1k output
+sol_core_flex_2k,360,360,usd,PLAN.md §16.1,same at 2k output
+sol_core_flex_3k,480,480,usd,PLAN.md §16.1,same at 3k output
+sol_h1_replication_flex_nowrites,365,544,usd,review step 5b,sol H1 replication (640 episodes) Flex 1k-3k without cache writes
+sol_h1_replication_flex_writes,430,610,usd,PLAN.md §16.1,sol H1 replication Flex with cache writes
+luna_sweep_4cells,78,78,usd,review step 4b,luna sweep with the 4 replay-off cells (1k)
+luna_sweep_8cells,148,148,usd,review step 4b,luna sweep with 8 cells (1k)
+luna_controls,4,4,usd,review step 4b,luna control prompts
+phase_1a_total,230,415,usd,PLAN.md §16.1,phase 1a PersistGym total
+echo_check,0.35,0.35,usd,PLAN.md §16.2,OpenAI reasoning.context echo check
+replay_probe,2,2,usd,PLAN.md §16.2,private-choice replay probe (sol plus luna)
+gemini_probe,3,3,usd,PLAN.md §16.2,Gemini acceptance and Flex latency probe
+arc_pilot_flex,13,13,usd,PLAN.md §16.2,truncated ARC pilot at Flex
+arc_pilot_list,26,26,usd,PLAN.md §16.2,truncated ARC pilot at no-cache list
+arc_pilot_s0s4_list,16.55,16.55,usd,review step 2a,S0+S4 to 50 actions at list
+arc_pilot_s1s2_list,9.93,9.93,usd,review step 2a,S1 to first compaction + 5 and S2 to 30 actions at list
+luna_pilots,2,4,usd,review step 2b,luna pilots at Flex
+luna_validity,5.4,9.6,usd,review step 2b,luna 300-episode validity run at Flex
+sol_pilot,3.5,7,usd,review step 2c,sol pilot at Flex
+sol_validity,12.8,24,usd,review step 2c,sol 40-episode validity at Flex
+block1_total,42,76,usd,PLAN.md §16.2,block 1 pilots
+block1_openai,26,47,usd,PLAN.md §16.2,block 1 OpenAI share
+block1_google,16,29,usd,PLAN.md §16.2,block 1 Google share
+block2_flex,62,132,usd,PLAN.md §16.2,block 2 seed-1 S0+S4 at Flex (excl. re-runs)
+block2_standard,125,263,usd,PLAN.md §16.2,block 2 on the standard tier (excl. re-runs)
+block2_reruns,0,60,usd,PLAN.md §16.2,block 2 re-runs (up to)
+block3_flex,540,790,usd,PLAN.md §16.2,block 3 commitment with ARC at Flex
+block3_standard,760,1150,usd,PLAN.md §16.2,block 3 with ARC on the standard tier with caching
+block3_list_max,1370,1370,usd,PLAN.md §16.2,block 3 upper end at no-cache list
+block4,460,1100,usd,PLAN.md §16.2,block 4 phase 2
+before_g2,650,1550,usd,PLAN.md §16.1,spend before G2 (blocks 1-3) across Flex and standard tier
+cum_by_g2_flex,650,1000,usd,review stage 4,blocks 1-3 with ARC at Flex
+cum_by_g2_standard,950,1550,usd,review stage 4,blocks 1-3 with ARC on the standard tier
+cum_by_g2_list,1050,1800,usd,review stage 4,blocks 1-3 with ARC at no-cache list
+pre_commit_flex,105,225,usd,review commit_point,blocks 1-2 with ARC at Flex
+pre_commit_standard,175,400,usd,review commit_point,blocks 1-2 with ARC on the standard tier
+total_flex_cached,1300,1300,usd,PLAN.md §16.1,central total through phase 2 with ARC on Flex
+total_flex_cached_google,850,850,usd,PLAN.md §16.1,Google share of that total
+total_flex_cached_openai,460,460,usd,PLAN.md §16.1,OpenAI share of that total
+total_standard_cached,2000,2000,usd,PLAN.md §16.1,central total with ARC on the standard tier with caching
+total_standard_cached_google,1550,1550,usd,PLAN.md §16.1,Google share (ARC on the standard tier with caching)
+total_standard_cached_openai,460,460,usd,PLAN.md §16.1,OpenAI share (ARC on the standard tier with caching)
+total_list_nocache,2400,2400,usd,PLAN.md §16.1,central total with ARC at no-cache list
+total_list_nocache_google,1960,1960,usd,PLAN.md §16.1,Google share (ARC at no-cache list)
+total_list_nocache_openai,460,460,usd,PLAN.md §16.1,OpenAI share (ARC at no-cache list)
+total_everything_list,2900,2900,usd,PLAN.md §16.1,everything at list
+total_pessimistic,4000,4000,usd,PLAN.md §16.1,pessimistic case
+openai_uncapped_3k,800,800,usd,review who_gets_paid,OpenAI total at 3k output per call without the 1a cap
+e1_gpu,20,80,usd,PLAN.md §12,E1 GPU (extension; not in the central case)

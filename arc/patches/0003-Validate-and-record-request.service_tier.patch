@@ -1,0 +1,760 @@
+From d9fec4746628c72ebb5db7c245adac2e33e89888 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 23:33:30 -0400
+Subject: [PATCH 03/16] Validate and record request.service_tier
+
+The Google Interactions and OpenAI adapters already forward request-block
+keys as SDK keyword arguments, so `service_tier` reached the provider, but
+nothing checked the value or recorded which tier served each step.
+
+- Config loading validates request.service_tier against the pinned SDK
+  literals: google-genai interactions {flex, standard, priority};
+  openai responses and chat_completions {auto, default, flex, scale,
+  priority}. Unset stays unset (provider default).
+- ModelResponse.service_tier carries the tier the provider reports.
+- Step records store it as `service_tier`; run_meta.json stores the
+  configured `requested_service_tier`. Both are omitted when absent, so
+  legacy artifacts are unchanged.
+- A reported tier that differs from an explicit request (not `auto`) is
+  logged as a warning.
+
+Tests use the real SDK clients over httpx.MockTransport, including the
+continuous-conversation and harness-summary compaction requests.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py           |  28 +-
+ benchmarking/model_config.py    |  33 +++
+ benchmarking/recording.py       |   4 +
+ benchmarking/runtime_models.py  |  10 +
+ docs/runtime-state.md           |  13 +
+ tests/unit/test_service_tier.py | 491 ++++++++++++++++++++++++++++++++
+ 6 files changed, 577 insertions(+), 2 deletions(-)
+ create mode 100644 tests/unit/test_service_tier.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 647d2ba..cf274b0 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -247,6 +247,7 @@ class BenchmarkingAgent(Agent):
+             started_at=datetime.now(timezone.utc),
+             run_dir=self.run_dir,
+             runtime=runtime_metadata,
++            requested_service_tier=request_cfg.get("service_tier"),
+         )
+         self._write_run_meta()
+ 
+@@ -511,7 +512,11 @@ class BenchmarkingAgent(Agent):
+         ).value
+         path = os.path.join(self.run_dir, "run_meta.json")
+         with open(path, "w") as f:
+-            exclude = {"runtime"} if self.run_record.runtime is None else None
++            exclude = {
++                field
++                for field in ("runtime", "requested_service_tier")
++                if getattr(self.run_record, field) is None
++            }
+             f.write(self.run_record.model_dump_json(indent=2, exclude=exclude))
+ 
+     def _save_diagnostic(self, response: Any) -> None:
+@@ -559,7 +564,12 @@ class BenchmarkingAgent(Agent):
+         with open(filename, "w") as f:
+             exclude = {
+                 field
+-                for field in ("request_record", "state_transition", "continuation")
++                for field in (
++                    "request_record",
++                    "state_transition",
++                    "continuation",
++                    "service_tier",
++                )
+                 if getattr(step, field) is None
+             }
+             f.write(step.model_dump_json(indent=2, exclude=exclude))
+@@ -651,6 +661,18 @@ class BenchmarkingAgent(Agent):
+             result.usage if pending_usage is None else pending_usage + result.usage
+         )
+ 
++    def _check_service_tier(self, model_response: ModelResponse) -> None:
++        requested = self._request_kwargs.get("service_tier")
++        reported = model_response.service_tier
++        if requested in (None, "auto") or reported in (None, requested):
++            return
++        logger.warning(
++            "Requested service_tier=%r but the provider reported %r for step %s.",
++            requested,
++            reported,
++            self.step_counter + 1,
++        )
++
+     def _schedule_compaction(self, usage: NormalizedUsage) -> None:
+         summary_compactor = getattr(self, "_summary_compactor", None)
+         if summary_compactor is None:
+@@ -853,6 +875,7 @@ class BenchmarkingAgent(Agent):
+         )
+ 
+         logger.info(f"Parsed action: {self._format_parsed_action(action)}")
++        self._check_service_tier(model_response)
+         request_record = None
+         state_transition = None
+         if self._last_turn_result is not None:
+@@ -876,6 +899,7 @@ class BenchmarkingAgent(Agent):
+                 request_record=request_record,
+                 state_transition=state_transition,
+                 continuation=continuation,
++                service_tier=model_response.service_tier,
+             )
+         )
+         self._pending_compaction_continuation = None
+diff --git a/benchmarking/model_config.py b/benchmarking/model_config.py
+index a9c0f97..1e58bdd 100644
+--- a/benchmarking/model_config.py
++++ b/benchmarking/model_config.py
+@@ -33,6 +33,17 @@ CONTINUOUS_CONVERSATION_RUNTIME_PAIRS = frozenset(
+         ("openai-python", "responses"),
+     }
+ )
++# request.service_tier values accepted by the pinned SDKs; omit the field for the
++# provider default (standard processing).
++SERVICE_TIERS_BY_RUNTIME_PAIR = {
++    ("google-genai", "interactions"): frozenset({"flex", "standard", "priority"}),
++    ("openai-python", "responses"): frozenset(
++        {"auto", "default", "flex", "scale", "priority"}
++    ),
++    ("openai-python", "chat_completions"): frozenset(
++        {"auto", "default", "flex", "scale", "priority"}
++    ),
++}
+ ANTHROPIC_OPENAI_COMPAT_CLIENT_FIELDS = frozenset({"base_url"})
+ ANTHROPIC_OPENAI_COMPAT_REQUEST_FIELDS = frozenset(
+     {
+@@ -92,6 +103,27 @@ def _validate_anthropic_messages_config(config_id: str, entry: dict[str, Any]) -
+         )
+ 
+ 
++def _validate_service_tier(
++    config_id: str, entry: dict[str, Any], runtime_pair: tuple[str, str]
++) -> None:
++    request = entry["request"]
++    if "service_tier" not in request:
++        return
++    if entry["runtime"].get("adapter_id") == "xai.responses.v1":
++        return
++    allowed = SERVICE_TIERS_BY_RUNTIME_PAIR.get(runtime_pair)
++    if allowed is None:
++        return
++    tier = request["service_tier"]
++    if not isinstance(tier, str) or tier not in allowed:
++        supported = ", ".join(repr(value) for value in sorted(allowed))
++        raise ValueError(
++            f"Model config '{config_id}' request.service_tier={tier!r} is not "
++            f"supported for sdk={runtime_pair[0]!r}, api={runtime_pair[1]!r}. "
++            f"Use one of {supported}, or omit it for the provider default."
++        )
++
++
+ def _validate_continuous_conversation_config(
+     config_id: str, entry: dict[str, Any]
+ ) -> None:
+@@ -384,6 +416,7 @@ def _validate_model_config_entry(
+         _validate_continuous_conversation_config(config_id, entry)
+     if runtime_pair == ("anthropic-python", "messages"):
+         _validate_anthropic_messages_config(config_id, entry)
++    _validate_service_tier(config_id, entry, runtime_pair)
+ 
+     return entry
+ 
+diff --git a/benchmarking/recording.py b/benchmarking/recording.py
+index 9f4af06..19ef1ff 100644
+--- a/benchmarking/recording.py
++++ b/benchmarking/recording.py
+@@ -106,6 +106,8 @@ class StepRecord(BaseModel):
+     request_record: dict[str, Any] | None = None
+     state_transition: dict[str, Any] | None = None
+     continuation: CompactionContinuationRecord | None = None
++    # Service tier the provider reported for the accepted response, if any.
++    service_tier: str | None = None
+ 
+ 
+ class CompactionRecord(BaseModel):
+@@ -145,5 +147,7 @@ class RunRecord(BaseModel):
+     # Why the agent loop ended (``ExitReason`` value). ``UNKNOWN`` while the run
+     # is in progress, or if the process stopped before recording an ending.
+     exit_reason: Optional[str] = None
++    # request.service_tier from the model config; None means provider default.
++    requested_service_tier: Optional[str] = None
+     run_dir: str
+     runtime: dict[str, Any] | None = None
+diff --git a/benchmarking/runtime_models.py b/benchmarking/runtime_models.py
+index e19af60..b851052 100644
+--- a/benchmarking/runtime_models.py
++++ b/benchmarking/runtime_models.py
+@@ -67,6 +67,8 @@ class ModelResponse(BaseModel):
+     # Server-side response identifier (OpenAI Responses API). Used to chain
+     # turns via previous_response_id when runtime.state == "previous_response_id".
+     response_id: str | None = None
++    # Service tier the provider reports for this response, when it reports one.
++    service_tier: str | None = None
+ 
+ 
+ def _extract_output_text_with_usage(
+@@ -87,6 +89,11 @@ def _value_from_response_object(item: Any, key: str, default: Any = None) -> Any
+     return getattr(item, key, default)
+ 
+ 
++def _reported_service_tier(response: Any) -> str | None:
++    tier = _value_from_response_object(response, "service_tier")
++    return tier if isinstance(tier, str) and tier else None
++
++
+ def _normalize_chat_usage(usage: Any) -> dict[str, Any]:
+     if not usage:
+         return {}
+@@ -464,6 +471,7 @@ def normalize_chat_completion_response(response: Any) -> ModelResponse:
+         or getattr(message, "reasoning_content", None),
+         usage=usage,
+         raw_response=response,
++        service_tier=_reported_service_tier(response),
+     )
+ 
+ 
+@@ -483,6 +491,7 @@ def normalize_responses_response(response: Any) -> ModelResponse:
+         usage=usage,
+         raw_response=response,
+         response_id=_value_from_response_object(response, "id"),
++        service_tier=_reported_service_tier(response),
+     )
+ 
+ 
+@@ -525,6 +534,7 @@ def normalize_google_interaction_response(response: Any) -> ModelResponse:
+             else None
+         ),
+         response_id=_value_from_response_object(response, "id"),
++        service_tier=_reported_service_tier(response),
+     )
+ 
+ 
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index ef99086..bed7510 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -313,6 +313,19 @@ summary-and-bridge structure and completed-turn unwinding are inspired by
+ the prompts and exact-tail preservation here are independently adapted and
+ domain-neutral.
+ 
++## Service tier
++
++`request.service_tier` is forwarded unchanged to the provider on every model
++call, including harness summary compaction, which copies the action request
++settings. Omit it to use the provider default (standard processing).
++Configuration loading validates the value for the Google Interactions runtime
++(`flex`, `standard`, `priority`) and the OpenAI Responses and Chat Completions
++runtimes (`auto`, `default`, `flex`, `scale`, `priority`). Run metadata records
++the requested tier as `requested_service_tier`, and each step record stores the
++tier the provider reported for the accepted response as `service_tier`. A
++reported tier that differs from an explicit request other than `auto` is
++logged as a warning. Both fields are omitted when absent.
++
+ ## Recording and provenance
+ 
+ ### xAI Responses
+diff --git a/tests/unit/test_service_tier.py b/tests/unit/test_service_tier.py
+new file mode 100644
+index 0000000..3fdac96
+--- /dev/null
++++ b/tests/unit/test_service_tier.py
+@@ -0,0 +1,491 @@
++"""request.service_tier reaches the provider and the reported tier is recorded."""
++
++import json
++import logging
++from copy import deepcopy
++from pathlib import Path
++from types import SimpleNamespace
++
++import httpx
++import pytest
++import yaml
++from arcengine import FrameData, GameAction, GameState
++from google import genai as google_genai
++from openai import OpenAI
++
++import benchmarking.model_config as model_config
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.compaction import SummaryCompactionPolicy, SummaryCompactor
++from benchmarking.google_runtime import GoogleContinuousConversationRuntimeAdapter
++from benchmarking.model_config import get_model_config
++from benchmarking.openai_runtime import OpenAIContinuousConversationRuntimeAdapter
++from benchmarking.runtime_adapters import (
++    GoogleGenAIInteractionsAdapter,
++    OpenAIChatCompletionsAdapter,
++    OpenAIResponsesAdapter,
++)
++from benchmarking.runtime_models import (
++    Message,
++    ModelRequest,
++    ModelResponse,
++    NormalizedUsage,
++)
++from benchmarking.runtime_registry import ADAPTER_DESCRIPTORS
++from benchmarking.runtime_state import ModelTurnRequest
++
++GOOGLE_PA_CONFIG = "google-gemini-3-8-flash-low-provider-adapter"
++OPENAI_PA_CONFIG = "openai-gpt-5-6-sol-max-provider-adapter"
++
++
++def _write_model_configs(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    configs: list[dict],
++) -> Path:
++    config_path = tmp_path / "model_configs.yaml"
++    config_path.write_text(yaml.safe_dump(configs, sort_keys=False))
++    monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", config_path)
++    return config_path
++
++
++def _with_tier(config_id: str, tier: object, **runtime: str) -> dict:
++    entry = deepcopy(get_model_config(config_id))
++    entry["runtime"].update(runtime)
++    entry["request"]["service_tier"] = tier
++    return entry
++
++
++class _Recorder:
++    """httpx handler that records JSON bodies and returns canned responses."""
++
++    def __init__(self, respond) -> None:  # noqa: ANN001
++        self.respond = respond
++        self.bodies: list[dict] = []
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        self.bodies.append(json.loads(request.content))
++        return httpx.Response(200, request=request, json=self.respond(len(self.bodies)))
++
++
++def _interaction_json(turn: int, *, tier: str | None) -> dict:
++    payload = {
++        "id": f"interaction-{turn}",
++        "created": "2026-09-30T00:00:00Z",
++        "updated": "2026-09-30T00:00:00Z",
++        "status": "completed",
++        "steps": [
++            {
++                "type": "thought",
++                "signature": f"opaque-{turn}",
++                "summary": [{"type": "text", "text": f"summary {turn}"}],
++            },
++            {
++                "type": "model_output",
++                "content": [{"type": "text", "text": "ACTION1"}],
++            },
++        ],
++        "usage": {
++            "total_input_tokens": 100,
++            "total_output_tokens": 10,
++            "total_thought_tokens": 10,
++            "total_tokens": 120,
++        },
++    }
++    if tier is not None:
++        payload["service_tier"] = tier
++    return payload
++
++
++def _responses_json(turn: int, *, tier: str | None) -> dict:
++    payload = {
++        "id": f"resp_{turn}",
++        "object": "response",
++        "created_at": 0,
++        "status": "completed",
++        "model": "gpt-test",
++        "output": [
++            {
++                "type": "reasoning",
++                "id": f"rs_{turn}",
++                "summary": [{"type": "summary_text", "text": f"summary {turn}"}],
++                "encrypted_content": f"opaque-{turn}",
++            },
++            {
++                "type": "message",
++                "id": f"msg_{turn}",
++                "role": "assistant",
++                "status": "completed",
++                "content": [
++                    {"type": "output_text", "text": "ACTION1", "annotations": []}
++                ],
++            },
++        ],
++        "usage": {
++            "input_tokens": 100,
++            "output_tokens": 10,
++            "total_tokens": 110,
++            "input_tokens_details": {"cached_tokens": 0},
++            "output_tokens_details": {"reasoning_tokens": 5},
++        },
++        "parallel_tool_calls": True,
++        "tool_choice": "auto",
++        "tools": [],
++    }
++    if tier is not None:
++        payload["service_tier"] = tier
++    return payload
++
++
++def _chat_json(turn: int, *, tier: str | None) -> dict:
++    payload = {
++        "id": f"chatcmpl-{turn}",
++        "object": "chat.completion",
++        "created": 0,
++        "model": "gpt-test",
++        "choices": [
++            {
++                "index": 0,
++                "finish_reason": "stop",
++                "message": {"role": "assistant", "content": "ACTION1"},
++            }
++        ],
++        "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
++    }
++    if tier is not None:
++        payload["service_tier"] = tier
++    return payload
++
++
++def _google_client(recorder: _Recorder) -> google_genai.Client:
++    return google_genai.Client(
++        api_key="test-key",
++        http_options={
++            "base_url": "https://example.test",
++            "httpx_client": httpx.Client(transport=httpx.MockTransport(recorder)),
++        },
++    )
++
++
++def _openai_client(recorder: _Recorder) -> OpenAI:
++    return OpenAI(
++        api_key="test-key",
++        base_url="https://example.test/v1",
++        http_client=httpx.Client(transport=httpx.MockTransport(recorder)),
++    )
++
++
++def _google_request_config(tier: str | None) -> dict:
++    config = {
++        "model": "gemini-3.8-flash",
++        "store": False,
++        "generation_config": {
++            "max_output_tokens": 65_536,
++            "thinking_level": "high",
++            "thinking_summaries": "auto",
++        },
++    }
++    if tier is not None:
++        config["service_tier"] = tier
++    return config
++
++
++def _manual_request(request_config: dict) -> ModelRequest:
++    return ModelRequest(
++        messages=[
++            Message(role="system", content="system"),
++            Message(role="user", content="frame"),
++        ],
++        request_config=request_config,
++    )
++
++
++@pytest.mark.unit
++class TestServiceTierConfigValidation:
++    @pytest.mark.parametrize("tier", ["flex", "standard", "priority"])
++    def test_google_interactions_accepts_documented_tiers(
++        self, tmp_path, monkeypatch, tier
++    ):
++        _write_model_configs(tmp_path, monkeypatch, [_with_tier(GOOGLE_PA_CONFIG, tier)])
++
++        assert model_config.load_model_configs()[0]["request"]["service_tier"] == tier
++
++    @pytest.mark.parametrize("tier", ["auto", "default", "Flex", "", 1, None])
++    def test_google_interactions_rejects_other_values(self, tmp_path, monkeypatch, tier):
++        _write_model_configs(tmp_path, monkeypatch, [_with_tier(GOOGLE_PA_CONFIG, tier)])
++
++        with pytest.raises(ValueError, match="request.service_tier="):
++            model_config.load_model_configs()
++
++    @pytest.mark.parametrize(
++        ("config_id", "runtime"),
++        [
++            (OPENAI_PA_CONFIG, {}),
++            ("openai-gpt-5-4-2026-03-05-responses", {}),
++            ("openai-gpt-5-4-2026-03-05", {}),
++        ],
++    )
++    @pytest.mark.parametrize("tier", ["auto", "default", "flex", "scale", "priority"])
++    def test_openai_runtimes_accept_documented_tiers(
++        self, tmp_path, monkeypatch, config_id, runtime, tier
++    ):
++        _write_model_configs(
++            tmp_path, monkeypatch, [_with_tier(config_id, tier, **runtime)]
++        )
++
++        assert model_config.load_model_configs()[0]["request"]["service_tier"] == tier
++
++    @pytest.mark.parametrize(
++        "config_id",
++        [OPENAI_PA_CONFIG, "openai-gpt-5-4-2026-03-05"],
++    )
++    def test_openai_runtimes_reject_google_tier_name(
++        self, tmp_path, monkeypatch, config_id
++    ):
++        _write_model_configs(
++            tmp_path, monkeypatch, [_with_tier(config_id, "standard")]
++        )
++
++        with pytest.raises(ValueError, match="not supported for sdk='openai-python'"):
++            model_config.load_model_configs()
++
++    def test_other_runtimes_are_not_validated(self, tmp_path, monkeypatch):
++        entry = _with_tier("anthropic-opus-4-7-medium", "standard_only")
++        _write_model_configs(tmp_path, monkeypatch, [entry])
++
++        assert model_config.load_model_configs()[0]["request"]["service_tier"] == (
++            "standard_only"
++        )
++
++
++@pytest.mark.unit
++@pytest.mark.filterwarnings("ignore:Interactions usage is experimental")
++class TestGoogleInteractionsServiceTier:
++    @pytest.mark.parametrize("tier", ["flex", "standard", "priority"])
++    def test_manual_rolling_request_sends_configured_tier(self, tier):
++        recorder = _Recorder(lambda turn: _interaction_json(turn, tier=tier))
++        client = _google_client(recorder)
++        try:
++            response = GoogleGenAIInteractionsAdapter(client).invoke(
++                _manual_request(_google_request_config(tier))
++            )
++        finally:
++            client.close()
++
++        assert recorder.bodies[0]["service_tier"] == tier
++        assert response.service_tier == tier
++
++    def test_unset_tier_is_not_sent(self):
++        recorder = _Recorder(lambda turn: _interaction_json(turn, tier=None))
++        client = _google_client(recorder)
++        try:
++            response = GoogleGenAIInteractionsAdapter(client).invoke(
++                _manual_request(_google_request_config(None))
++            )
++        finally:
++            client.close()
++
++        assert "service_tier" not in recorder.bodies[0]
++        assert response.service_tier is None
++
++    def test_continuous_conversation_and_summary_compaction_send_tier(self):
++        recorder = _Recorder(lambda turn: _interaction_json(turn, tier="flex"))
++        client = _google_client(recorder)
++        try:
++            adapter = GoogleContinuousConversationRuntimeAdapter(
++                model_adapter=GoogleGenAIInteractionsAdapter(client),
++                descriptor=ADAPTER_DESCRIPTORS["google.interactions.v1"],
++            )
++            first = adapter.invoke_turn(
++                ModelTurnRequest(
++                    system_prompt="system",
++                    new_messages=[Message(role="user", content="one")],
++                    request_config=_google_request_config("flex"),
++                    previous_state=adapter.initial_state(),
++                )
++            )
++            compactor = SummaryCompactor(
++                SummaryCompactionPolicy(
++                    strategy="harness_summary", trigger_tokens=175_000
++                )
++            )
++            compactor.compact(
++                adapter=adapter,
++                state=first.state,
++                request_config=_google_request_config("flex"),
++                trigger_tokens=175_000,
++                max_context_length=1_048_576,
++                max_retries=0,
++            )
++        finally:
++            client.close()
++
++        action_body, summary_body = recorder.bodies
++        assert action_body["service_tier"] == "flex"
++        assert summary_body["service_tier"] == "flex"
++        assert summary_body["generation_config"]["max_output_tokens"] == 8_192
++        assert first.response.service_tier == "flex"
++
++
++@pytest.mark.unit
++class TestOpenAIServiceTier:
++    def test_responses_request_sends_tier_and_records_reported_tier(self):
++        recorder = _Recorder(lambda turn: _responses_json(turn, tier="flex"))
++        client = _openai_client(recorder)
++        try:
++            response = OpenAIResponsesAdapter(client).invoke(
++                _manual_request({"model": "gpt-test", "service_tier": "flex"})
++            )
++        finally:
++            client.close()
++
++        assert recorder.bodies[0]["service_tier"] == "flex"
++        assert response.service_tier == "flex"
++
++    def test_responses_unset_tier_is_not_sent(self):
++        recorder = _Recorder(lambda turn: _responses_json(turn, tier="default"))
++        client = _openai_client(recorder)
++        try:
++            response = OpenAIResponsesAdapter(client).invoke(
++                _manual_request({"model": "gpt-test"})
++            )
++        finally:
++            client.close()
++
++        assert "service_tier" not in recorder.bodies[0]
++        # The provider may still report the tier it used.
++        assert response.service_tier == "default"
++
++    def test_responses_continuous_conversation_sends_tier_every_turn(self):
++        recorder = _Recorder(lambda turn: _responses_json(turn, tier="flex"))
++        client = _openai_client(recorder)
++        request_config = {
++            **deepcopy(get_model_config(OPENAI_PA_CONFIG)["request"]),
++            "service_tier": "flex",
++        }
++        try:
++            adapter = OpenAIContinuousConversationRuntimeAdapter(
++                model_adapter=OpenAIResponsesAdapter(client),
++                descriptor=ADAPTER_DESCRIPTORS["openai.responses.v1"],
++            )
++            state = adapter.initial_state()
++            for content in ("one", "two"):
++                result = adapter.invoke_turn(
++                    ModelTurnRequest(
++                        system_prompt="system",
++                        new_messages=[Message(role="user", content=content)],
++                        request_config=request_config,
++                        previous_state=state,
++                    )
++                )
++                state = result.state
++        finally:
++            client.close()
++
++        assert [body["service_tier"] for body in recorder.bodies] == ["flex", "flex"]
++        assert result.response.service_tier == "flex"
++
++    def test_chat_completions_request_sends_tier(self):
++        recorder = _Recorder(lambda turn: _chat_json(turn, tier="flex"))
++        client = _openai_client(recorder)
++        try:
++            response = OpenAIChatCompletionsAdapter(client).invoke(
++                _manual_request({"model": "gpt-test", "service_tier": "flex"})
++            )
++        finally:
++            client.close()
++
++        assert recorder.bodies[0]["service_tier"] == "flex"
++        assert response.service_tier == "flex"
++
++
++class _TierAdapter:
++    def __init__(self, reported: str | None) -> None:
++        self.reported = reported
++
++    def invoke(self, request: ModelRequest) -> ModelResponse:
++        return ModelResponse(
++            output_text="ACTION1",
++            usage=NormalizedUsage(total_tokens=5),
++            service_tier=self.reported,
++        )
++
++
++def _agent(monkeypatch, tmp_path, *, requested: str | None, reported: str | None):
++    config = deepcopy(get_model_config("openai-gpt-5-4-2026-03-05-responses"))
++    if requested is not None:
++        config["request"]["service_tier"] = requested
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_client", lambda **_kwargs: object()
++    )
++    monkeypatch.setattr(
++        "benchmarking.agent.build_model_runtime_adapter",
++        lambda **_kwargs: _TierAdapter(reported),
++    )
++    return BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=SimpleNamespace(info=SimpleNamespace(baseline_actions=[])),
++        config=config["id"],
++    )
++
++
++def _frame() -> FrameData:
++    return FrameData(
++        frame=[[[0, 1], [1, 0]]],
++        state=GameState.NOT_FINISHED,
++        levels_completed=0,
++        available_actions=[GameAction.ACTION1.value],
++    )
++
++
++@pytest.mark.unit
++class TestAgentServiceTierRecording:
++    def test_requested_and_reported_tiers_are_recorded(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, requested="flex", reported="flex")
++
++        agent.choose_action([], _frame())
++
++        run = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++        step = json.loads((Path(agent.run_dir) / "step_001.json").read_text())
++        assert run["requested_service_tier"] == "flex"
++        assert step["service_tier"] == "flex"
++
++    def test_unset_tier_leaves_legacy_files_unchanged(self, monkeypatch, tmp_path):
++        agent = _agent(monkeypatch, tmp_path, requested=None, reported=None)
++
++        agent.choose_action([], _frame())
++
++        run = json.loads((Path(agent.run_dir) / "run_meta.json").read_text())
++        step = json.loads((Path(agent.run_dir) / "step_001.json").read_text())
++        assert "requested_service_tier" not in run
++        assert "service_tier" not in step
++
++    def test_reported_tier_different_from_request_is_logged(
++        self, monkeypatch, tmp_path, caplog
++    ):
++        agent = _agent(monkeypatch, tmp_path, requested="flex", reported="default")
++
++        with caplog.at_level(logging.WARNING):
++            agent.choose_action([], _frame())
++
++        assert "Requested service_tier='flex' but the provider reported 'default'" in (
++            caplog.text
++        )
++        step = json.loads((Path(agent.run_dir) / "step_001.json").read_text())
++        assert step["service_tier"] == "default"
++
++    @pytest.mark.parametrize(("requested", "reported"), [("auto", "default"), ("flex", None)])
++    def test_auto_or_unreported_tier_is_not_logged(
++        self, monkeypatch, tmp_path, caplog, requested, reported
++    ):
++        agent = _agent(monkeypatch, tmp_path, requested=requested, reported=reported)
++
++        with caplog.at_level(logging.WARNING):
++            agent.choose_action([], _frame())
++
++        assert "service_tier" not in caplog.text
+-- 
+2.54.0.windows.1
+

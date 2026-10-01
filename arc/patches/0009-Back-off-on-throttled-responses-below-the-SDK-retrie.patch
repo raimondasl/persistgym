@@ -1,0 +1,1106 @@
+From 1c49cf34d02f7ef0113abad849f43074036af3a4 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 00:25:31 -0400
+Subject: [PATCH 09/16] Back off on throttled responses below the SDK retries
+
+The SDKs retry 429/5xx a few times within seconds (google-genai's
+Interactions client: 3 retries at 0.5-8 s), and _request_with_retries then
+spends MAX_RETRIES without waiting, so a short congestion window ends a run
+with AGENT_ERROR. Gemini Flex answers 503 at capacity and 429 for rate
+limits and asks clients to implement their own exponential backoff
+(https://ai.google.dev/gemini-api/docs/flex-inference).
+
+- ThrottleBackoffTransport (benchmarking/runtime_transport.py) wraps the
+  SDK client's httpx transport and retries throttled responses (default
+  429, 503) with exponential backoff and jitter, honouring Retry-After.
+  The SDK never sees a retried response, so neither SDK retries nor
+  MAX_RETRIES are spent. Action and harness summary requests are covered.
+- Waiting is bounded per throttled episode (max_wait_seconds) and by the
+  run's wall-clock deadline; past either bound the throttled response is
+  passed through. A model call that then fails after the deadline ends
+  the run with TIME_BUDGET instead of AGENT_ERROR.
+- Opt-in per config as client.transport_retry (validated, extra keys
+  rejected). build_model_runtime_client accepts http_transport and passes
+  it to the google-genai (HttpOptions.client_args), OpenAI and Anthropic
+  (DefaultHttpxClient) clients; without the block clients are built
+  exactly as before.
+- run_meta.json records the policy and counters as transport_retry.
+- The four Gemini 3.8 Flash high path profiles enable the same policy
+  (2 s initial, 60 s max delay, 30 min per episode), so the setting is
+  identical across the path. Request bodies are unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py                  |  37 +-
+ benchmarking/model_config.py           |  19 +
+ benchmarking/model_configs.yaml        |  28 ++
+ benchmarking/recording.py              |   2 +
+ benchmarking/runtime_clients.py        |  30 ++
+ benchmarking/runtime_transport.py      | 185 +++++++++
+ docs/runtime-state.md                  |  27 ++
+ tests/unit/test_gemini_path_configs.py |  14 +-
+ tests/unit/test_transport_retry.py     | 516 +++++++++++++++++++++++++
+ 9 files changed, 856 insertions(+), 2 deletions(-)
+ create mode 100644 benchmarking/runtime_transport.py
+ create mode 100644 tests/unit/test_transport_retry.py
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 3199353..55e33e4 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -54,6 +54,11 @@ from .runtime_state import (
+     sanitize_settings,
+     source_permalink,
+ )
++from .runtime_transport import (
++    ThrottleBackoffTransport,
++    TransportRetryPolicy,
++    default_http_transport,
++)
+ 
+ logger = logging.getLogger()
+ 
+@@ -189,10 +194,22 @@ class BenchmarkingAgent(Agent):
+         self.MODEL: str = request_cfg["model"]
+         self._request_kwargs: dict[str, Any] = request_cfg
+ 
++        # Optional HTTP-level backoff on throttled responses (client.transport_retry).
++        self._transport_retry: ThrottleBackoffTransport | None = None
++        client_kwargs: dict[str, Any] = {}
++        transport_retry_cfg = client_cfg.get("transport_retry")
++        if transport_retry_cfg is not None:
++            self._transport_retry = ThrottleBackoffTransport(
++                default_http_transport(),
++                TransportRetryPolicy.model_validate(transport_retry_cfg),
++                deadline=self._run_deadline,
++            )
++            client_kwargs["http_transport"] = self._transport_retry
+         self._client = build_model_runtime_client(
+             runtime_config=runtime_cfg,
+             client_config=client_cfg,
+             config_id=self.MODEL_CONFIG_ID,
++            **client_kwargs,
+         )
+         self._adapter = build_model_runtime_adapter(
+             client=self._client,
+@@ -536,15 +553,23 @@ class BenchmarkingAgent(Agent):
+             return {"action": action.name, **action.action_data.model_dump()}
+         return str(action.name)
+ 
++    def _run_deadline(self) -> float | None:
++        """Wall-clock time (time.time()) at which MAX_RUNTIME_SECONDS runs out."""
++        timer = getattr(self, "timer", 0)
++        return timer + self.MAX_RUNTIME_SECONDS if timer else None
++
+     def _write_run_meta(self) -> None:
+         self.run_record.exit_reason = ExitReason(
+             getattr(self, "exit_reason", ExitReason.UNKNOWN)
+         ).value
++        transport_retry = getattr(self, "_transport_retry", None)
++        if transport_retry is not None:
++            self.run_record.transport_retry = transport_retry.summary()
+         path = os.path.join(self.run_dir, "run_meta.json")
+         with open(path, "w") as f:
+             exclude = {
+                 field
+-                for field in ("runtime", "requested_service_tier")
++                for field in ("runtime", "requested_service_tier", "transport_retry")
+                 if getattr(self.run_record, field) is None
+             }
+             f.write(self.run_record.model_dump_json(indent=2, exclude=exclude))
+@@ -825,6 +850,16 @@ class BenchmarkingAgent(Agent):
+         try:
+             super().main()
+         finally:
++            transport_retry = getattr(self, "_transport_retry", None)
++            if (
++                getattr(self, "exit_reason", None) == ExitReason.AGENT_ERROR
++                and transport_retry is not None
++                and transport_retry.stats.deadline_passthroughs
++            ):
++                # The wall-clock budget ran out while the provider was
++                # throttling; the failed model call is a time-budget ending.
++                self._timed_out = True
++                self.exit_reason = ExitReason.TIME_BUDGET
+             # Agent.main records API_ERROR or AGENT_ERROR and re-raises without
+             # calling cleanup(), so persist that ending before it propagates.
+             if hasattr(self, "run_record"):
+diff --git a/benchmarking/model_config.py b/benchmarking/model_config.py
+index 32fd7ee..d3d60d9 100644
+--- a/benchmarking/model_config.py
++++ b/benchmarking/model_config.py
+@@ -124,6 +124,24 @@ def _validate_service_tier(
+         )
+ 
+ 
++def _validate_transport_retry(config_id: str, entry: dict[str, Any]) -> None:
++    retry = entry["client"].get("transport_retry")
++    if retry is None:
++        return
++    if not isinstance(retry, dict):
++        raise ValueError(
++            f"Model config '{config_id}' client.transport_retry must be a mapping."
++        )
++    from .runtime_transport import TransportRetryPolicy
++
++    try:
++        TransportRetryPolicy.model_validate(retry)
++    except ValueError as exc:
++        raise ValueError(
++            f"Model config '{config_id}' has invalid client.transport_retry: {exc}"
++        ) from exc
++
++
+ def _validate_continuous_conversation_config(
+     config_id: str, entry: dict[str, Any]
+ ) -> None:
+@@ -427,6 +445,7 @@ def _validate_model_config_entry(
+     if runtime_pair == ("anthropic-python", "messages"):
+         _validate_anthropic_messages_config(config_id, entry)
+     _validate_service_tier(config_id, entry, runtime_pair)
++    _validate_transport_retry(config_id, entry)
+ 
+     return entry
+ 
+diff --git a/benchmarking/model_configs.yaml b/benchmarking/model_configs.yaml
+index 378852a..ce98220 100644
+--- a/benchmarking/model_configs.yaml
++++ b/benchmarking/model_configs.yaml
+@@ -307,6 +307,13 @@
+     state: "manual_rolling"
+   client:
+     api_key_env: "GOOGLE_API_KEY"
++    # Back off on throttled responses without spending MAX_RETRIES.
++    transport_retry:
++      status_codes: [429, 503]
++      initial_delay_seconds: 2.0
++      max_delay_seconds: 60.0
++      max_wait_seconds: 1_800.0
++      jitter_ratio: 0.25
+   request:
+     model: "gemini-3.8-flash"
+     store: false
+@@ -337,6 +344,13 @@
+       summary_input_headroom_tokens: 8_192
+   client:
+     api_key_env: "GOOGLE_API_KEY"
++    # Back off on throttled responses without spending MAX_RETRIES.
++    transport_retry:
++      status_codes: [429, 503]
++      initial_delay_seconds: 2.0
++      max_delay_seconds: 60.0
++      max_wait_seconds: 1_800.0
++      jitter_ratio: 0.25
+   request:
+     model: "gemini-3.8-flash"
+     store: false
+@@ -366,6 +380,13 @@
+       summary_input_headroom_tokens: 8_192
+   client:
+     api_key_env: "GOOGLE_API_KEY"
++    # Back off on throttled responses without spending MAX_RETRIES.
++    transport_retry:
++      status_codes: [429, 503]
++      initial_delay_seconds: 2.0
++      max_delay_seconds: 60.0
++      max_wait_seconds: 1_800.0
++      jitter_ratio: 0.25
+   request:
+     model: "gemini-3.8-flash"
+     store: false
+@@ -394,6 +415,13 @@
+       summary_input_headroom_tokens: 8_192
+   client:
+     api_key_env: "GOOGLE_API_KEY"
++    # Back off on throttled responses without spending MAX_RETRIES.
++    transport_retry:
++      status_codes: [429, 503]
++      initial_delay_seconds: 2.0
++      max_delay_seconds: 60.0
++      max_wait_seconds: 1_800.0
++      jitter_ratio: 0.25
+   request:
+     model: "gemini-3.8-flash"
+     store: false
+diff --git a/benchmarking/recording.py b/benchmarking/recording.py
+index 19ef1ff..40cd388 100644
+--- a/benchmarking/recording.py
++++ b/benchmarking/recording.py
+@@ -149,5 +149,7 @@ class RunRecord(BaseModel):
+     exit_reason: Optional[str] = None
+     # request.service_tier from the model config; None means provider default.
+     requested_service_tier: Optional[str] = None
++    # client.transport_retry policy and counters; None when not configured.
++    transport_retry: dict[str, Any] | None = None
+     run_dir: str
+     runtime: dict[str, Any] | None = None
+diff --git a/benchmarking/runtime_clients.py b/benchmarking/runtime_clients.py
+index 09ca726..2c01863 100644
+--- a/benchmarking/runtime_clients.py
++++ b/benchmarking/runtime_clients.py
+@@ -3,8 +3,12 @@ from __future__ import annotations
+ import os
+ from typing import Any
+ 
++import anthropic
++import httpx
++import openai
+ from anthropic import Anthropic as AnthropicClient
+ from google import genai as google_genai
++from google.genai import types as google_genai_types
+ from openai import OpenAI as OpenAIClient
+ 
+ DEFAULT_ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
+@@ -42,7 +46,13 @@ def build_model_runtime_client(
+     runtime_config: dict[str, Any],
+     client_config: dict[str, Any],
+     config_id: str,
++    http_transport: httpx.BaseTransport | None = None,
+ ) -> Any:
++    """Build the SDK client for a model config.
++
++    ``http_transport``, when given, carries every request of the client (for
++    example a ``ThrottleBackoffTransport``); otherwise the SDK default applies.
++    """
+     sdk = runtime_config.get("sdk")
+     if sdk == "openai-python":
+         is_xai = runtime_config.get("adapter_id") == "xai.responses.v1"
+@@ -51,11 +61,17 @@ def build_model_runtime_client(
+             config_id=config_id,
+             default_api_key_env="XAI_API_KEY" if is_xai else DEFAULT_OPENAI_API_KEY_ENV,
+         )
++        openai_kwargs: dict[str, Any] = {}
++        if http_transport is not None:
++            openai_kwargs["http_client"] = openai.DefaultHttpxClient(
++                transport=http_transport
++            )
+         return OpenAIClient(
+             base_url=client_config.get(
+                 "base_url", "https://api.x.ai/v1" if is_xai else DEFAULT_OPENAI_BASE_URL
+             ),
+             api_key=api_key,
++            **openai_kwargs,
+         )
+ 
+     if sdk == "anthropic-python":
+@@ -64,6 +80,11 @@ def build_model_runtime_client(
+             config_id=config_id,
+             default_api_key_env=DEFAULT_ANTHROPIC_API_KEY_ENV,
+         )
++        if http_transport is not None:
++            return AnthropicClient(
++                api_key=api_key,
++                http_client=anthropic.DefaultHttpxClient(transport=http_transport),
++            )
+         return AnthropicClient(api_key=api_key)
+ 
+     if sdk == "google-genai":
+@@ -72,6 +93,15 @@ def build_model_runtime_client(
+             config_id=config_id,
+             default_api_key_env=DEFAULT_GOOGLE_API_KEY_ENV,
+         )
++        if http_transport is not None:
++            # client_args reach the SDK's own httpx.Client, which the
++            # Interactions client shares; other SDK defaults are kept.
++            return google_genai.Client(
++                api_key=api_key,
++                http_options=google_genai_types.HttpOptions(
++                    client_args={"transport": http_transport}
++                ),
++            )
+         return google_genai.Client(api_key=api_key)
+ 
+     raise ValueError(
+diff --git a/benchmarking/runtime_transport.py b/benchmarking/runtime_transport.py
+new file mode 100644
+index 0000000..4a2aed4
+--- /dev/null
++++ b/benchmarking/runtime_transport.py
+@@ -0,0 +1,185 @@
++"""HTTP-level backoff for throttled model requests.
++
++Gemini Flex answers 503 when it is at capacity and 429 for rate limits or
++resource exhaustion, and expects the client to back off. The SDKs retry such
++responses only a few times within seconds, and the harness then spends its
++model retries (``MAX_RETRIES``) without waiting, so a short congestion window
++ends a run. ``ThrottleBackoffTransport`` wraps the SDK's HTTP transport and
++retries throttled responses with exponential backoff before the SDK sees them,
++so neither the SDK's retries nor ``MAX_RETRIES`` are spent on throttling.
++
++Waiting is bounded per throttled episode (consecutive throttled responses
++with no other response in between) and by an optional wall-clock deadline.
++Once either bound is reached, throttled responses pass through unchanged and
++the usual SDK and harness retry handling applies.
++"""
++
++from __future__ import annotations
++
++import logging
++import os
++import random
++import ssl
++import threading
++import time
++from collections.abc import Callable
++from email.utils import parsedate_to_datetime
++from typing import Any
++
++import certifi
++import httpx
++from pydantic import BaseModel, ConfigDict, Field
++
++logger = logging.getLogger()
++
++
++class TransportRetryPolicy(BaseModel):
++    """``client.transport_retry`` settings."""
++
++    model_config = ConfigDict(extra="forbid")
++
++    status_codes: list[int] = Field(default_factory=lambda: [429, 503], min_length=1)
++    initial_delay_seconds: float = Field(default=2.0, gt=0)
++    max_delay_seconds: float = Field(default=60.0, gt=0)
++    # Longest total wait across one throttled episode.
++    max_wait_seconds: float = Field(default=1_800.0, gt=0)
++    jitter_ratio: float = Field(default=0.25, ge=0, le=1)
++
++
++class TransportRetryStats(BaseModel):
++    throttled_responses: int = 0
++    retries: int = 0
++    wait_seconds: float = 0.0
++    longest_episode_seconds: float = 0.0
++    # Throttled responses returned to the SDK because a bound was reached.
++    passed_through: int = 0
++    deadline_passthroughs: int = 0
++
++
++def default_http_transport() -> httpx.HTTPTransport:
++    """Plain HTTPS transport with the CA bundle the SDK clients use by default.
++
++    Mirrors google-genai's default SSL context (``SSL_CERT_FILE`` or certifi,
++    plus ``SSL_CERT_DIR``), which also matches httpx's own default.
++    """
++    context = ssl.create_default_context(
++        cafile=os.environ.get("SSL_CERT_FILE", certifi.where()),
++        capath=os.environ.get("SSL_CERT_DIR"),
++    )
++    return httpx.HTTPTransport(verify=context)
++
++
++def _retry_after_seconds(response: httpx.Response) -> float | None:
++    value: str | None = response.headers.get("retry-after")
++    if value is None:
++        return None
++    try:
++        return max(0.0, float(value))
++    except ValueError:
++        pass
++    try:
++        seconds: float = parsedate_to_datetime(value).timestamp() - time.time()
++    except (TypeError, ValueError):
++        return None
++    return max(0.0, seconds)
++
++
++class ThrottleBackoffTransport(httpx.BaseTransport):
++    def __init__(
++        self,
++        inner: httpx.BaseTransport,
++        policy: TransportRetryPolicy,
++        *,
++        deadline: Callable[[], float | None] | None = None,
++        sleep: Callable[[float], None] = time.sleep,
++        clock: Callable[[], float] = time.monotonic,
++        wall_clock: Callable[[], float] = time.time,
++        rng: Callable[[], float] = random.random,
++    ) -> None:
++        self.inner = inner
++        self.policy = policy
++        self.stats = TransportRetryStats()
++        self._deadline = deadline
++        self._sleep = sleep
++        self._clock = clock
++        self._wall_clock = wall_clock
++        self._rng = rng
++        self._lock = threading.Lock()
++        self._episode_start: float | None = None
++        self._episode_retries = 0
++
++    def _backoff_seconds(self, response: httpx.Response) -> float:
++        policy = self.policy
++        delay: float = min(
++            policy.initial_delay_seconds * (2.0**self._episode_retries),
++            policy.max_delay_seconds,
++        )
++        delay *= 1.0 - policy.jitter_ratio * self._rng()
++        retry_after = _retry_after_seconds(response)
++        if retry_after is not None:
++            delay = max(delay, retry_after)
++        return delay
++
++    def _end_episode(self) -> None:
++        with self._lock:
++            if self._episode_start is not None:
++                elapsed = self._clock() - self._episode_start
++                self.stats.longest_episode_seconds = max(
++                    self.stats.longest_episode_seconds, round(elapsed, 3)
++                )
++            self._episode_start = None
++            self._episode_retries = 0
++
++    def _pass_through(
++        self, request: httpx.Request, response: httpx.Response, reason: str
++    ) -> httpx.Response:
++        with self._lock:
++            self.stats.passed_through += 1
++            if reason == "deadline":
++                self.stats.deadline_passthroughs += 1
++        logger.warning(
++            "HTTP %s from %s passed to the SDK without further backoff (%s).",
++            response.status_code,
++            request.url.host,
++            reason,
++        )
++        return response
++
++    def handle_request(self, request: httpx.Request) -> httpx.Response:
++        while True:
++            response = self.inner.handle_request(request)
++            if response.status_code not in self.policy.status_codes:
++                self._end_episode()
++                return response
++
++            with self._lock:
++                self.stats.throttled_responses += 1
++                now = self._clock()
++                if self._episode_start is None:
++                    self._episode_start = now
++                budget = self.policy.max_wait_seconds - (now - self._episode_start)
++            if budget <= 0:
++                return self._pass_through(request, response, "max_wait_seconds")
++            delay = min(self._backoff_seconds(response), budget)
++            deadline = self._deadline() if self._deadline is not None else None
++            if deadline is not None and self._wall_clock() + delay >= deadline:
++                return self._pass_through(request, response, "deadline")
++
++            response.close()
++            logger.info(
++                "HTTP %s; retrying in %.1f s without using a model retry.",
++                response.status_code,
++                delay,
++            )
++            self._sleep(delay)
++            with self._lock:
++                self.stats.retries += 1
++                self.stats.wait_seconds = round(self.stats.wait_seconds + delay, 3)
++                self._episode_retries += 1
++
++    def close(self) -> None:
++        self.inner.close()
++
++    def summary(self) -> dict[str, Any]:
++        """Policy and counters for run metadata."""
++        return {"policy": self.policy.model_dump(), **self.stats.model_dump()}
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index 6c9ac16..e9e828b 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -341,6 +341,33 @@ tier the provider reported for the accepted response as `service_tier`. A
+ reported tier that differs from an explicit request other than `auto` is
+ logged as a warning. Both fields are omitted when absent.
+ 
++## Throttled responses
++
++The SDKs retry 429 and 5xx responses a few times within seconds, and the
++harness then spends its model retries (`MAX_RETRIES`) without waiting, so a
++short provider congestion window can end a run with `AGENT_ERROR`. Gemini Flex,
++for example, answers 503 when it is at capacity and 429 for rate limits, and
++asks clients to back off ([Flex inference](https://ai.google.dev/gemini-api/docs/flex-inference)).
++
++An optional `client.transport_retry` block wraps the SDK client's HTTP
++transport in `ThrottleBackoffTransport` (`benchmarking/runtime_transport.py`).
++Throttled responses (`status_codes`, default 429 and 503) are retried below the
++SDK with exponential backoff (`initial_delay_seconds`, doubling up to
++`max_delay_seconds`, shortened by up to `jitter_ratio`, and never shorter than a
++`Retry-After` header). Neither SDK retries nor `MAX_RETRIES` are spent. This
++covers action requests and harness summary requests alike, for the Google,
++OpenAI, and Anthropic SDK clients. Request bodies are unchanged.
++
++Waiting is bounded by `max_wait_seconds` per throttled episode (consecutive
++throttled responses with no other response between them) and by the run's
++`MAX_RUNTIME_SECONDS`. When either bound is reached, the throttled response is
++passed to the SDK and the usual retry handling applies. If the wall-clock bound
++was reached and the model call then fails, the run ends with `TIME_BUDGET`
++rather than `AGENT_ERROR`. `run_meta.json` records the policy and counters as
++`transport_retry`; the field is omitted when the block is absent, and clients
++are then built exactly as before. Requests that httpx routes through an
++environment proxy mount bypass the wrapper.
++
+ ## Recording and provenance
+ 
+ ### xAI Responses
+diff --git a/tests/unit/test_gemini_path_configs.py b/tests/unit/test_gemini_path_configs.py
+index 804a59a..2734472 100644
+--- a/tests/unit/test_gemini_path_configs.py
++++ b/tests/unit/test_gemini_path_configs.py
+@@ -28,6 +28,13 @@ HIGH_REQUEST = {
+         "thinking_summaries": "auto",
+     },
+ }
++TRANSPORT_RETRY = {
++    "status_codes": [429, 503],
++    "initial_delay_seconds": 2.0,
++    "max_delay_seconds": 60.0,
++    "max_wait_seconds": 1_800.0,
++    "jitter_ratio": 0.25,
++}
+ 
+ 
+ def _agent(monkeypatch, tmp_path, config_id: str) -> BenchmarkingAgent:
+@@ -60,7 +67,10 @@ class TestGeminiFlashHighProfiles:
+             "api": "interactions",
+             "state": "manual_rolling",
+         }
+-        assert config["client"] == {"api_key_env": "GOOGLE_API_KEY"}
++        assert config["client"] == {
++            "api_key_env": "GOOGLE_API_KEY",
++            "transport_retry": TRANSPORT_RETRY,
++        }
+         assert config["request"] == HIGH_REQUEST
+         assert config["pricing"] == {"input": 0.75, "output": 3.75}
+ 
+@@ -69,6 +79,8 @@ class TestGeminiFlashHighProfiles:
+         expected = deepcopy(get_model_config(LOW_PROVIDER_ADAPTER))
+         expected["id"] = PROVIDER_ADAPTER
+         expected["request"]["generation_config"]["thinking_level"] = "high"
++        # Transport-level backoff only; it does not change any request body.
++        expected["client"]["transport_retry"] = TRANSPORT_RETRY
+ 
+         assert config == expected
+         assert config["request"] == HIGH_REQUEST
+diff --git a/tests/unit/test_transport_retry.py b/tests/unit/test_transport_retry.py
+new file mode 100644
+index 0000000..91e58c0
+--- /dev/null
++++ b/tests/unit/test_transport_retry.py
+@@ -0,0 +1,516 @@
++"""HTTP-level backoff on throttled responses (client.transport_retry)."""
++
++import json
++from copy import deepcopy
++from types import SimpleNamespace
++
++import httpx
++import numpy as np
++import pytest
++import yaml
++from arcengine import FrameDataRaw, GameAction, GameState
++
++import benchmarking.model_config as model_config
++from benchmarking import runtime_clients
++from benchmarking.agent import BenchmarkingAgent
++from benchmarking.base import ExitReason
++from benchmarking.compaction import SUMMARY_SYSTEM_PROMPT
++from benchmarking.model_config import get_model_config
++from benchmarking.runtime_transport import (
++    ThrottleBackoffTransport,
++    TransportRetryPolicy,
++    default_http_transport,
++)
++
++pytestmark = [
++    pytest.mark.unit,
++    pytest.mark.filterwarnings("ignore:Interactions usage is experimental"),
++]
++
++STANDARD = "google-gemini-3-8-flash-high"
++PROVIDER_ADAPTER = "google-gemini-3-8-flash-high-provider-adapter"
++NO_SDK_RETRY = {"x-should-retry": "false"}
++
++
++class _Clock:
++    def __init__(self) -> None:
++        self.now = 0.0
++        self.sleeps: list[float] = []
++
++    def monotonic(self) -> float:
++        return self.now
++
++    def wall(self) -> float:
++        return 1_000_000.0 + self.now
++
++    def sleep(self, seconds: float) -> None:
++        self.sleeps.append(seconds)
++        self.now += seconds
++
++
++class _Script:
++    """Answers with the scripted statuses, then with ``final`` forever."""
++
++    def __init__(self, statuses: list[int], final: int = 200, headers=None) -> None:
++        self.statuses = list(statuses)
++        self.final = final
++        self.headers = headers or {}
++        self.requests: list[httpx.Request] = []
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        self.requests.append(request)
++        status = self.statuses.pop(0) if self.statuses else self.final
++        return httpx.Response(status, headers=self.headers, json={"status": status})
++
++
++def _transport(script, clock, **policy) -> ThrottleBackoffTransport:
++    return ThrottleBackoffTransport(
++        httpx.MockTransport(script),
++        TransportRetryPolicy(**{"jitter_ratio": 0.0, **policy}),
++        sleep=clock.sleep,
++        clock=clock.monotonic,
++        wall_clock=clock.wall,
++    )
++
++
++def _send(transport, body: bytes = b'{"q": 1}') -> httpx.Response:
++    with httpx.Client(transport=transport) as client:
++        return client.post("https://provider.test/v1/call", content=body)
++
++
++# ── Transport ──────────────────────────────────────────────────────────
++
++
++class TestThrottleBackoffTransport:
++    def test_retries_429_and_503_then_returns_the_success(self):
++        clock, script = _Clock(), _Script([429, 503])
++        transport = _transport(script, clock)
++
++        response = _send(transport)
++
++        assert response.status_code == 200
++        assert len(script.requests) == 3
++        assert clock.sleeps == [2.0, 4.0]
++        assert transport.stats.throttled_responses == 2
++        assert transport.stats.retries == 2
++        assert transport.stats.wait_seconds == 6.0
++        assert transport.stats.passed_through == 0
++
++    def test_delay_doubles_up_to_the_maximum(self):
++        clock, script = _Clock(), _Script([429] * 6)
++
++        _send(_transport(script, clock, initial_delay_seconds=2, max_delay_seconds=10))
++
++        assert clock.sleeps == [2, 4, 8, 10, 10, 10]
++
++    def test_jitter_only_shortens_the_delay(self):
++        clock, script = _Clock(), _Script([429])
++        transport = ThrottleBackoffTransport(
++            httpx.MockTransport(script),
++            TransportRetryPolicy(jitter_ratio=0.25),
++            sleep=clock.sleep,
++            clock=clock.monotonic,
++            rng=lambda: 1.0,
++        )
++
++        _send(transport)
++
++        assert clock.sleeps == [1.5]
++
++    def test_retry_after_header_wins_when_longer(self):
++        clock, script = _Clock(), _Script([429], headers={"retry-after": "30"})
++
++        _send(_transport(script, clock))
++
++        assert clock.sleeps == [30.0]
++
++    @pytest.mark.parametrize("status", [400, 404, 500, 502, 504])
++    def test_other_statuses_are_returned_unchanged(self, status):
++        clock, script = _Clock(), _Script([status])
++
++        response = _send(_transport(script, clock))
++
++        assert response.status_code == status
++        assert clock.sleeps == []
++        assert len(script.requests) == 1
++
++    def test_configured_status_codes_replace_the_defaults(self):
++        clock, script = _Clock(), _Script([503, 500])
++
++        response = _send(_transport(script, clock, status_codes=[500]))
++
++        assert response.status_code == 503
++        assert clock.sleeps == []
++
++    def test_request_body_is_resent_unchanged(self):
++        clock, script = _Clock(), _Script([429, 429])
++
++        _send(_transport(script, clock), body=b'{"input": "same"}')
++
++        assert [request.content for request in script.requests] == [
++            b'{"input": "same"}'
++        ] * 3
++
++    def test_episode_budget_bounds_waiting_and_success_resets_it(self):
++        clock, script = _Clock(), _Script([429] * 4 + [200, 429])
++        transport = _transport(script, clock, max_wait_seconds=5)
++
++        first = _send(transport)
++        # A follow-up call in the same throttled episode passes straight through.
++        second = _send(transport)
++        third = _send(transport)
++        fourth = _send(transport)
++
++        assert first.status_code == 429
++        assert clock.sleeps == [2.0, 3.0, 2.0]
++        assert second.status_code == 429
++        assert third.status_code == 200
++        assert fourth.status_code == 200
++        assert transport.stats.passed_through == 2
++        assert transport.stats.longest_episode_seconds == 5.0
++
++    def test_wall_clock_deadline_passes_through_and_is_counted(self):
++        clock, script = _Clock(), _Script([429] * 3)
++        transport = _transport(script, clock)
++        transport._deadline = lambda: clock.wall() + 3
++
++        response = _send(transport)
++
++        assert response.status_code == 429
++        assert clock.sleeps == [2.0]
++        assert transport.stats.deadline_passthroughs == 1
++
++    def test_summary_reports_policy_and_counters(self):
++        clock, script = _Clock(), _Script([503])
++        transport = _transport(script, clock)
++
++        _send(transport)
++
++        summary = transport.summary()
++        assert summary["policy"]["status_codes"] == [429, 503]
++        assert summary["retries"] == 1
++        assert summary["throttled_responses"] == 1
++
++    def test_default_inner_transport_is_plain_https(self):
++        transport = default_http_transport()
++
++        assert isinstance(transport, httpx.HTTPTransport)
++        transport.close()
++
++
++class TestPolicyValidation:
++    @pytest.mark.parametrize(
++        "policy",
++        [
++            {"unknown": 1},
++            {"initial_delay_seconds": 0},
++            {"max_wait_seconds": -1},
++            {"status_codes": []},
++            {"jitter_ratio": 1.5},
++        ],
++    )
++    def test_invalid_policies_fail_config_loading(self, tmp_path, monkeypatch, policy):
++        config = deepcopy(get_model_config(STANDARD))
++        config["client"]["transport_retry"] = policy
++        path = tmp_path / "model_configs.yaml"
++        path.write_text(yaml.safe_dump([config]))
++        monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", path)
++
++        with pytest.raises(ValueError, match="invalid client.transport_retry"):
++            model_config.load_model_configs()
++
++    def test_non_mapping_is_rejected(self, tmp_path, monkeypatch):
++        config = deepcopy(get_model_config(STANDARD))
++        config["client"]["transport_retry"] = True
++        path = tmp_path / "model_configs.yaml"
++        path.write_text(yaml.safe_dump([config]))
++        monkeypatch.setattr(model_config, "MODEL_CONFIG_PATH", path)
++
++        with pytest.raises(ValueError, match="must be a mapping"):
++            model_config.load_model_configs()
++
++
++# ── SDK clients ────────────────────────────────────────────────────────
++
++
++def _interaction(text: str = "ACTION1", total: int = 120) -> dict:
++    return {
++        "id": "interaction-1",
++        "created": "2026-10-01T00:00:00Z",
++        "updated": "2026-10-01T00:00:00Z",
++        "status": "completed",
++        "steps": [
++            {"type": "thought", "signature": "sig", "summary": [{"type": "text", "text": "t"}]},
++            {"type": "model_output", "content": [{"type": "text", "text": text}]},
++        ],
++        "usage": {
++            "total_input_tokens": total - 20,
++            "total_output_tokens": 10,
++            "total_thought_tokens": 10,
++            "total_tokens": total,
++        },
++    }
++
++
++class _ThrottlingProvider:
++    """Answers each logical call after its scripted throttle statuses.
++
++    ``throttled`` maps a 1-based call number to the statuses returned before
++    that call is answered. Throttle responses tell the SDK not to retry, so
++    only the transport under test can retry them.
++    """
++
++    def __init__(self, body, throttled: dict[int, list[int]] | None = None) -> None:
++        self.body = body
++        self.throttled = throttled or {}
++        self.calls = 0
++        self.bodies: list[dict] = []
++        self.hosts: list[str] = []
++        self._queue: list[int] | None = None
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        self.hosts.append(request.url.host)
++        if self._queue is None:
++            self.calls += 1
++            self.bodies.append(json.loads(request.content))
++            self._queue = list(self.throttled.get(self.calls, []))
++        if self._queue:
++            status = self._queue.pop(0)
++            return httpx.Response(status, headers=NO_SDK_RETRY, json={"error": status})
++        self._queue = None
++        body = self.body(self.bodies[-1]) if callable(self.body) else self.body
++        return httpx.Response(200, request=request, json=body)
++
++
++class TestSdkClientsUseTheTransport:
++    def test_google_interactions_requests_go_through_the_transport(self, monkeypatch):
++        monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
++        clock = _Clock()
++        provider = _ThrottlingProvider(_interaction(), throttled={1: [503, 429]})
++        transport = _transport(provider, clock)
++        client = runtime_clients.build_model_runtime_client(
++            runtime_config={"sdk": "google-genai"},
++            client_config={"api_key_env": "GOOGLE_API_KEY"},
++            config_id="google-test",
++            http_transport=transport,
++        )
++
++        response = client.interactions.create(
++            model="gemini-3.8-flash",
++            input=[{"type": "user_input", "content": [{"type": "text", "text": "hi"}]}],
++            store=False,
++        )
++
++        assert response.status == "completed"
++        assert provider.hosts == ["generativelanguage.googleapis.com"] * 3
++        assert transport.stats.retries == 2
++
++    def test_openai_requests_go_through_the_transport(self, monkeypatch):
++        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
++        clock = _Clock()
++        completion = {
++            "id": "c1",
++            "object": "chat.completion",
++            "created": 0,
++            "model": "m",
++            "choices": [
++                {
++                    "index": 0,
++                    "finish_reason": "stop",
++                    "message": {"role": "assistant", "content": "ACTION1"},
++                }
++            ],
++        }
++        provider = _ThrottlingProvider(completion, throttled={1: [429]})
++        transport = _transport(provider, clock)
++        client = runtime_clients.build_model_runtime_client(
++            runtime_config={"sdk": "openai-python"},
++            client_config={
++                "base_url": "https://api.openai.com/v1",
++                "api_key_env": "OPENAI_API_KEY",
++            },
++            config_id="openai-test",
++            http_transport=transport,
++        )
++
++        result = client.chat.completions.create(
++            model="m", messages=[{"role": "user", "content": "hi"}]
++        )
++
++        assert result.choices[0].message.content == "ACTION1"
++        assert provider.hosts == ["api.openai.com"] * 2
++
++    def test_anthropic_requests_go_through_the_transport(self, monkeypatch):
++        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
++        clock = _Clock()
++        message = {
++            "id": "m1",
++            "type": "message",
++            "role": "assistant",
++            "model": "claude-test",
++            "content": [{"type": "text", "text": "ACTION1"}],
++            "stop_reason": "end_turn",
++            "usage": {"input_tokens": 1, "output_tokens": 1},
++        }
++        provider = _ThrottlingProvider(message, throttled={1: [429]})
++        transport = _transport(provider, clock)
++        client = runtime_clients.build_model_runtime_client(
++            runtime_config={"sdk": "anthropic-python"},
++            client_config={"api_key_env": "ANTHROPIC_API_KEY"},
++            config_id="anthropic-test",
++            http_transport=transport,
++        )
++
++        result = client.messages.create(
++            model="claude-test",
++            max_tokens=16,
++            messages=[{"role": "user", "content": "hi"}],
++        )
++
++        assert result.content[0].text == "ACTION1"
++        assert provider.hosts == ["api.anthropic.com"] * 2
++
++
++# ── Agent ──────────────────────────────────────────────────────────────
++
++
++def _raw_frame(value: int) -> FrameDataRaw:
++    raw = FrameDataRaw()
++    raw.game_id = "game-id"
++    raw.frame = [np.array([[value, 0], [0, value]], dtype=np.int8)]
++    raw.state = GameState.NOT_FINISHED
++    raw.levels_completed = 0
++    raw.win_levels = 1
++    raw.action_input = None
++    raw.guid = "guid-1"
++    raw.full_reset = False
++    raw.available_actions = [GameAction.ACTION1.value]
++    return raw
++
++
++class _Game:
++    def __init__(self) -> None:
++        self.info = SimpleNamespace(baseline_actions=[])
++        self.observation_space = _raw_frame(1)
++        self.actions: list[GameAction] = []
++
++    def step(self, action: GameAction, *, data: dict, reasoning: dict) -> FrameDataRaw:
++        self.actions.append(action)
++        self.observation_space = _raw_frame(len(self.actions) + 1)
++        return self.observation_space
++
++
++def _agent(monkeypatch, tmp_path, config, provider, clock) -> BenchmarkingAgent:
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
++    monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    monkeypatch.setattr(
++        "benchmarking.agent.default_http_transport",
++        lambda: httpx.MockTransport(provider),
++    )
++    agent = BenchmarkingAgent(
++        card_id="card-id",
++        game_id="game-id",
++        agent_name="agent-name",
++        ROOT_URL="https://arcprize.org",
++        record=False,
++        arc_env=_Game(),
++        config=config["id"],
++    )
++    agent._transport_retry._sleep = clock.sleep
++    agent._transport_retry._clock = clock.monotonic
++    agent._transport_retry._rng = lambda: 0.0
++    return agent
++
++
++def _action_body(request: dict) -> dict:
++    if request.get("system_instruction") == SUMMARY_SYSTEM_PROMPT:
++        return _interaction("summary", total=500)
++    turn = sum(
++        1 for item in request["input"] if item["type"] == "user_input"
++    )
++    return _interaction("ACTION1", total=180_000 if turn == 2 else 120)
++
++
++class TestAgentTransportRetry:
++    def test_throttling_does_not_spend_model_retries(self, monkeypatch, tmp_path):
++        config = deepcopy(get_model_config(STANDARD))
++        config["agent"]["MAX_RETRIES"] = 0
++        clock = _Clock()
++        provider = _ThrottlingProvider(_interaction(), throttled={1: [429, 503, 429]})
++        agent = _agent(monkeypatch, tmp_path, config, provider, clock)
++        agent._level_action_budgets = [2]
++
++        agent.main()
++
++        step = json.loads((tmp_path / agent.run_dir / "step_001.json").read_text())
++        assert step["retries"] == 0
++        assert clock.sleeps == [2.0, 4.0, 8.0]
++        meta = json.loads((tmp_path / agent.run_dir / "run_meta.json").read_text())
++        assert meta["exit_reason"] == ExitReason.ACTION_BUDGET.value
++        assert meta["transport_retry"]["retries"] == 3
++        assert meta["transport_retry"]["throttled_responses"] == 3
++        assert meta["transport_retry"]["policy"]["max_wait_seconds"] == 1_800.0
++
++    def test_summary_requests_are_retried_too(self, monkeypatch, tmp_path):
++        config = deepcopy(get_model_config(PROVIDER_ADAPTER))
++        clock = _Clock()
++        # Call 3 is the harness summary request after turn 2's 180k usage.
++        provider = _ThrottlingProvider(_action_body, throttled={3: [503]})
++        agent = _agent(monkeypatch, tmp_path, config, provider, clock)
++        agent._level_action_budgets = [3]
++
++        agent.main()
++
++        assert provider.bodies[2]["system_instruction"] == SUMMARY_SYSTEM_PROMPT
++        compaction = json.loads(
++            (tmp_path / agent.run_dir / "compaction_001.json").read_text()
++        )
++        assert compaction["attempts"] == 1
++        assert agent._transport_retry.stats.retries == 1
++
++    def test_deadline_during_throttling_ends_as_time_budget(self, monkeypatch, tmp_path):
++        config = deepcopy(get_model_config(STANDARD))
++        config["agent"]["MAX_RETRIES"] = 0
++        config["agent"]["MAX_RUNTIME_SECONDS"] = 60
++        clock = _Clock()
++        provider = _ThrottlingProvider(_interaction(), throttled={1: [429] * 100})
++        agent = _agent(monkeypatch, tmp_path, config, provider, clock)
++        agent._transport_retry.policy = TransportRetryPolicy(
++            initial_delay_seconds=120, jitter_ratio=0
++        )
++        agent._level_action_budgets = [2]
++
++        with pytest.raises(RuntimeError, match="Failed to get a valid action"):
++            agent.main()
++
++        assert clock.sleeps == []
++        meta = json.loads((tmp_path / agent.run_dir / "run_meta.json").read_text())
++        assert meta["exit_reason"] == ExitReason.TIME_BUDGET.value
++        assert meta["transport_retry"]["deadline_passthroughs"] == 1
++
++    def test_unconfigured_profiles_build_the_default_client(self, monkeypatch, tmp_path):
++        config = deepcopy(get_model_config(STANDARD))
++        del config["client"]["transport_retry"]
++        calls: list[dict] = []
++        monkeypatch.chdir(tmp_path)
++        monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++        monkeypatch.setattr(
++            "benchmarking.agent.build_model_runtime_client",
++            lambda **kwargs: calls.append(kwargs) or object(),
++        )
++
++        agent = BenchmarkingAgent(
++            card_id="card-id",
++            game_id="game-id",
++            agent_name="agent-name",
++            ROOT_URL="https://arcprize.org",
++            record=False,
++            arc_env=_Game(),
++            config=config["id"],
++        )
++
++        assert agent._transport_retry is None
++        assert "http_transport" not in calls[0]
++        meta = json.loads((tmp_path / agent.run_dir / "run_meta.json").read_text())
++        assert "transport_retry" not in meta
+-- 
+2.54.0.windows.1
+

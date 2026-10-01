@@ -1,0 +1,488 @@
+From ef433150315726c8accd5155c0562719d0fabd95 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 12:38:45 -0400
+Subject: [PATCH 16/16] Never drop oldest turns when manual_rolling summarizes
+
+With harness summary compaction configured, manual_rolling still ran
+_trim_to_fit_context before every action request, so the oldest
+user/assistant pair was dropped whenever the transcript's character
+estimate passed MAX_CONTEXT_LENGTH. With MAX_CONTEXT_LENGTH at the
+provider's context capacity this was meant as a backstop, but it fired
+before the summary trigger whenever the provider reported no usage, or
+fewer tokens per character than trigger_tokens / MAX_CONTEXT_LENGTH
+(about 0.17 for the Gemini profiles). A rolling-summary run could then
+lose history under two policies, while continuous_conversation never
+trims locally.
+
+_request_with_retries now skips _trim_to_fit_context when a rolling
+summary adapter is configured. History is lost only by summarizing: at
+the usage trigger, or when the provider rejects an action request as too
+long (once per action request; a second overflow fails the run), as in
+continuous_conversation. manual_rolling without compaction still trims.
+run_meta.json keeps runtime.context_trims, which now stays 0.
+
+Tests: the rolling-summary profiles keep every turn with usage
+unreported, at about 0.03-0.1 provider tokens per character, and with a
+tiny chars-per-token estimate, including past the checked-in profiles'
+1,048,576-character limit; the Standard profile still drops its oldest
+turns in the same runs; and without usage only a provider overflow
+compacts, with notes-off equal to the Provider Adapter without thought
+steps.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ benchmarking/agent.py                        |  21 ++-
+ benchmarking/model_configs.yaml              |   5 +-
+ docs/runtime-state.md                        |  10 +-
+ tests/unit/test_gemini_path_payloads.py      | 160 ++++++++++++++++++-
+ tests/unit/test_manual_rolling_compaction.py | 142 +++++++++++++++-
+ 5 files changed, 315 insertions(+), 23 deletions(-)
+
+diff --git a/benchmarking/agent.py b/benchmarking/agent.py
+index 5eb25ff..10a0e35 100644
+--- a/benchmarking/agent.py
++++ b/benchmarking/agent.py
+@@ -81,7 +81,8 @@ class BenchmarkingAgent(Agent):
+     message (reasoning + chosen action). On context overflow, the oldest
+     turns are trimmed from the front of the conversation, unless the config
+     selects harness summary compaction, which replaces the transcript with a
+-    model-written summary once provider usage reaches its trigger.
++    model-written summary once provider usage reaches its trigger or the
++    provider rejects a request as too long; no turn is then trimmed.
+     """
+ 
+     MODEL_CONFIG_ID: str = ""
+@@ -292,8 +293,9 @@ class BenchmarkingAgent(Agent):
+                     "context_limit_tokens": self.MAX_CONTEXT_LENGTH,
+                 },
+                 "compaction_count": 0,
+-                # Oldest-turn drops by _trim_to_fit_context; summary compaction
+-                # replaces that loss policy, so this should stay 0.
++                # Oldest-turn drops. Summary compaction replaces that loss
++                # policy and _trim_to_fit_context is never called, so this
++                # stays 0; a non-zero value means the trim came back.
+                 "context_trims": 0,
+             }
+         self.run_record = RunRecord(
+@@ -1154,7 +1156,7 @@ class BenchmarkingAgent(Agent):
+                 runtime["context_trims"] += 1
+                 logger.warning(
+                     "Dropped the oldest turn although summary compaction is "
+-                    "configured; raise MAX_CONTEXT_LENGTH if this repeats."
++                    "configured; summarizing should be the only loss policy."
+                 )
+             estimated = self._estimate_conversation_tokens()
+             logger.info(
+@@ -1185,8 +1187,15 @@ class BenchmarkingAgent(Agent):
+         while attempt < max_attempts:
+             try:
+                 # Server-managed state compacts on OpenAI's side; the docs say not
+-                # to manually prune when chaining via previous_response_id.
+-                if not hasattr(self, "_stateful_adapter") and not self._server_state:
++                # to manually prune when chaining via previous_response_id. With
++                # harness summary compaction, manual_rolling loses history only
++                # by summarizing, as continuous conversation does: at the usage
++                # trigger, or when the provider rejects a request as too long.
++                if (
++                    not hasattr(self, "_stateful_adapter")
++                    and not self._server_state
++                    and getattr(self, "_rolling_summary_adapter", None) is None
++                ):
+                     self._trim_to_fit_context()
+                 if hasattr(self, "_stateful_adapter"):
+                     turn_request = ModelTurnRequest(
+diff --git a/benchmarking/model_configs.yaml b/benchmarking/model_configs.yaml
+index ce98220..9dd6631 100644
+--- a/benchmarking/model_configs.yaml
++++ b/benchmarking/model_configs.yaml
+@@ -327,8 +327,9 @@
+ 
+ # google-gemini-3-8-flash-high with the Provider Adapter's loss policy: the
+ # visible-text transcript is replaced by a harness summary when provider usage
+-# reaches 175k tokens. MAX_CONTEXT_LENGTH is the model's input capacity, as in
+-# the Provider Adapter profile, so oldest-turn trimming stays a backstop only.
++# reaches 175k tokens or the provider rejects a request as too long. Oldest
++# turns are never dropped. MAX_CONTEXT_LENGTH is the model's input capacity,
++# as in the Provider Adapter profile.
+ - id: "google-gemini-3-8-flash-high-rolling-summary"
+   agent:
+     MAX_ACTIONS_BASELINE_MULTIPLIER: 5.0
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index 98b39bd..d42062f 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -302,10 +302,12 @@ buffered observations, such as the GAME_OVER frame before a forced RESET, are
+ summarized like buffered inputs in the Google adapter. After compaction the
+ transcript is the system prompt, the user-role bridge, and any unwound turns.
+ Context overflow recovery works as above, with the current observation kept
+-pending. The estimated-token limit `agent.MAX_CONTEXT_LENGTH` still drops the
+-oldest turns as a backstop, so set it to the provider's context capacity.
+-Run metadata then records `state_strategy`, the compaction policy,
+-`compaction_count`, and `context_trims`, the number of oldest-turn drops.
++pending. As in continuous conversation, no turn is dropped to fit the
++estimated-token limit `agent.MAX_CONTEXT_LENGTH`, whatever usage the provider
++reports or omits; the limit still records the provider's context capacity.
++History is lost only by summarizing. Run metadata then records
++`state_strategy`, the compaction policy, `compaction_count`, and
++`context_trims`, the number of oldest-turn drops, which stays 0.
+ 
+ Each harness compaction is written to `compaction_NNN.json` with its summary,
+ trigger, item counts, attempts, overflow recoveries, excluded-turn counts, and
+diff --git a/tests/unit/test_gemini_path_payloads.py b/tests/unit/test_gemini_path_payloads.py
+index 8b1a29f..c928e72 100644
+--- a/tests/unit/test_gemini_path_payloads.py
++++ b/tests/unit/test_gemini_path_payloads.py
+@@ -941,6 +941,29 @@ class _UnparseableOnceServer(_InteractionsServer):
+         return super().__call__(request)
+ 
+ 
++def _without_usage(response: httpx.Response) -> httpx.Response:
++    """The same response without its usage block, as if none was reported."""
++    if response.status_code != 200:
++        return response
++    payload = json.loads(response.content)
++    del payload["usage"]
++    return httpx.Response(200, request=response.request, json=payload)
++
++
++class _NoUsageServer(_InteractionsServer):
++    """Reports no usage on any response."""
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        return _without_usage(super().__call__(request))
++
++
++class _NoUsageOverflowServer(_OverflowServer):
++    """_OverflowServer that reports no usage on accepted responses."""
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        return _without_usage(super().__call__(request))
++
++
+ def _assert_notes_off_equals_adapter_without_thoughts(
+     notes_off: list[dict], adapter: list[dict]
+ ) -> None:
+@@ -1006,19 +1029,21 @@ class TestPathParity:
+         assert notes_off[6]["input"][0] == _user(_bridge("summary of play 2"))
+         _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
+ 
++    @pytest.mark.parametrize("server_cls", [_OverflowServer, _NoUsageOverflowServer])
+     def test_notes_off_equals_provider_adapter_through_overflow_recovery(
+-        self, monkeypatch, tmp_path
++        self, monkeypatch, tmp_path, server_cls
+     ):
+         # The third action request is rejected as too long. Both harnesses
+         # summarize the accepted history without the current observation,
+-        # then resend that observation after the bridge.
++        # then resend that observation after the bridge. Without reported
++        # usage this overflow is the only thing that compacts either one.
+         def _run(config_id: str, path: str) -> list[dict]:
+             bodies, _ = _play(
+                 monkeypatch,
+                 tmp_path / path,
+                 _config(config_id),
+                 actions=4,
+-                server=_OverflowServer({3}),
++                server=server_cls({3}),
+             )
+             return bodies
+ 
+@@ -1063,3 +1088,132 @@ class TestPathParity:
+         assert all("still thinking" not in json.dumps(body) for body in notes_off)
+         assert all("opaque-unparseable" not in json.dumps(body) for body in adapter)
+         _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
++
++
++# ── No oldest-turn trimming with summary compaction ────────────────────
++
++
++class _FewTokensPerCharServer(_OneTokenPerCharServer):
++    """Reports about one provider token per ten characters of request text."""
++
++    def tokens_for(self, body: dict, turn: int) -> int:
++        return super().tokens_for(body, turn) // 10 + 20
++
++
++class _HugeGame(_BigGame):
++    """Seven 64x64 animation frames: one observation is about 87.5k characters."""
++
++    def _frame(self) -> FrameDataRaw:
++        raw = super()._frame()
++        raw.frame = raw.frame * 7
++        return raw
++
++
++def _chars(body: dict) -> int:
++    """Characters of request text, as the harness estimates context size."""
++    return len(body["system_instruction"]) + sum(
++        len(part["text"]) for item in body["input"] for part in item["content"]
++    )
++
++
++def _full_history(system: str, turns: int) -> list[dict]:
++    """Action requests 1..turns of an untrimmed, uncompacted run."""
++    bodies = []
++    for turn in range(1, turns + 1):
++        inputs = []
++        for earlier in range(1, turn):
++            inputs += [_user(OBS[earlier]), _text_turn(_note(earlier))]
++        bodies.append(_body(system, [*inputs, _user(OBS[turn])]))
++    return bodies
++
++
++class TestNoTrimWithSummaryCompaction:
++    """S1 and S2 lose history only by summarizing, as S4 does; S0 still trims."""
++
++    @pytest.mark.parametrize("server_cls", [_NoUsageServer, _FewTokensPerCharServer])
++    def test_only_standard_drops_turns_above_max_context_length(
++        self, monkeypatch, tmp_path, server_cls
++    ):
++        # Each limit leaves room for the system prompt and the newest two
++        # observations only, so the third request is over it. Usage is
++        # unreported, or far below the summary trigger.
++        def _limit(system: str) -> int:
++            return sum(len(text) for text in (system, OBS[2], _note(2), OBS[3]))
++
++        standard, _ = _play(
++            monkeypatch,
++            tmp_path / "s0",
++            _config(STANDARD),
++            actions=3,
++            server=server_cls(),
++            max_context_length=_limit(NOTES_PROMPT),
++        )
++        assert standard[2] == _body(
++            NOTES_PROMPT, [_user(OBS[2]), _text_turn(_note(2)), _user(OBS[3])]
++        )
++
++        for path, config_id, system in (
++            ("s1", ROLLING_SUMMARY, NOTES_PROMPT),
++            ("s2", NOTES_OFF, NO_NOTES_PROMPT),
++        ):
++            server = server_cls()
++            bodies, agent = _play(
++                monkeypatch,
++                tmp_path / path,
++                _config(config_id),
++                actions=3,
++                server=server,
++                max_context_length=_limit(system),
++            )
++
++            assert bodies == _full_history(system, 3)
++            assert _chars(bodies[2]) > _limit(system)
++            assert server.summaries == 0
++            meta = json.loads((tmp_path / path / agent.run_dir / "run_meta.json").read_text())
++            assert meta["runtime"]["context_trims"] == 0
++
++    @pytest.mark.parametrize(
++        ("config_id", "server_cls"),
++        [(ROLLING_SUMMARY, _NoUsageServer), (NOTES_OFF, _FewTokensPerCharServer)],
++    )
++    def test_checked_in_profiles_send_more_than_max_context_length_untrimmed(
++        self, monkeypatch, tmp_path, config_id, server_cls
++    ):
++        # About 87.5k characters per observation: from the 12th request on,
++        # the history is over the profile's MAX_CONTEXT_LENGTH (1,048,576) at
++        # the harness's estimate of one character per token, while reported
++        # usage stays below the 175k trigger (none, or about 0.1 tokens per
++        # character).
++        actions = 13
++        server = server_cls()
++        bodies, agent = _play(
++            monkeypatch,
++            tmp_path / "rolling",
++            _config(config_id),
++            actions=actions,
++            server=server,
++            game=_HugeGame(),
++        )
++        standard, _ = _play(
++            monkeypatch,
++            tmp_path / "s0",
++            _config(STANDARD),
++            actions=4,
++            server=server_cls(),
++            game=_HugeGame(),
++        )
++
++        assert agent.MAX_CONTEXT_LENGTH == 1_048_576
++        assert _chars(bodies[-1]) > agent.MAX_CONTEXT_LENGTH
++        assert server.summaries == 0
++        assert len(bodies) == actions
++        for turn, body in enumerate(bodies, start=1):
++            assert body["input"][0] == bodies[0]["input"][0]
++            assert body["input"][1::2] == [_text_turn(_note(n)) for n in range(1, turn)]
++            assert len(body["input"]) == 2 * turn - 1
++        meta = json.loads(
++            (tmp_path / "rolling" / agent.run_dir / "run_meta.json").read_text()
++        )
++        assert meta["runtime"]["context_trims"] == 0
++        # Standard drops its first observation once over 175,000 characters.
++        assert standard[-1]["input"][0] != standard[0]["input"][0]
+diff --git a/tests/unit/test_manual_rolling_compaction.py b/tests/unit/test_manual_rolling_compaction.py
+index 618ac34..3374567 100644
+--- a/tests/unit/test_manual_rolling_compaction.py
++++ b/tests/unit/test_manual_rolling_compaction.py
+@@ -184,6 +184,59 @@ def _read(agent: BenchmarkingAgent, name: str) -> dict:
+     return json.loads((Path(agent.run_dir) / name).read_text())
+ 
+ 
++# ── Oldest-turn trimming ───────────────────────────────────────────────
++
++# Room for the system prompt and the newest two observations only: the third
++# request's history is over this many characters, the second's is not.
++TWO_TURN_LIMIT = len(SYSTEM) + len(_obs(2)) + len("note 2: ACTION1") + len(_obs(3))
++# Ways the character estimate can pass MAX_CONTEXT_LENGTH long before provider
++# usage reaches the summary trigger.
++TRIM_CASES = ["usage-unreported", "few-tokens-per-char", "tiny-chars-per-token-estimate"]
++
++
++class _NoUsageAdapter(_ScriptedAdapter):
++    """Reports no usage on any call."""
++
++    def invoke(self, request: ModelRequest) -> ModelResponse:
++        response = super().invoke(request)
++        return response.model_copy(update={"usage": NormalizedUsage()})
++
++
++def _trim_case_adapter(case: str) -> _ScriptedAdapter:
++    if case == "usage-unreported":
++        return _NoUsageAdapter()
++    if case == "few-tokens-per-char":
++        # About 0.03 provider tokens per character of the third request.
++        return _ScriptedAdapter(total_tokens={turn: 10 for turn in range(1, 5)})
++    return _ScriptedAdapter()
++
++
++def _trim_case_agent(
++    monkeypatch, tmp_path, config, adapter, case, *, actions: int = 3
++) -> BenchmarkingAgent:
++    agent = _agent(monkeypatch, tmp_path, config, adapter, _Game())
++    agent._level_action_budgets = [actions]
++    if case == "tiny-chars-per-token-estimate":
++        # 1,000 estimated tokens per character; the limit stays at 100,000.
++        agent.ESTIMATED_CHARS_PER_TOKEN = 0.001
++    else:
++        agent.MAX_CONTEXT_LENGTH = TWO_TURN_LIMIT
++    return agent
++
++
++def _spy_on_trims(agent: BenchmarkingAgent) -> list[int]:
++    """Record the transcript length at every _trim_to_fit_context call."""
++    calls: list[int] = []
++    trim = agent._trim_to_fit_context
++
++    def _spy() -> None:
++        calls.append(len(agent.conversation))
++        trim()
++
++    agent._trim_to_fit_context = _spy  # type: ignore[method-assign]
++    return calls
++
++
+ # ── Adapter ────────────────────────────────────────────────────────────
+ 
+ 
+@@ -434,17 +487,90 @@ class TestAgentWithRollingSummary:
+         assert adapter.summaries == 1
+         assert _read(agent, "run_meta.json")["exit_reason"] == ExitReason.AGENT_ERROR.value
+ 
+-    def test_drop_oldest_is_counted_if_it_ever_fires(self, monkeypatch, tmp_path):
+-        adapter = _ScriptedAdapter()
+-        limit = len(SYSTEM) + len(_obs(2)) + len("note 2: ACTION1") + len(_obs(3))
++    @pytest.mark.parametrize("case", TRIM_CASES)
++    def test_oldest_turn_is_never_dropped(self, monkeypatch, tmp_path, case):
++        # Each case puts the character estimate above MAX_CONTEXT_LENGTH by
++        # the third request while provider usage stays below the trigger.
++        adapter = _trim_case_adapter(case)
++        agent = _trim_case_agent(monkeypatch, tmp_path, _config(), adapter, case)
++        trims = _spy_on_trims(agent)
++
++        agent.main()
++
++        assert trims == []
++        assert _messages(adapter.requests[2]) == [
++            ("system", SYSTEM),
++            ("user", _obs(1)),
++            ("assistant", "note 1: ACTION1"),
++            ("user", _obs(2)),
++            ("assistant", "note 2: ACTION1"),
++            ("user", _obs(3)),
++        ]
++        assert agent._estimate_conversation_tokens() > agent.MAX_CONTEXT_LENGTH
++        assert adapter.summaries == 0
++        assert _read(agent, "run_meta.json")["runtime"]["context_trims"] == 0
++
++    @pytest.mark.parametrize(
++        ("case", "third_request"),
++        [
++            ("usage-unreported", [_obs(2), "note 2: ACTION1", _obs(3)]),
++            ("few-tokens-per-char", [_obs(2), "note 2: ACTION1", _obs(3)]),
++            ("tiny-chars-per-token-estimate", [_obs(3)]),
++        ],
++    )
++    def test_without_compaction_the_oldest_turn_is_still_dropped(
++        self, monkeypatch, tmp_path, case, third_request
++    ):
++        config = _config()
++        del config["runtime"]["compaction"]
++        adapter = _trim_case_adapter(case)
++        agent = _trim_case_agent(monkeypatch, tmp_path, config, adapter, case)
++        trims = _spy_on_trims(agent)
++
++        agent.main()
++
++        assert len(trims) == 3
++        assert [text for _, text in _messages(adapter.requests[2])] == [
++            SYSTEM,
++            *third_request,
++        ]
++        assert "runtime" not in _read(agent, "run_meta.json")
++
++    def test_without_usage_only_a_provider_overflow_compacts(self, monkeypatch, tmp_path):
++        # No usage is reported, so the trigger never fires and the transcript
++        # grows past MAX_CONTEXT_LENGTH until the provider rejects request 3.
++        adapter = _NoUsageAdapter(overflow_calls={3})
++        agent = _trim_case_agent(
++            monkeypatch, tmp_path, _config(), adapter, "usage-unreported", actions=4
++        )
++        trims = _spy_on_trims(agent)
+ 
+-        agent = _agent(monkeypatch, tmp_path, _config(), adapter, _Game())
+-        agent._level_action_budgets = [3]
+-        agent.MAX_CONTEXT_LENGTH = limit
+         agent.main()
+ 
+-        assert _messages(adapter.requests[2])[1] == ("user", _obs(2))
+-        assert _read(agent, "run_meta.json")["runtime"]["context_trims"] == 1
++        assert trims == []
++        rejected, summary, retry, turn4 = adapter.requests[2:]
++        assert _messages(rejected)[1] == ("user", _obs(1))
++        assert _messages(summary) == [
++            ("system", SUMMARY_SYSTEM_PROMPT),
++            ("user", _obs(1)),
++            ("assistant", "note 1: ACTION1"),
++            ("user", _obs(2)),
++            ("assistant", "note 2: ACTION1"),
++            ("user", SUMMARY_REQUEST_PROMPT),
++        ]
++        bridge = build_summary_bridge("summary 1")
++        assert _messages(retry) == [("system", SYSTEM), ("user", bridge), ("user", _obs(3))]
++        assert _messages(turn4) == [
++            ("system", SYSTEM),
++            ("user", bridge),
++            ("user", _obs(3)),
++            ("assistant", "note 3: ACTION1"),
++            ("user", _obs(4)),
++        ]
++        assert _read(agent, "compaction_001.json")["trigger_tokens"] == TWO_TURN_LIMIT
++        runtime = _read(agent, "run_meta.json")["runtime"]
++        assert runtime["compaction_count"] == 1
++        assert runtime["context_trims"] == 0
+ 
+     def test_without_compaction_manual_rolling_is_unchanged(self, monkeypatch, tmp_path):
+         config = _config()
+-- 
+2.54.0.windows.1
+

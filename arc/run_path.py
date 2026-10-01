@@ -8,12 +8,15 @@ online through ARC's scorecard. One invocation is one run.
         --experiment gemini_probe --acceptance-check --planned-usd 1
 
 It spends money only after every check below passes, in this order:
-1. The arguments make sense (`make_plan`): a known profile (S0, S1, S2, S4), a path game
-   (FT09, SB26, R11L, CD82; never a held-out game), truncation only for the pilot, the
-   experiment's mode, the price table valid today, the frozen profile asks for the standard
-   tier, and GOOGLE_API_KEY (plus ARC_API_KEY for a game) is set. Keys are never printed.
+1. The arguments make sense (`make_plan`): a plain block name, a known profile (S0, S1, S2,
+   S4), a path game (FT09, SB26, R11L, CD82; never a held-out game), truncation only for
+   the pilot, the experiment's mode, the price table valid today, the frozen profile asks
+   for the standard tier, and GOOGLE_API_KEY (plus ARC_API_KEY for a game) is set. Keys
+   are never printed.
 2. No other paid run holds the lock (`common.paidlock`): one paid run at a time. The lock
-   is taken before the spend checks, so two runs cannot both pass them.
+   is taken before the spend checks, so two runs cannot both pass them. A run that could
+   not write its costs row leaves the lock held, and the last paid run's costs row must be
+   in this checkout's results/costs.csv (each checkout has its own ledger).
 3. The paid guard (`common.approval.require_paid_approval`): PERSISTGYM_ALLOW_PAID=1, the
    researcher's line `approved_block: <name> | experiments: <list> | max_usd: <n>` on
    origin/main (fetched now), HEAD and the working tree, the experiment listed, block spend
@@ -186,6 +189,12 @@ def make_plan(args: argparse.Namespace, record: Mapping[str, Any], *,
     today = today or datetime.now(UTC).date()
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     exp = args.experiment
+    # Exactly a block name: the guard strips whitespace before it looks up the approval,
+    # but the costs row is tagged with this string, so " 1-pilots" would pass the guard
+    # and then be missing from the block's spend.
+    if not approval.NAME_RE.fullmatch(args.approved_block):
+        raise Refused(f"--approved-block {args.approved_block!r} is not a block name "
+                      "([A-Za-z0-9._-]+, no spaces)")
     if not (math.isfinite(args.planned_usd) and args.planned_usd > 0):
         raise Refused("--planned-usd must be a positive, finite number of dollars")
     truncating = args.max_actions is not None or args.after_summary_turns is not None
@@ -310,7 +319,14 @@ def prereg_not_frozen(repo: Path, remote: RemoteRef = MAIN) -> str | None:
     return None if state.frozen else f"PREREG.md is not frozen: {state.why_not}"
 
 
-def check_paid(plan: Plan, paths: Paths) -> approval.PaidApproval:
+def check_paid(plan: Plan, paths: Paths, lock: Path) -> approval.PaidApproval:
+    try:
+        rows = costs.read_rows(paths.costs)
+    except (OSError, ValueError) as e:
+        raise PaidCallsNotAllowed(f"cannot read {paths.costs}: {e}") from None
+    reason = paidlock.last_run_missing(lock, rows)
+    if reason is not None:
+        raise PaidCallsNotAllowed(reason)
     granted = approval.require_paid_approval(
         approved_block=plan.approved_block, experiment=plan.experiment,
         planned_usd=plan.planned_usd, costs_path=paths.costs, repo=paths.repo,
@@ -417,8 +433,22 @@ def run_inner(command: list[str], cwd: Path, env: Mapping[str, str], *,
         try:
             return proc.wait(timeout=grace_s)
         except subprocess.TimeoutExpired:
-            proc.kill()
-            return proc.wait()
+            return kill_tree(proc)
+        except BaseException:  # a second Ctrl+C: stop the run before accounting for it
+            kill_tree(proc)
+            raise
+
+
+def kill_tree(proc: subprocess.Popen) -> int:
+    """Kill the inner process and everything it started. The inner process is `uv run`,
+    which starts python as a child; on Windows, killing uv alone leaves that python running
+    (checked 2026-10-01), and it would go on spending after the launcher has accounted for
+    the run and released the lock. `taskkill /T` ends the whole tree."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True,
+                       check=False)
+    proc.kill()
+    return proc.wait()
 
 
 # ── Accounting ─────────────────────────────────────────────────────────
@@ -674,7 +704,7 @@ def _rel(path: Path) -> str:
 
 
 def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths: Paths,
-            record: Mapping[str, Any]) -> int:
+            record: Mapping[str, Any], *, lock: Path, held: dict) -> int:
     raw_dir = paths.raw / plan.experiment / plan.run_id
     out_dir = paths.results / plan.experiment / plan.run_id
     price = pricing.price_for(plan.model, pricing.TIER)
@@ -685,20 +715,31 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
         command = inner_command(plan, harness, scratch / "out")
         code = run_inner(command, scratch, inner_env(plan, harness, scratch))
     finally:
+        row = None
         try:
             collect_outputs(scratch, raw_dir)
             account = account_acceptance if plan.acceptance else account_game
             acct = account(plan, raw_dir, price)
-        except Exception:
-            print(f"ERROR: could not account for run {plan.run_id}. Its harness files are "
-                  f"in {scratch} and {raw_dir}; add its results/costs.csv row by hand "
-                  f"(tagged {approval.spend_tag(plan.approved_block)}) before any other "
-                  "paid run.", file=sys.stderr)
+            if acct.any_call:
+                candidate = costs_row(plan, acct, git=runmeta.git_state(paths.repo))
+                costs.append_row(candidate, paths.costs)
+                row = candidate
+        except BaseException:
+            # The run may have spent money the ledger does not show: keep the lock so that
+            # no paid run starts until the row is added by hand.
+            why = (f"run {plan.run_id} ({plan.describe()}) may have spent money that "
+                   f"{paths.costs} does not show: add its row by hand (tagged "
+                   f"{approval.spend_tag(plan.approved_block)}; harness files in {scratch} "
+                   f"and {raw_dir}), then delete this lock file")
+            paidlock.keep(lock, held, why)
+            print(f"ERROR: could not account for the run. {why}: {lock}", file=sys.stderr)
             raise
-        row = None
-        if acct.any_call:
-            row = costs_row(plan, acct, git=runmeta.git_state(paths.repo))
-            costs.append_row(row, paths.costs)
+        if row is not None:
+            try:
+                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs)
+            except OSError as e:
+                print(f"warning: could not record the last paid run next to {lock}: {e}",
+                      file=sys.stderr)
         meta = write_meta(plan, acct, harness, granted, out_dir=out_dir, raw_dir=raw_dir,
                           started=started, row=row, record=record)
         committed = [meta]
@@ -751,14 +792,14 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
         return 2
     harness: Harness | None = None
     try:
-        with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe()):
-            granted = check_paid(plan, paths)
+        with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe()) as held:
+            granted = check_paid(plan, paths, lock)
             print(f"approved: block {plan.approved_block!r} ({granted.phase}), planned "
                   f"${plan.planned_usd:.2f}, block headroom after this run "
                   f"${granted.block_headroom_usd:.2f}; harness cost guard "
                   f"${plan.cost_cap_usd:.2f} (list)", flush=True)
             harness = prepare_harness(plan, record)
-            return execute(plan, granted, harness, paths, record)
+            return execute(plan, granted, harness, paths, record, lock=lock, held=held)
     except (Refused, PaidCallsNotAllowed, paidlock.LockHeld, ap.PatchError,
             freeze.FreezeError) as e:
         print(f"refused: {e}", file=sys.stderr)

@@ -10,6 +10,8 @@ import csv
 import json
 import os
 import subprocess
+import sys
+import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -327,6 +329,59 @@ def test_a_different_served_tier_is_flagged(world):
     assert "served tier differs" in row["notes"]
 
 
+def test_a_run_that_cannot_be_accounted_keeps_the_lock(world, capsys):
+    """Spend the ledger does not show must stop the next paid run until it is added."""
+    paths, h = world
+    bad = {**STEP_USAGE, "cached_tokens": STEP_USAGE["prompt_tokens"] + 1}  # unpriceable
+
+    def odd_usage(command, cwd):
+        fake_game(cwd)
+        run = cwd / "recordings" / "ft09.benchmarkingagent.0123"
+        _write(run / "step_002.json", {"step": 2, "usage": bad})
+        return 0
+
+    h.inner = odd_usage
+    with pytest.raises(pricing.PriceError):
+        rp.main(GAME_ARGS, paths=paths)
+
+    assert _rows(paths) == []
+    held = json.loads(paths.lock.read_text(encoding="utf-8"))
+    assert "add its row by hand" in held["kept_because"]
+    assert "could not account" in capsys.readouterr().err
+
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS, paths=paths) == 2
+    assert "add its row by hand" in capsys.readouterr().err
+    assert h.calls.count("inner") == 1
+
+
+def test_the_last_run_must_be_in_this_checkouts_ledger(world, tmp_path, capsys):
+    """The lock is shared by all checkouts, the ledger is not: a run started from another
+    checkout must not miss the spend the last run wrote to this one's costs.csv."""
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    (row,) = _rows(paths)
+
+    other = tmp_path / "other-costs.csv"
+    other.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    elsewhere = rp.Paths(**{**vars(paths), "costs": other})
+    assert rp.main(GAME_ARGS, paths=elsewhere) == 2
+    err = capsys.readouterr().err
+    assert row["run_id"] in err and "not in this checkout" in err
+    assert h.calls.count("inner") == 1
+
+    assert rp.main(GAME_ARGS, paths=paths) == 0      # the ledger that has the row
+    assert h.calls.count("inner") == 2
+
+
+def test_an_unreadable_ledger_refuses(world):
+    paths, h = world
+    paths.costs.write_text("timestamp_utc,run_id\n", encoding="utf-8")
+    assert rp.main(GAME_ARGS, paths=paths) == 2
+    assert "create" not in h.calls and not paths.lock.exists()
+
+
 def test_no_model_call_means_no_costs_row(world):
     paths, h = world
     h.inner = lambda command, cwd: 1
@@ -502,6 +557,11 @@ def test_plan_keeps_a_game_version():
     (["--max-actions", "50"], "never truncated"),
     (["--after-summary-turns", "5"], "never truncated"),
     (["--rerun-of", "../x"], "--rerun-of"),
+    # The guard strips the name, but the costs row is tagged with it as given: a padded
+    # name would pass the guard and then be missing from the block's spend.
+    (["--approved-block", " 1-pilots"], "not a block name"),
+    (["--approved-block", "1-pilots "], "not a block name"),
+    (["--approved-block", "1-pilots;x"], "not a block name"),
 ])
 def test_plan_refuses_counted_runs(change, message):
     argv = list(GAME_ARGS)
@@ -605,12 +665,66 @@ def test_run_inner_lets_the_run_close_its_scorecard_on_ctrl_c(monkeypatch, tmp_p
     assert not proc.killed
 
 
+def _fake_kill_tree(proc):
+    proc.kill()
+    return proc.wait()
+
+
 def test_run_inner_kills_a_run_that_does_not_stop(monkeypatch, tmp_path):
     proc = _Proc([KeyboardInterrupt(), subprocess.TimeoutExpired("x", 1), -9])
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: proc)
+    monkeypatch.setattr(rp, "kill_tree", _fake_kill_tree)
 
     assert rp.run_inner(["x"], tmp_path, {}, grace_s=1) == -9
     assert proc.killed
+
+
+def test_a_second_ctrl_c_kills_the_run_before_it_is_accounted(monkeypatch, tmp_path):
+    proc = _Proc([KeyboardInterrupt(), KeyboardInterrupt(), -9])
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: proc)
+    monkeypatch.setattr(rp, "kill_tree", _fake_kill_tree)
+
+    with pytest.raises(KeyboardInterrupt):
+        rp.run_inner(["x"], tmp_path, {}, grace_s=1)
+    assert proc.killed
+
+
+def _alive(pid: int) -> bool:
+    out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                         capture_output=True, text=True, check=False).stdout
+    return f'"{pid}"' in out
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the uv-leaves-its-child problem is Windows'")
+def test_kill_tree_also_ends_the_process_the_inner_process_started(tmp_path):
+    """The inner process is `uv run`, whose python child survives a kill of uv alone on
+    Windows. Here a python parent stands in for uv."""
+    pid_file = tmp_path / "child.pid"
+    child = (f"import os, time; open(r'{pid_file}', 'w').write(str(os.getpid())); "
+             "time.sleep(60)")
+    parent = (f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', "
+              f"{child!r}]); time.sleep(60)")
+    proc = subprocess.Popen([sys.executable, "-c", parent])
+    try:
+        deadline = time.monotonic() + 30
+        while not (pid_file.exists() and pid_file.read_text()):
+            assert time.monotonic() < deadline, "the child never started"
+            time.sleep(0.1)
+        pid = int(pid_file.read_text())
+        assert _alive(pid)
+
+        rp.kill_tree(proc)
+
+        deadline = time.monotonic() + 10
+        while _alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert not _alive(pid)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        if pid_file.exists() and pid_file.read_text() and _alive(int(pid_file.read_text())):
+            subprocess.run(["taskkill", "/F", "/PID", pid_file.read_text()],
+                           capture_output=True, check=False)
 
 
 def test_inner_env_keeps_only_the_needed_keys(tmp_path):

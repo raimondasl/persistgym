@@ -80,3 +80,37 @@ def test_git_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "run", boom)
     with pytest.raises(paidlock.LockHeld, match="git common directory"):
         paidlock.lock_path(tmp_path)
+
+
+def test_keep_leaves_the_lock_held_with_the_reason(tmp_path):
+    path = tmp_path / paidlock.LOCK_NAME
+    with paidlock.paid_run_lock(path, run_id="run-1", what="x") as info:
+        paidlock.keep(path, info, "run-1 spent money costs.csv does not show")
+    held = json.loads(path.read_text(encoding="utf-8"))
+    assert held["run_id"] == "run-1" and held["token"] != info["token"]
+    with (pytest.raises(paidlock.LockHeld, match="costs.csv does not show"),
+          paidlock.paid_run_lock(path, run_id="run-2", what="y")):
+        pass
+
+
+def test_keep_leaves_a_lock_that_is_not_ours_alone(tmp_path):
+    path = tmp_path / paidlock.LOCK_NAME
+    with paidlock.paid_run_lock(path, run_id="run-1", what="x") as info:
+        path.write_text(json.dumps({"run_id": "other", "token": "someone-else"}),
+                        encoding="utf-8")
+        paidlock.keep(path, info, "why")
+    assert json.loads(path.read_text(encoding="utf-8")) == {"run_id": "other",
+                                                            "token": "someone-else"}
+
+
+def test_the_last_runs_row_must_be_in_the_ledger(tmp_path):
+    lock = tmp_path / paidlock.LOCK_NAME
+    assert paidlock.last_run_missing(lock, []) is None        # no paid run recorded yet
+
+    paidlock.record_last_run(lock, run_id="run-1", costs_csv=tmp_path / "a" / "costs.csv")
+    assert paidlock.last_run_missing(lock, [{"run_id": "run-1"}]) is None
+    reason = paidlock.last_run_missing(lock, [{"run_id": "run-0"}])
+    assert "run-1" in reason and "not in this checkout" in reason
+
+    paidlock.last_run_path(lock).write_text("garbage", encoding="utf-8")
+    assert "unreadable" in paidlock.last_run_missing(lock, [{"run_id": "run-1"}])

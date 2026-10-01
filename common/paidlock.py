@@ -12,6 +12,12 @@ The next paid run then refuses and prints the file's contents. Nothing removes a
 automatically: the operator checks that no paid run is still going and deletes the file
 by hand. This is the operator rule "one paid run at a time" (arc/README.md) in code; it
 protects against mistakes, not against someone deleting the file while a run is going.
+A run whose spend could not be written to results/costs.csv leaves the lock held on
+purpose (`keep`), with the reason, so no paid run starts on an incomplete ledger.
+
+Next to the lock, `persistgym-paid-last-run.json` names the last paid run that appended a
+costs.csv row and the ledger it went to; a paid run refuses unless that row is in its own
+ledger (`last_run_missing`), since each checkout has its own results/costs.csv.
 """
 
 from __future__ import annotations
@@ -76,3 +82,60 @@ def paid_run_lock(path: Path, *, run_id: str, what: str) -> Iterator[dict]:
                 path.unlink()
         except (OSError, ValueError):
             pass
+
+
+def keep(path: Path, info: dict, reason: str) -> None:
+    """Leave the lock held after the run ends, with `reason`: for a run that may have spent
+    money that results/costs.csv does not show. The file (if it is still ours) gets the
+    reason and a new token, so `paid_run_lock` does not remove it and every later paid run
+    refuses, printing the reason, until the operator has added the missing row and deleted
+    the file by hand."""
+    try:
+        held = json.loads(path.read_text(encoding="utf-8"))
+        if held.get("token") != info["token"]:
+            return
+        held.update(token=uuid.uuid4().hex, kept_because=reason)
+        path.write_text(json.dumps(held), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+
+
+# ── The last paid run's ledger ─────────────────────────────────────────
+# The lock is shared by every checkout, but each checkout has its own results/costs.csv.
+# A paid run started in another checkout would not see the spend the last run wrote to
+# this one's ledger, so the block and phase checks would undercount. Each paid run that
+# appends a costs.csv row records its run ID here, and the next one refuses unless that
+# row is in its own ledger.
+
+LAST_RUN_NAME = "persistgym-paid-last-run.json"
+
+
+def last_run_path(lock: Path) -> Path:
+    return lock.with_name(LAST_RUN_NAME)
+
+
+def record_last_run(lock: Path, *, run_id: str, costs_csv: Path) -> None:
+    """Note that run `run_id` appended its costs row to `costs_csv`."""
+    last_run_path(lock).write_text(
+        json.dumps({"run_id": run_id, "costs_csv": str(Path(costs_csv).resolve()),
+                    "finished_utc": datetime.now(UTC).isoformat(timespec="seconds")}),
+        encoding="utf-8")
+
+
+def last_run_missing(lock: Path, rows: list[dict]) -> str | None:
+    """None if the last paid run's costs row is among `rows` (or no run is recorded);
+    otherwise why not."""
+    path = last_run_path(lock)
+    if not path.exists():
+        return None
+    try:
+        last = json.loads(path.read_text(encoding="utf-8"))
+        run_id = last["run_id"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return f"{path} is unreadable; check results/costs.csv by hand, then delete it"
+    if any(r.get("run_id") == run_id for r in rows):
+        return None
+    return (f"the last paid run, {run_id}, appended its costs row to {last.get('costs_csv')}, "
+            f"and that row is not in this checkout's results/costs.csv, so the block and "
+            f"phase spend would be undercounted. Run from that checkout, or bring that row "
+            f"here first (recorded in {path})")

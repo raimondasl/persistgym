@@ -6,7 +6,8 @@ Lookup (recoverable cells only). If the reply's action is `lookup(<key>)` and th
 still has lookups left, the pending step is NOT scored and does not advance. The next
 observation is a lookup result (padded to v tokens like every observation) that re-shows
 every record about the entity displayed at or before the pending step, then repeats the
-pending EVENT. So a lookup costs exactly one extra turn. A key other than the entity name
+pending EVENT. So a lookup costs exactly one extra turn. The key matches if it contains the
+entity name as a whole word, ignoring case (`render.lookup_key_matches`); any other key
 returns "no records found" and also costs the turn. In non-recoverable cells, or once the
 lookup limit is used up, a lookup is an invalid action: the pending step is scored wrong and
 the episode advances (no extra turn).
@@ -54,6 +55,22 @@ def parse_action(reply: str, known_verbs: set[str], strict: bool = False) -> Par
 
 def _clean_arg(arg: str) -> str:
     return arg.strip().strip("'\"<>` ").strip()
+
+
+def need_label(parsed: ParsedAction | None, need_verb: str, options: list[tuple[str, int]],
+               accept_values: bool) -> str | None:
+    """Option letter a need-step action resolves to (None if it resolves to none). Shared by
+    `EpisodeEnv` and the single-turn control scorer, so both score the same way."""
+    if parsed is None or parsed.verb != need_verb.lower() or not parsed.arg:
+        return None
+    arg = parsed.arg.strip().upper().rstrip(")")
+    if arg in {label for label, _ in options}:
+        return arg
+    if accept_values and arg.isdigit():
+        for label, value in options:
+            if value == int(arg):
+                return label
+    return None
 
 
 def canonical(action: str) -> str:
@@ -183,17 +200,9 @@ class EpisodeEnv:
         return got == canonical(self.ep.steps[step_index].expected_action)
 
     def resolve_need_label(self, parsed: ParsedAction | None) -> str | None:
-        if parsed is None or parsed.verb != self.ep.need_verb.lower() or not parsed.arg:
-            return None
-        arg = parsed.arg.strip().upper().rstrip(")")
-        labels = {o.label for o in self.ep.options}
-        if arg in labels:
-            return arg
-        if self.cfg["accept_value_answers"] and arg.isdigit():
-            for o in self.ep.options:
-                if o.value == int(arg):
-                    return o.label
-        return None
+        return need_label(parsed, self.ep.need_verb,
+                          [(o.label, o.value) for o in self.ep.options],
+                          self.cfg["accept_value_answers"])
 
     # ------------------------------------------------------------------
     def result(self) -> EpisodeResult:

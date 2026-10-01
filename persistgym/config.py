@@ -12,7 +12,7 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-GENERATOR_VERSION = "0.1.0"
+GENERATOR_VERSION = "0.1.1"
 SCHEMA_VERSION = 1
 
 # Disjoint seed ranges (half-open). Pilot templates never share seeds with main templates

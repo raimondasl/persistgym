@@ -8,6 +8,12 @@ need control is an Episode variant (`variant="restated"`, see render.py).
 Reply positions: by default ('oracle') each earlier reply is the minimal correct reply
 "ACTION: <expected action>". To yoke the control to a real multi-turn run, pass that run's
 replies so every offset matches the run's actual transcript.
+
+The control is built from non-recoverable base episodes only. A recoverable cell has the
+same observations, and its system prompt offers `lookup`, which a single prompt cannot
+serve (there is no next update), so its control would differ only by offering an action
+that cannot work. `score_single_turn` scores a reply exactly as `EpisodeEnv` scores the
+need step.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from persistgym import tokens
+from persistgym.env import need_label, parse_action
 from persistgym.episode import Episode
 
 PREAMBLE = ("Console session transcript. Each earlier update is followed by the operator's "
@@ -37,6 +44,10 @@ def single_turn_control(ep: Episode, replies: Sequence[str] | None = None,
     """Flatten steps 0..need of `ep` into one prompt and record component token offsets."""
     if ep.variant != "base":
         raise ValueError("the single-turn control is built from base episodes")
+    if ep.cell.recoverable:
+        raise ValueError("the single-turn control is built from non-recoverable cells: a "
+                         "single prompt cannot serve the lookup the recoverable system prompt "
+                         "offers (the observations are identical)")
     n = ep.need_step
     reply_mode = "given" if replies is not None else (mode or ep.config["single_turn_reply_mode"])
     replies = list(replies) if replies is not None else control_replies(ep, mode)
@@ -81,4 +92,22 @@ def single_turn_control(ep: Episode, replies: Sequence[str] | None = None,
         "need_verb": ep.need_verb, "options": [{"label": o.label, "value": o.value}
                                               for o in ep.options],
         "correct_label": ep.correct_label, "component_offsets": offsets,
+        "strict_action_parse": ep.config["strict_action_parse"],
+        "accept_value_answers": ep.config["accept_value_answers"],
     }
+
+
+def score_single_turn(control: dict, reply: str) -> dict:
+    """Score a model reply to a single-turn control the way `EpisodeEnv` scores the need
+    step: the last `ACTION: verb(arg)` (or, unless strict, the last need-verb call), letter or,
+    if allowed, option value."""
+    verb = control["need_verb"]
+    parsed = parse_action(reply, {verb.lower()}, control["strict_action_parse"])
+    options = [(o["label"], o["value"]) for o in control["options"]]
+    label = need_label(parsed, verb, options, control["accept_value_answers"])
+    if parsed is None or parsed.verb is None:
+        outcome = "unparsed"
+    else:
+        outcome = "correct" if label == control["correct_label"] else "wrong"
+    return {"correct": outcome == "correct", "outcome": outcome, "label": label,
+            "action": parsed.raw if parsed else None}

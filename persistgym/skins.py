@@ -58,7 +58,8 @@ SKINS: dict[str, Skin] = {
     "biobank": Skin(
         name="biobank",
         facility="sample-tracking console",
-        sites=("the Eastfield biobank", "the Linden clinical lab", "the Moorgate core facility"),
+        # No site may contain an entity name of its skin ("LINDEN" is an entity; a test checks).
+        sites=("the Eastfield biobank", "the Calder clinical lab", "the Moorgate core facility"),
         kind="sample",
         entities=("ALDER", "BIRCH", "CEDAR", "ELM", "HAZEL", "HOLLY", "JUNIPER", "LARCH",
                   "MAPLE", "OAK", "PINE", "ROWAN", "SPRUCE", "WILLOW", "YEW", "ASPEN",

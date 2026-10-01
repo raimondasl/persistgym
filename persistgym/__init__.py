@@ -11,7 +11,7 @@ Typical use:
 """
 
 from persistgym.config import DEFAULT_CONFIG, RESEARCHER_DECISIONS, GeneratorConfig
-from persistgym.controls import single_turn_control
+from persistgym.controls import score_single_turn, single_turn_control
 from persistgym.env import EpisodeEnv, EpisodeResult, parse_action
 from persistgym.episode import ALL_CELLS, VARIANTS, Episode, Step, TaskCell, read_jsonl
 from persistgym.oracle import KeyOracle, TextOracle, run_episode
@@ -45,6 +45,7 @@ __all__ = [
     "render_template",
     "run_episode",
     "sample_template",
+    "score_single_turn",
     "single_turn_control",
     "survival_from_payload",
     "window_keep_start",

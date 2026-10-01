@@ -3,6 +3,7 @@
     uv run python -m persistgym render --n 20
     uv run python -m persistgym render --split pilot --n 5 --single-turn --gzip
     uv run python -m persistgym render --n 50 --W 24000 --v 1500 --out results/raw/persistgym/x
+    uv run python -m persistgym partial-memory --n 2000
 
 Writes into the output folder (default results/raw/persistgym/<split>-<start>-<n>-<hash8>,
 gitignored): episodes.jsonl[.gz] (one Episode per line), single_turn.jsonl[.gz] (optional),
@@ -27,7 +28,13 @@ from persistgym.controls import single_turn_control
 from persistgym.episode import ALL_CELLS, VARIANTS, Episode
 from persistgym.render import generate
 from persistgym.template import sample_template
-from persistgym.validity import heuristic_baselines, oracle_scores, shortcut_audit
+from persistgym.validity import (
+    heuristic_baselines,
+    oracle_scores,
+    partial_memory_diagnostic,
+    partial_memory_from_episodes,
+    shortcut_audit,
+)
 
 DEFAULT_OUT = REPO_ROOT / "results" / "raw" / "persistgym"
 
@@ -107,7 +114,7 @@ def run(args: argparse.Namespace) -> int:
         for t, eps in generate(args.split, indices, cfg, ALL_CELLS, variants):
             for ep in eps:
                 f.write(json.dumps(ep.to_dict(), ensure_ascii=False) + "\n")
-                if st_file and ep.variant == "base":
+                if st_file and ep.variant == "base" and not ep.cell.recoverable:
                     st_file.write(json.dumps(single_turn_control(ep), ensure_ascii=False) + "\n")
                     n_single += 1
             all_eps.extend(eps)
@@ -132,6 +139,8 @@ def run(args: argparse.Namespace) -> int:
         summary["shortcut_audit"] = shortcut_audit(all_eps)
         summary["heuristic_baselines"] = heuristic_baselines(all_eps, calibration_labels=cal)
         summary["oracles"] = oracle_scores(all_eps)
+        # Reported, not gated: what the base clue alone gives away in derived cells.
+        summary["partial_memory"] = partial_memory_from_episodes(all_eps)
         summary["validity_pass"] = (all(c["pass"] for c in summary["shortcut_audit"])
                                     and summary["heuristic_baselines"].get("pass", True)
                                     and summary["oracles"]["pass"])
@@ -179,7 +188,37 @@ def print_summary(summary: dict, out: Path) -> None:
         for name in ("key", "text", "lookup_no_memory"):
             accs = ", ".join(f"{k}={v['need_acc']:.2f}" for k, v in orc[name].items())
             print(f"  oracle {name}: {accs}")
+        if summary.get("partial_memory"):
+            print_partial_memory(summary["partial_memory"], indent="  ")
         print(f"validity_pass={summary['validity_pass']}")
+
+
+def print_partial_memory(pm: dict, indent: str = "") -> None:
+    print(f"{indent}partial memory, derived cells (reported, not gated; chance "
+          f"{pm['chance']:.2f}):")
+    for key, row in [*pm["by_n_clues"].items(), ("all", pm["all"])]:
+        label = f"{key} clues" if key != "all" else "all"
+        print(f"{indent}  {label:<8} n={row['n_templates']:<5} base+range unique="
+              f"{row['base_and_range_unique_rate']:.3f} expected acc="
+              f"{row['base_and_range_expected_accuracy']:.3f} nearest-above-base acc="
+              f"{row['nearest_above_base_accuracy']:.3f}")
+
+
+def run_partial_memory(args: argparse.Namespace) -> int:
+    """Template-only (no rendering), so it is cheap for large N."""
+    cfg = GeneratorConfig.from_dict({**GeneratorConfig().to_dict(),
+                                     **parse_overrides(args.set or [])})
+    items = []
+    for i in range(args.start, args.start + args.n):
+        t = sample_template(args.split, i, cfg)
+        items.append((t.n_clues, t.clue_values[0], t.option_values, t.target_value))
+    pm = partial_memory_diagnostic(items, cfg.minor_component_range, cfg.K_options)
+    pm.update(split=args.split, indices=[args.start, args.start + args.n],
+              config_hash=config_hash(cfg.to_dict()), generator_version=GENERATOR_VERSION)
+    if args.out:
+        Path(args.out).write_text(json.dumps(pm, indent=2) + "\n", encoding="utf-8")
+    print_partial_memory(pm)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -202,8 +241,17 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--gzip", action="store_true")
     r.add_argument("--no-checks", action="store_true", help="skip audit, baselines, oracles")
     r.add_argument("--verbose", action="store_true")
+    pm = sub.add_parser("partial-memory",
+                        help="what the base clue alone gives away in derived cells "
+                             "(templates only, no rendering)")
+    pm.add_argument("--n", type=int, default=2000, help="number of templates")
+    pm.add_argument("--split", choices=sorted(SEED_RANGES), default="main")
+    pm.add_argument("--start", type=int, default=0)
+    pm.add_argument("--set", action="append", metavar="KEY=VALUE",
+                    help="override any GeneratorConfig field (value parsed as JSON)")
+    pm.add_argument("--out", default=None, help="optional JSON output file")
     args = p.parse_args(argv)
-    return run(args)
+    return run_partial_memory(args) if args.cmd == "partial-memory" else run(args)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,8 @@ import json
 import pytest
 
 from persistgym.cli import main, parse_overrides
-from persistgym.controls import single_turn_control
+from persistgym.config import GeneratorConfig
+from persistgym.controls import score_single_turn, single_turn_control
 from persistgym.episode import read_jsonl
 from persistgym.filler import Reserved
 from persistgym.validity import (
@@ -14,6 +15,8 @@ from persistgym.validity import (
     most_frequent_option,
     option_hits,
     oracle_scores,
+    partial_memory_diagnostic,
+    partial_memory_from_episodes,
     shortcut_audit,
 )
 
@@ -115,6 +118,59 @@ def test_single_turn_control(small_eps):
         single_turn_control(ep, replies=["ok"])
     with pytest.raises(ValueError):
         single_turn_control(pick(small_eps, "derived-nonrec-far", "restated"))
+    with pytest.raises(ValueError):  # recoverable: the prompt would offer an unservable lookup
+        single_turn_control(pick(small_eps, "derived-rec-far"))
+
+
+def test_single_turn_scoring_matches_env(small_eps):
+    ep = pick(small_eps, "observed-nonrec-far")
+    c = single_turn_control(ep)
+    verb, right = ep.need_verb, ep.correct_label
+    wrong = next(o.label for o in ep.options if o.label != right)
+    assert score_single_turn(c, f"reasoning\nACTION: {verb}({right})")["correct"]
+    assert score_single_turn(c, f"ACTION: {verb}({right.lower()})")["correct"]
+    assert score_single_turn(c, f"ACTION: {verb}({ep.target_value})")["correct"]
+    r = score_single_turn(c, f"ACTION: {verb}({wrong})")
+    assert not r["correct"] and r["outcome"] == "wrong" and r["label"] == wrong
+    assert score_single_turn(c, "no idea")["outcome"] == "unparsed"
+    assert score_single_turn(c, f"ACTION: lookup({ep.entity})")["outcome"] == "wrong"
+
+
+def test_partial_memory_diagnostic_toy():
+    # 2 clues, addends 61-98: the base-consistent window is [base + 61, base + 98]
+    items = [(2, 500, [570, 600, 700, 300], 570),   # only 570 in [561, 598]
+             (2, 500, [570, 590, 700, 300], 590),   # 570 and 590 remain
+             (3, 400, [530, 600, 590, 300], 590)]   # 3 clues: [523, 595] keeps 530, 590
+    pm = partial_memory_diagnostic(items, (61, 98), 4)
+    two, three = pm["by_n_clues"]["2"], pm["by_n_clues"]["3"]
+    assert two["base_and_range_unique_rate"] == 0.5
+    assert two["base_and_range_expected_accuracy"] == 0.75
+    assert two["nearest_above_base_accuracy"] == 0.5  # 570 is nearest above 500 both times
+    assert three["base_and_range_mean_options_left"] == 2
+    assert three["nearest_above_base_accuracy"] == 0.0
+    assert pm["all"]["n_templates"] == 3
+    with pytest.raises(ValueError):
+        partial_memory_diagnostic([(2, 500, [700, 300], 700)], (61, 98), 2)
+
+
+def test_partial_memory_from_episodes_matches_templates(small_eps):
+    from persistgym.template import sample_template
+
+    pm = partial_memory_from_episodes(small_eps)
+    cfg = small_eps[0].config
+    items = []
+    for i in range(10):
+        t = sample_template("main", i, GeneratorConfig.from_dict(cfg))
+        items.append((t.n_clues, t.clue_values[0], t.option_values, t.target_value))
+    assert pm == partial_memory_diagnostic(items, tuple(cfg["minor_component_range"]), 10)
+
+
+def test_cli_partial_memory(tmp_path, capsys):
+    out = tmp_path / "pm.json"
+    assert main(["partial-memory", "--n", "30", "--out", str(out)]) == 0
+    pm = json.loads(out.read_text(encoding="utf-8"))
+    assert pm["all"]["n_templates"] == 30 and pm["indices"] == [0, 30]
+    assert "partial memory" in capsys.readouterr().out
 
 
 def test_parse_overrides():
@@ -138,9 +194,12 @@ def test_cli_render(tmp_path, capsys):
     eps = list(read_jsonl(out / "episodes.jsonl.gz"))
     assert len(eps) == 48 and eps[0].to_dict() == first
     with gzip.open(out / "single_turn.jsonl.gz", "rt", encoding="utf-8") as f:
-        assert len(f.readlines()) == 2 * 8
+        controls = [json.loads(line) for line in f]
+    assert len(controls) == 2 * 4  # non-recoverable base cells only
+    assert all("-nonrec-" in c["cell"] and "lookup(" not in c["system_prompt"] for c in controls)
     summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert summary["validity_pass"] is True
+    assert summary["partial_memory"]["all"]["n_templates"] == 2
     assert set(summary["cells"]) == {
         f"{f}-{r}-{d}" for f in ("observed", "derived") for r in ("nonrec", "rec")
         for d in ("near", "far")}

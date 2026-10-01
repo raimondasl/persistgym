@@ -299,6 +299,67 @@ def heuristic_baselines(episodes: Sequence[Episode], margin_pp: float | None = N
 
 
 # ---------------------------------------------------------------------------
+# Partial memory in derived cells (reported, not gated)
+# ---------------------------------------------------------------------------
+
+def partial_memory_diagnostic(items: Sequence[tuple[int, int, Sequence[int], int]],
+                              minor_range: tuple[int, int], K: int) -> dict:
+    """How much the base clue alone gives away in derived cells.
+
+    This is not a no-memory shortcut: it measures what an agent that kept *part* of the
+    derived state can do, which matters for rescue rates and P(rescued | not carried) in
+    notes and summary cells. `items` holds one (n_clues, base clue value, option values,
+    target value) per template; all derived cells of a template share them.
+
+    * `base_and_range`: the agent kept the base clue and the rule, and knows the range of the
+      addends (`minor_component_range`, which agents are never told). It drops every option
+      outside [base + smallest addend sum, base + largest addend sum]. Reports how often one
+      option remains and the expected accuracy of a uniform pick among those that remain.
+    * `nearest_above_base`: the agent kept the base clue and picks the smallest option above
+      it (no knowledge of the range).
+    """
+    lo_m, hi_m = minor_range
+    rows: dict[int, list[tuple[int, float, bool]]] = defaultdict(list)
+    for n_clues, base, values, target in items:
+        k = n_clues - 1
+        lo = base + sum(range(lo_m, lo_m + k))
+        hi = base + sum(range(hi_m - k + 1, hi_m + 1))
+        cands = [v for v in values if lo <= v <= hi]
+        if target not in cands:  # cannot happen if the generator is right
+            raise ValueError(f"target {target} outside the base-consistent window")
+        above = sorted(v for v in values if v > base)
+        rows[n_clues].append((len(cands), 1 / len(cands), bool(above) and above[0] == target))
+
+    def agg(rs: list[tuple[int, float, bool]]) -> dict:
+        n = len(rs)
+        return {"n_templates": n,
+                "base_and_range_unique_rate": sum(c == 1 for c, _, _ in rs) / n,
+                "base_and_range_expected_accuracy": sum(a for _, a, _ in rs) / n,
+                "base_and_range_mean_options_left": sum(c for c, _, _ in rs) / n,
+                "nearest_above_base_accuracy": sum(x for _, _, x in rs) / n}
+
+    out: dict = {"chance": 1 / K, "by_n_clues": {str(k): agg(v) for k, v in sorted(rows.items())}}
+    every = [r for v in rows.values() for r in v]
+    out["all"] = agg(every) if every else None
+    return out
+
+
+def partial_memory_from_episodes(episodes: Sequence[Episode]) -> dict | None:
+    """`partial_memory_diagnostic` over the derived base episodes (one per template)."""
+    per_t: dict[str, Episode] = {}
+    for ep in episodes:
+        if ep.variant == "base" and ep.cell.fact == "derived":
+            per_t.setdefault(ep.template_id, ep)
+    if not per_t:
+        return None
+    first = next(iter(per_t.values()))
+    items = [(e.n_clues, e.component("clue0").value, [o.value for o in e.options],
+              e.target_value) for e in per_t.values()]
+    return partial_memory_diagnostic(items, tuple(first.config["minor_component_range"]),
+                                     first.config["K_options"])
+
+
+# ---------------------------------------------------------------------------
 # Oracles
 # ---------------------------------------------------------------------------
 

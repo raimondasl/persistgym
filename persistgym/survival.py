@@ -185,6 +185,11 @@ def survival_from_payload(episode: Episode, messages: Sequence[dict],
     model wrote (assistant turns) is checked separately with `carried_in_text`, so S stays
     the environment-side quantity. Summary cells insert a model-written summary as a user
     message: pass its index in `exclude_indices` and string-match it with `carried_in_text`.
+
+    Use the payload of the need step's first presentation. After a lookup the payload holds
+    the lookup result (records re-shown, so S=1 by construction) and the model's own lookup
+    reply, which may quote the options next to the entity name; neither says whether the
+    fact was carried.
     """
     pairs = flatten_payload(messages)
     skip = set(exclude_indices)
@@ -200,7 +205,8 @@ def survival_from_payload(episode: Episode, messages: Sequence[dict],
         "assistant_carried": carried_in_text(assistant_text, episode),
         "n_messages": len(pairs),
         "n_opaque_items": sum(1 for r, _ in pairs if r == "opaque"),
-        "payload_text_tokens": tokens.count("\n".join(t for _, t in pairs) + (system or "")),
+        "payload_text_tokens": tokens.count("\n".join(t for _, t in pairs) + (system or ""),
+                                            episode.config["tokenizer"]),
     }
 
 
@@ -213,7 +219,7 @@ def reference_window_payload(episode: Episode, replies: Sequence[str], W: int | 
         count_system = episode.config["window_counts_system_prompt"]
     m = len(replies)
     obs = episode.obs_tokens[: m + 1]
-    rep = [tokens.count(r) for r in replies]
+    rep = [tokens.count(r, episode.config["tokenizer"]) for r in replies]
     keep = window_keep_start(obs, rep, W, episode.system_tokens if count_system else 0)
     msgs = [{"role": "system", "content": episode.system_prompt}]
     for i in range(keep, m):

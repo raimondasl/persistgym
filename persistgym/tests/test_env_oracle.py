@@ -110,6 +110,23 @@ def test_lookup_before_reveal_and_wrong_key(small_eps):
     assert env.result().n_turns == ep.n_steps + 2
 
 
+def test_lookup_key_matches_entity_as_a_word(small_eps):
+    ep = pick(small_eps, "observed-rec-far")
+    for key, ok in ((ep.entity, True), (ep.entity.lower(), True),
+                    (f"{ep.kind} {ep.entity}", True), (f"'{ep.entity}' records", True),
+                    (ep.entity + "S", False), ("x" + ep.entity, False), ("everything", False)):
+        def policy(env, key=key):
+            if env.pending == ep.need_step and env.lookups_used == 0:
+                return f"ACTION: lookup({key})"
+            return _key(env)
+
+        env, seen = _play(ep, policy)
+        lookup_obs = seen[ep.need_step + 1]
+        assert (ep.components[0].sentence in lookup_obs) is ok, key
+        assert ("no records found" in lookup_obs) is (not ok), key
+        assert env.result().n_turns == ep.n_steps + 1
+
+
 def test_lookup_limit_and_nonrecoverable(small_eps):
     rec = pick(small_eps, "observed-rec-far")
     cap = rec.lookup.max_per_episode

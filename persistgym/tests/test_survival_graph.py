@@ -63,6 +63,17 @@ def test_far_cells_evicted_for_any_reply_length(small_eps):
             assert max_reply_tokens_for_survival(ep) >= ep.config["assumed_max_reply_tokens"]
 
 
+def test_near_reply_budget_at_defaults_matches_design_doc(default_eps):
+    """DESIGN.md §11: near cells keep S=1 up to uniform replies of 4,125 tokens (observed),
+    3,000 (2 clues) and 2,250 (3 clues) at W=24,000 and v=1,500."""
+    expected = {0: 4_125, 2: 3_000, 3: 2_250}
+    for ep in default_eps:
+        if ep.variant == "base" and ep.cell.distance == "near":
+            gap = ep.design["gap_steps_earliest"]
+            assert max_reply_tokens_for_survival(ep) == (24_000 - (gap + 1) * 1_500) // gap
+            assert max_reply_tokens_for_survival(ep) == expected[ep.n_clues]
+
+
 def test_flatten_payload_formats():
     msgs = [
         {"role": "system", "content": "sys"},

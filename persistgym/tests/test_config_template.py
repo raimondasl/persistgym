@@ -1,4 +1,5 @@
 import dataclasses
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from persistgym.config import (
     SEED_RANGES,
     GeneratorConfig,
 )
+from persistgym.skins import SKINS
 from persistgym.template import sample_template, seed_for, split_of_seed
 
 DESIGN = Path(__file__).resolve().parent.parent / "DESIGN.md"
@@ -89,6 +91,19 @@ def test_template_values():
         assert len(t.routine) == t.n_steps
         for r in t.routine:
             assert t.reserved.clean(r.event)
+
+
+def test_no_skin_text_contains_one_of_its_entity_names():
+    """The entity is the lookup key and the anchor of P(carried); it must not also appear in
+    the site or other fixed text (e.g. sample LINDEN at 'the Linden clinical lab')."""
+    for sk in SKINS.values():
+        fixed = " ".join([sk.facility, *sk.sites, sk.kind, sk.quantity, *sk.components,
+                          *sk.sources, sk.need_verb, sk.route_noun, *sk.route_tags,
+                          *(m for m, _ in sk.sensor_metrics), *sk.broadcast_senders,
+                          *sk.services, *sk.null_records])
+        for e in sk.entities:
+            assert not re.search(rf"(?<![A-Za-z]){e}(?![A-Za-z])", fixed, re.IGNORECASE), (
+                sk.name, e)
 
 
 def test_letters_and_ranks_balanced_within_blocks():

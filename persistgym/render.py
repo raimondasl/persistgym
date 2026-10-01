@@ -10,6 +10,7 @@ across cells.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Iterator
 from datetime import timedelta
 from functools import lru_cache
@@ -68,6 +69,14 @@ def need_event(kind: str, entity: str, quantity: str, verb: str, options: list[O
 
 def memo_event(record: str, record_id: str) -> str:
     return f"{record} Reply ack({record_id}) to acknowledge it."
+
+
+def lookup_key_matches(key: str, entity: str) -> bool:
+    """A lookup key matches if it contains the entity name as a whole word, ignoring case
+    ("BEECH", "beech", "sample BEECH" all match; "BEECHES" does not). With one entity per
+    episode (k=1) this is unambiguous, and it keeps formatting slips such as
+    lookup(sample BEECH) from costing extra turns that are not about memory."""
+    return bool(re.search(rf"(?<![A-Za-z]){re.escape(entity)}(?![A-Za-z])", key, re.IGNORECASE))
 
 
 def restated_block(kind: str, entity: str, record_lines: list[str]) -> str:
@@ -332,7 +341,7 @@ class TemplateRenderer:
         """Observation shown after a lookup(key) at `pending_step` (see env.EpisodeEnv)."""
         sk = self.skin
         safe_key = "".join(ch for ch in key if ch.isalnum() or ch in " _-")[:40].strip()
-        if safe_key.lower() == ep.lookup.key.lower():
+        if lookup_key_matches(safe_key, ep.lookup.key):
             lines: list[str] = []
             for cid, st in sorted(ep.lookup.reveal_steps.items(), key=lambda kv: (kv[1], kv[0])):
                 if st <= pending_step and ep.lookup.records[cid] not in lines:

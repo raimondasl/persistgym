@@ -1,0 +1,68 @@
+name,value,unit,source,note
+flex_discount,0.5,fraction off list,PLAN.md §12; https://ai.google.dev/gemini-api/docs/pricing; https://developers.openai.com/api/docs/guides/flex-processing,Flex and Batch 50% off on both providers; applied to every token class
+openai_cache_write_multiplier,1.25,x uncached input price,PLAN.md §16.1; https://developers.openai.com/api/docs/guides/prompt-caching,GPT-5.6 and later; applied to every uncached input token
+arc_std_input_tokens_per_game,70000000,tokens,docs/background.md §4,Standard-high mean per public game
+arc_std_output_tokens_per_game,8000000,tokens,docs/background.md §4,Standard-high mean per public game
+arc_pa_input_tokens_per_game,95000000,tokens,docs/background.md §4,Adapter-high mean per public game
+arc_pa_output_tokens_per_game,4300000,tokens,docs/background.md §4,Adapter-high mean per public game
+arc_std_cached_share,0.17,fraction of input,docs/background.md §4,measured on the published Standard-high runs
+arc_pa_cached_share,0.53,fraction of input,docs/background.md §4,measured on the published Adapter-high runs
+arc_std_input_tokens_per_action,148000,tokens,docs/background.md §4,Standard average; used for the ~150k Gemini probe calls
+arc_std_reasoning_tokens_per_action,15900,tokens,docs/background.md §4,Standard average
+arc_std_visible_tokens_per_action,907,tokens,docs/background.md §4,Standard average
+arc_pa_visible_tokens_per_action,200,tokens,docs/background.md §4,Adapter average
+arc_frame_tokens,12800,tokens,docs/background.md §4,one 64x64 frame
+arc_turn_growth_tokens,13018,tokens per turn,docs/background.md §4,LP85 Standard input 12769 -> 25787 between the first two turns
+arc_compaction_trigger_tokens,175000,tokens,PLAN.md §8.2,S1 SummaryCompactor trigger
+arc_eligible_max_cost_usd,60,usd per published run,PLAN.md §8.3,both published high runs at or below this
+arc_eligible_min_gap,20,RHAE points,PLAN.md §8.3,published Standard-to-Adapter gap at or above this
+arc_path_games,4,games,PLAN.md §8.3,drawn from the eligible pool
+arc_path_configs,4,configs,PLAN.md §8.2,S0 S1 S2 S4
+arc_seeds,2,seeds,PLAN.md §8.3,
+arc_heldout_third_candidates,VC33;RE86,games,PLAN.md §9,third held-out game fixed in PREREG; the model averages over both unless a scenario names one
+arc_heldout_configs,3,configs,PLAN.md §9,S0 S4 S0+StateCarry
+arc_dev_cap_usd,150,usd,PLAN.md §9,StateCarry ARC dev spend cap; costed at the cap in every billing case
+arc_rerun_rate_moderate,0.20,fraction of counted runs,PLAN.md §16.3,the 20% re-run reserve in the corrected G0 cost rule
+arc_early_end_share_std,0.44,fraction of runs,docs/background.md §4,11 of 25 published Standard-high runs ended early without a win
+arc_early_end_share_pa,0.20,fraction of runs,docs/background.md §4,5 of 25 published Adapter-high runs ended early without a win
+arc_pilot_actions_s0,50,actions,PLAN.md §16.3,truncated ARC pilot
+arc_pilot_actions_s4,50,actions,PLAN.md §16.3,truncated ARC pilot
+arc_pilot_turns_after_compaction_s1,5,actions,PLAN.md §16.3,S1 runs to its first compaction plus this many turns
+arc_pilot_actions_s2,30,actions,PLAN.md §16.3,truncated ARC pilot
+gemini_probe_flex_calls,20,calls,2026-09-30 low-spend review (step 1c),~150k-input calls at high thinking on Flex
+gemini_probe_standard_calls,5,calls,2026-09-30 low-spend review (step 1c),~150k-input calls on the standard tier
+gemini_probe_small_calls,10,calls,2026-09-30 low-spend review (step 1c),small acceptance calls (one frame of input)
+openai_echo_calls_per_model,36,calls,2026-09-30 low-spend review (step 1a),reasoning.context echo check on sol and on luna
+openai_probe_conversations,50,conversations,PLAN.md §16.3; review step 1b,private-choice replay probe per model
+openai_probe_turns,3,calls per conversation,PLAN.md §16.3,
+openai_probe_input_tokens,2000,tokens per call,assumption,short probe prompts; all input uncached
+pg_calls_per_episode,28,calls,PLAN.md §12,
+pg_context_max_tokens,64000,tokens,PLAN.md §12 and §5,history at the last call under full history; grows linearly from the first call
+pg_cached_share,0.85,fraction of input,PLAN.md §12,applied to every call whose prefix is unchanged since the previous call
+pg_output_tokens_central,1000,tokens per call,PLAN.md §12,
+pg_output_tokens_grid,1000;2000;3000,tokens per call,PLAN.md §16.1,
+pg_visible_tokens_per_call,200,tokens per call,assumption from docs/background.md §4,visible reply length (ARC Adapter average); output minus visible = reasoning tokens replayed in replay cells
+pg_window_tokens,24000,tokens,PLAN.md §5,starting W; window cells send at most W tokens and lose the cache once full
+pg_summary_tokens,1000,tokens,assumption,visible summary (Sum cells) or ledger (StateCarry) carried after a compaction
+pg_digest_tokens,150,tokens per call,PLAN.md §9,StateCarry visible belief digest (upper bound)
+pg_task_cells,8,cells,PLAN.md §5,
+pg_templates_luna,100,templates,PLAN.md §7 and §10,
+pg_templates_sol,40,templates,PLAN.md §7,
+pg_replicate_fraction,0.10,fraction of template x cell,PLAN.md §5,"2 repeats on a 10% subset"
+pg_luna_cells_all,F-r;F-0;W-n-r;W-n-0;Sum-n-r;Sum-n-0;W-0;Sum-0-r,cells,PLAN.md §6,Sum = the summary-at-W cells written with a Greek capital sigma in PLAN.md
+pg_luna_cells_replay_off,F-0;W-n-0;Sum-n-0;W-0,cells,PLAN.md §7,
+pg_sol_core_cells,F-r;F-0,cells,PLAN.md §7,
+pg_sol_h1_cells,W-0;W-n-0,cells,PLAN.md §4 H1,optional sol H1 replication
+pg_control_prompts,1600,prompts,PLAN.md §12,luna control prompts
+pg_control_prompt_tokens,48000,tokens per prompt,assumption,single-turn prompt up to the need step; all input uncached
+pg_pilot_episodes_per_cell,10,episodes,CLAUDE.md,pilot of at most 10 episodes per new harness cell
+pg_luna_validity_episodes,300,episodes,2026-09-30 low-spend review (step 2b),run under F-0
+pg_sol_validity_episodes,40,episodes,2026-09-30 low-spend review (step 2c),run under F-0
+cap_phase_0,100,usd,PLAN.md §12,
+cap_phase_1a,450,usd,PLAN.md §12,
+cap_phase_1b,900,usd,PLAN.md §12,
+cap_phase_2,950,usd,PLAN.md §12,
+gpu_a100_usd_per_hour_low,1.19,usd per hour,https://www.runpod.io/pricing (PLAN.md §12),A100 80GB community
+gpu_a100_usd_per_hour_high,1.59,usd per hour,https://www.runpod.io/pricing (PLAN.md §12),A100 80GB secure
+e1_gpu_hours_low,15,hours,PLAN.md §12,extension E1 only; not in the central case
+e1_gpu_hours_high,50,hours,PLAN.md §12,extension E1 only; not in the central case

@@ -1,0 +1,92 @@
+{
+  "experiment": "power_sim",
+  "run_id": "20261001T035759Z",
+  "cell_or_config": "power_sim_v1",
+  "config": {
+    "reps": 1000,
+    "seed": 20260930,
+    "boot": 2000,
+    "part": "all",
+    "sec10_calibration": "both",
+    "h2_p0": 0.8,
+    "h2_templates": "30,40,60,80,120,160,200",
+    "engine": "fast",
+    "cluster_correction": "clusters",
+    "out_dir": null,
+    "no_write": false,
+    "h2_setup": {
+      "p_f0": 0.8,
+      "cells": 2,
+      "bound": 0.08,
+      "holm_steps": 3,
+      "sd": 1.0,
+      "calibration": "marginal"
+    },
+    "template_sd": 1.0,
+    "alpha": 0.05,
+    "sec10_designs": [
+      {
+        "label": "60 x 5 x 2",
+        "templates": 60,
+        "distances": 5,
+        "seeds": 2
+      },
+      {
+        "label": "120 x 5 x 2",
+        "templates": 120,
+        "distances": 5,
+        "seeds": 2
+      },
+      {
+        "label": "120 x 2 x 2",
+        "templates": 120,
+        "distances": 2,
+        "seeds": 2
+      },
+      {
+        "label": "card: 30 x 5 x 2",
+        "templates": 30,
+        "distances": 5,
+        "seeds": 2
+      },
+      {
+        "label": "luna plan: 100 x 2 x 1",
+        "templates": 100,
+        "distances": 2,
+        "seeds": 1
+      }
+    ]
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": [
+    20260930
+  ],
+  "started_utc": "2026-10-01T03:57:59+00:00",
+  "finished_utc": "2026-10-01T03:59:06+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "h2_sol_power.csv",
+    "sec10_power.csv"
+  ],
+  "runtime_s": 67.2,
+  "paid_calls": 0,
+  "config_hash": "ebd7d62aaee3a735ea6ab379dab11baa526c434b4a6207f52a41d711b76feee0",
+  "prereg_version": null,
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "ef01aa19fb021cc5b29b365803883ef273f7f1d1",
+  "git_dirty": false
+}

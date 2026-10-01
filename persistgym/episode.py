@@ -25,6 +25,10 @@ FACT_KINDS = ("observed", "derived")
 DISTANCES = ("near", "far")
 VARIANTS = ("base", "restated", "withheld")
 STEP_KINDS = ("routine", "reveal", "distractor", "need")
+LOOKUP_EVENT_MARKER = "EVENT: LOOKUP RESULT"
+"""Every lookup response (served, "no such record" or "lookup unavailable") contains this
+text and no scripted observation does. `survival.survival_from_payload` uses it to leave
+lookup responses out of S (PREREG §2.8)."""
 
 
 @dataclass(frozen=True)

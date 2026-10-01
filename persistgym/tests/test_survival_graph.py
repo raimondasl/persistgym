@@ -111,6 +111,41 @@ def test_survival_from_payload_separates_notes_and_summaries(small_eps):
     assert not s["assistant_carried"]["final_value"]
 
 
+def test_survival_from_payload_ignores_lookup_responses(small_eps):
+    """PREREG §2.8: S_verbatim leaves out every lookup response. A far window episode whose
+    agent looked up two steps before need still has S = 0 at need (S = 1 there is the
+    window-accounting bug stop), although the lookup response re-shows the records."""
+    from persistgym.env import EpisodeEnv
+    from persistgym.episode import LOOKUP_EVENT_MARKER
+
+    for ep in small_eps:  # no scripted observation carries the marker
+        assert not any(LOOKUP_EVENT_MARKER in s.observation for s in ep.steps), ep.episode_id
+    ep = pick(small_eps, "derived-rec-far")
+    n = ep.need_step
+    env = EpisodeEnv(ep)
+    shown = [(env.pending, env.observation)]
+    while env.pending < n:
+        lookup = env.pending == n - 2 and env.lookups_used == 0
+        reply = (f"ACTION: lookup({ep.entity})" if lookup
+                 else f"ACTION: {ep.steps[env.pending].expected_action}")
+        obs, _ = env.step(reply)
+        shown.append((env.pending, obs))
+    lookup_text = next(o for p, o in shown if LOOKUP_EVENT_MARKER in o)
+    assert all(c.sentence in lookup_text for c in ep.components)
+    # what a drop-oldest window sends at need: the last few turns, lookup response included
+    tail = [o for p, o in shown if p >= n - 3]
+    payload = [{"role": "system", "content": ep.system_prompt}]
+    for o in tail[:-1]:
+        payload += [{"role": "user", "content": o}, {"role": "assistant", "content": "ok"}]
+    payload.append({"role": "user", "content": tail[-1]})
+    s = survival_from_payload(ep, payload)
+    assert s["S"] is False and s["n_lookup_responses"] == 1
+    # the same text as an ordinary observation would count, so the exclusion is what bites
+    plain = [dict(m, content=m["content"].replace(LOOKUP_EVENT_MARKER, "EVENT: RECORDS"))
+             for m in payload]
+    assert survival_from_payload(ep, plain)["S"] is True
+
+
 def test_carried_in_text(small_eps):
     """PREREG §2.8 (D6): whole-word `(?<![0-9A-Za-z])VALUE(?![0-9A-Za-z])` anywhere in the
     model's text; the value, or for a derived fact every clue value; rule not required."""

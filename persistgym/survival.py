@@ -188,15 +188,23 @@ def survival_from_payload(episode: Episode, messages: Sequence[dict],
     the environment-side quantity. Summary cells insert a model-written summary as a user
     message: pass its index in `exclude_indices` and string-match it with `carried_in_text`.
 
-    Use the payload of the need step's first presentation. After a lookup the payload holds
-    the lookup result (records re-shown, so S=1 by construction) and the model's own lookup
-    reply, which may quote the options next to the entity name; neither says whether the
-    fact was carried.
+    Lookup responses (any message containing `episode.LOOKUP_EVENT_MARKER`) never count, as
+    PREREG §2.8 requires: a lookup taken before the need step re-shows the records whatever
+    the window kept, so counting it would give S = 1 in a far window cell, which §2.8 treats
+    as a window-accounting bug. `n_lookup_responses` reports how many were left out.
+
+    Use the payload of the need step's first presentation. A later presentation also holds
+    the model's own lookup reply, which may quote the options next to the entity name and
+    says nothing about whether the fact was carried.
     """
+    from persistgym.episode import LOOKUP_EVENT_MARKER
+
     pairs = flatten_payload(messages)
     skip = set(exclude_indices)
+    lookups = {i for i, (r, t) in enumerate(pairs)
+               if r in observation_roles and LOOKUP_EVENT_MARKER in t}
     env_text = "\n".join(t for i, (r, t) in enumerate(pairs)
-                         if r in observation_roles and i not in skip)
+                         if r in observation_roles and i not in skip and i not in lookups)
     if system:
         env_text = system + "\n" + env_text
     assistant_text = "\n".join(t for r, t in pairs if r == "assistant")
@@ -206,6 +214,7 @@ def survival_from_payload(episode: Episode, messages: Sequence[dict],
         "components": per,
         "assistant_carried": carried_in_text(assistant_text, episode),
         "n_messages": len(pairs),
+        "n_lookup_responses": len(lookups),
         "n_opaque_items": sum(1 for r, _ in pairs if r == "opaque"),
         "payload_text_tokens": tokens.count("\n".join(t for _, t in pairs) + (system or ""),
                                             episode.config["tokenizer"]),

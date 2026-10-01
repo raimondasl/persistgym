@@ -20,6 +20,7 @@ from persistgym import tokens
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, GeneratorConfig
 from persistgym.episode import (
     ALL_CELLS,
+    LOOKUP_EVENT_MARKER,
     VARIANTS,
     Component,
     Episode,
@@ -406,6 +407,8 @@ class TemplateRenderer:
         slot = max(1, self.cfg.step_seconds // (self.cfg.lookup_max_per_episode + 2))
         clock = self.step_time(pending_step) + timedelta(seconds=(slot_no + 1) * slot)
         fitted = self.observation(("lookup", pending_step, slot_no), clock, event)
+        if LOOKUP_EVENT_MARKER not in fitted.text:  # survival_from_payload relies on it
+            raise GenerationError(f"{self.t.template_id}: lookup response without its marker")
         return fitted.text, fitted.n_tokens, event
 
 

@@ -140,7 +140,7 @@ Per request it logs to the raw transcript:
 - the returned model string and service tier.
 
 At the need step's **first** presentation (not a lookup result) it records:
-- `survival_from_payload` on the payload actually sent, with `system` = instructions and the bridge excluded;
+- `survival_from_payload` on the payload actually sent, with `system` = instructions and the bridge excluded (lookup responses from earlier steps are always left out, PREREG §2.8);
 - `carried_in_text` on the bridge (summary cells);
 - the window or compaction bookkeeping.
 

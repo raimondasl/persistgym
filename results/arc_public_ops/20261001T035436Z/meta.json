@@ -1,6 +1,6 @@
 {
   "experiment": "arc_public_ops",
-  "run_id": "20261001T033934Z",
+  "run_id": "20261001T035436Z",
   "cell_or_config": "published gemini-3.8-flash public-set runs (6 variants x 25 games)",
   "config": {
     "results_slug": "google-gemini-3-8-flash",
@@ -32,8 +32,8 @@
   "template_id": null,
   "repeat_index": null,
   "seeds": null,
-  "started_utc": "2026-10-01T03:39:34+00:00",
-  "finished_utc": "2026-10-01T03:39:40+00:00",
+  "started_utc": "2026-10-01T03:54:36+00:00",
+  "finished_utc": "2026-10-01T03:54:42+00:00",
   "exit_reason": "completed",
   "tokens": {
     "paid_calls": 0
@@ -221,6 +221,6 @@
     "arc-agi": null,
     "tiktoken": "0.14.0"
   },
-  "git_commit": "7b1ac24e3e0680494608d6d8f2aed9a576a038ce",
+  "git_commit": "f4202822bc1f4cf25394eb7c00af09912fadc662",
   "git_dirty": false
 }

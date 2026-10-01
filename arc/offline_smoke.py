@@ -220,18 +220,42 @@ def check_run(label: str, result: dict[str, Any], bodies: list[dict[str, Any]]) 
                 problems.append("request after a summary does not start with the bridge")
             position = 0
     if label in {"S1", "S2"}:
-        # Patch 0016: these lose history only by summarizing, never by
-        # dropping the oldest turn, so every action request starts with the
-        # first observation or a summary bridge.
         if runtime.get("context_trims") != 0:
             problems.append(f"context_trims {runtime.get('context_trims')!r}")
-        first = _first_text(actions[0]) if actions else ""
-        for index, body in enumerate(actions, start=1):
-            text = _first_text(body)
-            if text != first and not text.startswith(BRIDGE_PREFIX):
-                problems.append(f"request {index}: oldest turn dropped")
-                break
+        problems += _dropped_turn_problems(bodies)
     return problems
+
+
+def _dropped_turn_problems(bodies: list[dict[str, Any]]) -> list[str]:
+    """S1/S2 (patch 0016) lose history only by summarizing, never by dropping turns.
+
+    Every action request starts with the first observation or a summary bridge,
+    and until the next summary each one resends the previous action request in
+    full and adds to it. Comparing first texts alone would miss a dropped pair
+    whose next observation reads the same as the first, as after a no-op move.
+    check_run separately requires one action request per step, so an action
+    request never repeats the one before it.
+    """
+    actions = [body for body in bodies if not _is_summary(body)]
+    first = _first_text(actions[0]) if actions else ""
+    previous: list[Any] | None = None
+    index = 0
+    for body in bodies:
+        if _is_summary(body):
+            previous = None
+            continue
+        index += 1
+        items = list(body.get("input") or [])
+        text = _first_text(body)
+        dropped = text != first and not text.startswith(BRIDGE_PREFIX)
+        if previous is not None and (
+            len(items) <= len(previous) or items[: len(previous)] != previous
+        ):
+            dropped = True
+        if dropped:
+            return [f"request {index}: oldest turn dropped"]
+        previous = items
+    return []
 
 
 def _forced_steps(result: dict[str, Any]) -> int:

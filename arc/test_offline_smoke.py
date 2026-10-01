@@ -287,6 +287,15 @@ def _run(label: str) -> tuple[dict, list[dict]]:
     return result, bodies
 
 
+def _drop_pair_with_same_observations(result: dict, bodies: list[dict]) -> None:
+    """Every observation reads like the first, and request 2 lost its oldest pair."""
+    for body in bodies:
+        for item in body["input"]:
+            if item["content"][0]["text"].startswith("obs"):
+                item["content"][0]["text"] = "obs 1"
+    bodies[1]["input"] = bodies[1]["input"][2:]
+
+
 class TestCheckRun:
     @pytest.mark.parametrize("label", list(smoke.PATH_CONFIGS))
     def test_expected_behaviour_passes(self, label):
@@ -304,6 +313,8 @@ class TestCheckRun:
             ("S1", lambda r, b: r["run_meta"]["runtime"].update(context_trims=2), "context_trims"),
             ("S1", lambda r, b: b[1]["input"].pop(0), "oldest turn dropped"),
             ("S2", lambda r, b: b[3]["input"].pop(0), "oldest turn dropped"),
+            ("S1", _drop_pair_with_same_observations, "oldest turn dropped"),
+            ("S2", _drop_pair_with_same_observations, "oldest turn dropped"),
             ("S1", lambda r, b: b.pop(2), "no summary request"),
             ("S2", lambda r, b: b[3]["input"].pop(0), "bridge"),
             ("S4", lambda r, b: b[2]["generation_config"].update(max_output_tokens=9), "max_output_tokens"),

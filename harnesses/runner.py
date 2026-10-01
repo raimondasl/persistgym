@@ -12,12 +12,26 @@ string-matched separately with `carried_in_text`).
 
 An episode whose echoed `reasoning.context` differs from the request on any response is
 excluded (CLAUDE.md); by default it stops at that response.
+
+Per episode it also logs (harnesses/DESIGN.md §7):
+* `need_phase` (D8): provider-reported tokens summed over every call made while the need step
+  is pending, from its first call through the call that returns the scored action, lookup
+  round-trips included;
+* `compacted_between` (D12, summary cells): 1 iff a compaction fired after the first evidence
+  step r_first and before the agent first saw the need-step observation (a compaction
+  applied to the payload of the need step's first call counts; one fired during a lookup
+  round-trip at the need step does not, and is marked `at_lookup_result` = 1);
+* the wall-clock seconds of every call (`call_latency_s`).
+
+Pilot-blinded experiments (`harnesses.blinding`, PREREG §11) keep `episodes.jsonl` under the
+gitignored results/raw/ only.
 """
 
 from __future__ import annotations
 
 import gzip
 import json
+import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -26,6 +40,7 @@ from typing import Any, Protocol
 import openai
 
 from common import runmeta
+from harnesses import blinding
 from harnesses.cells import CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.items import item_text
@@ -88,6 +103,7 @@ class EpisodeRun:
     task_cell: str
     variant: str
     harness_cell: str
+    model: str = ""  # requested
     exit_reason: str = "DONE"
     error: str | None = None
     excluded: bool = False
@@ -100,13 +116,18 @@ class EpisodeRun:
     n_requests: int = 0
     n_summary_requests: int = 0
     n_summary_failures: int = 0
+    n_unparsed_routine: int = 0  # unparsed replies at routine (non-need) steps
+    # each with at_step and at_lookup_result (D12)
     compactions: list[dict] = field(default_factory=list)
+    compacted_between: int | None = None  # D12; summary cells only, see run_episode
     need_payload: dict | None = None  # survival_from_payload at the need step
     need_bridge_carried: dict | None = None  # carried_in_text on the bridge, summary cells
     need_info: dict | None = None  # loss-policy bookkeeping of the need request
     designed: dict | None = None  # episode.design survival for reference
+    need_phase: dict | None = None  # D8 need-phase tokens, see _need_phase_add
     echo: dict = field(default_factory=dict)
     usage: dict = field(default_factory=dict)
+    call_latency_s: list[float] = field(default_factory=list)  # wall clock per call
     cost_usd_list: float | None = 0.0
     cost_usd_billed_est: float | None = 0.0
 
@@ -125,20 +146,51 @@ def _add_usage(run: EpisodeRun, response: dict) -> None:
         run.cost_usd_billed_est += billed
 
 
+def _need_phase_add(run: EpisodeRun, req, info: dict, response: dict) -> None:
+    """D8: add one call made while the need step is pending. `tokens` is the D8 quantity:
+    provider-reported input tokens (cached included: OpenAI's `input_tokens` counts cached
+    tokens) plus output tokens (reasoning included: `output_tokens` counts reasoning
+    tokens). Summary calls fired while the need step is pending are calls at the need step
+    and are included; they are also totalled apart (`summary_tokens`) for the reading that
+    leaves them out. H1's cells (F-0, W-0) never summarize."""
+    u = usage_numbers(response.get("usage"))
+    if run.need_phase is None:
+        run.need_phase = {"n_calls": 0, "n_step_calls": 0, "n_lookup_result_calls": 0,
+                          "n_summary_calls": 0, "input_tokens": 0, "cached_input_tokens": 0,
+                          "output_tokens": 0, "reasoning_tokens": 0, "tokens": 0,
+                          "summary_tokens": 0, "first_step_call": None, "complete": False}
+    n = run.need_phase
+    n["n_calls"] += 1
+    for k in ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"):
+        n[k] += u[k]
+    n["tokens"] += u["input_tokens"] + u["output_tokens"]
+    if req.kind == "summary":
+        n["n_summary_calls"] += 1
+        n["summary_tokens"] += u["input_tokens"] + u["output_tokens"]
+    else:
+        n["n_step_calls"] += 1
+        n["n_lookup_result_calls"] += bool(info["is_lookup_result"])
+        if n["first_step_call"] is None:  # H2's usage[n]: the need step's first step call
+            n["first_step_call"] = u
+
+
 def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport: Transport,
                 recorder=None) -> EpisodeRun:
     env = EpisodeEnv(episode)
     session = HarnessSession.for_episode(cell, episode, cfg)
     run = EpisodeRun(episode.episode_id, episode.template_id, episode.cell.id, episode.variant,
-                     cell.cell_id)
+                     cell.cell_id, model=cfg.model)
     run.designed = {k: episode.design.get(k) for k in (
         "S_window_obs_only", "S_window_assumed_replies", "far_by_obs_tokens",
         "gap_steps_latest", "gap_steps_earliest")}
+    run.designed["evidence_steps"] = episode.reveal_steps
+    need = episode.need_step
     echoed: Counter = Counter()
     models: Counter = Counter()
     tiers: Counter = Counter()
     obs = env.observation
     done = False
+    n_compactions_seen_at_need = 0  # compactions applied before the need step's first call
     try:
         while not done:
             if len(env.turns) > cfg.max_turns:
@@ -151,7 +203,7 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
             while True:
                 req = session.next_request()
                 first_need = (req.kind == "step" and run.need_payload is None
-                              and info["pending_step"] == episode.need_step
+                              and info["pending_step"] == need
                               and not info["is_lookup_result"])
                 if first_need:
                     bridge = req.info["bridge_index"]
@@ -159,10 +211,14 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                         episode, req.payload["input"], system=req.payload["instructions"],
                         exclude_indices=[bridge] if bridge is not None else [])
                     run.need_info = dict(req.info)
+                    # every compaction so far is applied to this payload (D12)
+                    n_compactions_seen_at_need = len(session.compactions)
                     if bridge is not None:
                         run.need_bridge_carried = carried_in_text(
                             item_text(req.payload["input"][bridge]), episode)
+                started = time.monotonic()
                 response = transport.send(req.payload)
+                run.call_latency_s.append(round(time.monotonic() - started, 3))
                 run.n_requests += 1
                 run.n_summary_requests += req.kind == "summary"
                 echo = check_echo(req.payload, response)
@@ -170,6 +226,8 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 models[str(echo["model_returned"])] += 1
                 tiers[str(echo["service_tier_returned"])] += 1
                 _add_usage(run, response)
+                if info["pending_step"] == need:
+                    _need_phase_add(run, req, info, response)
                 if recorder is not None:
                     recorder({"episode_id": episode.episode_id, "harness_cell": cell.cell_id,
                               "request_index": run.n_requests - 1, "kind": req.kind,
@@ -210,8 +268,29 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
         run.routine_accuracy = (res.routine_accuracy if res.routine_total else None)
         run.n_lookups = res.n_lookups
         run.n_turns = res.n_turns
-        run.compactions = [{k: v for k, v in c.items() if k != "summary_text"}
+        run.n_unparsed_routine = sum(o == "unparsed" for s, o in res.step_outcomes.items()
+                                     if s != need)
+        if run.need_phase is not None:
+            run.need_phase["complete"] = need in res.step_outcomes
+        # Session turn t is environment turn t (one observation each), so env.turns maps a
+        # compaction's turn to the step that was pending when it fired, and to whether that
+        # turn's observation was a lookup result.
+        run.compactions = [{**{k: v for k, v in c.items() if k != "summary_text"},
+                            "at_step": env.turns[c["at_turn"]].pending_step,
+                            "at_lookup_result": int(env.turns[c["at_turn"]].is_lookup_result)}
                            for c in session.compactions]
+        if (cell.history == "summary" and episode.reveal_steps
+                and run.need_payload is not None):
+            # D12: did a summary fire after the first evidence step and before the agent
+            # first saw the need-step observation? The compactions applied to the payload of
+            # the need step's first call count; later ones (lookup round-trips at the need
+            # step, at_lookup_result = 1) do not. Successful compactions only (a failed
+            # summary attempt changes nothing). None when there is no evidence (withheld
+            # variant) or the need step was never presented.
+            r_first = min(episode.reveal_steps)
+            run.compacted_between = int(any(
+                c["at_step"] > r_first
+                for c in run.compactions[:n_compactions_seen_at_need]))
         run.echo = {"context_requested": cell.reasoning_context,
                     "context_echoed": dict(echoed), "models_returned": dict(models),
                     "service_tiers_returned": dict(tiers)}
@@ -221,19 +300,29 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
 def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
               transport: Transport, *, experiment: str, run_id: str, milestone: str = "M0",
               results_root: Path = RESULTS, raw_root: Path = RAW, repeat_index: int = 0,
-              notes: str = "", abort_after_api_errors: int = 2) -> dict[str, Any]:
-    """Run episodes in order; write results/<experiment>/<run_id>/{meta.json,episodes.jsonl}
-    and the raw transcript under results/raw/. Paid transports get their costs.csv row
-    appended in `finally`, whatever happens."""
+              notes: str = "", abort_after_api_errors: int = 2,
+              run_matrix: dict | None = None) -> dict[str, Any]:
+    """Run episodes in order; write results/<experiment>/<run_id>/{meta.json,summary.json,
+    episodes.jsonl} and the raw transcript under results/raw/. For a pilot-blinded
+    experiment (`blinding.BLINDED_EXPERIMENTS`) episodes.jsonl goes to
+    results/raw/<experiment>/<run_id>/ instead, and meta.json leaves out reasoning tokens.
+    Paid transports get their costs.csv row appended in `finally`, whatever happens.
+    `run_matrix` (harnesses.matrix.RunMatrix.to_dict) is recorded in meta.json's config."""
+    for what, name in (("experiment", experiment), ("run_id", run_id)):
+        require_plain_name(what, name)
+    blinded = blinding.is_blinded(experiment)
     out_dir = results_root / experiment / run_id
-    raw_path = raw_root / experiment / run_id / "transcript.jsonl.gz"
+    raw_dir = raw_root / experiment / run_id
+    raw_path = raw_dir / "transcript.jsonl.gz"
+    episodes_path = (raw_dir if blinded else out_dir) / "episodes.jsonl"
     out_dir.mkdir(parents=True, exist_ok=True)
+    episodes_path.parent.mkdir(parents=True, exist_ok=True)
     recorder = JsonlRecorder(raw_path)
     started = runmeta.utc_now()
     runs: list[EpisodeRun] = []
     exit_reason = "COMPLETED"
     try:
-        with (out_dir / "episodes.jsonl").open("a", encoding="utf-8") as f:
+        with episodes_path.open("a", encoding="utf-8") as f:
             for ep in episodes:
                 r = run_episode(ep, cell, cfg, transport, recorder)
                 runs.append(r)
@@ -257,15 +346,36 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
         if hasattr(transport, "finalize"):
             cost_row = transport.finalize(run_id=run_id, milestone=milestone,
                                           cell_or_config=cell.ascii_id, notes=notes)
+        summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded)
+        (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
+                                              encoding="utf-8")
         meta = _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport,
                            experiment=experiment, run_id=run_id, started=started,
                            exit_reason=exit_reason, repeat_index=repeat_index,
-                           cost_row=cost_row)
+                           cost_row=cost_row, blinded=blinded, episodes_path=episodes_path,
+                           run_matrix=run_matrix)
     return meta
 
 
+def require_plain_name(what: str, name: str) -> None:
+    """`name` must be one plain path component. A run id such as '../../x' would otherwise
+    move a blinded run's episodes.jsonl out of the gitignored results/raw/ (PREREG §11)."""
+    if (not name or name in (".", "..") or name != name.strip()
+            or any(ch in name for ch in '/\\:\0')):
+        raise ValueError(f"{what} must be a plain folder name (no path separators, ':' or "
+                         f"'..'), got {name!r}")
+
+
+def _rel(path: Path) -> str:
+    try:
+        return path.relative_to(runmeta.REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, experiment, run_id,
-                started, exit_reason, repeat_index, cost_row) -> dict:
+                started, exit_reason, repeat_index, cost_row, blinded=False,
+                episodes_path=None, run_matrix=None) -> dict:
     echoed: Counter = Counter()
     models: Counter = Counter()
     usage: Counter = Counter()
@@ -280,10 +390,15 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
               "generator_config_hashes": sorted(gen_cfgs),
               "generator_config": next(iter(gen_cfgs.values())) if len(gen_cfgs) == 1 else None,
               "episode_ids": [e.episode_id for e in episodes]}
-    try:
-        raw_rel = str(raw_path.relative_to(runmeta.REPO_ROOT).as_posix())
-    except ValueError:
-        raw_rel = str(raw_path)
+    if run_matrix is not None:
+        config["run_matrix"] = run_matrix
+    tokens = dict(usage)
+    extra = {}
+    if blinded:
+        # PREREG §11: one run is one arm, so its reasoning-token total is a per-arm number.
+        tokens = blinding.blinded_tokens(tokens)
+        extra["blinding"] = {"rule": blinding.WITHHELD_NOTE,
+                             "episodes_path": _rel(episodes_path) if episodes_path else None}
     path = runmeta.write_meta(
         out_dir, experiment=experiment, run_id=run_id, cell_or_config=cell.cell_id,
         config=config, model_requested=cfg.model, model_returned=sorted(models),
@@ -293,10 +408,10 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
         template_id=sorted({e.template_id for e in episodes}), repeat_index=repeat_index,
         seeds={"template_seeds": sorted({e.template_seed for e in episodes})},
         started_utc=started, finished_utc=runmeta.utc_now(), exit_reason=exit_reason,
-        tokens=dict(usage),
+        tokens=tokens,
         cost_usd={"list": sum(listed) if None not in listed else None,
                   "billed_est": sum(billed) if None not in billed else None,
                   "costs_csv_row_appended": cost_row is not None},
-        raw_transcript_path=raw_rel, paid=bool(getattr(transport, "paid", False)),
-        n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs))
+        raw_transcript_path=_rel(raw_path), paid=bool(getattr(transport, "paid", False)),
+        n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs), **extra)
     return json.loads(path.read_text(encoding="utf-8"))

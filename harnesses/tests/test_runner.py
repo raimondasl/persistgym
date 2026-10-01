@@ -180,10 +180,10 @@ def test_run_batch_writes_meta_and_transcript(small_eps, tmp_path, monkeypatch):
         raise AssertionError("the fake path must never build an OpenAI client")
     monkeypatch.setattr(openai, "OpenAI", no_client)
     eps = small_eps[:3]
-    meta = run_batch(eps, CELLS["W-n-0"], CFG, FakeModel(), experiment="persistgym_pilot",
+    meta = run_batch(eps, CELLS["W-n-0"], CFG, FakeModel(), experiment="persistgym",
                      run_id="test-run", results_root=tmp_path / "results",
                      raw_root=tmp_path / "raw")
-    out = tmp_path / "results" / "persistgym_pilot" / "test-run"
+    out = tmp_path / "results" / "persistgym" / "test-run"
     assert set(runmeta.REQUIRED) <= set(meta)
     assert meta["exit_reason"] == "COMPLETED" and meta["paid"] is False
     assert meta["reasoning_context_requested"] == "current_turn"
@@ -193,7 +193,10 @@ def test_run_batch_writes_meta_and_transcript(small_eps, tmp_path, monkeypatch):
     assert meta["cost_usd"]["costs_csv_row_appended"] is False
     lines = (out / "episodes.jsonl").read_text(encoding="utf-8").splitlines()
     assert [json.loads(x)["episode_id"] for x in lines] == [e.episode_id for e in eps]
-    with gzip.open(tmp_path / "raw" / "persistgym_pilot" / "test-run" / "transcript.jsonl.gz",
+    assert "blinding" not in meta and meta["tokens"]["reasoning_tokens"] > 0
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["n_episodes"] == 3 and summary["blinded"] is False
+    with gzip.open(tmp_path / "raw" / "persistgym" / "test-run" / "transcript.jsonl.gz",
                    "rt", encoding="utf-8") as f:
         events = [json.loads(x) for x in f]
     assert len(events) == sum(e.n_steps for e in eps)

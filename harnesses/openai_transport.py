@@ -1,18 +1,18 @@
 """The only code in harnesses/ that can make a paid API call. It is guarded.
 
-`OpenAIResponsesTransport` refuses to exist unless ALL of these hold (`require_paid_approval`):
-1. the environment variable PERSISTGYM_ALLOW_PAID is exactly "1";
-2. an approved spending block name is given (`--approved-block <name>`, PLAN §16.2);
-3. PREREG.md is committed: tracked by git, present in HEAD and without uncommitted changes
-   (PLAN §16.3: PREREG committed before any paid call);
-4. the researcher's approval of that block is committed: results/decisions.md holds a line
-   that is exactly `approved_block: <name>` in the HEAD commit, and the working-tree copy
-   still holds it (a line that exists only in the working tree, or that was deleted locally,
-   does not count);
-5. the planned spend is a positive, finite number of dollars;
-6. the experiment maps to a budget phase in common/costs.py and the phase cap minus the
-   spend logged in results/costs.csv minus the planned spend of this run is >= 0
-   (`common.costs.headroom`).
+`OpenAIResponsesTransport` refuses to exist, before it builds any client, unless every check
+of the shared guard passes (`common.approval.require_paid_approval`, which documents them):
+PERSISTGYM_ALLOW_PAID=1; `--approved-block <name>`; PREREG.md committed (PLAN §16.3); a
+positive, finite planned spend; and the researcher's approval line
+
+    approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>
+
+in results/decisions.md on origin/main (fetched now), in HEAD and in the working tree,
+listing this run's experiment, with block spend + planned spend <= max_usd and room under
+the phase cap (PLAN §12, §16.2).
+
+The costs.csv row's notes start with `common.approval.spend_tag(<name>)`
+("approved_block=<name>;"), which is how the guard sums a block's spend.
 
 While running it stops before a call once the run's estimated billed cost reaches the planned
 spend, logs every response's echoed `reasoning.context`, returned model string and served
@@ -29,9 +29,6 @@ or stores a key. Load keys with `uv run --env-file .env ...`.
 from __future__ import annotations
 
 import logging
-import math
-import os
-import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -41,126 +38,27 @@ from typing import Any
 import openai
 
 from common import costs, runmeta
+from common.approval import (
+    ALLOW_ENV,
+    MAIN,
+    PaidApproval,
+    PaidCallsNotAllowed,
+    RemoteRef,
+    require_paid_approval,
+    spend_tag,
+)
 from harnesses import blinding
 from harnesses.pricing import UsageLedger, price_for
 
-ALLOW_ENV = "PERSISTGYM_ALLOW_PAID"
+# The guard lives in common/approval.py; its names are re-exported here for the CLI and tests.
+__all__ = ["ALLOW_ENV", "BudgetExceeded", "OpenAIResponsesTransport", "PaidApproval",
+           "PaidCallsNotAllowed", "require_paid_approval"]
+
 log = logging.getLogger("harnesses.openai")
-
-
-class PaidCallsNotAllowed(RuntimeError):
-    pass
 
 
 class BudgetExceeded(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class PaidApproval:
-    approved_block: str
-    experiment: str
-    phase: str
-    planned_usd: float
-    headroom_usd: float
-    prereg_version: str
-    costs_path: Path
-
-
-def prereg_not_committed(repo: Path) -> str | None:
-    """None if PREREG.md is tracked by git, present in HEAD and has no uncommitted changes;
-    otherwise the reason it does not count as committed (PLAN §16.3)."""
-    def ok(*args: str) -> bool:
-        try:
-            return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
-                                  text=True, check=False).returncode == 0
-        except OSError:
-            return False
-    if not ok("ls-files", "--error-unmatch", "--", "PREREG.md"):
-        return "PREREG.md is not tracked by git"
-    if not ok("cat-file", "-e", "HEAD:PREREG.md"):
-        return "PREREG.md is not in the HEAD commit"
-    if not ok("diff", "--quiet", "HEAD", "--", "PREREG.md"):
-        return "PREREG.md has uncommitted changes"
-    return None
-
-
-DECISIONS_MD = "results/decisions.md"  # relative to the repo root, as git paths are
-
-
-def approval_line(block: str) -> str:
-    """The line results/decisions.md must hold, committed, before block `block` may spend."""
-    return f"approved_block: {block}"
-
-
-def _has_line(text: str, line: str) -> bool:
-    # Exact match; only trailing whitespace (a CR from CRLF files, Markdown spaces) is ignored.
-    return any(x.rstrip() == line for x in text.splitlines())
-
-
-def block_not_approved(repo: Path, block: str) -> str | None:
-    """None if results/decisions.md holds the line `approved_block: <block>` both in the HEAD
-    commit and in the working tree; otherwise the reason the block does not count as
-    approved. The researcher records the approval (PLAN §16.2); the guard only reads it."""
-    line = approval_line(block)
-    try:
-        head = subprocess.run(["git", "-C", str(repo), "show", f"HEAD:./{DECISIONS_MD}"],
-                              capture_output=True, encoding="utf-8", errors="replace",
-                              check=False)
-    except OSError:
-        return "git is not available"
-    if head.returncode != 0:
-        return f"{DECISIONS_MD} is not in the HEAD commit"
-    if not _has_line(head.stdout, line):
-        return f"no line {line!r} in {DECISIONS_MD} as committed in HEAD"
-    path = repo / DECISIONS_MD
-    try:
-        working = path.read_text(encoding="utf-8")
-    except OSError:
-        working = ""
-    if not _has_line(working, line):
-        return (f"the line {line!r} is committed but missing from the working-tree "
-                f"{DECISIONS_MD} (an uncommitted revocation counts)")
-    return None
-
-
-def require_paid_approval(*, approved_block: str | None, experiment: str, planned_usd: float,
-                          costs_path: Path = costs.COSTS_CSV,
-                          repo: Path = runmeta.REPO_ROOT) -> PaidApproval:
-    if os.environ.get(ALLOW_ENV) != "1":
-        raise PaidCallsNotAllowed(f"paid calls are off: set {ALLOW_ENV}=1 for an approved block")
-    if not approved_block or not str(approved_block).strip():
-        raise PaidCallsNotAllowed("paid calls need --approved-block <name> (PLAN §16.2)")
-    phase = costs.phase_of(experiment)
-    if phase not in costs.PHASE_CAPS:
-        raise PaidCallsNotAllowed(f"experiment {experiment!r} has no budget phase in "
-                                  "common/costs.py")
-    # NaN would pass `<= 0` and every later budget comparison, so require a finite number.
-    if (planned_usd is None or not math.isfinite(float(planned_usd))
-            or float(planned_usd) <= 0):
-        raise PaidCallsNotAllowed("paid calls need a positive, finite planned spend "
-                                  "(--planned-usd)")
-    prereg = runmeta.prereg_version(repo)
-    if prereg is None:
-        raise PaidCallsNotAllowed("PREREG.md must be committed before any paid call "
-                                  "(PLAN §16.3)")
-    reason = prereg_not_committed(repo)
-    if reason is not None:
-        raise PaidCallsNotAllowed(f"PREREG.md must be committed before any paid call "
-                                  f"(PLAN §16.3): {reason}")
-    block = str(approved_block).strip()
-    reason = block_not_approved(repo, block)
-    if reason is not None:
-        raise PaidCallsNotAllowed(
-            f"block {block!r} is not approved: {reason}. The researcher approves a block by "
-            f"committing the line {approval_line(block)!r} to {DECISIONS_MD} (PLAN §16.2)")
-    room = costs.headroom(planned_usd, phase, costs.read_rows(costs_path))
-    if room < 0:
-        raise PaidCallsNotAllowed(
-            f"planned ${planned_usd:.2f} would exceed the phase {phase} cap of "
-            f"${costs.PHASE_CAPS[phase]:.0f} by ${-room:.2f}: stop and ask the researcher")
-    return PaidApproval(block, experiment, phase, float(planned_usd), room, prereg,
-                        Path(costs_path))
 
 
 def _default_client(timeout_s: float) -> Any:
@@ -185,13 +83,16 @@ class OpenAIResponsesTransport:
     backoff_s: float = 5.0
     client_factory: Callable[[float], Any] | None = None
     sleep: Callable[[float], None] = time.sleep
+    # where an approval must have been merged (origin/main); tests use a local bare repo
+    approval_remote: RemoteRef = MAIN
     paid: bool = field(default=True, init=False)
 
     def __post_init__(self) -> None:
         # Guard first: nothing below runs without approval.
         self.approval = require_paid_approval(
             approved_block=self.approved_block, experiment=self.experiment,
-            planned_usd=self.planned_usd, costs_path=self.costs_path, repo=self.repo)
+            planned_usd=self.planned_usd, costs_path=self.costs_path, repo=self.repo,
+            remote=self.approval_remote)
         price_for(self.model)  # refuse a model we cannot cost
         self.ledger = UsageLedger(self.model)
         self.echo_log: list[dict] = []
@@ -255,7 +156,7 @@ class OpenAIResponsesTransport:
             timestamp_utc=runmeta.utc_now(), run_id=run_id, milestone=milestone,
             experiment=self.approval.experiment, cell_or_config=cell_or_config,
             git_commit=git["git_commit"],
-            notes=(f"approved_block={self.approval.approved_block}; "
+            notes=(f"{spend_tag(self.approval.approved_block)} "
                    f"context_mismatches={mismatches}; git_dirty={git['git_dirty']}"
                    + (f"; {notes}" if notes else "")))
         if blinding.is_blinded(self.approval.experiment):

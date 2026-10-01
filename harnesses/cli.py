@@ -5,10 +5,11 @@ $0 commands (fake model or local files, no network):
     uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far
     uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
 
-Paid commands (refuse unless PERSISTGYM_ALLOW_PAID=1, --approved-block and --planned-usd are
-given, PREREG.md is committed, results/decisions.md holds the committed line
-"approved_block: <name>" and the phase cap in common/costs.py has room; see
-harnesses/openai_transport.py). The OpenAI SDK reads the key from the environment:
+Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, --approved-block and --planned-usd are
+given, PREREG.md is committed, and results/decisions.md holds the researcher's line
+"approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>" on origin/main,
+in HEAD and in the working tree, listing the experiment, with room under max_usd and the
+phase cap (common/approval.py). The OpenAI SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-echo \
         --approved-block "1-pilots" --planned-usd 0.5
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
@@ -302,7 +303,9 @@ def main(argv: list[str] | None = None) -> int:
 
     def paid_args(sp):
         sp.add_argument("--approved-block", default=None,
-                        help="name of the researcher-approved spending block (PLAN §16.2)")
+                        help="name of the researcher-approved spending block (PLAN §16.2); "
+                             "its approval line in results/decisions.md must list the "
+                             "experiment and leave room under its max_usd")
         sp.add_argument("--planned-usd", type=float, default=None,
                         help="planned spend of the whole command in USD (estimated billed "
                              "cost; for probes, the total over all --model values)")

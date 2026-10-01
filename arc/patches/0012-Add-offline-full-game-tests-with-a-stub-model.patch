@@ -1,7 +1,7 @@
-From e05ade5bc4f5788cb042eaf7c7198b9045c26cc5 Mon Sep 17 00:00:00 2001
+From 9996462adaf9db28c80b24709427b0314e42e02a Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:36:54 -0400
-Subject: [PATCH 12/12] Add offline full-game tests with a stub model
+Subject: [PATCH 12/15] Add offline full-game tests with a stub model
 
 Runs Swarm end to end without a model or ARC's API: arc-agi loads a
 two-level toy game written for the test (not an ARC game) from a temporary

@@ -1,7 +1,7 @@
 From b464c55d293ba87e4c33a6d4a6c58aa2964378ea Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 23:40:52 -0400
-Subject: [PATCH 05/12] Add payload snapshot tests for Gemini 3.8 Flash high
+Subject: [PATCH 05/15] Add payload snapshot tests for Gemini 3.8 Flash high
  runs
 
 Runs BenchmarkingAgent.main() on a scripted game through the real

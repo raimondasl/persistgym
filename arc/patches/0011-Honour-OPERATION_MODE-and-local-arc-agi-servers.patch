@@ -1,7 +1,7 @@
-From ab22d3eb047901ca0f53f628c92156d56351bd78 Mon Sep 17 00:00:00 2001
+From 70951d5503d4dd198add4ec9b4939b0338485060 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:33:44 -0400
-Subject: [PATCH 11/12] Honour OPERATION_MODE and local arc-agi servers
+Subject: [PATCH 11/15] Honour OPERATION_MODE and local arc-agi servers
 
 Swarm hard-coded Arcade(operation_mode=OperationMode.ONLINE), and arc-agi
 gives that constructor argument precedence over OPERATION_MODE, so the

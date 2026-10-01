@@ -363,14 +363,20 @@ class TemplateRenderer:
         Re-shows, verbatim and in display order, every record shown at or before the pending
         step about an entity whose name the key contains as a whole word: the target's
         records (fact, or clues and rule) or a distractor's binding (PREREG D3). Any other
-        key, or a key whose records are not shown yet, gets "no such record"."""
+        key, or a key whose records are not shown yet, gets "no such record".
+
+        The key is matched as the agent wrote it. `safe_key` (punctuation dropped, at most 40
+        characters) is only echoed back: matching it instead would glue words together
+        (`key="BEECH"` -> `keyBEECH`, `sample:BEECH` -> `sampleBEECH`, `BEECH's` -> `BEECHs`)
+        or cut the name off a long key, and refuse keys that name the entity as a word."""
         sk = self.skin
+        key = key or ""
         safe_key = "".join(ch for ch in key if ch.isalnum() or ch in " _-")[:40].strip()
         lines: list[str] = []
         about: list[str] = []
         for rid, st in sorted(ep.lookup.reveal_steps.items(), key=lambda kv: (kv[1], kv[0])):
             ent = ep.lookup.key_of(rid)
-            if (st <= pending_step and lookup_key_matches(safe_key, ent)
+            if (st <= pending_step and lookup_key_matches(key, ent)
                     and ep.lookup.records[rid] not in lines):
                 lines.append(ep.lookup.records[rid])
                 if ent not in about:

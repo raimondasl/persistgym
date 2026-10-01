@@ -305,7 +305,9 @@ def _play(ep: Episode, at_need: list[str]) -> tuple[EpisodeEnv, list[str]]:
 
 def lookup_audit(episodes: Sequence[Episode]) -> list[dict]:
     """Play recoverable base episodes with lookups at the need step and check D3:
-    * lookup(target) re-shows every target record, and no distractor binding;
+    * lookup(target) re-shows every target record, and no distractor binding (the key is
+      written `key="<name in lower case>"`, so the whole-word match on the key as written is
+      exercised too);
     * lookup(distractor) re-shows that distractor's binding, and no target record;
     * lookup(unknown key) answers "no such record";
     * after the cap, a lookup answers "lookup unavailable", costs one turn, is not scored,
@@ -320,7 +322,7 @@ def lookup_audit(episodes: Sequence[Episode]) -> list[dict]:
         n += 1
         cap = ep.lookup.max_per_episode
         answer = f"ACTION: {ep.need.expected_action}"
-        keys = [ep.entity.lower(), *(f"{ep.kind} {d.entity}" for d in ep.distractors)]
+        keys = [f'key="{ep.entity.lower()}"', *(f"{ep.kind} {d.entity}" for d in ep.distractors)]
         env, seen = _play(ep, [f"ACTION: lookup({k})" for k in keys[:cap]] + [answer])
         target_ok = (all(c.sentence in seen[0] for c in ep.components)
                      and not any(d.sentence in seen[0] for d in ep.distractors))

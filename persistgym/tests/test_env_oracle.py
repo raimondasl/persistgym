@@ -114,9 +114,15 @@ def test_lookup_before_reveal_and_wrong_key(small_eps):
 
 def test_lookup_key_matches_entity_as_a_word(small_eps):
     ep = pick(small_eps, "observed-rec-far")
+    long_key = f"the {ep.quantity} record that was logged a while ago for {ep.kind} {ep.entity}"
+    assert len(long_key) > 40 and long_key.find(ep.entity) > 40
     for key, ok in ((ep.entity, True), (ep.entity.lower(), True),
                     (f"{ep.kind} {ep.entity}", True), (f"'{ep.entity}' records", True),
-                    (ep.entity + "S", False), ("x" + ep.entity, False), ("everything", False)):
+                    # punctuation next to the name, and long keys, still name it as a word
+                    (f'key="{ep.entity}"', True), (f"{ep.kind}:{ep.entity}", True),
+                    (f"{ep.entity}'s {ep.quantity}", True), (long_key, True),
+                    (ep.entity + "S", False), ("x" + ep.entity, False), ("everything", False),
+                    (f"{ep.kind}{ep.entity}", False)):
         def policy(env, key=key):
             if env.pending == ep.need_step and env.lookups_used == 0:
                 return f"ACTION: lookup({key})"

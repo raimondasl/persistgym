@@ -34,7 +34,7 @@ OUT_ROOT = REPO_ROOT / "results" / "arc_public_ops"
 HARNESS_COMMIT = "4ca00e607e3364a501fcbf7d1b7537dd2729cec3"
 COST_CAP_ELIGIBLE = 60.0
 GAP_MIN_ELIGIBLE = 20.0
-HARNESS_LABEL = {"standard": "Standard", "provider_adapter": "Provider Adapter"}
+CSV = {"index": False, "lineterminator": "\n", "float_format": "%.6g"}
 
 
 # ── loading ──────────────────────────────────────────────────────────────
@@ -443,10 +443,12 @@ def write_summary(run_dir: Path, runs, ends, rec, bounds, elig, lp85) -> None:
              "harness effect estimate.\n"
              "- Costs are ARC's no-cache list accounting from the recordings, not billed cost; "
              "per-action numbers come from 8 games chosen for the path study, not all 25.\n"
-             "- Clean-run bounds assume plateau cost per action holds for the remaining "
-             "budget and ignore wall-clock stops; they are upper-bound planning numbers.\n"
+             "- Clean-run bounds assume the plateau cost per action holds for the remaining "
+             "budget; the uncapped bound ignores the 12 h clock and the capped one assumes "
+             "the run's own mean pace. They are planning numbers, not forecasts of our runs "
+             "(service tier, latency and model behaviour can differ).\n"
              "- No per-level clear rates by harness (H5) are computed or implied.")
-    (run_dir / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    (run_dir / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -474,13 +476,13 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dir.mkdir(parents=True, exist_ok=True)
     runs[["variant_id", "page_score", *PER_RUN_COLS[:-1], "level_actions", "level_baselines",
-          "inferred_ending"]].to_csv(run_dir / "per_run.csv", index=False)
-    ends.to_csv(run_dir / "endings_by_harness_effort.csv", index=False)
-    rec.to_csv(run_dir / "recordings_per_action.csv", index=False)
-    bounds.to_csv(run_dir / "clean_run_bounds.csv", index=False)
-    elig.to_csv(run_dir / "eligibility.csv", index=False)
+          "inferred_ending"]].to_csv(run_dir / "per_run.csv", **CSV)
+    ends.to_csv(run_dir / "endings_by_harness_effort.csv", **CSV)
+    rec.to_csv(run_dir / "recordings_per_action.csv", **CSV)
+    bounds.to_csv(run_dir / "clean_run_bounds.csv", **CSV)
+    elig.to_csv(run_dir / "eligibility.csv", **CSV)
     (run_dir / "lp85_example.json").write_text(json.dumps(lp85, indent=2) + "\n",
-                                               encoding="utf-8")
+                                               encoding="utf-8", newline="\n")
     write_summary(run_dir, runs, ends, rec, bounds, elig, lp85)
 
     hashes = {str(p.relative_to(cache)).replace("\\", "/"): sha256_file(p) for p in inputs}

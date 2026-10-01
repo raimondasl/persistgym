@@ -10,7 +10,11 @@ Everything serializes to plain JSON (`to_dict` / `from_dict`), one episode per J
 
 from __future__ import annotations
 
+import gzip
+import json
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from persistgym.graph import DependencyGraph
 
@@ -184,3 +188,13 @@ class Episode:
         d["lookup"] = LookupSpec(**d["lookup"])
         d["graph"] = DependencyGraph.from_dict(d["graph"])
         return cls(**d)
+
+
+def read_jsonl(path: str | Path) -> Iterator[Episode]:
+    """Episodes from an episodes.jsonl or episodes.jsonl.gz file written by the CLI."""
+    path = Path(path)
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                yield Episode.from_dict(json.loads(line))

@@ -13,7 +13,7 @@ Typical use:
 from persistgym.config import DEFAULT_CONFIG, RESEARCHER_DECISIONS, GeneratorConfig
 from persistgym.controls import single_turn_control
 from persistgym.env import EpisodeEnv, EpisodeResult, parse_action
-from persistgym.episode import ALL_CELLS, VARIANTS, Episode, Step, TaskCell
+from persistgym.episode import ALL_CELLS, VARIANTS, Episode, Step, TaskCell, read_jsonl
 from persistgym.oracle import KeyOracle, TextOracle, run_episode
 from persistgym.render import generate, render_template
 from persistgym.survival import (
@@ -25,9 +25,27 @@ from persistgym.survival import (
 from persistgym.template import sample_template
 
 __all__ = [
-    "ALL_CELLS", "DEFAULT_CONFIG", "RESEARCHER_DECISIONS", "VARIANTS", "Episode", "EpisodeEnv",
-    "EpisodeResult", "GeneratorConfig", "KeyOracle", "Step", "TaskCell", "TextOracle",
-    "carried_in_text", "designed_survival", "generate", "parse_action", "render_template",
-    "run_episode", "sample_template", "single_turn_control", "survival_from_payload",
+    "ALL_CELLS",
+    "DEFAULT_CONFIG",
+    "RESEARCHER_DECISIONS",
+    "VARIANTS",
+    "Episode",
+    "EpisodeEnv",
+    "EpisodeResult",
+    "GeneratorConfig",
+    "KeyOracle",
+    "Step",
+    "TaskCell",
+    "TextOracle",
+    "carried_in_text",
+    "designed_survival",
+    "generate",
+    "parse_action",
+    "read_jsonl",
+    "render_template",
+    "run_episode",
+    "sample_template",
+    "single_turn_control",
+    "survival_from_payload",
     "window_keep_start",
 ]

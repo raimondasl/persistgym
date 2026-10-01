@@ -1,6 +1,7 @@
-"""The approval line grammar, where the line must be (origin/main, HEAD, working tree) and the
-per-block spend limit (common/approval.py). No network: each test repo's origin is a local
-bare repository and git may use only the file transport (conftest)."""
+"""The approval line grammar, where the line must be (origin/main, HEAD, working tree), that
+PREREG.md is the merged one, and the per-block spend limit (common/approval.py). No network:
+each test repo's origin is a local bare repository and git may use only the file transport
+(conftest)."""
 
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from common.approval import (
     require_paid_approval,
 )
 from common.tests.gitrepo import (
+    add_origin,
     approval_line,
     commit_on_origin_only,
     decisions_text,
@@ -292,27 +294,60 @@ def _row(notes, listed="", billed="", experiment="toggle_pilot"):
             "cost_usd_list": listed, "cost_usd_billed_est": billed}
 
 
-def test_block_spend_sums_the_larger_of_list_and_billed_over_tagged_rows():
+def test_block_spend_sums_billed_over_tagged_rows():
+    """Block spend counts each tagged row's billed estimate. It used to count the larger of
+    list and billed, which on Flex is the list cost, twice what is billed; PLAN's caps and
+    forecasts are in billed dollars (D23), so max_usd is now read in billed dollars too."""
     rows = [
-        _row("approved_block=1-pilots; context_mismatches=0", "0.30", "0.15"),
+        _row("approved_block=1-pilots; context_mismatches=0", "0.30", "0.15"),  # Flex
         _row("approved_block=1-pilots; pilot", "1.00", "1.20"),   # billed above list
-        _row("approved_block=1-pilots;", "", ""),                  # no cost logged
+        _row("approved_block=1-pilots; arc", "0.40", ""),          # no billed: list
         _row("approved_block=1-pilots-extra; x", "50", "50"),      # another block
         _row("approved_block=2-seed1; x", "50", "50"),
         _row("approved_block=1-pilots", "50", "50"),               # no ';': not the tag
         _row("", "50", "50"),
     ]
-    assert block_spend("1-pilots", rows) == Decimal("1.50")
+    assert block_spend("1-pilots", rows) == Decimal("1.75")
     assert block_spend("pilots", rows) == 0
     assert block_spend("2-seed1", rows) == 50
     assert block_spend("1-pilots", [_row("approved_block=1-pilots;", "1.5e-05", "")]) == (
         Decimal("0.000015"))
 
 
+def test_a_flex_row_counts_at_its_billed_estimate():
+    """The transport's Flex row: list $0.30, billed $0.15. The block has spent $0.15."""
+    row = _row("approved_block=1-pilots; context_mismatches=0", "0.300000", "0.150000")
+    assert block_spend("1-pilots", [row]) == Decimal("0.15")
+    assert approval.row_spend(row, 2) == Decimal("0.15")
+    assert approval.spend_usd is costs.spend_usd  # one measure for the guard and the caps
+
+
+def test_a_missing_billed_estimate_falls_back_to_list():
+    row = _row("approved_block=1-pilots;", "0.40", "")
+    assert block_spend("1-pilots", [row]) == Decimal("0.40")
+    assert block_spend("1-pilots", [_row("approved_block=1-pilots;", "0.40", " ")]) == (
+        Decimal("0.40"))  # whitespace is empty
+    # 0 is an estimate, not a missing one: no fallback
+    assert block_spend("1-pilots", [_row("approved_block=1-pilots;", "0.40", "0")]) == 0
+
+
+def test_a_row_with_neither_cost_cannot_be_counted():
+    """Before, a row with both costs empty counted as $0. Now it is unreadable: a run that
+    logged no cost must not look free."""
+    row = _row("approved_block=1-pilots;", "", "")
+    with pytest.raises(ValueError, match="costs.csv line 2: no cost"):
+        block_spend("1-pilots", [row])
+    with pytest.raises(ValueError, match="costs.csv line 2: no cost"):
+        approval.check_ledger([row])
+
+
 @pytest.mark.parametrize("bad", ["abc", "nan", "inf", "-1", "1,5"])
 def test_block_spend_refuses_unreadable_costs(bad):
+    """The list cost is checked even though the billed estimate is what counts."""
     with pytest.raises(ValueError, match="costs.csv line 2"):
         block_spend("1-pilots", [_row("approved_block=1-pilots;", bad, "0")])
+    with pytest.raises(ValueError, match="costs.csv line 2"):
+        block_spend("1-pilots", [_row("approved_block=1-pilots;", "0", bad)])
 
 
 # --- where the line must be ----------------------------------------------------------------
@@ -551,6 +586,102 @@ def test_fetch_timeout_refuses(repo, monkeypatch):
         _require(repo, _costs(repo.parent))
 
 
+# --- PREREG.md must be the merged (frozen) one ---------------------------------------------
+
+PREREG_DIFFERS = "PREREG.md in HEAD differs from PREREG.md on origin/main"
+
+
+def _commit_prereg(repo: Path, text: str, message: str = "amend prereg") -> None:
+    (repo / "PREREG.md").write_text(text, encoding="utf-8")
+    git_in(repo, "commit", "-q", "-am", message)
+
+
+def test_prereg_committed_but_not_merged_refuses(repo):
+    """A PREREG committed on a branch is not frozen until it is on origin/main."""
+    c = _costs(repo.parent)
+    assert _require(repo, c).prereg_version == "0.1"
+    _commit_prereg(repo, "Version: 0.2\n")
+    with pytest.raises(PaidCallsNotAllowed, match=f"merged to origin/main.*{PREREG_DIFFERS}"):
+        _require(repo, c)
+    push_main(repo)  # the researcher's merge
+    assert _require(repo, c).prereg_version == "0.2"
+
+
+def test_prereg_amended_on_main_but_not_in_head_refuses(repo):
+    """An amendment merged elsewhere: HEAD's PREREG is stale. The guard compares with the
+    freshly fetched origin/main, not the local ref from before."""
+    c = _costs(repo.parent)
+    assert _require(repo, c)
+    commit_on_origin_only(repo, "Version: 0.2\n", "amend prereg on main", path="PREREG.md")
+    with pytest.raises(PaidCallsNotAllowed, match=PREREG_DIFFERS):
+        _require(repo, c)
+    git_in(repo, "merge", "-q", "--ff-only", "origin/main")  # bring HEAD up to date
+    assert _require(repo, c).prereg_version == "0.2"
+
+
+def test_prereg_missing_on_main_refuses(tmp_path, armed):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git_in(repo, "init", "-q")
+    write_decisions(repo, decisions_text("1-pilots"))
+    git_in(repo, "add", "results/decisions.md")
+    git_in(repo, "commit", "-q", "-m", "approve")
+    add_origin(repo)
+    push_main(repo)  # main: the approval, no PREREG
+    (repo / "PREREG.md").write_text("Version: 0.1\n", encoding="utf-8")
+    git_in(repo, "add", "PREREG.md")
+    git_in(repo, "commit", "-q", "-m", "prereg on a branch")
+    with pytest.raises(PaidCallsNotAllowed, match="PREREG.md is not on origin/main"):
+        _require(repo, _costs(tmp_path))
+    push_main(repo)
+    assert _require(repo, _costs(tmp_path)).prereg_version == "0.1"
+
+
+def test_prereg_differing_from_main_only_in_line_endings_refuses(repo):
+    """The check compares blobs byte for byte: a PREREG committed with other line endings
+    (CRLF for LF, or LF for CRLF) is not the one merged to main, even though it reads the
+    same and records the same version. Normalising line endings before comparing would let
+    it through."""
+    c = _costs(repo.parent)
+    p = repo / "PREREG.md"
+    merged = p.read_bytes()  # as committed and pushed (write_text gives CRLF on Windows)
+    flipped = (merged.replace(b"\r\n", b"\n") if b"\r\n" in merged
+               else merged.replace(b"\n", b"\r\n"))
+    assert flipped != merged and flipped.replace(b"\r", b"") == merged.replace(b"\r", b"")
+    p.write_bytes(flipped)
+    git_in(repo, "-c", "core.autocrlf=false", "commit", "-q", "-am", "line endings only")
+    assert git_out(repo, "rev-parse", "HEAD:PREREG.md") != git_out(
+        repo, "rev-parse", "refs/remotes/origin/main:PREREG.md")  # the blob keeps the bytes
+    with pytest.raises(PaidCallsNotAllowed, match=PREREG_DIFFERS):
+        _require(repo, c)
+    push_main(repo)  # the CRLF file merged: now it is the frozen one
+    assert _require(repo, c).prereg_version == "0.1"
+
+
+def test_prereg_check_ignores_replace_refs(repo):
+    """A local `git replace` of origin/main's commit cannot make HEAD's PREREG look merged."""
+    c = _costs(repo.parent)
+    _commit_prereg(repo, "Version: 0.2\n")
+    main = git_out(repo, "rev-parse", "refs/remotes/origin/main").strip()
+    git_in(repo, "replace", main, git_out(repo, "rev-parse", "HEAD").strip())
+    assert git_out(repo, "rev-parse", "refs/remotes/origin/main:PREREG.md") == git_out(
+        repo, "rev-parse", "HEAD:PREREG.md")  # plain git sees the replacement
+    with pytest.raises(PaidCallsNotAllowed, match=PREREG_DIFFERS):
+        _require(repo, c)
+
+
+def test_prereg_check_reads_the_injected_remote(repo):
+    c = _costs(repo.parent)
+    other = RemoteRef("upstream", "release")
+    git_in(repo, "remote", "add", "upstream", str(repo.parent / "repo-origin.git"))
+    git_in(repo, "push", "-q", "upstream", "HEAD:refs/heads/release")
+    _commit_prereg(repo, "Version: 0.2\n")
+    push_main(repo)  # origin/main has 0.2; upstream/release still has 0.1
+    assert _require(repo, c).prereg_version == "0.2"
+    with pytest.raises(PaidCallsNotAllowed, match="differs from PREREG.md on upstream/release"):
+        _require(repo, c, remote=other)
+
+
 # --- what the approval allows --------------------------------------------------------------
 
 def test_experiment_must_be_listed(repo):
@@ -560,6 +691,8 @@ def test_experiment_must_be_listed(repo):
 
 
 def test_block_spend_limit(tmp_path, armed):
+    """A Flex row (list $6, billed $3) uses $3 of the block's max_usd. Under the old measure,
+    the larger of the two, it used $6 and the limit fell at planned $4."""
     repo = tmp_path / "repo"
     repo.mkdir()
     guarded_repo(repo, decisions=decisions_text("1-pilots", max_usd="10"))
@@ -567,14 +700,15 @@ def test_block_spend_limit(tmp_path, armed):
                _row("approved_block=1-pilots; context_mismatches=0", "6.00", "3.00"),
                _row("approved_block=2-seed1; context_mismatches=0", "500", "500",
                     experiment="arc_path"))  # another block's spend does not count
-    a = _require(repo, c, planned_usd=4.0)  # 6 + 4 = 10: exactly the limit
-    assert a.block_spent_usd == 6.0 and a.block_headroom_usd == 0.0
-    with pytest.raises(PaidCallsNotAllowed, match=r"spent \$6.00 of its max_usd \$10; "
-                                                  r"planned \$4.01 would exceed it by \$0.01"):
-        _require(repo, c, planned_usd=4.01)
+    a = _require(repo, c, planned_usd=7.0)  # 3 + 7 = 10: exactly the limit
+    assert a.block_spent_usd == 3.0 and a.block_headroom_usd == 0.0
+    with pytest.raises(PaidCallsNotAllowed, match=r"spent \$3.00 of its max_usd \$10; "
+                                                  r"planned \$7.01 would exceed it by \$0.01"):
+        _require(repo, c, planned_usd=7.01)
     costs.append_row(_row("approved_block=1-pilots; x", "0.5", "0.6"), c)
     with pytest.raises(PaidCallsNotAllowed, match="exceed it"):
-        _require(repo, c, planned_usd=4.0)
+        _require(repo, c, planned_usd=7.0)
+    assert _require(repo, c, planned_usd=6.4).block_spent_usd == pytest.approx(3.6)
 
 
 @pytest.mark.parametrize("listed, billed, experiment, msg", [
@@ -584,6 +718,11 @@ def test_block_spend_limit(tmp_path, armed):
     ("-1000", "-1000", "replay_probe", "is not a finite"),   # would add headroom
     ("inf", "", "replay_probe", "is not a finite"),
     ("1,5", "", "replay_probe", "is not a number"),
+    ("nan", "1", "replay_probe", "is not a finite"),         # list is checked, not counted
+    ("", "", "replay_probe", "no cost"),                     # would count as free
+    # finite as a Decimal, so check_ledger passes it, but infinite as the float the phase
+    # cap sums: headroom raises, and the guard must turn that into a refusal
+    ("", "1e400", "replay_probe", "is not a finite"),
     ("99", "99", "", "has no budget phase"),                 # would count toward no cap
     ("99", "99", "mystery", "has no budget phase"),
 ])

@@ -71,17 +71,21 @@ def push_main(repo: Path) -> None:
     git_in(repo, "push", "-q", "--force", "origin", "HEAD:refs/heads/main")
 
 
-def commit_on_origin_only(repo: Path, text: str, message: str = "on main") -> None:
-    """Change results/decisions.md on origin/main from a second clone, leaving `repo`'s HEAD
-    and working tree alone (a change merged elsewhere)."""
+def commit_on_origin_only(repo: Path, text: str, message: str = "on main",
+                          path: str = "results/decisions.md") -> None:
+    """Change `path` (default results/decisions.md) on origin/main from a second clone,
+    leaving `repo`'s HEAD and working tree alone (a change merged elsewhere)."""
     other = repo.parent / f"{repo.name}-other"
     if not other.exists():
         subprocess.run(["git", "clone", "-q", str(bare_origin(repo)), str(other)], check=True,
                        capture_output=True, env=_env(repo))
     git_in(other, "fetch", "-q", "origin")
     git_in(other, "checkout", "-q", "-B", "main", "origin/main")
-    write_decisions(other, text)
-    git_in(other, "commit", "-q", "-am", message)
+    target = other / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    git_in(other, "add", path)
+    git_in(other, "commit", "-q", "-m", message)
     git_in(other, "push", "-q", "origin", "HEAD:refs/heads/main")
 
 

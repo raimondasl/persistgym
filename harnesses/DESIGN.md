@@ -245,10 +245,11 @@ What this does not blind (§11): the per-run `costs.csv` row (one per run, requi
 4. `--planned-usd` is a positive, finite number (`nan` would otherwise pass every budget comparison);
 5. `PREREG.md` is **committed** (§16.3: PREREG committed before any paid call): tracked by git, present in `HEAD`, and with no uncommitted changes. A draft in the working tree does not count;
 6. the block's **approval line** is in `results/decisions.md` on `origin/main`, in `HEAD` and in the working tree (below);
-7. the run's experiment is in the line's `experiments` list;
-8. every `results/costs.csv` row can be counted (`common.approval.check_ledger`): each cost is empty or a finite, non-negative number, and each experiment has a budget phase. A `nan` cost would otherwise make the phase-cap comparison pass, a negative one would add headroom, and a row with no phase would count toward no cap;
-9. block spend + `--planned-usd` ≤ the line's `max_usd`;
-10. `common.costs.headroom(planned_usd, phase, rows)` ≥ 0: the phase cap still applies.
+7. `PREREG.md` in `HEAD` is **identical to `PREREG.md` on `origin/main`**, read after the same fetch as check 6 (`common.approval.prereg_not_on_remote`, which compares the two blobs with replace refs off). Only the merged, frozen PREREG unlocks paid calls: a PREREG or amendment committed on a branch but not merged refuses, and so does a `HEAD` that lacks an amendment already merged to `main`;
+8. the run's experiment is in the line's `experiments` list;
+9. every `results/costs.csv` row can be counted (`common.approval.check_ledger`): each cost is empty or a finite, non-negative number, at least one of the two is filled in, and each experiment has a budget phase. A `nan` cost would otherwise make the phase-cap comparison pass, a negative one would add headroom, a row with no cost would count as free, and a row with no phase would count toward no cap;
+10. block spend + `--planned-usd` ≤ the line's `max_usd`;
+11. `common.costs.headroom(planned_usd, phase, rows)` ≥ 0: the phase cap still applies.
 
 **The approval line.** One line, with exactly this spacing:
 
@@ -270,9 +271,12 @@ What this does not blind (§11): the per-run `costs.csv` row (one per run, requi
 - Two different valid lines for one name are ambiguous and refuse. The same line twice is not ambiguous.
 - The remote and branch are injectable (`common.approval.RemoteRef`, the transport's `approval_remote`). Tests use a local bare repository as `origin`, with `GIT_ALLOW_PROTOCOL=file`, so they never reach a network.
 
-**One spend measure.** Spend is the larger of the list and billed estimates (`common.approval.spend_usd`). On Flex that is the list cost, twice the billed estimate. Block spend, the phase-cap check and a run's own stop at `--planned-usd` all use it, so a run planned at $x adds at most $x, plus its last call, to its block's spend. Before the second #13 review the run stopped on its billed estimate alone: on Flex, a run planned at a block's whole `max_usd` could then log twice `max_usd` of block spend.
+**One spend measure: the billed estimate.** Spend is a row's `cost_usd_billed_est`, or its `cost_usd_list` only when the billed estimate is empty (`common.costs.spend_usd`, re-exported as `common.approval.spend_usd`). A row with neither cannot be counted and refuses (check 9). Block spend against `max_usd`, the phase-cap check (`common.costs.headroom`), a run's own stop at `--planned-usd` (the transport's `spent_usd`) and the split of `--planned-usd` over a probe's models all use this one function, so a run planned at $x adds at most $x, plus its last call, to its block's spend.
+- *Why billed.* Every cap and estimate for PersistGym in PLAN §12, §16 and §17 is in Flex-billed dollars, and D23 makes the billed estimate the primary cost basis. On Flex the list cost is twice the billed estimate, so counting list, or the larger of the two as the guard did before, would trip the caps at about half the real spend. The billed estimate is what the researcher pays: the Flex price for Flex runs, with cached input and cache writes at their own prices (`pricing.py`).
+- *List is still kept.* Every costs.csv row holds both `cost_usd_list` and `cost_usd_billed_est`, and `python -m common.costs` prints both sums next to the spend the caps count.
+- *The backstop.* The billed estimate comes from our price table. The provider-side hard spend limits, which the researcher sets in real billed dollars, remain the backstop against under-estimation (§11).
 
-**Block spend** is the sum, over `results/costs.csv` rows whose `notes` contain `approved_block=<name>;`, of that spend. Every costs row the transport writes starts its notes with that tag (`common.approval.spend_tag`). A row whose cost cannot be read refuses (check 8).
+**Block spend** is the sum, over `results/costs.csv` rows whose `notes` contain `approved_block=<name>;`, of that spend. Every costs row the transport writes starts its notes with that tag (`common.approval.spend_tag`). A row whose cost cannot be read, or that has no cost at all, refuses (check 9).
 
 The approval line records the researcher's decision. It is added only on the researcher's explicit instruction, under that day's entry, and reaches `main` through the researcher's merge like every change. `results/decisions.md` explains the grammar near its top. Its examples are in a code block, indented and use `<placeholder>` names, so none of the three lets them count. A test checks this, and that every other line of the file is shown text, so no unclosed fence or comment hides later entries.
 
@@ -364,11 +368,16 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - Any `costs.csv` row with a cost that is not empty or a finite, non-negative number, or with an experiment that has no phase, refuses. Before, a `nan` or negative cost in any row of the run's phase (not only the block's own rows) switched off or loosened the phase-cap check, and a row with no phase counted toward no cap.
 - `origin` must be a configured remote, and git reads with replace refs off.
 
+**Changed on 2026-10-01 after #13: spend basis and a frozen PREREG** (§8; for the researcher's review; it settles the open item "How the guard measures spend" of PLAN §17.4, amendment A2, if merged):
+- Spend is the billed estimate, with list only where a row has no billed estimate. It was the larger of list and billed, which on Flex is the list cost. Block `max_usd`, the phase caps, a run's stop at `--planned-usd` and the probe split all moved together, since they share `spend_usd`. On Flex a block or phase now holds about twice the calls it did. The run still stops on the same measure the guard counts, so the fix from the second review holds.
+- A costs.csv row with both costs empty no longer counts as $0. It refuses, like any other unreadable row.
+- `PREREG.md` in `HEAD` must be identical to `PREREG.md` on `origin/main` (check 7). Before, a PREREG committed on any branch unlocked paid calls.
+
 **Technical choices made here** (not D-items; open to the researcher's review):
 - Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
 - The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells (§7.4).
 - An approval line is compared as text across the three copies: changing its `max_usd` or experiments revokes it until the new line is on all three (§8).
-- Block spend takes the larger of list and billed cost row by row. This is conservative, like the phase-cap check, which takes the larger of the summed list and billed costs, and a run's stop at its planned spend uses the same measure (§8). If block limits should count billed cost instead, `common.approval.spend_usd` is the one place to change.
+- Spend is measured in one place, `common.costs.spend_usd` (re-exported as `common.approval.spend_usd`): block spend, the phase caps, a run's stop and the probe split all call it (§8).
 
 ## 11. Known limitations and what this does not show
 - **No payload has been sent to the API.** The tests show that the payloads are what the design says. They do not show that the API accepts them, for example:
@@ -383,8 +392,8 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - **The fake model's usage numbers are not realistic.** Fake runs check structure, not cost.
 - **Σ cells depend on what the model writes.** Their S is measured, and `carried_in_text` is the intended accounting (generator DESIGN.md §8, §12).
 - **Pilot blinding is partial, and was kept that way after the #13 review.** CLAUDE.md asks for one costs.csv row per run. Each pilot run's row keeps its input and output tokens, calls and cost, and leaves `reasoning_tokens` empty. The run's `meta.json` does the same (§7.4). Output tokens are mostly reasoning tokens, so these rows approximate one arm's withheld reasoning tokens and lookups. Running `pilot-report` before and after a run also gives that run's numbers by difference. Fully closing this would mean pooling the pilot arms into one ledger row, which departs from one row per run. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data. The code makes them hard to see, not impossible.
-- **The guard trusts `origin/main`.** It checks that the approval line was merged. It cannot check who merged it, so its strength is the branch protection and review on `main`. A paid command needs network access to GitHub at launch, because a failed fetch refuses.
+- **The guard trusts `origin/main`.** It checks that the approval line and `PREREG.md` were merged. It cannot check who merged them, so its strength is the branch protection and review on `main`. A paid command needs network access to GitHub at launch, because a failed fetch refuses.
 - **The guard catches mistakes, not a hostile operator.** Anyone who can edit this code, point `origin` at another repository or edit `costs.csv` can get past it. A merged line that the reviewer did not read as an approval still counts: a gate entry should show a proposed line only in a code block, which the guard ignores.
 - **The guard checks once, at launch.** A run continues if its approval is revoked while it runs. Two commands started at the same time both see the same block spend, so together they can pass `max_usd`. Run paid commands one at a time.
-- **Block spend is the logged estimate.** It sums the costs.csv rows tagged with the block, so it is only as good as the price table in `pricing.py`. It does not see spend the provider billed that was never logged. That includes a timed-out attempt the provider still processed, and a process killed before `finalize` wrote its row. The provider-side spend limits (decisions.md, 2026-10-01) remain the backstop. Only launchers that tag their rows `approved_block=<name>;` are counted, so the ARC launcher must use `common.approval.spend_tag` too.
+- **Block spend is the logged estimate.** It sums the billed estimates of the costs.csv rows tagged with the block, so it is only as good as the price table in `pricing.py` and the served tier the response reports. A response reported as Flex but billed at the standard rate would count at half its real cost. It does not see spend the provider billed that was never logged. That includes a timed-out attempt the provider still processed, and a process killed before `finalize` wrote its row. The provider-side spend limits (decisions.md, 2026-10-01), which the researcher sets in real billed dollars, remain the backstop against under-estimation. Only launchers that tag their rows `approved_block=<name>;` are counted, so the ARC launcher must use `common.approval.spend_tag` too.
 - **Need-phase tokens are provider counts.** They include rendered reasoning in r arms and per-message overhead, unlike W's tiktoken counts (§4).

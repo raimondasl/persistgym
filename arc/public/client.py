@@ -4,8 +4,12 @@ Rules (CLAUDE.md "arcprize.org public API"):
 - one request at a time (a process-wide lock), at least ``MIN_INTERVAL_S`` seconds between
   the end of one request and the start of the next;
 - a descriptive User-Agent;
-- retries with exponential backoff on 429, 5xx and transport errors (``Retry-After`` honoured);
+- retries with exponential backoff on 429, 5xx and transport errors; a ``Retry-After`` hint is
+  always honoured in full (never cut short by the backoff cap), and a hint longer than
+  ``MAX_RETRY_AFTER_S`` stops the pull instead of retrying early;
 - an on-disk cache that is never re-downloaded: if the cache file exists it is returned as is.
+  Responses are validated before they are cached (JSON, complete NDJSON lines, an HTML page
+  that ends with ``</html>``), so a truncated download is never cached.
 
 Cache layout, under ``$PERSISTGYM_RAW_DIR`` (default ``<repo>/results/raw``, gitignored)::
 
@@ -39,7 +43,8 @@ USER_AGENT = (
 MIN_INTERVAL_S = 2.5
 MAX_ATTEMPTS = 6
 BACKOFF_BASE_S = 5.0
-BACKOFF_CAP_S = 300.0
+BACKOFF_CAP_S = 300.0          # cap on our own exponential backoff, not on server hints
+MAX_RETRY_AFTER_S = 3600.0     # a longer Retry-After stops the pull (FetchError)
 TIMEOUT = httpx.Timeout(connect=20.0, read=180.0, write=20.0, pool=20.0)
 
 _GUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -149,7 +154,7 @@ class PoliteClient:
     # ── public getters ───────────────────────────────────────────────────
     def results_page(self, slug: str) -> Path:
         """Cached HTML of https://arcprize.org/results/<slug>."""
-        return self._cached(self.page_path(slug), f"/results/{slug}")
+        return self._cached(self.page_path(slug), f"/results/{slug}", validate=_validate_html)
 
     def session(self, guid: str) -> dict:
         """Cached session JSON from GET /api/sessions/<guid>."""
@@ -187,11 +192,15 @@ class PoliteClient:
             self._sleep(self.min_interval_s - gap)
 
     def _backoff(self, attempt: int, resp: httpx.Response | None) -> float:
+        """Our exponential backoff (capped), raised to the server's Retry-After if longer.
+
+        The cap applies only to our own schedule: a server hint is never cut short.
+        """
+        delay = min(self.backoff_base_s * (2 ** (attempt - 1)), BACKOFF_CAP_S)
         hinted = _retry_after_seconds(resp) if resp is not None else None
-        delay = self.backoff_base_s * (2 ** (attempt - 1))
         if hinted is not None:
             delay = max(delay, hinted)
-        return min(delay, BACKOFF_CAP_S)
+        return delay
 
     def _download(self, url: str, dest: Path) -> None:
         last_err: str = ""
@@ -223,6 +232,9 @@ class PoliteClient:
             if attempt == self.max_attempts:
                 break
             delay = self._backoff(attempt, resp)
+            if delay > MAX_RETRY_AFTER_S:
+                raise FetchError(f"GET {url} failed: {last_err}; server asked to wait "
+                                 f"{delay:.0f} s, stopping instead of retrying early")
             self.n_retries += 1
             self._log(f"GET {url} -> {last_err}; retry {attempt}/{self.max_attempts - 1} "
                       f"in {delay:.0f} s")
@@ -235,6 +247,13 @@ def _validate_json(path: Path) -> None:
         json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"response is not JSON: {path}: {e}") from e
+
+
+def _validate_html(path: Path) -> None:
+    """A complete page ends with ``</html>``; anything else (e.g. a cut-off body) is not cached."""
+    tail = path.read_bytes()[-4096:].rstrip().lower()
+    if not tail.endswith(b"</html>"):
+        raise ValueError(f"page does not end with </html> (truncated?): {path}")
 
 
 def _validate_ndjson(path: Path) -> None:

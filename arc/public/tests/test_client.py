@@ -92,6 +92,59 @@ def test_retries_429_and_5xx_with_backoff_honouring_retry_after(tmp_path):
     assert 10 in ft.sleeps            # exponential backoff on the 2nd retry
 
 
+def test_retry_after_longer_than_backoff_cap_is_honoured_in_full(tmp_path):
+    responses = [httpx.Response(503, headers={"Retry-After": "600"}),
+                 httpx.Response(200, json={"ok": 1})]
+    c, ft = make_client(tmp_path, lambda req: responses.pop(0))
+    assert c.session(GUID) == {"ok": 1}
+    assert 600 in ft.sleeps           # not cut to the 300 s backoff cap
+    assert max(ft.sleeps) == 600
+
+
+def test_very_long_retry_after_stops_instead_of_retrying_early(tmp_path):
+    c, ft = make_client(tmp_path, lambda req: httpx.Response(429,
+                                                             headers={"Retry-After": "7200"}))
+    with pytest.raises(FetchError):
+        c.session(GUID)
+    assert c.n_requests == 1 and c.n_retries == 0
+    assert all(s < 7200 for s in ft.sleeps)
+
+
+def test_requests_never_overlap_across_threads(tmp_path):
+    import threading
+    import time
+
+    active, peak = [0], [0]
+    guard = threading.Lock()
+
+    def handler(req):
+        with guard:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.02)              # widen the window in which an overlap could happen
+        with guard:
+            active[0] -= 1
+        return httpx.Response(200, json={})
+
+    c, _ = make_client(tmp_path, handler)
+    guids = [f"00000000-0000-4000-8000-{i:012d}" for i in range(6)]
+    threads = [threading.Thread(target=c.session, args=(g,)) for g in guids]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert c.n_requests == 6 and peak[0] == 1
+
+
+def test_truncated_results_page_is_not_cached(tmp_path):
+    c, _ = make_client(tmp_path, lambda req: httpx.Response(200, text="<html><body>cut"))
+    with pytest.raises(ValueError):
+        c.results_page("google-gemini-3-8-flash")
+    assert not c.page_path("google-gemini-3-8-flash").exists()
+    c2, _ = make_client(tmp_path, lambda req: httpx.Response(200, text="<html>ok</html>\n"))
+    assert c2.results_page("google-gemini-3-8-flash").exists()
+
+
 def test_non_retryable_status_raises_and_caches_nothing(tmp_path):
     c, _ = make_client(tmp_path, lambda req: httpx.Response(404))
     with pytest.raises(FetchError):

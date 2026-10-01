@@ -9,9 +9,13 @@ ARC Prize's harness, [arcprize/arc-agi-3-benchmarking](https://github.com/arcpri
 | `apply_patches.py` | Applies the series in a scratch worktree under `arc/.work/` and runs the upstream unit tests there. |
 | `no_dotenv_plugin.py` | pytest plugin that turns `load_dotenv()` into a no-op during harness tests (see Safety). |
 | `test_apply_patches.py` | Root-suite tests: the pin, patch numbering, test coverage per patch, env sanitizing, a clean apply. |
+| `offline_smoke.py` | $0 end-to-end runs of the patched harness on local games (S0, S1, S2, S4) with a stub model, plus checks of every request (see Offline smoke runs). |
+| `offline_smoke_inner.py` | The stub model and the single-game driver that `offline_smoke.py` runs inside the patched harness environment. |
+| `toy_game/` | A two-level toy game in arc-agi's local layout, written for these tests. It is not an ARC game. |
+| `test_offline_smoke.py` | Root-suite tests for the runner, with the harness mocked. The real run is opt-in (`RUN_OFFLINE_SMOKE=1`). |
 | `conftest.py`, `.gitignore`, `.gitattributes` | Keep the submodule and `arc/.work/` out of the root test run and out of git; keep patch files byte-exact. |
 
-Nothing here calls a model API or needs a key. All harness tests use mocked HTTP.
+Nothing here calls a model API or needs a key. All harness tests use mocked HTTP, and the offline runs use a stub model behind a loopback-only socket guard.
 
 ## Setup
 ```bash
@@ -20,20 +24,25 @@ uv run arc/apply_patches.py                  # apply all patches, run upstream u
 uv run arc/apply_patches.py --each           # ...and test after every patch
 uv run arc/apply_patches.py --no-tests       # only check that the series applies (~1 s)
 uv run arc/apply_patches.py --keep           # keep arc/.work/patched for inspection
+uv run arc/offline_smoke.py --toy            # S0-S4 on the toy game with a stub model ($0, ~1 min)
+RUN_OFFLINE_SMOKE=1 uv run pytest -q arc     # root tests including that end-to-end run
 ```
 
-`apply_patches.py` creates `git worktree add --detach arc/.work/<name> 4ca00e6` from the submodule, runs `git am --committer-date-is-author-date` on every patch with a fixed committer, runs `uv sync --locked` and `pytest tests/unit` there, then removes the worktree unless `--keep` is given. It prints the patch-series SHA-256 and the patched commit and tree IDs. The same series always gives the same IDs. On 2026-09-30 these were series `82580ebc…`, commit `b464c55d…`, tree `93573770…`.
+`apply_patches.py` creates `git worktree add --detach arc/.work/<name> 4ca00e6` from the submodule, runs `git am --committer-date-is-author-date` on every patch with a fixed committer, runs `uv sync --locked` and `pytest tests/unit` there, then removes the worktree unless `--keep` is given. It prints the patch-series SHA-256 and the patched commit and tree IDs. The same series always gives the same IDs. For 0001-0005 on 2026-09-30 these were series `82580ebc…`, commit `b464c55d…`, tree `93573770…`. For 0001-0012 on 2026-10-01: series `855409ae…`, commit `9996462a…`, tree `6f1314e1…` (the tree equals the dev branch the patches were exported from).
 
 ### Test results (Windows, Python 3.12.13, no keys set)
 | Tree | Result |
 |---|---|
 | Upstream at `4ca00e6`, `uv sync --locked && uv run pytest -q` in `arc/upstream` | 634 passed, 10 skipped. The 10 skipped are the paid live tests in `tests/integration`, which skip unless `RUN_*_LIVE_TESTS=1`. |
 | After 0001 / 0002 / 0003 / 0004 / 0005 (`apply_patches.py --each`, `tests/unit` only) | 642 / 654 / 695 / 700 / 721 passed |
+| After 0006 / 0007 / 0008 / 0009 / 0010 / 0011 / 0012 | 738 / 745 / 758 / 786 / 799 / 826 / 836 passed |
+| `offline_smoke.py --toy` (default script) | S0, S1, S2, S4 all pass: `GAME_WIN` in 9 steps, one summary each in S1/S2/S4 |
+| `offline_smoke.py --toy --usage chars --script ACTION3` | All pass: `ACTION_BUDGET` after 15 steps; S0 drops its oldest turns in the last 2 requests; S1/S2/S4 compact once, after turn 14 (176,644 tokens); S1/S2 `context_trims` 0 |
 
 The pin already has 2 ruff findings (`I001` in `benchmarking/model_config.py`) and 21 strict-mypy errors in `benchmarking/`. The patches add none of either.
 
-## Patch series (part A)
-Line numbers refer to the pinned `4ca00e6`.
+## Patch series
+Line numbers refer to the pinned `4ca00e6`. Part A is 0001-0005, part B is 0006-0012.
 
 | # | Patch | Concern | Upstream code it changes | New tests |
 |---|---|---|---|---|
@@ -42,6 +51,13 @@ Line numbers refer to the pinned `4ca00e6`.
 | 0003 | Validate and record `request.service_tier` | Request-block keys already reach the SDK as kwargs: Google Interactions `_build_call_kwargs` (`runtime_adapters.py:443`) and OpenAI Responses/Chat (`:108`, `:95`). Nothing checked the value or recorded the tier actually served. | Config validation against the pinned SDK literals. `ModelResponse.service_tier` (`runtime_models.py:61`) is filled from Interactions/Responses/Chat responses. Step records store the reported tier and `run_meta.json` stores `requested_service_tier`; both are omitted when unset. A tier mismatch is logged. | `test_service_tier.py` (41) |
 | 0004 | Add Gemini 3.8 Flash high profiles for both harnesses | Only the low Provider Adapter profile is checked in (`model_configs.yaml:269-294`). | S0 and S4 config entries (below). Adds one README sentence. | `test_gemini_path_configs.py` (5) |
 | 0005 | Add payload snapshot tests | (tests only) | Full JSON request bodies per config and step (below). | `test_gemini_path_payloads.py` (21) |
+| 0006 | Support harness summary compaction in `manual_rolling` (S1 mechanism) | `SummaryCompactor` runs only for `continuous_conversation` (`agent.py:105-114`), and config validation rejects `runtime.compaction` elsewhere (`model_config.py:345-352`). `manual_rolling` can only drop the oldest pair (`agent.py:907`, `:1105`). | `ManualRollingSummaryAdapter` (`compaction.py`) presents the text transcript to the unchanged `SummaryCompactor` through the plain API adapter. The agent schedules from the accepted request's own provider `total_tokens` (as S4 does), compacts before the next turn, recovers once from an action-request context overflow, and records `runtime` (policy, `compaction_count`, `context_trims`) in `run_meta.json`. | `test_manual_rolling_compaction.py` (16); `test_model_config.py` (+1) |
+| 0007 | Add the S1 and S2 profiles | (config only) | `google-gemini-3-8-flash-high-rolling-summary` and `…-rolling-summary-notes-off` (below). | `test_gemini_summary_path_configs.py` (7) |
+| 0008 | Add payload snapshot tests for S1 and S2 | Part A's notes-off test used a stand-in config. | Switches it to the checked-in S2 and adds S1/S2 snapshots (below). | `test_gemini_path_payloads.py` (+13) |
+| 0009 | Back off on throttled responses below the SDK retries | A 429/503 reaches the harness after the SDK's 3 quick retries, and `_request_with_retries` (`agent.py:1010-1016`) then spends `MAX_RETRIES` without waiting. | `ThrottleBackoffTransport` (`runtime_transport.py`) wraps the SDK client's httpx transport (opt-in `client.transport_retry`), enabled with identical settings on all four path profiles. | `test_transport_retry.py` (28) |
+| 0010 | Add an optional per-run cost guard | No spend limit exists. | `agent.MAX_RUN_COST_USD` (off unless set) ends a run with the new exit reason `COST_CAP`. | `test_cost_guard.py` (13) |
+| 0011 | Honour `OPERATION_MODE` and local arc-agi servers | `Swarm` hard-codes `Arcade(operation_mode=OperationMode.ONLINE)` (`swarm.py:60`), which arc-agi lets win over `OPERATION_MODE`. | `Swarm` resolves the mode (argument, then `OPERATION_MODE`, then online); placeholder key for a loopback `ARC_BASE_URL`; `main.py` lists local games offline; `run_meta.json` records `arc_environment`. | `test_operation_mode.py` (27) |
+| 0012 | Add offline full-game tests with a stub model | (tests only) | Full `Swarm` games on a toy game, offline and via a local server, with the real SDK clients over a stub transport. | `test_offline_game_loop.py` (10) |
 
 `service_tier` values: google-genai 2.4.0 Interactions accepts `flex | standard | priority` (`google/genai/_interactions/types/interaction_create_params.py:93`, echoed on `Interaction.service_tier`). openai 2.41.1 Responses and Chat accept `auto | default | flex | scale | priority` (`openai/types/responses/response_create_params.py:192`, `openai/types/chat/completion_create_params.py:257`). Unset sends no field, so the provider's default tier applies, as in every checked-in upstream config. Harness-summary compaction deep-copies the action request settings (`compaction.py:74-87`), so summary calls request the same tier; snapshot test 0005 checks this. The xAI adapter and the Anthropic and generate_content runtimes are not validated.
 
@@ -49,20 +65,24 @@ Line numbers refer to the pinned `4ca00e6`.
 | Config | ID | Where it comes from |
 |---|---|---|
 | S0 = Standard | `google-gemini-3-8-flash-high` | Patch 0004. `manual_rolling` on the Interactions API (`google-genai`/`interactions`), `MAX_CONTEXT_LENGTH` 175,000 (chars at 1 char/token; drop-oldest), notes sentence on (default), `thinking_level: high`. |
-| S1 | (part B) | `SummaryCompactor` wired into `manual_rolling`; `MAX_CONTEXT_LENGTH` raised so drop-oldest never fires. |
-| S2 | (part B adds the config entry) | S1 plus `agent.carry_forward_instruction: false` (patch 0002). |
+| S1 | `google-gemini-3-8-flash-high-rolling-summary` | Patch 0007. S0 with S4's `harness_summary` block (175,000-token trigger, 8,192-token summary cap, 8,192 headroom) via patch 0006, and S4's `MAX_CONTEXT_LENGTH` of 1,048,576, so drop-oldest does not fire before the summary trigger. |
+| S2 | `google-gemini-3-8-flash-high-rolling-summary-notes-off` | Patch 0007. S1 plus `agent.carry_forward_instruction: false` (patch 0002). Its system prompt equals S4's. |
 | S4 = Provider Adapter | `google-gemini-3-8-flash-high-provider-adapter` | Patch 0004. The checked-in `google-gemini-3-8-flash-low-provider-adapter` with only `thinking_level: high` changed: `continuous_conversation`, `harness_summary` compaction at 175,000 provider tokens, 8,192-token summary cap, 8,192 headroom, `MAX_CONTEXT_LENGTH` 1,048,576. |
 
-S0 and S4 share the client, pricing ($0.75/$3.75 per M, valid through 2026-12-31) and the whole request block: `store: false`, `max_output_tokens: 65536`, `thinking_level: high`, `thinking_summaries: auto`. Two settings are our choices, not ARC's:
+All four profiles share the client, pricing ($0.75/$3.75 per M, valid through 2026-12-31) and the whole request block: `store: false`, `max_output_tokens: 65536`, `thinking_level: high`, `thinking_summaries: auto`. Patch 0009 adds the same `client.transport_retry` block to all four (see Throttling). Path steps: S0→S1 changes only the loss policy, S1→S2 only the notes sentence, S2→S4 only native replay (with the native item format); snapshot 0008 checks the last step request by request. Some settings are our choices, not ARC's:
 - **`thinking_summaries: auto` in S0.** It keeps the request identical across the path, so S2→S4 changes only state and replay. In S0-S2 the summaries are written to local step files and ARC's action metadata but are never sent back to the model; snapshot 0005 checks this. The published Standard recordings carry no reasoning summary (`docs/background.md` §4), so ARC's Standard-high run probably did not request summaries. The researcher can drop the setting from S0 before the config hashes are frozen.
 - **`store: false` in S0**, matching S4.
+- **S1/S2's loss policy.** ARC has no Standard profile with a harness summary; S1 and S2 reuse S4's compaction settings and prompts unchanged.
+- **`client.transport_retry` on all four** (patch 0009). It changes no request body, but published ARC runs did not have it.
 
-`service_tier` is unset in both profiles. Per PLAN §16.4, one tier is chosen for all ARC configs by the pre-registered latency rule, and the frozen configs then get `request.service_tier` set (patch 0003 makes that value validated and recorded).
+`service_tier` is unset in all four profiles. Per PLAN §16.4, one tier is chosen for all ARC configs by the pre-registered latency rule, and the frozen configs then get `request.service_tier` set (patch 0003 makes that value validated and recorded).
 
-### What the snapshot tests pin down (patch 0005)
+### What the snapshot tests pin down (patches 0005 and 0008)
 The tests run `BenchmarkingAgent.main()` on a scripted 2×2 game through the real google-genai SDK over `httpx.MockTransport`. The mock provider answers every call with a signed thought step plus visible text, so a leak would show. The tests compare each request's full JSON body:
 - **S0:** the system instruction contains the notes sentence. `input` holds only `user_input` and `model_output` text items, never `thought` items, signatures or summaries. The oldest user/assistant pair is dropped once the estimate exceeds `MAX_CONTEXT_LENGTH`. Provider usage ≥ 175k never triggers compaction.
-- **Notes-off (part A's stand-in for S2):** the S0 profile with `carry_forward_instruction: false`. Requests are identical to S0 except the system instruction, which then equals S4's. The flag also wins over `analysis_mode`. When part B checks in S1/S2, this test should switch to the checked-in S2 entry and add its compaction steps.
+- **S1 and S2:** the same visible-text requests until a turn reports ≥ 175k provider tokens. Before the next turn the harness sends one summary request (system prompt `SUMMARY_SYSTEM_PROMPT`, the whole text history, `max_output_tokens` 8,192); later turns start with the user-role bridge followed by the new observation. No request carries thought steps, signatures or summaries, and `run_meta.json` shows `compaction_count` 1 and `context_trims` 0.
+- **Drop-oldest never fires in S1:** with about 12k-character observations and one provider token per character, S0 starts dropping turns above 175k characters while S1 compacts instead; every S1 action request starts with the first observation or a bridge.
+- **S2 = S4 without thoughts:** removing S4's `thought` steps and the SDK's `annotations` makes every S4 request, including the summary request, equal to S2's. This also holds when a lost life buffers a GAME_OVER frame just before compaction (both summarize that frame; see 09a307b below). S1 equals S2 except the notes sentence. The S2 flag also wins over `analysis_mode`.
 - **S4:** every earlier `thought` step (with its `signature`) and `model_output` is replayed as the SDK parsed it. The SDK adds `"annotations": null` to text parts. At the 175k trigger the harness sends one summary request with system prompt `SUMMARY_SYSTEM_PROMPT`, the full native history including thoughts, and `max_output_tokens` 8,192. Later turns restart from a user-role bridge message, and the summary call's own thought is not carried forward.
 - **All configs:** every request has `thinking_level: high`, `thinking_summaries: auto` and `store: false`. Without `service_tier` the field is absent. With it, it is present on every request, including summary requests, and the bodies are otherwise unchanged.
 
@@ -87,7 +107,27 @@ Steps 1-3 do not show that ARC used `MAX_CONTEXT_LENGTH` 1,048,576, the 8,192 he
 - `API_ERROR` means an exception while submitting the action to the **ARC** environment (`take_action`). It does not mean a model API error (`base.py:113`).
 - `AGENT_ERROR` means any other exception in the loop. This includes the **model** call failing after `MAX_RETRIES` (`agent.py:1098`) and compaction failures.
 - `SCORECARD_CLOSED` means an `API_ERROR` agent whose scorecard was closed server-side (404 on close while the card exists; `swarm.py:153-156`). If closing the scorecard fails any other way, upstream marks every agent `API_ERROR`, even winners (`swarm.py:157-160`). With 0001 that is now visible in `run_meta.json`; `outcome` and the per-level results still show the win.
+- `COST_CAP` (patch 0010) means the optional cost guard ended the run. It never fires unless `agent.MAX_RUN_COST_USD` is set.
+- With patch 0009, a model call that fails because the 12 h wall clock ran out during a throttling backoff is recorded as `TIME_BUDGET`, not `AGENT_ERROR`.
 - `UNKNOWN` means the run is still in progress, or the process died before recording an ending.
+
+## Throttling and Flex (patch 0009)
+Gemini Flex answers 503 when it is at capacity and 429 for rate limits, and Google says clients must add their own exponential backoff ([Flex inference](https://ai.google.dev/gemini-api/docs/flex-inference), checked 2026-10-01). At the pin, a throttled response gets google-genai's 3 quick retries (about 0.5, 1 and 2 s, `google/genai/_interactions/_base_client.py:772-829`), then `_request_with_retries` retries `MAX_RETRIES` times without waiting (`agent.py:1010-1016`), so 10-15 s of congestion (longer only if the server sends `Retry-After`) ends a run with `AGENT_ERROR`. `ThrottleBackoffTransport` sits below the SDK and retries 429/503 itself, so neither SDK retries nor `MAX_RETRIES` are spent; summary requests are covered too. The path profiles use: first wait 2 s, doubling to 60 s, up to 25% shorter by jitter, never shorter than `Retry-After`, at most 30 min per throttled episode, and never past the run's 12 h deadline. Past either bound the 429/503 goes to the SDK as before. `run_meta.json` records the policy and counters under `transport_retry`. Limits: requests that httpx sends through an environment proxy bypass the wrapper; the async SDK clients are not wrapped (the harness does not use them). The researcher can change the values before the config hashes are frozen.
+
+## Cost guard (patch 0010)
+`agent.MAX_RUN_COST_USD` is off in every checked-in profile. Set, it ends a run with `COST_CAP` once the run's estimated spend exceeds the value. The estimate covers all recorded requests (retries and harness summaries included) at the configured `pricing`, with no cache or tier discount, which is ARC's published-cost accounting. Under Flex it is therefore about twice the bill. The check runs before each action, after the win and per-level budget checks, so the action whose request crossed the limit still runs (overshoot ≤ one step). `run_meta.json` records `cost_guard` with the limit and the current estimate. Whether to use it, and at what value, is the researcher's decision (PLAN §16.3, §16.5): a `COST_CAP` ending would be a reported deviation from ARC's protocol.
+
+## Offline smoke runs (patches 0011-0012, `offline_smoke.py`)
+**Local play is for testing only.** Counted runs use ARC's online scorecard; `run_meta.json` records `arc_environment` (`{"kind": "remote", "base_url": …}` or `{"kind": "local"}`) so this can be checked per run.
+
+- `OPERATION_MODE=offline` makes `Swarm` play games found under `ENVIRONMENTS_DIR` in-process with a local scorecard; `main.py --list-games` then lists those games.
+- `ARC_BASE_URL=http://127.0.0.1:<port>` with the default online mode plays against a local `Arcade.listen_and_serve()` server. Without `ARC_API_KEY` a placeholder key is used for loopback URLs. That server does not publish `baseline_actions`, so per-level budgets fall back to `MAX_ACTIONS`.
+
+`uv run arc/offline_smoke.py --toy` builds the patched harness in `arc/.work/offline-smoke`, then plays `toy_game/` under S0, S1, S2 and S4 in fresh processes with a sanitized environment (no keys), `OPERATION_MODE=offline` and a socket guard that blocks every non-loopback connection. The stub model answers through the real google-genai client with scripted actions: two moves, a lost life (forced RESET), then six moves to the win, with turn 2 reporting 180k tokens so S1, S2 and S4 compact right after the GAME_OVER frame is buffered. The runner checks every captured request and `run_meta.json`: exit reason, `arc_environment`, notes sentence, `thinking_level`, no `service_tier`, thought replay only in S4, summary requests only in S1/S2/S4 (one per `compaction_count`, 8,192 cap, bridge first afterwards), and `context_trims` 0 in S1/S2. Output goes to `results/raw/arc_offline_smoke/<UTC time>/` (gitignored): `summary.json`, and per run `bodies.json`, `result.json`, `inner.log` and the harness files under `run/`. On 2026-10-01 all four runs passed (`GAME_WIN` in 9 steps; one summary each in S1, S2 and S4).
+
+`--usage chars` makes the stub report one provider token per character of request text, so S0's 175k-character limit and the 175k-token summary trigger are reached as the transcript grows; on the toy game with no-op actions (`--script ACTION3`) S0 trims and S1/S2/S4 compact once (see Test results). `--script`, `--trigger-turns` and `--configs` override the defaults.
+
+**ARC's public games (needs approval first).** `uv run arc/offline_smoke.py --games ft09,sb26 --environments-dir <dir>` runs the same checks on real games, with a seeded stub policy that picks among the listed actions (seeded coordinates for ACTION6) and `--usage chars` by default. Not yet run on any real game. It needs each game's `metadata.json` and game class under `<dir>` (default `results/raw/arc_games/`). This repository contains no ARC game code and the runner never downloads; it stops and says so when a game is missing. Getting the files means running ARC's code on this machine: arc-agi's `normal` mode (`Arcade(operation_mode=OperationMode.NORMAL, environments_dir=<dir>).make("ft09")`, with `ARC_API_KEY` set) downloads the game source from ARC's API into `<dir>/<game>/<version>/` and then executes it. Both steps wait for the researcher's approval. Use only path (dev) games, never held-out ones (PLAN §16.3).
 
 ## Changing or adding patches
 ```bash
@@ -101,14 +141,19 @@ git format-patch 4ca00e6..HEAD -o ../patches
 git checkout --detach 4ca00e6             # leave the submodule at the pin
 cd ../.. && uv run arc/apply_patches.py --each
 ```
-Use one commit per concern, each with tests in `tests/unit/` (`arc/test_apply_patches.py` enforces this). End each commit message with the Co-Authored-By line. Edit files with LF line endings. Part B continues the numbering from 0006.
+Use one commit per concern, each with tests in `tests/unit/` (`arc/test_apply_patches.py` enforces this). End each commit message with the Co-Authored-By line. Edit files with LF line endings. The next patch is 0013. From ten patches on, `format-patch` writes zero-padded subjects (`[PATCH 01/12]`), and the `From <sha>` header line depends on who applied the series; `git am` ignores both. The submodule has no git identity of its own, so commit there with `git -c user.name=… -c user.email=… commit`.
 
 ## Safety
 - **No paid calls.** Every test uses fake adapters or `httpx.MockTransport`. Live tests skip unless `RUN_*_LIVE_TESTS=1` is already set.
 - **No `.env` loading.** The upstream `tests/conftest.py` and live tests call `load_dotenv()` with no path. python-dotenv 1.1.1 (pinned upstream) then searches the calling file's directory and its parents, so from `arc/upstream/tests` it would find a `.env` at the repository root. This was checked offline with a throwaway `.env`. `apply_patches.py` therefore loads `no_dotenv_plugin.py` (`-p no_dotenv_plugin`). It also drops every variable that looks like a credential, every provider-prefixed variable (`OPENAI_`, `GOOGLE_`, `GEMINI_`, `ARC_`, …), and `RUN_*_LIVE_TESTS`. If you run `pytest` inside `arc/upstream` by hand, do it only when no `.env` exists above it.
 
-## Not in part A
-- **S1** (`SummaryCompactor` in `manual_rolling`; `model_config.py:345-352` currently rejects `runtime.compaction` outside `continuous_conversation`) and the **S1/S2 config entries.** These are part B.
-- Other patches listed in PLAN §16.3: offline/local-server play, transport-level 429/503 backoff that does not use up `MAX_RETRIES`, and an optional per-run cost guard.
-- **Upstream since the pin.** `main` is at `09a307b` (DeepSeek and Grok adapters); it is not pulled. Its 6-line `compaction.py` change only matters for adapters that implement the new `PendingCompactionInputs` protocol, and only `deepseek_runtime.py` does. `google_runtime.py` and `agent.py` are unchanged between `4ca00e6` and `09a307b`. So the change is a no-op for S4. Part B's S1 compactor can decide separately whether to keep unpresented observations out of summaries.
-- **Flex timeouts (read from code).** `runtime_clients.py:75` builds `google_genai.Client(api_key=...)` with no HTTP options. The resulting Interactions client has no client-side timeout and 3 SDK-level retries (checked offline). The OpenAI client defaults to a 600 s read timeout and 2 retries. Flex targets 1-15 min per call ([Gemini Flex](https://ai.google.dev/gemini-api/docs/flex-inference)), so wall-clock time, not client timeouts, is the binding limit for Gemini.
+## Upstream since the pin
+- **`09a307b`'s `compaction.py` change is not needed for S1, and not ported.** `main` moved to `09a307b` on 2026-09-30. Its 6-line change lets an adapter that implements the new `PendingCompactionInputs` protocol keep unpresented observations out of a summary and re-buffer them after the bridge. Only `deepseek_runtime.py` implements it; `google_runtime.py` and `agent.py` are unchanged between `4ca00e6` and `09a307b`, so S4 summarizes a buffered GAME_OVER frame (the observation before a forced RESET) together with the history. S1/S2 must match S4 for the path to change one thing at a time, so `ManualRollingSummaryAdapter` does not implement the protocol either. Snapshot 0008 checks this: with a GAME_OVER frame buffered just before compaction, S2's requests equal S4's without thought steps, and both summaries end with that frame. If ARC later moves the Google adapter to the protocol, S1/S2 would need the same change.
+- **Open upstream PR [#42](https://github.com/arcprize/arc-agi-3-benchmarking/pull/42)** (2026-09-17, "Add HttpOptions configuration for Google client") edits the same `google_genai.Client(...)` line as patch 0009. If it is merged and pulled, 0009's Google branch needs a small rebase that builds one `HttpOptions` with both settings.
+- **Scoop signal: an unmerged ARC Prize branch ablates the notes instruction in the Provider Adapter.** Branch `feature/continuous-conversation-carry-forward-ablation` ([commit fecf46b](https://github.com/arcprize/arc-agi-3-benchmarking/commit/fecf46b3a451cf6ab68d3d71280a3a53af62783e), 2026-08-29, "Add carry-forward prompt ablation") adds the carry-forward sentence to the `continuous_conversation` system prompt; the commits before it on that branch add GPT-5.6 Sol continuous-conversation configs. No PR was opened from it, and it is not in `main`. It is one component (notes instruction × Provider Adapter), not a path decomposition, and no published result from it was found. Checked with `gh` on 2026-10-01.
+- **Flex timeouts (read from code).** `runtime_clients.py:75` builds `google_genai.Client(api_key=...)` with no HTTP options. The resulting Interactions client has no client-side timeout and 3 SDK-level retries (checked offline). Patch 0009 changes only the transport, not timeouts. The OpenAI client defaults to a 600 s read timeout and 2 retries. Flex targets 1-15 min per call ([Gemini Flex](https://ai.google.dev/gemini-api/docs/flex-inference)), so wall-clock time, not client timeouts, is the binding limit for Gemini.
+
+## Not in this PR
+- **No ARC game files and no real-game offline run.** Downloading and executing ARC game sources waits for the researcher's approval (see Offline smoke runs).
+- **No decision on the cost guard value or the tier.** The guard is off; `service_tier` is unset; `transport_retry` values can be changed before the config hashes are frozen in PREREG.
+- **No upstream PR or issue.** Patches 0006 and 0009-0011 could be offered to `arcprize/arc-agi-3-benchmarking`; that needs the researcher's review first.

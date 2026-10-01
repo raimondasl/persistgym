@@ -2,6 +2,7 @@ import json
 
 import numpy as np
 import pytest
+import statsmodels.api as sm
 from scipy import special
 
 from analysis import power_sim as ps
@@ -24,6 +25,28 @@ def test_fast_fe_logit_matches_statsmodels(design):
     ref = ps.fe_logit(data["y"], data["template"], z, engine="statsmodels")
     for a, b in zip(fast, ref, strict=True):
         assert a == pytest.approx(b, rel=1e-7, abs=1e-9)
+
+
+@pytest.mark.parametrize("engine", ["fast", "statsmodels"])
+def test_clusters_only_correction_matches_statsmodels(engine):
+    # 'clusters' = statsmodels' cluster sandwich without its correction, times G/(G-1).
+    data = ps.simulate_sec10(ps.SEC10_DESIGNS[4], 0.2, np.random.default_rng(11))
+    z = np.column_stack([data["harness"], data["distance"], data["harness"] * data["distance"]])
+    y, codes, zk, g = ps._informative(data["y"], data["template"], z)
+    dummies = np.zeros((len(y), g))
+    dummies[np.arange(len(y)), codes] = 1.0
+    ref = sm.GLM(y, np.column_stack([dummies, zk]), family=sm.families.Binomial()).fit(
+        cov_type="cluster", cov_kwds={"groups": codes, "use_correction": False})
+    est, se, p = ps.fe_logit(data["y"], data["template"], z, engine=engine,
+                             correction="clusters")
+    assert est == pytest.approx(ref.params[-3:], rel=1e-7)
+    assert se == pytest.approx(ref.bse[-3:] * np.sqrt(g / (g - 1)), rel=1e-7)
+    assert p == pytest.approx(2 * special.ndtr(-np.abs(est / se)))
+    # With 4 episodes per template, the default factor (dummies counted in K) is much larger.
+    default = ps.fe_logit(data["y"], data["template"], z, engine=engine)
+    assert (default[1] / se > 1.1).all()
+    with pytest.raises(ValueError):
+        ps.fe_logit(data["y"], data["template"], z, correction="nope")
 
 
 def test_h2_glm_matches_statsmodels():

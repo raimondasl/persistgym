@@ -23,8 +23,16 @@ percentile bootstrap. Reported, for 30/40/60/80 templates:
   effects, cluster-robust SEs).
 
 The probability targets are converted to logits either conditionally (the target holds for a
-template with intercept 0; ``--calibration conditional``) or marginally (the target is the
-population-average success; default for H2, because its estimand is on the probability scale).
+template with intercept 0) or marginally (the target is the population-average success). Part 1
+runs both by default (``--sec10-calibration``); part 2 always uses the marginal calibration,
+because its estimand is on the probability scale.
+
+Cluster-robust small-sample factor (``--cluster-correction``). The default, ``statsmodels``, is
+statsmodels' G/(G-1) * (N-1)/(N-K) with the template dummies counted in K. With template fixed
+effects nested in the clusters this is conservative when templates have few observations: about
++16% on the SE with 4 episodes per template (the H2 GLM and the 100 x 2 x 1 luna design), +7% with
+8, +3% with 20, and the size falls below nominal. ``clusters`` uses G/(G-1) only. Which one the
+confirmatory model uses is a PREREG choice; the bootstrap contrasts do not depend on it.
 
 Run: ``uv run python -m analysis.power_sim [--reps 200] [--seed 20260930] [--no-write]``
 """
@@ -49,6 +57,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SEED = 20260930
 TEMPLATE_SD = 1.0
 ALPHA = 0.05
+CORRECTIONS = ("statsmodels", "clusters")
 
 # PLAN.md §10 table, for comparison only (the card's row was reported as one range).
 SEC10_REFERENCE = {
@@ -182,12 +191,16 @@ def _fe_logit_fast(y, codes, z, max_iter: int = 100, tol: float = 1e-10) -> FitR
 
 
 def fe_logit(y: np.ndarray, groups: np.ndarray, slopes: np.ndarray,
-             engine: str = "fast") -> FitResult | None:
+             engine: str = "fast", correction: str = "statsmodels") -> FitResult | None:
     """Logistic GLM y ~ template fixed effects + slopes, cluster-robust SEs by template.
 
     Templates whose outcomes are all 0 or all 1 are dropped first: their fixed effects diverge
     and they carry no information about the slopes. Returns None when the fit fails.
+    ``correction`` picks the small-sample factor (module docstring): 'statsmodels' (G/(G-1) *
+    (N-1)/(N-K), template dummies in K) or 'clusters' (G/(G-1) only).
     """
+    if correction not in CORRECTIONS:
+        raise ValueError(f"unknown cluster correction {correction!r}")
     y, codes, z, n_groups = _informative(y, groups, slopes)
     if n_groups < 2 or len(y) <= n_groups + z.shape[1]:
         return None
@@ -196,15 +209,20 @@ def fe_logit(y: np.ndarray, groups: np.ndarray, slopes: np.ndarray,
         est, se, p = fit(y, codes, z)
     except (np.linalg.LinAlgError, ValueError, FloatingPointError):
         return None
+    if correction == "clusters":
+        n, k = len(y), z.shape[1]
+        se = se * np.sqrt((n - (n_groups + k)) / (n - 1))
+        p = 2 * special.ndtr(-np.abs(est / se))
     if not (np.isfinite(est).all() and np.isfinite(se).all() and np.isfinite(p).all()):
         return None
     return est, se, p
 
 
 def fe_logit_last_coef(y: np.ndarray, groups: np.ndarray, slopes: np.ndarray,
-                       engine: str = "fast") -> tuple[float, float, float] | None:
+                       engine: str = "fast", correction: str = "statsmodels"
+                       ) -> tuple[float, float, float] | None:
     """(estimate, SE, two-sided p) of the last slope column, or None if the fit fails."""
-    fit = fe_logit(y, groups, slopes, engine)
+    fit = fe_logit(y, groups, slopes, engine, correction)
     if fit is None:
         return None
     est, se, p = fit
@@ -232,15 +250,16 @@ def simulate_sec10(design: Sec10Design, effect: float, rng: np.random.Generator,
             "distance": dd.ravel()}
 
 
-def fit_sec10(data: dict[str, np.ndarray], engine: str = "fast"
-              ) -> tuple[float, float, float] | None:
+def fit_sec10(data: dict[str, np.ndarray], engine: str = "fast",
+              correction: str = "statsmodels") -> tuple[float, float, float] | None:
     h, x = data["harness"], data["distance"]
     return fe_logit_last_coef(data["y"], data["template"], np.column_stack([h, x, h * x]),
-                              engine)
+                              engine, correction)
 
 
 def run_sec10(reps: int, seed: int, *, effects=(0.0, 0.10, 0.20),
               calibration: str = "conditional", engine: str = "fast",
+              correction: str = "statsmodels",
               designs: tuple[Sec10Design, ...] = SEC10_DESIGNS) -> pd.DataFrame:
     rows = []
     seqs = np.random.SeedSequence([seed, 10]).spawn(len(designs) * len(effects))
@@ -248,7 +267,8 @@ def run_sec10(reps: int, seed: int, *, effects=(0.0, 0.10, 0.20),
         rng = np.random.default_rng(seqs[i])
         hits = fails = 0
         for _ in range(reps):
-            fit = fit_sec10(simulate_sec10(design, effect, rng, calibration=calibration), engine)
+            data = simulate_sec10(design, effect, rng, calibration=calibration)
+            fit = fit_sec10(data, engine, correction)
             if fit is None:
                 fails += 1
                 continue
@@ -309,8 +329,8 @@ def percentile_ci(dist: np.ndarray, level: float) -> tuple[float, float]:
     return float(lo), float(hi)
 
 
-def h2_glm(y0: np.ndarray, y1: np.ndarray, engine: str = "fast"
-           ) -> tuple[float, float, float] | None:
+def h2_glm(y0: np.ndarray, y1: np.ndarray, engine: str = "fast",
+           correction: str = "statsmodels") -> tuple[float, float, float] | None:
     """Confirmatory model: logit with template and cell fixed effects plus the arm."""
     t, c = y0.shape
     y = np.concatenate([y0.ravel(), y1.ravel()])
@@ -318,11 +338,13 @@ def h2_glm(y0: np.ndarray, y1: np.ndarray, engine: str = "fast"
     cell = np.tile(np.tile(np.arange(c), t), 2)
     arm = np.repeat([0.0, 1.0], t * c)
     cell_dummies = np.column_stack([(cell == k).astype(float) for k in range(1, c)])
-    return fe_logit_last_coef(y, template, np.column_stack([cell_dummies, arm]), engine)
+    return fe_logit_last_coef(y, template, np.column_stack([cell_dummies, arm]), engine,
+                              correction)
 
 
 def run_h2(reps: int, seed: int, *, templates=(30, 40, 60, 80), boot: int = 2000,
-           setup: H2Setup = DEFAULT_H2, engine: str = "fast") -> pd.DataFrame:
+           setup: H2Setup = DEFAULT_H2, engine: str = "fast",
+           correction: str = "statsmodels") -> pd.DataFrame:
     effects = (0.0, setup.bound)
     holm_level = 1 - ALPHA / setup.holm_steps
     rows = []
@@ -341,7 +363,7 @@ def run_h2(reps: int, seed: int, *, templates=(30, 40, 60, 80), boot: int = 2000
             tost += (lo90 > -setup.bound) and (hi90 < setup.bound)
             sup += lo95 > 0
             sup_holm += lo_holm > 0
-            fit = h2_glm(y0, y1, engine)
+            fit = h2_glm(y0, y1, engine, correction)
             if fit is None:
                 glm_fail += 1
             else:
@@ -384,6 +406,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--engine", choices=("fast", "statsmodels"), default="fast",
                     help="FE-logit implementation (identical model; 'fast' is checked against "
                          "statsmodels in the tests)")
+    ap.add_argument("--cluster-correction", choices=CORRECTIONS, default="statsmodels",
+                    help="small-sample factor of the cluster-robust SEs (module docstring)")
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="default: results/power_sim/<run_id>/")
     ap.add_argument("--no-write", action="store_true", help="print only")
@@ -398,13 +422,15 @@ def main(argv: list[str] | None = None) -> int:
         cals = ("conditional", "marginal") if args.sec10_calibration == "both" else (
             args.sec10_calibration,)
         tables["sec10_power"] = pd.concat(
-            [run_sec10(args.reps, args.seed, calibration=c, engine=args.engine) for c in cals],
+            [run_sec10(args.reps, args.seed, calibration=c, engine=args.engine,
+                       correction=args.cluster_correction) for c in cals],
             ignore_index=True)
     setup = H2Setup(p_f0=args.h2_p0)
     if args.part in ("h2", "all"):
         counts = tuple(int(x) for x in args.h2_templates.split(",") if x.strip())
         tables["h2_sol_power"] = run_h2(args.reps, args.seed, templates=counts, boot=args.boot,
-                                        setup=setup, engine=args.engine)
+                                        setup=setup, engine=args.engine,
+                                        correction=args.cluster_correction)
     for name, df in tables.items():
         _print(name, df)
     elapsed = time.perf_counter() - t0

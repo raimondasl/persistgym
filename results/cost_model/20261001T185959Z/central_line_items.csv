@@ -1,0 +1,24 @@
+phase,block,payee,item,usd
+0,1 pilots,OpenAI,echo check (sol),0.27
+0,1 pilots,OpenAI,echo check (luna),0.0135
+0,1 pilots,OpenAI,replay probe (sol),1.125
+0,1 pilots,OpenAI,replay probe (luna),0.05625
+0,1 pilots,Google,Gemini acceptance + Flex latency probe,3.33666
+0,1 pilots,Google,truncated ARC pilot,9.74529
+1a,1 pilots,OpenAI,luna pilots,1.95914
+1a,1 pilots,OpenAI,luna validity,5.8932
+1a,1 pilots,OpenAI,sol pilot,7.76432
+1a,1 pilots,OpenAI,sol validity,14.1376
+1b,2 seed-1 S0+S4,Google,seed-1 S0+S4 (8 runs),86.7527
+1b,2 seed-1 S0+S4,Google,seed-1 re-runs,17.3505
+1b,3 commitment,Google,path remainder (24 runs),260.258
+1b,3 commitment,Google,remainder re-runs,52.0516
+1a,3 commitment,OpenAI,luna sweep,172.405
+1a,3 commitment,OpenAI,luna control prompts,5.2
+1a,3 commitment,OpenAI,sol H2 core,273.304
+2,4 phase 2,OpenAI,StateCarry PersistGym cell (luna),13.7274
+2,4 phase 2,Google,ARC dev games (at cap),150
+2,4 phase 2,Google,held-out runs (18),279.842
+2,4 phase 2,Google,held-out re-runs,55.9685
+1b,2 seed-1 S0+S4,ARC Prize,ARC API (free research preview),0
+2,4 phase 2,GPU,GPU (E1 not in this scenario),0

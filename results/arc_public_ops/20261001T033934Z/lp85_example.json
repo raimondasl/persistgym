@@ -1,0 +1,17 @@
+{
+  "guid": "484de130-939a-4773-b771-d0108ed46a56",
+  "config": "google-gemini-3-8-flash-high",
+  "state": "NOT_FINISHED",
+  "levels_completed": 7,
+  "level_count": 8,
+  "stopped_on_level": 8,
+  "actions_on_stopping_level": 16,
+  "stopping_level_baseline": 159,
+  "allowed_actions_on_stopping_level": 795,
+  "duration": "1 h 56 min 19 s",
+  "duration_s": 6979.420452,
+  "open_at": "2026-09-10T15:43:25.771774Z",
+  "last_update": "2026-09-10T17:39:45.192226Z",
+  "inferred_ending": "ERROR_OR_CLOSED",
+  "matches_plan_claim": true
+}

@@ -17,8 +17,10 @@ Per episode it also logs (harnesses/DESIGN.md §7):
 * `need_phase` (D8): provider-reported tokens summed over every call made while the need step
   is pending, from its first call through the call that returns the scored action, lookup
   round-trips included;
-* `compacted_between` (D12, summary cells): 1 iff a compaction fired at a step in
-  (r_first, need_step], where r_first is the first evidence step;
+* `compacted_between` (D12, summary cells): 1 iff a compaction fired after the first evidence
+  step r_first and before the agent first saw the need-step observation (a compaction
+  applied to the payload of the need step's first call counts; one fired during a lookup
+  round-trip at the need step does not, and is marked `at_lookup_result` = 1);
 * the wall-clock seconds of every call (`call_latency_s`).
 
 Pilot-blinded experiments (`harnesses.blinding`, PREREG §11) keep `episodes.jsonl` under the
@@ -115,7 +117,8 @@ class EpisodeRun:
     n_summary_requests: int = 0
     n_summary_failures: int = 0
     n_unparsed_routine: int = 0  # unparsed replies at routine (non-need) steps
-    compactions: list[dict] = field(default_factory=list)  # each with at_step (D12)
+    # each with at_step and at_lookup_result (D12)
+    compactions: list[dict] = field(default_factory=list)
     compacted_between: int | None = None  # D12; summary cells only, see run_episode
     need_payload: dict | None = None  # survival_from_payload at the need step
     need_bridge_carried: dict | None = None  # carried_in_text on the bridge, summary cells
@@ -187,6 +190,7 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
     tiers: Counter = Counter()
     obs = env.observation
     done = False
+    n_compactions_seen_at_need = 0  # compactions applied before the need step's first call
     try:
         while not done:
             if len(env.turns) > cfg.max_turns:
@@ -207,6 +211,8 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                         episode, req.payload["input"], system=req.payload["instructions"],
                         exclude_indices=[bridge] if bridge is not None else [])
                     run.need_info = dict(req.info)
+                    # every compaction so far is applied to this payload (D12)
+                    n_compactions_seen_at_need = len(session.compactions)
                     if bridge is not None:
                         run.need_bridge_carried = carried_in_text(
                             item_text(req.payload["input"][bridge]), episode)
@@ -267,19 +273,24 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
         if run.need_phase is not None:
             run.need_phase["complete"] = need in res.step_outcomes
         # Session turn t is environment turn t (one observation each), so env.turns maps a
-        # compaction's turn to the step that was pending when it fired.
+        # compaction's turn to the step that was pending when it fired, and to whether that
+        # turn's observation was a lookup result.
         run.compactions = [{**{k: v for k, v in c.items() if k != "summary_text"},
                             "at_step": env.turns[c["at_turn"]].pending_step,
-                            "at_lookup_result": env.turns[c["at_turn"]].is_lookup_result}
+                            "at_lookup_result": int(env.turns[c["at_turn"]].is_lookup_result)}
                            for c in session.compactions]
         if (cell.history == "summary" and episode.reveal_steps
                 and run.need_payload is not None):
-            # D12: did a summary fire at a step in (r_first, n]? Successful compactions only
-            # (a failed summary attempt changes nothing). None when there is no evidence
-            # (withheld variant) or the need step was never presented.
+            # D12: did a summary fire after the first evidence step and before the agent
+            # first saw the need-step observation? The compactions applied to the payload of
+            # the need step's first call count; later ones (lookup round-trips at the need
+            # step, at_lookup_result = 1) do not. Successful compactions only (a failed
+            # summary attempt changes nothing). None when there is no evidence (withheld
+            # variant) or the need step was never presented.
             r_first = min(episode.reveal_steps)
-            run.compacted_between = int(any(r_first < c["at_step"] <= need
-                                            for c in run.compactions))
+            run.compacted_between = int(any(
+                c["at_step"] > r_first
+                for c in run.compactions[:n_compactions_seen_at_need]))
         run.echo = {"context_requested": cell.reasoning_context,
                     "context_echoed": dict(echoed), "models_returned": dict(models),
                     "service_tiers_returned": dict(tiers)}

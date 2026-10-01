@@ -105,6 +105,10 @@ def test_need_phase_includes_a_summary_fired_at_the_need_step(small_eps):
         step = need[1]["response"]["usage"]
         assert n["tokens"] - n["summary_tokens"] == step["input_tokens"] + step["output_tokens"]
         assert n["first_step_call"]["input_tokens"] == step["input_tokens"]
+        # D12: this summary is applied to the payload of the need step's first call, so the
+        # agent first saw the need-step observation after it: it counts
+        (c,) = [c for c in run.compactions if c["at_step"] == ep.need_step]
+        assert c["at_lookup_result"] == 0 and run.compacted_between == 1
     assert seen >= 1
 
 
@@ -124,27 +128,73 @@ def test_need_phase_incomplete_or_absent_when_the_episode_stops(small_eps):
 # --- D12 --------------------------------------------------------------------------------
 
 def _expected_between(ep, events):
-    """1 iff a summary call fired (and succeeded) at a pending step in (r_first, n]."""
+    """D12 from the transcript: 1 iff a summary call fired (and succeeded) after the first
+    evidence step and before the agent first saw the need-step observation, i.e. at a
+    pending step s with r_first < s < n, or at s = n before the first need-step call (not
+    while a lookup result at n was pending)."""
     r_first = min(c.step for c in ep.components if c.step is not None)
-    steps = [e["pending_step"] for e in events if e["kind"] == "summary"]
-    return int(any(r_first < s <= ep.need_step for s in steps))
+    n = ep.need_step
+    return int(any(r_first < e["pending_step"] < n
+                   or (e["pending_step"] == n and not e["is_lookup_result"])
+                   for e in events if e["kind"] == "summary"))
 
 
-@pytest.mark.parametrize("reply_tokens", [None, 150, 250])
-def test_compacted_between_matches_the_transcript(small_eps, reply_tokens):
-    fake = (lambda: FakeModel(_long_replies(reply_tokens))) if reply_tokens else FakeModel
+def _long_replies_with_lookups_at_need(ep, n_tokens):
+    """Long replies, and a lookup in reply to every presentation of the need step (the
+    environment allows 3; the 4th reply is the scored action)."""
+    def reply(payload, i):
+        last = item_text(payload["input"][-1])
+        action = (f"lookup({ep.entity})" if "needs its" in last else "ack(none)")
+        return padded_text("Notes.", n_tokens) + f"\nACTION: {action}"
+    return reply
+
+
+@pytest.mark.parametrize("reply_tokens, lookups", [(None, False), (150, False),
+                                                   (250, False), (150, True), (400, True)])
+def test_compacted_between_matches_the_transcript(small_eps, reply_tokens, lookups):
+    def fake(ep):
+        if lookups:
+            return FakeModel(_long_replies_with_lookups_at_need(ep, reply_tokens))
+        return FakeModel(_long_replies(reply_tokens)) if reply_tokens else FakeModel()
     values = {"near": set(), "far": set()}
     for ep in small_eps:
         for cid in SUMMARY_CELLS:
-            run, events = _events(ep, cid, fake())
+            run, events = _events(ep, cid, fake(ep))
             assert run.compacted_between == _expected_between(ep, events)
+            summaries = [e for e in events if e["kind"] == "summary"]
             assert [c["at_step"] for c in run.compactions] == [
-                e["pending_step"] for e in events if e["kind"] == "summary"]
+                e["pending_step"] for e in summaries]
+            assert [c["at_lookup_result"] for c in run.compactions] == [
+                int(e["is_lookup_result"]) for e in summaries]
             values[ep.cell.distance].add(run.compacted_between)
     # far evidence always passes through a summary by the need step (PREREG §2.7)
     assert values["far"] == {1}
     if reply_tokens == 150:
         assert values["near"] == {0, 1}  # the near case really is measured, not designed
+
+
+def test_a_compaction_during_a_lookup_at_the_need_step_does_not_count(small_eps):
+    """D12: the agent first saw the need-step observation before such a summary fired, so it
+    does not set compacted_between; it is marked at_lookup_result = 1. Template 0's
+    recoverable near Σ episodes with 150-token replies and lookups at the need step compact
+    at step 11 (before the evidence) and during a lookup round-trip at the need step 20."""
+    seen = 0
+    for ep in small_eps:
+        if ep.template_id != small_eps[0].template_id or ep.cell.id != "observed-rec-near":
+            continue
+        for cid in SUMMARY_CELLS:
+            run, events = _events(ep, cid,
+                                  FakeModel(_long_replies_with_lookups_at_need(ep, 150)))
+            r_first, n = min(ep.reveal_steps), ep.need_step
+            at_lookup = [c for c in run.compactions
+                         if c["at_step"] == n and c["at_lookup_result"] == 1]
+            assert run.n_lookups == 3 and at_lookup
+            # the reading D12 no longer uses would count it
+            assert any(r_first < c["at_step"] <= n for c in run.compactions)
+            assert run.compacted_between == 0 == _expected_between(ep, events)
+            assert run.need_payload["S"] is True  # the need step showed the evidence verbatim
+            seen += 1
+    assert seen == len(SUMMARY_CELLS)
 
 
 def test_compacted_between_only_in_summary_cells(small_eps):
@@ -183,6 +233,7 @@ def test_compaction_step_is_the_pending_step_not_the_turn(small_eps):
     run, events = _events(ep, "Σ-n-0", FakeModel(reply))
     assert run.n_lookups == 1 and run.compactions
     assert all(c["at_turn"] == c["at_step"] + 1 for c in run.compactions)
+    assert all(c["at_lookup_result"] == 0 for c in run.compactions)
     assert [c["at_step"] for c in run.compactions] == [
         e["pending_step"] for e in events if e["kind"] == "summary"]
     assert run.compacted_between == _expected_between(ep, events) == 1

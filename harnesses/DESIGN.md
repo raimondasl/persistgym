@@ -147,7 +147,7 @@ At the need step's **first** presentation (not a lookup result) it records:
 
 Per episode it also records:
 - `need_phase`: the need-phase tokens (§7.1);
-- `compacted_between` in Σ cells, and the step of every compaction (§7.2);
+- `compacted_between` in Σ cells, and the step of every compaction and whether it fired during a lookup round-trip (§7.2);
 - `call_latency_s`: wall-clock seconds of every call, retries and backoff included;
 - `n_unparsed_routine`: unparsed replies at routine steps (a format-error count; the need step is left out because it is an outcome);
 - `model` (requested) and `designed.evidence_steps`.
@@ -188,13 +188,18 @@ The phase runs from the first call at the need step through the call that return
 A summary call that fires while the need step is pending is a call at the need step, so it is included, and `tokens − summary_tokens` gives the reading without it. H1's cells (W-0, F-0) never summarize, so for H1 the two readings are the same.
 
 ### 7.2 `compacted_between` (D12)
-In Σ cells, `compacted_between` = 1 iff a compaction fired at a step s with r_first < s ≤ n, where r_first = min(`evidence_steps`) and n = `need_step`; otherwise 0 (D12, accepted 2026-10-01). Details:
+In Σ cells, `compacted_between` = 1 iff a summary fired **after the first reveal step and before the agent first saw the need-step observation**; otherwise 0. Here r_first = min(`evidence_steps`) and n = `need_step`. In terms of the step s pending when a summary fired, it counts when r_first < s < n, or when s = n and the summary fired before the need step's first call, so that it was applied to that call's payload. Details:
+- **Lookup round-trips at the need step do not count.** A summary that fires while a lookup result at step n is pending comes after the agent saw the need-step observation, so it does not set `compacted_between`. Its entry in `compactions` has `at_lookup_result` = 1. A summary during a lookup at an earlier step s with r_first < s < n counts, because it is still before the need step.
+- A summary that fires at step r_first itself (before the reveal observation, or during a lookup at r_first, whose result re-shows the evidence) does not count.
 - Only successful compactions count. A failed summary attempt changes nothing in the session.
-- s is the environment step pending when the summary fired, not the turn. Lookups add turns, so after a lookup `at_turn` = `at_step` + 1. Every entry of `compactions` carries `at_step` and `at_lookup_result`.
-- A compaction while a lookup result at step n is pending counts, as the definition says. It happens after the need payload was sent, so `at_lookup_result` marks it for the reading that leaves it out.
+- s is the environment step pending when the summary fired, not the turn. Lookups add turns, so after a lookup `at_turn` = `at_step` + 1. Every entry of `compactions` carries `at_step` and `at_lookup_result` (0 or 1).
 - `None` in W and F cells, for the withheld variant (no evidence), and when the need step was never presented (for example a summary that failed every attempt).
 
-Σ results are reported split by `compacted_between`, and Σ cells enter no confirmatory test (D12). A test checks the value against the transcript in every Σ cell. With the fake model's short replies near cells give 0; with 150-token replies they give both 0 and 1.
+The runner counts the compactions applied before it sends the need step's first call, so the value does not depend on the at_step bookkeeping. Tests recompute it from the transcript in every Σ cell, with and without lookups at the need step. With the fake model's short replies, near cells give 0; with 150-token replies they give both 0 and 1. One test covers the case that separates the two readings: template 0's recoverable near episodes, with 150-token replies and 3 lookups at the need step, compact at step 11 and during a lookup at the need step 20. That gives `compacted_between` = 0, and the need payload still shows the evidence verbatim.
+
+Σ results are reported split by `compacted_between`, and Σ cells enter no confirmatory test (D12).
+
+The earlier version of this branch counted every summary at a step in (r_first, n], including those during lookups at n. The #13 review flagged that reading, and it was changed to the one above (§10).
 
 ### 7.3 Run matrix (D11)
 `harnesses/matrix.py`. A `RunMatrix` maps each task cell to a template count n. The cell runs on the first n templates from `--start`, so a cell with fewer templates uses a prefix of another cell's templates and every contrast stays within-template. Episodes come out template by template, so a run stopped by its cost cap leaves whole templates plus at most one partial template, the one in progress. The r and 0 arms are separate runs, so their pairs are the episode ids both arms finished. `meta.json` records the matrix.
@@ -230,27 +235,47 @@ Two CLI checks keep pilot data inside this path:
 What this does not blind (§11): the per-run `costs.csv` row (one per run, required by CLAUDE.md) still holds that run's input and output tokens, calls and cost, and so does the run's `meta.json` (`tokens` without `reasoning_tokens`, as CLAUDE.md asks for token totals). `summary.json`'s `latency.n_calls` is the run's call count. Output tokens are mostly reasoning tokens, and calls minus steps counts lookups and summaries, so these approximate the withheld numbers for one arm. Only the explicit `reasoning_tokens` fields are withheld.
 
 ## 8. Paid calls (`openai_transport.py`)
-`OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless all of these hold:
+`OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless every check of the shared guard passes. The guard is `common.approval.require_paid_approval`. It lives in `common/` so that the ARC launcher can reuse it, and `harnesses.openai_transport` re-exports its names. The checks:
 1. `PERSISTGYM_ALLOW_PAID=1` is set;
 2. `--approved-block <name>` is given. This is the researcher's approved spending block from PLAN §16.2;
-3. `PREREG.md` is **committed** (§16.3: PREREG committed before any paid call): tracked by git, present in `HEAD`, and with no uncommitted changes. A draft in the working tree does not count;
-4. the block's approval is **committed**: `results/decisions.md` holds a line that is exactly `approved_block: <name>`, in the `HEAD` commit, and the working-tree copy still holds it. Details:
-   - only trailing whitespace (a CR, Markdown spaces) is ignored. `- approved_block: <name>`, an indented line, another case, a longer or shorter name, or the line inside backticks do not count;
-   - a line added but not committed does not count;
-   - a committed line deleted in the working tree counts as an uncommitted revocation and refuses;
-   - approving one block never approves another (§16.2).
+3. the experiment has a budget phase in `common/costs.py`;
+4. `--planned-usd` is a positive, finite number (`nan` would otherwise pass every budget comparison);
+5. `PREREG.md` is **committed** (§16.3: PREREG committed before any paid call): tracked by git, present in `HEAD`, and with no uncommitted changes. A draft in the working tree does not count;
+6. the block's **approval line** is in `results/decisions.md` on `origin/main`, in `HEAD` and in the working tree (below);
+7. the run's experiment is in the line's `experiments` list;
+8. block spend + `--planned-usd` ≤ the line's `max_usd`;
+9. `common.costs.headroom(planned_usd, phase, rows)` ≥ 0: the phase cap still applies.
 
-   The line records the researcher's approval, so it is added only on the researcher's explicit instruction, under that day's entry, and reaches `main` through the researcher's merge like every change. The guard reads the checked-out `HEAD`; it does not check that the commit is on `main` (§11);
-5. `--planned-usd` is a positive, finite number (`nan` would otherwise pass every budget comparison);
-6. the experiment has a budget phase in `common/costs.py`, and `common.costs.headroom(planned_usd, phase, rows)` ≥ 0.
+**The approval line.** One line, with exactly this spacing:
 
-`--planned-usd` is the planned spend of the whole command: for `probe-echo` and `probe-replay` with several models, each model's transport gets only what the earlier models left. `run` refuses a `persistgym_pilot` run on any split other than `pilot` (§16.5: pilot templates use a disjoint seed range).
+```
+    approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>
+```
+
+- `<name>` matches `[A-Za-z0-9._-]+`.
+- The experiments are a comma-separated list with no spaces, at least one and no repeats. Each is a key of `common.costs.EXPERIMENT_PHASE` or starts with `ext_`.
+- `<amount>` is a positive, finite decimal number of US dollars made of ASCII digits with an optional fractional part (`76`, `2.50`). A sign, exponent, `$`, thousands separator or non-ASCII digit makes the line malformed.
+- The line starts at column 0. Only trailing whitespace (a CR, Markdown spaces) is ignored. A list marker, indentation, backticks, other spacing or another case makes the line malformed, and a malformed line never counts. The refusal names the working-tree lines that look like an approval of the block but do not parse.
+- Lines are split on `\n` only. A form feed or U+2028 cannot start a line.
+
+**Where it must be.** The guard first runs `git fetch origin main`, written as `+refs/heads/main:refs/remotes/origin/main` so that the remote-tracking ref is updated whatever the remote's fetch config says. Prompts are off and there is a 60 s timeout. If the fetch fails, the guard refuses. The same line, compared after trailing whitespace is removed, must then be in all three copies of `results/decisions.md`: `origin/main`, `HEAD` and the working tree.
+- An approval reaches the guard only through the researcher's merge. A line committed on a feature branch is refused until it is on `main`.
+- Removing the line from any of the three, or changing it, counts as a revocation: a revocation merged to `main`, a committed one not yet pushed, or an uncommitted one.
+- A changed line (for example a raised `max_usd`) counts only once the new line is on all three.
+- Two different valid lines for one name are ambiguous and refuse. The same line twice is not ambiguous.
+- The remote and branch are injectable (`common.approval.RemoteRef`, the transport's `approval_remote`). Tests use a local bare repository as `origin`, with `GIT_ALLOW_PROTOCOL=file`, so they never reach a network.
+
+**Block spend** is the sum, over `results/costs.csv` rows whose `notes` contain `approved_block=<name>;`, of max(`cost_usd_list`, `cost_usd_billed_est`). Every costs row the transport writes starts its notes with that tag (`common.approval.spend_tag`). A tagged row whose cost cannot be read refuses.
+
+The approval line records the researcher's decision. It is added only on the researcher's explicit instruction, under that day's entry, and reaches `main` through the researcher's merge like every change. `results/decisions.md` explains the grammar near its top. Its examples are indented and use `<placeholder>` names, so neither can parse. A test checks this.
+
+`--planned-usd` is the planned spend of the whole command, as an estimated billed cost: for `probe-echo` and `probe-replay` with several models, each model's transport gets only what the earlier models left. Block spend counts the larger of list and billed cost, which on Flex is the list cost, twice the billed estimate. A multi-model probe whose `--planned-usd` is close to the block's remaining `max_usd` can therefore be refused for its later models. `run` refuses a `persistgym_pilot` run on any split other than `pilot` (§16.5: pilot templates use a disjoint seed range).
 
 While running, it:
 - stops before a call once the run's estimated billed cost reaches `--planned-usd` (`COST_CAP`);
 - retries 429s, timeouts and 5xx errors with exponential backoff, but never `insufficient_quota`. Flex 429s are not charged ([Flex guide](https://developers.openai.com/api/docs/guides/flex-processing)). A timed-out or dropped connection may still have been processed and billed; such attempts are not in the ledger;
 - logs the echoed `reasoning.context`, the returned model string and the served service tier of every response;
-- appends one costs.csv row per run, with `approved_block`, the number of context mismatches and the git dirty flag in `notes`. For a pilot-blinded experiment `reasoning_tokens` is left empty (§7.4). `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
+- appends one costs.csv row per run. Its `notes` start with `approved_block=<name>;` (what block spend sums) and hold the number of context mismatches and the git dirty flag. For a pilot-blinded experiment `reasoning_tokens` is left empty (§7.4). `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
 
 It never switches service tier. The API can still serve a request on a different tier than requested; the response says so and the row records it.
 
@@ -319,13 +344,18 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - D11 option A, sol on derived-far × T_d plus observed-far × T_d/3 (§7.3);
 - D12, `compacted_between` logged in Σ cells (§7.2);
 - pilot outcomes only under `results/raw/` (§7.4);
-- the paid guard requires the committed `approved_block: <name>` line (§8).
+- the paid guard requires the researcher's approval line in `results/decisions.md` (§8).
+
+**Changed after the #13 review** (2026-10-01; its four open items):
+- An approval is specific, so the researcher decides at every spending point. The line names the block, the experiments it may run and a dollar limit (`approved_block: <name> | experiments: ... | max_usd: ...`). It must be on `origin/main` as well as in `HEAD` and the working tree (§8). The guard moved to `common/approval.py`.
+- D12: a summary fired during a lookup round-trip at the need step no longer sets `compacted_between`. It is marked `at_lookup_result` = 1 (§7.2).
+- Pilot blinding stays as it is: per-run costs rows keep output tokens and leave `reasoning_tokens` empty (§7.4, §11).
 
 **Technical choices made here** (not D-items; open to the researcher's review):
 - Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
-- A compaction during a lookup round-trip at step n counts for `compacted_between`, as D12's definition says, and is marked (§7.2).
-- A blinded pilot's costs.csv row keeps input and output tokens and cost for the cost audit, and empties only `reasoning_tokens` (§7.4).
 - The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells (§7.4).
+- An approval line is compared as text across the three copies: changing its `max_usd` or experiments revokes it until the new line is on all three (§8).
+- Block spend takes the larger of list and billed cost row by row. This is conservative, like the phase-cap check, which takes the larger of the summed list and billed costs (§8).
 
 ## 11. Known limitations and what this does not show
 - **No payload has been sent to the API.** The tests show that the payloads are what the design says. They do not show that the API accepts them, for example:
@@ -339,6 +369,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - **Tokens are tiktoken's.** Provider counts differ by per-message overhead and rendered reasoning. Both are logged.
 - **The fake model's usage numbers are not realistic.** Fake runs check structure, not cost.
 - **Σ cells depend on what the model writes.** Their S is measured, and `carried_in_text` is the intended accounting (generator DESIGN.md §8, §12).
-- **Pilot blinding is partial.** Per-run costs.csv rows and `meta.json` still carry one arm's output tokens, calls and cost (§7.4). Running `pilot-report` before and after a run also gives that run's numbers by difference. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data; the code makes them hard to see, not impossible.
-- **The approval check reads the checked-out `HEAD`.** A line committed on a feature branch passes while that branch is checked out. Paid runs are meant to run from `main`, where only the researcher's merges land; the guard does not check that.
+- **Pilot blinding is partial, and was kept that way after the #13 review.** CLAUDE.md asks for one costs.csv row per run. Each pilot run's row keeps its input and output tokens, calls and cost, and leaves `reasoning_tokens` empty. The run's `meta.json` does the same (§7.4). Output tokens are mostly reasoning tokens, so these rows approximate one arm's withheld reasoning tokens and lookups. Running `pilot-report` before and after a run also gives that run's numbers by difference. Fully closing this would mean pooling the pilot arms into one ledger row, which departs from one row per run. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data. The code makes them hard to see, not impossible.
+- **The guard trusts `origin/main`.** It checks that the approval line was merged. It cannot check who merged it, so its strength is the branch protection and review on `main`. A paid command needs network access to GitHub at launch, because a failed fetch refuses.
+- **Block spend is the logged estimate.** It sums the costs.csv rows tagged with the block, so it is only as good as the price table in `pricing.py`. It does not see spend the provider billed that was never logged. That includes a timed-out attempt the provider still processed, and a process killed before `finalize` wrote its row. The provider-side spend limits (decisions.md, 2026-10-01) remain the backstop. Only launchers that tag their rows `approved_block=<name>;` are counted, so the ARC launcher must use `common.approval.spend_tag` too.
 - **Need-phase tokens are provider counts.** They include rendered reasoning in r arms and per-message overhead, unlike W's tiktoken counts (§4).

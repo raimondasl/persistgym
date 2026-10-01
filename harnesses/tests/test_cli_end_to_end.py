@@ -11,7 +11,7 @@ import json
 import pytest
 
 from common import costs, runmeta
-from harnesses import cli
+from harnesses import blinding, cli
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
 from harnesses.tests.conftest import prereg_repo
@@ -88,7 +88,10 @@ def test_probe_planned_usd_is_a_total_over_models(paid_env, monkeypatch, capsys)
     monkeypatch.setattr(cli, "_guarded_transport", spy)
     assert cli.main(["probe-echo", "--approved-block", "1-pilots", "--planned-usd", "0.5",
                      "--run-id", "e"]) == 0
-    first = float(costs.read_rows(costs_csv)[0]["cost_usd_billed_est"])
+    # spend is measured like block spend: the larger of list and billed (Flex: the list)
+    row = costs.read_rows(costs_csv)[0]
+    first = max(float(row["cost_usd_list"]), float(row["cost_usd_billed_est"]))
+    assert first > float(row["cost_usd_billed_est"])  # Flex: billed alone would undercount
     assert first > 0 and planned == [0.5, pytest.approx(0.5 - first)]
     # a total smaller than one model's spend: the first model stops at the cap
     # (BudgetExceeded) and the second is refused
@@ -127,3 +130,54 @@ def test_run_cli(paid_env):
     assert row["cell_or_config"] == "W-n-0" and row["experiment"] == "persistgym_pilot"
     assert int(row["n_calls"]) == len(fakes[0].calls) > 0
     assert "context_mismatches=0" in row["notes"]
+    # pilot blinding (PREREG §11): no per-arm reasoning tokens in committed files
+    assert row["reasoning_tokens"] == "" and blinding.WITHHELD_NOTE in row["notes"]
+    assert int(row["output_tokens"]) > 0 and float(row["cost_usd_billed_est"]) > 0
+    assert meta["tokens"]["reasoning_tokens"] is None
+    committed = sorted(p.name for p in (tmp / "results" / "persistgym_pilot").rglob("*")
+                       if p.is_file())
+    assert committed == ["meta.json", "summary.json"]
+    assert (tmp / "raw" / "persistgym_pilot" / "r" / "episodes.jsonl").exists()
+    assert meta["config"]["run_matrix"]["name"] == "full"
+
+
+def test_probe_rows_keep_reasoning_tokens(paid_env):
+    """The echo and replay probes are toggle checks, exempt from pilot blinding (D29)."""
+    _, costs_csv, _ = paid_env
+    assert cli.main(["probe-echo", "--model", "gpt-6-luna", "--approved-block", "1-pilots",
+                     "--planned-usd", "0.5", "--run-id", "e"]) == 0
+    (row,) = costs.read_rows(costs_csv)
+    assert int(row["reasoning_tokens"]) > 0 and blinding.WITHHELD_NOTE not in row["notes"]
+
+
+def test_run_cli_d11_matrix(paid_env):
+    """D11: derived-far on T_d templates, observed-far on the first T_o of them."""
+    tmp, costs_csv, _ = paid_env
+    small = ["--gen-set", "W_tokens=6400", "--gen-set", "v_tokens=400",
+             "--gen-set", "assumed_max_reply_tokens=200"]
+    assert cli.main(["run", "--cell", "F-r", "--model", "gpt-6.1-sol", "--matrix", "d11",
+                     "--n", "3", *small, "--approved-block", "1-pilots", "--planned-usd", "5",
+                     "--run-id", "d11"]) == 0
+    meta = json.loads((tmp / "results" / "persistgym_pilot" / "d11" / "meta.json")
+                      .read_text(encoding="utf-8"))
+    assert meta["config"]["run_matrix"] == {
+        "name": "d11", "n_templates": 3, "n_episodes": 8,
+        "templates_per_task_cell": {"observed-nonrec-far": 1, "observed-rec-far": 1,
+                                    "derived-nonrec-far": 3, "derived-rec-far": 3}}
+    ids = meta["config"]["episode_ids"]
+    assert len(ids) == 8 and not [i for i in ids if "near" in i]
+    assert sum("observed" in i for i in ids) == 2
+    (row,) = costs.read_rows(costs_csv)
+    assert row["model_requested"] == "gpt-6.1-sol" and "matrix=d11" in row["notes"]
+
+
+def test_run_cli_refuses_bad_matrix_options(paid_env, capsys):
+    base = ["run", "--cell", "F-r", "--approved-block", "1-pilots", "--planned-usd", "1"]
+    assert cli.main([*base, "--matrix", "d11", "--n", "4"]) == 2  # 4 / 3 is not whole
+    assert "T_d = 4" in capsys.readouterr().err
+    assert cli.main([*base, "--matrix", "d11", "--task-cell", "derived-rec-far"]) == 2
+    assert cli.main([*base, "--n-observed", "1"]) == 2
+    assert cli.main([*base, "--cell-templates", "derived-rec-near=1", "--matrix", "d11"]) == 2
+    assert cli.main([*base, "--cell-templates", "derived-rec-near=1", "--n-observed", "1"]) == 2
+    assert cli.main([*base, "--matrix", "d11", "--n", "33"]) == 2  # 88 episodes > 10
+    assert "at most 10" in capsys.readouterr().err

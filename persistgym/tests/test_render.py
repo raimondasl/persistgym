@@ -44,6 +44,7 @@ def test_step_kinds_and_reveal_positions(small_eps):
     for ep in small_eps:
         kinds = [s.kind for s in ep.steps]
         assert kinds.count("need") == 1 and kinds.index("need") == ep.need_step
+        assert kinds.count("distractor") == ep.config["n_distractors"]
         n = ep.need_step
         if ep.variant == "withheld":
             assert ep.components == [] and not ep.fact_available
@@ -76,6 +77,30 @@ def test_cells_share_need_options_and_routine(small_rendered):
         for i in range(t.n_steps):
             routine = {e.steps[i].observation for e in eps if e.steps[i].kind == "routine"}
             assert len(routine) <= 1
+
+
+def test_distractor_bindings_identical_in_every_cell_and_variant(small_rendered):
+    """D1: the 2 distractor bindings sit at the same steps with the same observation text in
+    all 8 cells and 3 variants, in the target's sentence frame about another entity; they
+    are never evidence, never needed, and lookup can serve them."""
+    for t, eps in small_rendered:
+        steps = sorted(d.step for d in t.distractors)
+        for e in eps:
+            assert [d.step for d in e.distractors] == steps
+            assert [s.index for s in e.steps if s.kind == "distractor"] == steps
+            for d in e.distractors:
+                s = e.steps[d.step]
+                assert s.distractors == [d.comp_id] and s.reveals == []
+                assert d.sentence == f"For {e.kind} {d.entity}, the {e.quantity} is {d.value}."
+                assert d.sentence in s.event and s.expected_action.startswith("ack(M-")
+                assert e.lookup.records[d.comp_id] == d.record
+                assert e.lookup.key_of(d.comp_id) == d.entity
+                assert e.graph.needed_step(f"comp:{d.comp_id}") is None
+                assert f"comp:{d.comp_id}" not in e.graph.required_components()
+        for i in steps:
+            assert len({e.steps[i].observation for e in eps}) == 1
+        evidence = {c.step for e in eps for c in e.components if c.step is not None}
+        assert not evidence & set(steps)
 
 
 def test_derived_value_never_shown_before_need(small_eps):

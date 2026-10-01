@@ -5,7 +5,7 @@
 1. Results page -> 6 variants x 25 games of session GUIDs (``discover.py``).
 2. Every session JSON (``GET /api/sessions/<guid>``).
 3. Recording NDJSON (``GET /api/recordings/<game_id>/<guid>``) only for the high-effort
-   Standard and Provider Adapter runs of ``RECORDING_GAMES`` (16 recordings).
+   Standard and Provider Adapter runs of ``RECORDING_GAMES`` (2 per game, 20 recordings).
 
 Everything goes through ``PoliteClient`` (one request at a time, >= 2 s apart, cached, never
 re-downloaded). Nothing here needs an API key.
@@ -21,8 +21,10 @@ from arc.public.client import PoliteClient
 from arc.public.discover import PublishedRun, published_runs
 
 RESULTS_SLUG = "google-gemini-3-8-flash"
-# The six eligible games (PLAN §8.3) plus the two third-held-out candidates (PLAN §9).
-RECORDING_GAMES = ("FT09", "SB26", "R11L", "LP85", "SC25", "CD82", "VC33", "RE86")
+# The six eligible games (PLAN §8.3), the two third-held-out candidates (PLAN §9), and the
+# other two held-out games of decision D14 option A (held out: SP80, VC33, TN36), so that every
+# option-A game's cost comes from its recordings, not from the premise table.
+RECORDING_GAMES = ("FT09", "SB26", "R11L", "LP85", "SC25", "CD82", "VC33", "RE86", "SP80", "TN36")
 
 
 @dataclass

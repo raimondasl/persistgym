@@ -169,3 +169,99 @@ def test_main_writes_tables_and_meta(tmp_path, capsys):
     for name in meta["outputs"]:
         assert (tmp_path / name).exists()
     assert "differ by more than 5%" in capsys.readouterr().out
+    opt = meta["config"]["option_a"]
+    assert cm.OPTION_A_FILE in opt["input_sha256"] and len(opt["input_sha256"]) == 2
+    assert "option_a_summary.md" in meta["outputs"]
+    assert {f"{n}.csv" for n in cm.option_a_tables(cm.OptionAModel())} <= set(meta["outputs"])
+
+
+# --------------------------------------------------------------------------------------------
+# Option A (decisions of 2026-10-01)
+# --------------------------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def option_a(model) -> cm.OptionAModel:
+    return cm.OptionAModel(model)
+
+
+def test_option_a_inputs_and_recorded_costs(model, option_a):
+    params = pd.read_csv(cm.DATA_DIR / cm.OPTION_A_FILE, dtype=str, keep_default_na=False)
+    assert params.name.is_unique and (params.source.str.len() > 0).all()
+    assert option_a.caps == {"0": 100, "1a": 500, "1b": 900, "2": 1150}
+    arc = option_a.arc
+    assert set(arc.loc[arc.role == "path", "game"]) == {"FT09", "SB26", "R11L", "CD82"}
+    assert set(arc.loc[arc.role == "heldout", "game"]) == {"SP80", "VC33", "TN36"}
+    # The recordings' list costs are the published costs of the premise table, to the cent.
+    published = model.inp.games.set_index("game")
+    lst = arc.loc[arc.basis == "list_nocache"].set_index("game")
+    assert lst.S0.to_numpy() == pytest.approx(published.loc[lst.index, "std_cost_usd"], abs=0.006)
+    assert lst.S4.to_numpy() == pytest.approx(published.loc[lst.index, "pa_cost_usd"], abs=0.006)
+    # Billed re-prices cached input only, so it never exceeds list.
+    billed = arc.loc[arc.basis == "billed_standard"].set_index("game")
+    assert (billed.S0 <= lst.S0).all() and (billed.S4 <= lst.S4).all()
+    assert billed.loc["FT09", "S0"] == pytest.approx(27.7040, abs=1e-3)
+
+
+def test_option_a_arc_rules(option_a):
+    for basis in cm.OA_BASES:
+        mid = option_a.arc_path(basis, "midpoint")
+        # Midpoint rule: 2 seeds x (S0 + S4 + 2 x midpoint) = 4 x the seed-1 S0+S4 block.
+        assert mid["path_1b"] == pytest.approx(4 * mid["seed1_s0s4"])
+        cpc = option_a.arc_path(basis, "checkpoint_c")
+        assert cpc["seed1_s0s4"] == mid["seed1_s0s4"] and cpc["path_1b"] >= mid["path_1b"]
+    a = option_a.arc.set_index(["basis", "game"])
+    # CD82: S0 $11.6785 over 60 calls, S4 took 207 actions.
+    assert a.loc[("list_nocache", "CD82"), "checkpoint_c"] == pytest.approx(11.6785 / 60 * 207,
+                                                                             rel=1e-4)
+    assert (option_a.arc.checkpoint_c >= option_a.arc.S0 - 1e-9).all()
+    with pytest.raises(ValueError):
+        option_a.arc_s12("billed_standard", "nope")
+
+
+def test_option_a_sol_reallocation_and_repeats(model, option_a):
+    s = cm.OPTION_A_CENTRAL
+    assert option_a.sol_templates(s) == (120, 40)
+    assert option_a.sol_templates(replace(s, sol_td=200)) == (200, 67)
+    assert option_a.with_repeats(120, True) == 132 and option_a.with_repeats(67, True) == 74
+    central = {n: u for *_, n, u in model.items(cm.CENTRAL)}
+    # T_d = 120, T_o = 40 is budget-neutral with PLAN's 40 templates x 8 task cells.
+    assert sum(option_a.sol_lines(s)) == pytest.approx(central["sol H2 core"])
+    no_rep = sum(option_a.sol_lines(replace(s, sol_repeats=False)))
+    assert sum(option_a.sol_lines(s)) / no_rep == pytest.approx((2 * 132 + 2 * 44) / 320)
+    items = {n: u for *_, n, u in option_a.items(s)}
+    assert items["luna sweep"] == pytest.approx(central["luna sweep"])  # 100 + 10 repeats
+
+
+def test_option_a_items(model, option_a):
+    items = option_a.items(cm.OPTION_A_CENTRAL)
+    by_name = {n: u for *_, n, u in items}
+    assert by_name["ARC dev games (at the dev cap)"] == 150
+    g3 = by_name["G3 v0 runs (4, outside the dev cap)"]
+    assert g3 == pytest.approx(option_a.arc_g3("billed_standard", "midpoint"))
+    assert by_name["G3 re-run reserve"] == pytest.approx(0.2 * g3)
+    held = next(u for n, u in by_name.items() if n.startswith("held-out runs (18"))
+    assert by_name["held-out re-run reserve"] == pytest.approx(0.2 * held)
+    # D21: no Flex probe calls, so the Gemini probe costs less than the A1 one.
+    assert 0 < by_name["Gemini acceptance probe (standard tier; no Flex probe, D21)"] < (
+        model.gemini_probe)
+    assert cm.total(items, phase="1b") == pytest.approx(
+        1.2 * option_a.arc_path("billed_standard", "midpoint")["path_1b"])
+    by_phase = cm.pivot_payee(items, "phase")
+    assert by_phase.iloc[-1]["total"] == pytest.approx(cm.total(items))
+    with pytest.raises(ValueError):
+        option_a.items(replace(cm.OPTION_A_CENTRAL, arc_basis="flex"))
+
+
+def test_option_a_tables(option_a):
+    t = cm.option_a_tables(option_a)
+    f = t["optA_forecasts"]
+    g0 = f.loc[f.metric.str.startswith("G0") & (f.basis == "billed_standard")].iloc[0]
+    assert g0.usd_with_reserve == pytest.approx(1.2 * g0.usd)
+    assert g0.headroom_usd == pytest.approx(900 - g0.usd_with_reserve)
+    z = t["optA_sizing_1a"]
+    assert set(z.T_d) == {90, 120, 150, 180, 200, 210} and (z.sol_repeats_usd > 0).all()
+    one = z.loc[(z.T_d == 120) & (z.output_per_call == 1000) & (z.luna_cells == 8)].iloc[0]
+    assert one.sol_episodes == 704
+    tot = t["optA_totals_by_phase_payee"]
+    assert set(tot.loc[tot.phase != "total", "cap"]) == {100, 500, 900, 1150}
+    lines = option_a.summary_lines(t)
+    assert any(line.startswith("- G0 forecast") for line in lines)

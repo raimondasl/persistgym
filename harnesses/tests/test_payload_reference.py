@@ -1,14 +1,15 @@
 """Randomised cross-check of every cell's payloads against a brute-force reference.
 
 The snapshot tests use uniform turn sizes. Here observation and reply lengths vary per turn,
-W varies, the instructions count toward W in half the trials, and Σ cells run with
-`summary_keep_recent_tokens` 0 or > 0. The reference recomputes, from token counts alone and
-without `persistgym.survival.window_keep_start`, which turns every request must carry:
-* window: the earliest start whose kept turns + observation (+ instructions) fit in W, never
-  moving backwards;
+W varies, the system prompt (never the notes sentence, PREREG D5) counts toward W in half the
+trials, and Σ cells run with `summary_keep_recent_tokens` 0 or > 0. The reference recomputes,
+from token counts alone and without `persistgym.survival.window_keep_start`, which turns
+every request must carry:
+* window: the earliest start whose kept turns + observation (+ system prompt) fit in W,
+  never moving backwards;
 * summary: a summary request exactly when bridge + turns since the last compaction +
-  observation (+ instructions) exceed W, compacting everything (keep 0) or everything but the
-  newest turns that fit in the keep budget (at least one turn);
+  observation (+ system prompt) exceed W, compacting everything (keep 0) or everything but
+  the newest turns that fit in the keep budget (at least one turn);
 * full: every turn.
 It then checks the visible texts of the payload item by item, one reasoning item per turn
 sent verbatim, and at most one bridge.
@@ -47,7 +48,7 @@ def _check_trial(seed: int) -> None:
     fake = FakeModel(lambda p, i: reps[i], summary_fn=lambda p, j: _summary(j))
     s = HarnessSession(cell, SYSTEM, HarnessConfig(summary_keep_recent_tokens=keep),
                        W_tokens=W, count_system=count_system)
-    sys_t = tokens.count(s.instructions) if count_system else 0
+    sys_t = tokens.count(SYSTEM) if count_system else 0  # never the notes sentence (D5)
     ot = [tokens.count(o) for o in obs]
     rt = [tokens.count(r) for r in reps]
 

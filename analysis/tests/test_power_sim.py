@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 import statsmodels.api as sm
 from scipy import special
@@ -106,6 +107,47 @@ def test_h2_extremes():
     # ...and when the true effect sits on the bound it rarely does (nominal size 5%).
     edge = ps.run_h2(200, 2, templates=(200,), boot=500)
     assert edge.loc[edge.true_effect_pp == 8, "P_tost_equivalent"].item() < 0.10
+
+
+def test_h2_d11_options_leave_existing_columns_unchanged():
+    base = ps.run_h2(20, 5, templates=(30, 60), boot=200)
+    setup = ps.H2Setup(holm_one_sided_alpha=0.0125, observed_divisor=3)
+    full = ps.run_h2(20, 5, templates=(30, 60), boot=200, setup=setup)
+    assert full[base.columns].equals(base)
+    assert list(full.T_o) == [10, 10, 20, 20]
+    assert list(full.episodes_total) == [2 * (30 * 2 + 10 * 2)] * 2 + [2 * (60 * 2 + 20 * 2)] * 2
+    # "supported" needs the bootstrap test AND a positive GLM estimate.
+    assert (full.P_supported <= full.P_superior_holm_one_sided).all()
+    for col in ("P_superior_holm_one_sided", "P_superior_glm_one_sided", "P_supported",
+                "obs_P_point_within_bound"):
+        assert full[col].between(0, 1).all()
+
+
+def test_h2_one_sided_holm_and_observed_cells():
+    setup = ps.H2Setup(p_f0=0.5, bound=0.4, holm_one_sided_alpha=0.0125, observed_divisor=3)
+    big = ps.run_h2(10, 1, templates=(60,), boot=500, setup=setup)
+    hit = big.loc[big.true_effect_pp == 40].iloc[0]
+    assert hit.P_superior_holm_one_sided == 1.0 and hit.P_supported == 1.0
+    null = big.loc[big.true_effect_pp == 0].iloc[0]
+    assert null.P_superior_holm_one_sided <= 0.2
+    # With 1000 observed templates and no true difference, the point estimate is within 3pp.
+    many = ps.run_h2(5, 2, templates=(3000,), boot=100,
+                     setup=ps.H2Setup(holm_one_sided_alpha=0.0125, observed_divisor=3))
+    assert (many.T_o == 1000).all() and (many.obs_P_point_within_bound == 1.0).all()
+    assert (many.obs_mean_ci90_halfwidth_pp < 3).all()
+
+
+def test_main_h2_p0_list_and_d11_options(tmp_path):
+    args = ["--part", "h2", "--reps", "2", "--boot", "50", "--h2-templates", "30",
+            "--h2-p0", "0.6,0.8", "--holm-one-sided-alpha", "0.0125",
+            "--h2-observed-divisor", "3", "--cluster-correction", "clusters",
+            "--out-dir", str(tmp_path)]
+    assert ps.main(args) == 0
+    meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
+    assert [s["p_f0"] for s in meta["config"]["h2_setups"]] == [0.6, 0.8]
+    assert meta["config"]["h2_setups"][0]["holm_one_sided_alpha"] == 0.0125
+    t = pd.read_csv(tmp_path / "h2_sol_power.csv")
+    assert sorted(t.p_F0.unique()) == [0.6, 0.8] and len(t) == 4 and (t.T_o == 10).all()
 
 
 def test_main_writes_tables_and_meta(tmp_path):

@@ -201,15 +201,26 @@ def test_window_counts_reply_tokens():
         step(0, 0), step(0, 1), step(0, 2), step(1, 3), step(2, 4), step(2, 5)]
 
 
-def test_window_counts_instructions_when_configured():
-    """With count_system, the 15-token instructions (+ notes sentence in W-n cells) also
-    have to fit: at W = 965, W-0 (15 tokens) keeps step 3 whole, W-n-0 does not."""
-    n_notes = tokens.count(NOTES_SYSTEM)
-    assert tokens.count(SYSTEM) == 15 and n_notes > 15
-    _, m0, _ = run_synthetic(CELLS["W-0"], n_steps=4, W=965, count_system=True)
-    _, mn, _ = run_synthetic(CELLS["W-n-0"], n_steps=4, W=965, count_system=True)
-    assert label_payload(m0.calls[3]) == step(0, 3)
-    assert label_payload(mn.calls[3]) == step(1, 3)
+def test_window_counts_system_prompt_when_configured():
+    """With count_system, the 15-token episode system prompt also has to fit: at W = 965
+    step 3 is kept whole (15 + 3 x 250 + 200 = 965), at W = 964 it drops turn 0."""
+    assert tokens.count(SYSTEM) == 15
+    for W, keep in ((965, 0), (964, 1)):
+        _, m0, _ = run_synthetic(CELLS["W-0"], n_steps=4, W=W, count_system=True)
+        assert label_payload(m0.calls[3]) == step(keep, 3)
+
+
+def test_notes_sentence_never_counts_toward_W():
+    """PREREG D5: W counts the episode's system prompt, not the notes sentence, so W-n-0
+    and W-0 (and Σ-n-r and Σ-0-r) keep and compact the same turns; only `instructions`
+    differs. At W = 965 the notes sentence would push W-n-0 one turn shorter if counted."""
+    assert tokens.count(NOTES_SYSTEM) > tokens.count(SYSTEM)
+    for notes, plain in (("W-n-0", "W-0"), ("Σ-n-r", "Σ-0-r")):
+        sn, mn, _ = run_synthetic(CELLS[notes], n_steps=6, W=965, count_system=True)
+        s0, m0, _ = run_synthetic(CELLS[plain], n_steps=6, W=965, count_system=True)
+        assert sn.system_tokens == s0.system_tokens == 15
+        assert [label_payload(p) for p in mn.calls] == [label_payload(p) for p in m0.calls]
+        assert sn.compactions == s0.compactions
 
 
 def test_session_state_after_summary():

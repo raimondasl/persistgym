@@ -1,10 +1,10 @@
 """Render a template into episodes: 8 task cells x variants {base, restated, withheld}.
 
 All cells of one template share the need step index, the option list, the correct letter,
-the routine events and the log filler of every step index. They differ only in where the
-target components are revealed (near / far), how (observed / derived) and whether lookup is
-available (recoverable). Observations of identical (step, event) pairs are byte-identical
-across cells.
+the routine events, the distractor bindings and the log filler of every step index. They
+differ only in where the target components are revealed (near / far), how (observed /
+derived) and whether lookup is available (recoverable). Observations of identical
+(step, event) pairs are byte-identical across cells.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from persistgym import tokens
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, GeneratorConfig
 from persistgym.episode import (
     ALL_CELLS,
+    LOOKUP_EVENT_MARKER,
     VARIANTS,
     Component,
     Episode,
@@ -39,7 +40,14 @@ from persistgym.filler import (
 )
 from persistgym.graph import build_graph
 from persistgym.survival import episode_design
-from persistgym.template import LABELS, Template, rng, sample_template, split_of_seed
+from persistgym.template import (
+    LABELS,
+    Template,
+    component_schedule,
+    rng,
+    sample_template,
+    split_of_seed,
+)
 
 EVENT_PREFIX = "EVENT: "
 
@@ -72,10 +80,11 @@ def memo_event(record: str, record_id: str) -> str:
 
 
 def lookup_key_matches(key: str, entity: str) -> bool:
-    """A lookup key matches if it contains the entity name as a whole word, ignoring case
-    ("BEECH", "beech", "sample BEECH" all match; "BEECHES" does not). With one entity per
-    episode (k=1) this is unambiguous, and it keeps formatting slips such as
-    lookup(sample BEECH) from costing extra turns that are not about memory."""
+    """A lookup key matches an entity if it contains the entity name as a whole word,
+    ignoring case ("BEECH", "beech", "sample BEECH" all match; "BEECHES" does not). Entity
+    names are single distinct words, so this never confuses the target with a distractor,
+    and it keeps formatting slips such as lookup(sample BEECH) from costing extra turns that
+    are not about memory (PREREG D3)."""
     return bool(re.search(rf"(?<![A-Za-z]){re.escape(entity)}(?![A-Za-z])", key, re.IGNORECASE))
 
 
@@ -119,23 +128,7 @@ def component_ids(fact: str, n_clues: int) -> list[str]:
 
 def schedule(t: Template, cell: TaskCell, cfg: GeneratorConfig) -> dict[str, int | None]:
     """Reveal step of every component. The latest reveal is gap steps before need."""
-    n = t.need_index
-    g = cfg.near_gap_steps if cell.distance == "near" else cfg.far_gap_steps
-    s = cfg.clue_spacing_steps
-    if cell.fact == "observed":
-        return {"fact": n - g}
-    clues = [f"clue{i}" for i in range(t.n_clues)]
-    steps: dict[str, int | None] = {}
-    if cfg.rule_placement == "separate_step":
-        steps["rule"] = n - g
-        for i, cid in enumerate(reversed(clues)):
-            steps[cid] = n - g - (i + 1) * s
-    else:
-        for i, cid in enumerate(clues):
-            steps[cid] = n - g - (len(clues) - 1 - i) * s
-        steps["rule"] = {"with_last_clue": steps[clues[-1]], "with_first_clue": steps[clues[0]],
-                         "system_prompt": None}[cfg.rule_placement]
-    return {cid: steps[cid] for cid in [*clues, "rule"]}
+    return component_schedule(t.need_index, t.n_clues, cell.fact, cell.distance, cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -196,16 +189,28 @@ class TemplateRenderer:
         kind, ent = sk.kind, t.entity
         if cell.fact == "observed":
             sent = fact_sentence(kind, ent, sk.quantity, t.target_value)
-            return [Component("fact", "fact", sk.quantity, t.target_value, sent, "", steps["fact"])]
+            return [Component("fact", "fact", sk.quantity, t.target_value, sent, "", steps["fact"],
+                              ent)]
         comps = []
         names = list(sk.components[: t.n_clues])
         for i in range(t.n_clues):
             sent = fact_sentence(kind, ent, names[i], t.clue_values[i])
             comps.append(Component(f"clue{i}", "clue", names[i], t.clue_values[i], sent, "",
-                                   steps[f"clue{i}"]))
+                                   steps[f"clue{i}"], ent))
         comps.append(Component("rule", "rule", sk.quantity, None,
-                               rule_sentence(kind, sk.quantity, names), "", steps["rule"]))
+                               rule_sentence(kind, sk.quantity, names), "", steps["rule"], ent))
         return comps
+
+    def distractors(self) -> list[Component]:
+        """Distractor bindings (PREREG D1): the target's sentence frame about another entity,
+        in a memo from the same source as an observed fact. Identical in every cell."""
+        sk = self.skin
+        out = []
+        for k, d in enumerate(self.t.distractors):
+            sent = fact_sentence(sk.kind, d.entity, sk.quantity, d.value)
+            out.append(Component(f"dist{k}", "distractor", sk.quantity, d.value, sent,
+                                 f"{sk.sources[0]} {d.record_id}. {sent}", d.step, d.entity))
+        return out
 
     def _records(self, comps: list[Component]) -> tuple[dict[int, str], dict[int, str]]:
         """Record line and record id per reveal step; fills Component.record in place."""
@@ -252,6 +257,10 @@ class TemplateRenderer:
             raise GenerationError(f"{t.template_id} {cell.id}: reveal before lead-in")
 
         comps = self._components(cell, steps_of)
+        dists = self.distractors()
+        dist_at = {d.step: (d, t.distractors[k].record_id) for k, d in enumerate(dists)}
+        if set(dist_at) & set(reveal_steps) or len(dist_at) != len(dists):
+            raise GenerationError(f"{t.template_id} {cell.id}: distractor step collides")
         rec_lines, rec_ids = self._records(comps)
         if variant == "withheld":
             shown_lines, shown_ids = self._null_records(steps_of)
@@ -285,6 +294,10 @@ class TemplateRenderer:
                 kind, rtype = "reveal", "memo"
                 event = memo_event(shown_lines[i], shown_ids[i])
                 expected = f"ack({shown_ids[i]})"
+            elif i in dist_at:
+                d, rid = dist_at[i]
+                kind, rtype = "distractor", "memo"
+                event, expected = memo_event(d.record, rid), f"ack({rid})"
             else:
                 spec = t.routine[i]
                 kind, rtype, event, expected = "routine", spec.type, spec.event, spec.expected_action
@@ -295,7 +308,8 @@ class TemplateRenderer:
                 obs_tokens=fitted.n_tokens, event_start=len(fitted.text) - len(event),
                 event_end=len(fitted.text), filler_start=fitted.filler_start,
                 filler_end=fitted.filler_end, expected_action=expected, reveals=reveals,
-                restates=restates if i == n else [], sim_time=clock.isoformat()))
+                restates=restates if i == n else [], sim_time=clock.isoformat(),
+                distractors=[dist_at[i][0].comp_id] if i in dist_at else []))
 
         carried = comps if variant != "withheld" else []
         lookup_records = ({c.comp_id: c.record for c in carried if c.step is not None}
@@ -304,14 +318,21 @@ class TemplateRenderer:
         lookup_steps = ({c.comp_id: c.step for c in carried if c.step is not None}
                         if variant != "withheld" else
                         {f"null{k}": s for k, s in enumerate(sorted(shown_lines))})
+        record_keys = {rid: t.entity for rid in lookup_records}
+        for d in dists:  # lookup serves the distractor keys too (PREREG D3)
+            lookup_records[d.comp_id] = d.record
+            lookup_steps[d.comp_id] = d.step
+            record_keys[d.comp_id] = d.entity
         lookup = LookupSpec(available=cell.recoverable, key=t.entity,
                             syntax=f"lookup(<{sk.kind} name>)",
                             max_per_episode=cfg.lookup_max_per_episode,
-                            records=lookup_records, reveal_steps=lookup_steps)
+                            records=lookup_records, reveal_steps=lookup_steps,
+                            record_keys=record_keys)
         graph = build_graph(
             t.n_steps, n,
             [{"comp_id": c.comp_id, "role": c.role, "step": c.step} for c in carried],
-            cell.fact, cell.recoverable, rule_in_system_prompt=rule_in_prompt)
+            cell.fact, cell.recoverable, rule_in_system_prompt=rule_in_prompt,
+            distractors=[{"comp_id": d.comp_id, "step": d.step} for d in dists])
         system_tokens = tokens.count(system, cfg.tokenizer)
         obs_tokens = [s.obs_tokens for s in steps]
         design = episode_design(
@@ -331,31 +352,63 @@ class TemplateRenderer:
             system_prompt=system, system_tokens=system_tokens, steps=steps, need_step=n,
             n_clues=t.n_clues if cell.fact == "derived" else 0, components=carried,
             target_value=t.target_value, options=options, correct_label=t.correct_label,
-            lookup=lookup, graph=graph, design=design)
+            lookup=lookup, graph=graph, design=design, distractors=dists)
         validate_episode(ep, cfg)
         return ep
 
     # -- lookup -------------------------------------------------------------
     def lookup_observation(self, ep: Episode, pending_step: int, lookup_no: int,
                            key: str) -> tuple[str, int, str]:
-        """Observation shown after a lookup(key) at `pending_step` (see env.EpisodeEnv)."""
+        """Observation shown after a served lookup(key) at `pending_step` (env.EpisodeEnv).
+
+        Re-shows, verbatim and in display order, every record shown at or before the pending
+        step about an entity whose name the key contains as a whole word: the target's
+        records (fact, or clues and rule) or a distractor's binding (PREREG D3). Any other
+        key, or a key whose records are not shown yet, gets "no such record".
+
+        The key is matched as the agent wrote it. `safe_key` (punctuation dropped, at most 40
+        characters) is only echoed back: matching it instead would glue words together
+        (`key="BEECH"` -> `keyBEECH`, `sample:BEECH` -> `sampleBEECH`, `BEECH's` -> `BEECHs`)
+        or cut the name off a long key, and refuse keys that name the entity as a word."""
         sk = self.skin
+        key = key or ""
         safe_key = "".join(ch for ch in key if ch.isalnum() or ch in " _-")[:40].strip()
-        if lookup_key_matches(safe_key, ep.lookup.key):
-            lines: list[str] = []
-            for cid, st in sorted(ep.lookup.reveal_steps.items(), key=lambda kv: (kv[1], kv[0])):
-                if st <= pending_step and ep.lookup.records[cid] not in lines:
-                    lines.append(ep.lookup.records[cid])
-            if lines:
-                body = f"LOOKUP RESULT for {sk.kind} {ep.entity}:\n" + "\n".join(lines)
-            else:
-                body = f"LOOKUP RESULT for {sk.kind} {ep.entity}: no records yet."
+        lines: list[str] = []
+        about: list[str] = []
+        for rid, st in sorted(ep.lookup.reveal_steps.items(), key=lambda kv: (kv[1], kv[0])):
+            ent = ep.lookup.key_of(rid)
+            if (st <= pending_step and lookup_key_matches(key, ent)
+                    and ep.lookup.records[rid] not in lines):
+                lines.append(ep.lookup.records[rid])
+                if ent not in about:
+                    about.append(ent)
+        if lines:
+            names = " and ".join(f"{sk.kind} {e}" for e in about)
+            body = f"LOOKUP RESULT for {names}:\n" + "\n".join(lines)
         else:
-            body = f"LOOKUP RESULT for '{safe_key}': no records found."
+            body = f"LOOKUP RESULT for '{safe_key}': no such record."
+        return self._lookup_slot(ep, pending_step, lookup_no, body)
+
+    def lookup_unavailable_observation(self, ep: Episode,
+                                       pending_step: int) -> tuple[str, int, str]:
+        """Observation shown after a lookup once all `lookup_max_per_episode` lookups are used
+        (PREREG D3): "lookup unavailable", then the pending request again. It costs one turn,
+        like a lookup, and is not an answer to the pending step."""
+        cap = self.cfg.lookup_max_per_episode
+        body = (f"LOOKUP RESULT: lookup unavailable. All {cap} lookups allowed per session "
+                "have been used.")
+        return self._lookup_slot(ep, pending_step, cap, body)
+
+    def _lookup_slot(self, ep: Episode, pending_step: int, slot_no: int,
+                     body: str) -> tuple[str, int, str]:
+        """Pad a lookup response to v tokens. Slot j of pending step t has its clock at
+        T(t) + (j + 1) * slot, before the next step's clock."""
         event = body + "\nPending request (repeated): " + ep.steps[pending_step].event
         slot = max(1, self.cfg.step_seconds // (self.cfg.lookup_max_per_episode + 2))
-        clock = self.step_time(pending_step) + timedelta(seconds=(lookup_no + 1) * slot)
-        fitted = self.observation(("lookup", pending_step, lookup_no), clock, event)
+        clock = self.step_time(pending_step) + timedelta(seconds=(slot_no + 1) * slot)
+        fitted = self.observation(("lookup", pending_step, slot_no), clock, event)
+        if LOOKUP_EVENT_MARKER not in fitted.text:  # survival_from_payload relies on it
+            raise GenerationError(f"{self.t.template_id}: lookup response without its marker")
         return fitted.text, fitted.n_tokens, event
 
 

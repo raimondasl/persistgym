@@ -1329,6 +1329,11 @@ class OptionAModel:
             L.append(f"| {td} | {int(by_o.T_o.iloc[0])} | " + " | ".join(
                 f"{by_o.loc[o, 'phase_1a_usd']:.2f}" for o in grid)
                 + f" | {by_o.loc[min(grid), 'sol_repeats_usd']:.2f} |")
+        td0, _ = self.sol_templates(OPTION_A_CENTRAL)
+        c0 = z8.loc[(z8.T_d == td0) & (z8.output_per_call == min(grid)), "phase_1a_usd"].item()
+        L.append(f"\nCentral size (T_d = {td0}, 8 luna cells, {min(grid) // 1000}k output): "
+                 f"{c0:.2f} against the ${self.caps['1a']:,.0f} cap (headroom "
+                 f"{self.caps['1a'] - c0:.2f}).")
         L.append(f"\nLargest T_d whose phase 1a fits the ${self.caps['1a']:,.0f} cap (\"none\": "
                  f"not even T_d = {int(z.T_d.min())}):")
         for cells in sorted(z.luna_cells.unique(), reverse=True):

@@ -296,4 +296,6 @@ def test_option_a_tables(option_a):
     lines = option_a.summary_lines(t)
     assert any(line.startswith("- G0 forecast") for line in lines)
     assert any(line.startswith("- Restated-at-need:") for line in lines)
+    head = next(line for line in lines if line.startswith("\nCentral size (T_d = 120"))
+    assert f"(headroom {500 - one.phase_1a_usd:.2f})" in head
     assert not any("roposed" in line for line in lines)

@@ -14,10 +14,11 @@ the phase cap (PLAN §12, §16.2).
 The costs.csv row's notes start with `common.approval.spend_tag(<name>)`
 ("approved_block=<name>;"), which is how the guard sums a block's spend.
 
-While running it stops before a call once the run's estimated billed cost reaches the planned
-spend, logs every response's echoed `reasoning.context`, returned model string and served
-service tier, and `finalize` appends exactly one results/costs.csv row via
-`common.costs.append_row`. A response whose returned model string has no price is still
+While running it stops before a call once the run's spend reaches the planned spend. Spend is
+measured as block spend and the phase caps measure it (`common.approval.spend_usd`, the
+larger of the list and billed estimates; on Flex, the list cost). It logs every response's
+echoed `reasoning.context`, returned model string and served service tier, and `finalize`
+appends exactly one results/costs.csv row via `common.costs.append_row`. A response whose returned model string has no price is still
 logged, priced as the requested model and flagged in the row's notes. For a pilot-blinded
 experiment (`harnesses.blinding`, PREREG §11) the row's `reasoning_tokens` is left empty; the
 per-call values stay in the raw transcript under results/raw/.
@@ -46,6 +47,7 @@ from common.approval import (
     RemoteRef,
     require_paid_approval,
     spend_tag,
+    spend_usd,
 )
 from harnesses import blinding
 from harnesses.pricing import UsageLedger, price_for
@@ -99,16 +101,24 @@ class OpenAIResponsesTransport:
         self._finalized = False
         self._client = (self.client_factory or _default_client)(self.timeout_s)
 
+    @property
+    def spent_usd(self) -> float:
+        """This run's spend so far, measured as block spend and the phase caps measure it
+        (`common.approval.spend_usd`: on Flex, the list cost). The run stops before a call
+        once it reaches the planned spend, so the guard's check `block spend + planned <=
+        max_usd` holds after the run too, up to the last call's cost."""
+        return spend_usd(self.ledger.cost_usd_list, self.ledger.cost_usd_billed_est)
+
     # ------------------------------------------------------------------
     def send(self, payload: dict) -> dict:
         if self._finalized:
             raise RuntimeError("transport already finalized")
         if payload.get("model") != self.model:
             raise ValueError(f"payload model {payload.get('model')!r} != {self.model!r}")
-        if self.ledger.cost_usd_billed_est >= self.approval.planned_usd:
+        if self.spent_usd >= self.approval.planned_usd:
             raise BudgetExceeded(
-                f"run spend ${self.ledger.cost_usd_billed_est:.4f} reached the planned "
-                f"${self.approval.planned_usd:.2f}")
+                f"run spend ${self.spent_usd:.4f} (the larger of list and billed estimates) "
+                f"reached the planned ${self.approval.planned_usd:.2f}")
         started = time.monotonic()
         for attempt in range(1, self.max_attempts + 1):
             try:

@@ -27,8 +27,13 @@ def _env(repo: Path) -> dict:
 
 def git_in(repo: Path, *args: str) -> None:
     """Run git in a test repo, isolated from the user's and the system's git config."""
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
-                   env=_env(repo))
+    git_out(repo, *args)
+
+
+def git_out(repo: Path, *args: str) -> str:
+    """`git_in`, returning the command's stdout."""
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                          encoding="utf-8", env=_env(repo)).stdout
 
 
 def approval_line(name: str, experiments=DEFAULT_EXPERIMENTS,

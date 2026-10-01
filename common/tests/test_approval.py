@@ -4,6 +4,7 @@ bare repository and git may use only the file transport (conftest)."""
 
 from __future__ import annotations
 
+import csv
 import math
 import random
 import re
@@ -28,6 +29,7 @@ from common.tests.gitrepo import (
     commit_on_origin_only,
     decisions_text,
     git_in,
+    git_out,
     guarded_repo,
     push_main,
     write_decisions,
@@ -197,6 +199,53 @@ def test_lines_split_only_on_newline():
     assert len(approval.approvals_in(f"# log\r\n{VALID}\r\n", "1-pilots")) == 1
 
 
+# --- code blocks and HTML comments ----------------------------------------------------------
+
+HIDDEN = {
+    "backtick fence": f"Proposed (not approved):\n```\n{VALID}\n```\n",
+    "fence with info": f"```text\n{VALID}\n```\n",
+    "tilde fence": f"~~~\n{VALID}\n~~~\n",
+    "indented fence": f"   ```\n{VALID}\n   ```\n",
+    "unclosed fence": f"```\n{VALID}\n",
+    "a shorter fence does not close": f"````\n```\n{VALID}\n````\n",
+    "the other fence character does not close": f"```\n~~~\n{VALID}\n```\n",
+    "CRLF fence": f"```\r\n{VALID}\r\n```\r\n",
+    "fence after a lone CR": f"note\r```\n{VALID}\n```\n",
+    "HTML comment": f"<!--\n{VALID}\n-->\n",
+    "comment opened mid-line": f"Draft <!-- not yet\n{VALID}\n-->\n",
+    "unclosed comment": f"<!--\n{VALID}\n",
+}
+
+SHOWN = {
+    "after a closed fence": f"```\nx\n```\n{VALID}\n",
+    "after a closed comment": f"<!--\nx\n-->\n{VALID}\n",
+    "one-line comment": f"<!-- note -->\n{VALID}\n",
+    "comment marker in a code span": f"Write `<!--` as words.\n{VALID}\n",
+    "backticks with a backtick info string are inline code": f"``` a`b\n{VALID}\n",
+    "comment marker inside a fence": f"```\n<!--\n```\n{VALID}\n",
+    "fence marker inside a comment": f"<!--\n```\n-->\n{VALID}\n",
+    "4-space indent is not a fence": f"    ```\n{VALID}\n",
+}
+
+
+@pytest.mark.parametrize("body", HIDDEN.values(), ids=HIDDEN.keys())
+def test_lines_in_code_blocks_or_html_comments_never_count(body):
+    """A proposed or example line shown in a code block, or a line commented out, is not an
+    approval; the refusal names it."""
+    text = "# Decisions log\n\n" + body
+    assert parse_line(VALID) is not None
+    assert approval.approvals_in(text, "1-pilots") == set()
+    n = text.split("\n").index(next(x for x in text.split("\n") if x.rstrip() == VALID)) + 1
+    assert n in approval.look_alikes(text, "1-pilots")
+
+
+@pytest.mark.parametrize("body", SHOWN.values(), ids=SHOWN.keys())
+def test_lines_outside_code_blocks_and_comments_count(body):
+    text = "# Decisions log\n\n" + body
+    assert len(approval.approvals_in(text, "1-pilots")) == 1
+    assert approval.look_alikes(text, "1-pilots") == []
+
+
 # --- the docs never approve anything by example -------------------------------------------
 
 def _fenced(text: str) -> list[str]:
@@ -218,6 +267,14 @@ def test_decisions_md_documents_the_grammar_with_examples_that_cannot_parse():
     for x in examples:
         assert parse_line(x) is None
         assert parse_line(x.strip()) is None  # not even if someone removes the indent
+    # The guard sees every line outside that code block: no unclosed fence or HTML comment
+    # in the log hides the entries below it, where approval lines go.
+    lines = text.split("\n")
+    shown = approval.shown_lines(lines)
+    fence = [i for i, x in enumerate(lines) if x.startswith("```")]
+    assert len(fence) == 2
+    hidden = [i + 1 for i, s in enumerate(shown) if not s]
+    assert hidden == list(range(fence[0] + 2, fence[1] + 2))
 
 
 @pytest.mark.parametrize("doc", ["common/approval.py", "harnesses/DESIGN.md",
@@ -378,6 +435,30 @@ def test_malformed_lines_refuse_and_are_named(tmp_path, armed):
         _require(repo, _costs(tmp_path))
 
 
+def test_a_proposed_line_in_a_code_block_is_not_an_approval(tmp_path, armed):
+    """A gate entry that shows the proposed line in a code block, merged as a proposal, does
+    not approve the block."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    text = ("# Decisions log\n\n## G0 proposal\nProposed approval line:\n\n```\n"
+            + approval_line("1-pilots") + "\n```\n")
+    guarded_repo(repo, decisions=text)
+    with pytest.raises(PaidCallsNotAllowed, match=r"no valid approval line .* on origin/main, "
+                                                  r"HEAD, the working tree; malformed or "
+                                                  r"hidden .* working tree: 7"):
+        _require(repo, _costs(tmp_path))
+
+
+def test_commenting_the_line_out_revokes(repo):
+    c = _costs(repo.parent)
+    assert _require(repo, c)
+    write_decisions(repo, "# Decisions log\n\n<!-- revoked\n" + approval_line("1-pilots")
+                    + "\n-->\n")
+    with pytest.raises(PaidCallsNotAllowed, match="no valid approval line .* on the working "
+                                                  "tree; present on origin/main, HEAD"):
+        _require(repo, c)
+
+
 def test_block_name_must_match_the_grammar(repo):
     with pytest.raises(PaidCallsNotAllowed, match="must match"):
         _require(repo, _costs(repo.parent), approved_block="1 pilots")
@@ -400,6 +481,43 @@ def test_no_origin_remote_refuses(repo):
     git_in(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
     with pytest.raises(PaidCallsNotAllowed, match="cannot check .* on origin/main"):
         _require(repo, _costs(repo.parent))
+
+
+def test_origin_must_be_a_configured_remote(tmp_path, armed):
+    """Given a name that is not a configured remote, `git fetch origin` reads a directory
+    called origin. A local repository there must not stand in for origin/main."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    guarded_repo(repo, decisions=decisions_text())  # main: no approval
+    write_decisions(repo, decisions_text("1-pilots"))
+    git_in(repo, "commit", "-q", "-am", "approve on a branch")
+    git_in(repo, "remote", "remove", "origin")
+    fake = repo / "origin"
+    fake.mkdir()
+    git_in(fake, "init", "-q")
+    write_decisions(fake, decisions_text("1-pilots"))
+    git_in(fake, "add", ".")
+    git_in(fake, "commit", "-q", "-m", "fake main")
+    git_in(fake, "branch", "-M", "main")
+    with pytest.raises(PaidCallsNotAllowed, match="no git remote named 'origin' is configured"):
+        _require(repo, _costs(tmp_path))
+
+
+def test_replace_refs_cannot_stand_in_for_main(tmp_path, armed):
+    """A local `git replace` of origin/main's decisions.md blob is ignored."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    guarded_repo(repo, decisions=decisions_text())  # main: no approval
+    old = git_out(repo, "rev-parse", "refs/remotes/origin/main:results/decisions.md").strip()
+    write_decisions(repo, decisions_text("1-pilots"))
+    git_in(repo, "add", "results/decisions.md")
+    new = git_out(repo, "rev-parse", ":results/decisions.md").strip()
+    git_in(repo, "replace", old, new)
+    git_in(repo, "commit", "-q", "-m", "approve locally")
+    shown = git_out(repo, "show", "refs/remotes/origin/main:results/decisions.md")
+    assert approval.approvals_in(shown, "1-pilots")  # plain git shows the replacement
+    with pytest.raises(PaidCallsNotAllowed, match="on origin/main; present on HEAD"):
+        _require(repo, _costs(tmp_path))
 
 
 def test_network_transports_are_off_in_tests(repo):
@@ -457,6 +575,39 @@ def test_block_spend_limit(tmp_path, armed):
     costs.append_row(_row("approved_block=1-pilots; x", "0.5", "0.6"), c)
     with pytest.raises(PaidCallsNotAllowed, match="exceed it"):
         _require(repo, c, planned_usd=4.0)
+
+
+@pytest.mark.parametrize("listed, billed, experiment, msg", [
+    ("nan", "nan", "replay_probe", "is not a finite"),       # would switch off the cap
+    ("99", "nan", "replay_probe", "is not a finite"),
+    ("nan", "99", "replay_probe", "is not a finite"),
+    ("-1000", "-1000", "replay_probe", "is not a finite"),   # would add headroom
+    ("inf", "", "replay_probe", "is not a finite"),
+    ("1,5", "", "replay_probe", "is not a number"),
+    ("99", "99", "", "has no budget phase"),                 # would count toward no cap
+    ("99", "99", "mystery", "has no budget phase"),
+])
+def test_every_costs_row_must_be_readable(tmp_path, armed, listed, billed, experiment, msg):
+    """Rows of other blocks feed the phase-cap check: one unreadable row refuses, so it can
+    neither switch the check off nor loosen it."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    guarded_repo(repo)
+    c = tmp_path / "costs.csv"
+    c.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    with c.open("a", newline="", encoding="utf-8") as f:  # raw rows, as a hand edit would be
+        csv.DictWriter(f, fieldnames=costs.COLUMNS).writerow(
+            _row("approved_block=other;", listed, billed, experiment=experiment))
+    with pytest.raises(PaidCallsNotAllowed, match=f"costs.csv line 2.*{msg}"):
+        _require(repo, c, planned_usd=50.0)
+
+
+def test_ext_rows_are_readable(tmp_path, armed):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    guarded_repo(repo)
+    c = _costs(tmp_path, _row("", "5", "5", experiment="ext_gemini_flex"))
+    assert _require(repo, c).headroom_usd == pytest.approx(99.0)
 
 
 def test_phase_cap_still_applies(tmp_path, armed):

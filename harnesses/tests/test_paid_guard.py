@@ -346,15 +346,43 @@ def test_sends_logs_echo_and_appends_one_costs_row(repo, monkeypatch):
 
 
 def test_stops_at_planned_spend(repo, monkeypatch):
+    """The run stops before a call once its spend reaches the planned spend. Spend is measured
+    like block spend and the phase caps, the larger of list and billed: on Flex, the list
+    cost. (Billed alone, $0.525 a call, would have allowed 4 calls under $2.)"""
     monkeypatch.setenv(ALLOW_ENV, "1")
-    factory, built = _factory([_response(inp=10_000_000)] * 3)  # $0.525 billed each
-    t = _make(repo, factory, planned_usd=1.0)
+    factory, built = _factory([_response(inp=10_000_000)] * 5)  # $1.05 list, $0.525 billed
+    t = _make(repo, factory, planned_usd=2.0)
     p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
     t.send(p)
     t.send(p)
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceeded, match=r"run spend \$2.1000 .*planned \$2.00"):
         t.send(p)
     assert len(built[0].sent) == 2
+    assert t.spent_usd == pytest.approx(2.10) and t.ledger.cost_usd_billed_est == (
+        pytest.approx(1.05))
+
+
+def test_a_run_cannot_spend_past_its_blocks_max_usd(tmp_path, monkeypatch):
+    """A run planned at the block's whole max_usd stops when the block's spend, as the guard
+    counts it, reaches max_usd (plus at most the last call). Stopping on billed cost would
+    let a Flex run log twice max_usd against the block."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    write_decisions(tmp_path, decisions_text("1-pilots", max_usd="1"))
+    git_in(tmp_path, "commit", "-q", "-am", "approve $1")
+    push_main(tmp_path)
+    factory, built = _factory([_response()] * 20)  # $0.15 list, $0.075 billed per call
+    t = _make(tmp_path, factory, planned_usd=1.0)
+    p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
+    with pytest.raises(BudgetExceeded):
+        for _ in range(20):
+            t.send(p)
+    t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    spent = approval.block_spend("1-pilots", costs.read_rows(tmp_path / "costs.csv"))
+    assert len(built[0].sent) == 7 and float(spent) == pytest.approx(1.05)  # 1 + one call
+    with pytest.raises(PaidCallsNotAllowed, match="would exceed it"):
+        _make(tmp_path, factory, planned_usd=0.01)
 
 
 def test_retries_rate_limits_then_gives_up(repo, monkeypatch):

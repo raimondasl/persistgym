@@ -185,7 +185,7 @@ def _probe_run(a, kind: str) -> int:
     experiment = "toggle_pilot" if kind == "echo" else "replay_probe"
     status = 0
     # --planned-usd is the total for the whole command: each model's transport may spend only
-    # what the earlier models left (estimated billed cost).
+    # what the earlier models left, measured like block spend (transport.spent_usd).
     spent = 0.0
     for model in a.model:
         remaining = None if a.planned_usd is None else a.planned_usd - spent
@@ -220,7 +220,7 @@ def _probe_run(a, kind: str) -> int:
         except (openai.OpenAIError, BudgetExceeded) as e:
             exit_reason, status = f"ERROR:{type(e).__name__}: {e}", 1
         finally:
-            spent += transport.ledger.cost_usd_billed_est
+            spent += transport.spent_usd
             row = transport.finalize(run_id=run_id, milestone=a.milestone,
                                      cell_or_config=f"{kind}-probe")
             with (out_dir / "trials.jsonl").open("a", encoding="utf-8") as f:
@@ -307,8 +307,10 @@ def main(argv: list[str] | None = None) -> int:
                              "its approval line in results/decisions.md must list the "
                              "experiment and leave room under its max_usd")
         sp.add_argument("--planned-usd", type=float, default=None,
-                        help="planned spend of the whole command in USD (estimated billed "
-                             "cost; for probes, the total over all --model values)")
+                        help="planned spend of the whole command in USD, measured like block "
+                             "spend and the phase caps: the larger of the list and billed "
+                             "estimates, so on Flex the list cost (for probes, the total "
+                             "over all --model values)")
 
     sub.add_parser("cells", help="list the harness cells").set_defaults(fn=cmd_cells)
 

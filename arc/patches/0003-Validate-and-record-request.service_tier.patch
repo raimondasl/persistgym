@@ -1,7 +1,7 @@
-From ce2a0e5721233e2c89375cb8a43a5dd3a631a5e4 Mon Sep 17 00:00:00 2001
+From d9fec4746628c72ebb5db7c245adac2e33e89888 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 23:33:30 -0400
-Subject: [PATCH 3/5] Validate and record request.service_tier
+Subject: [PATCH 03/12] Validate and record request.service_tier
 
 The Google Interactions and OpenAI adapters already forward request-block
 keys as SDK keyword arguments, so `service_tier` reached the provider, but

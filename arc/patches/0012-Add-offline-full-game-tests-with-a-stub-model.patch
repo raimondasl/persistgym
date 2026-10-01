@@ -1,0 +1,421 @@
+From e05ade5bc4f5788cb042eaf7c7198b9045c26cc5 Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 00:36:54 -0400
+Subject: [PATCH 12/12] Add offline full-game tests with a stub model
+
+Runs Swarm end to end without a model or ARC's API: arc-agi loads a
+two-level toy game written for the test (not an ARC game) from a temporary
+ENVIRONMENTS_DIR, and the model is a stub HTTP transport that returns
+canned actions through the real google-genai Interactions or OpenAI chat
+client, installed via the client.transport_retry transport. A socket guard
+fails the test on any connection to a non-loopback address.
+
+- OPERATION_MODE=offline, every Gemini 3.8 Flash high path profile: the
+  game is won in six actions; the notes sentence, thought replay and the
+  175k harness-summary compaction appear exactly where each profile puts
+  them; run_meta records arc_environment kind local.
+- A lost life forces a RESET, the buffered GAME_OVER frame reaches the
+  next request, and play continues to a win.
+- The per-level action budget (5x baseline) and the optional cost guard
+  end the run with ACTION_BUDGET and COST_CAP.
+- The OpenAI chat stub plays the same game.
+- Online mode against a local arc-agi server (create_app on 127.0.0.1,
+  ARC_BASE_URL, no ARC_API_KEY) plays the game through
+  RemoteEnvironmentWrapper.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ tests/unit/test_offline_game_loop.py | 381 +++++++++++++++++++++++++++
+ 1 file changed, 381 insertions(+)
+ create mode 100644 tests/unit/test_offline_game_loop.py
+
+diff --git a/tests/unit/test_offline_game_loop.py b/tests/unit/test_offline_game_loop.py
+new file mode 100644
+index 0000000..4d6310c
+--- /dev/null
++++ b/tests/unit/test_offline_game_loop.py
+@@ -0,0 +1,381 @@
++"""Full game loops with a stub model, offline.
++
++A two-level toy game written for this test (not an ARC game) is loaded by
++arc-agi from a temporary ENVIRONMENTS_DIR. Swarm runs it with
++OPERATION_MODE=offline, or online against a local arc-agi server on
++127.0.0.1. The model is a stub HTTP transport that returns canned actions
++through the real google-genai Interactions or OpenAI SDK client. Any
++connection to a non-loopback address fails the test.
++"""
++
++import json
++import math
++import socket
++import threading
++from copy import deepcopy
++from pathlib import Path
++
++import httpx
++import pytest
++from arc_agi import Arcade, OperationMode
++from arc_agi.server import create_app
++from werkzeug.serving import make_server
++
++from benchmarking.base import ExitReason
++from benchmarking.compaction import SUMMARY_SYSTEM_PROMPT
++from benchmarking.model_config import get_model_config
++from benchmarking.swarm import Swarm
++
++pytestmark = [
++    pytest.mark.unit,
++    pytest.mark.filterwarnings("ignore:Interactions usage is experimental"),
++]
++
++STANDARD = "google-gemini-3-8-flash-high"
++ROLLING_SUMMARY = "google-gemini-3-8-flash-high-rolling-summary"
++NOTES_OFF = "google-gemini-3-8-flash-high-rolling-summary-notes-off"
++PROVIDER_ADAPTER = "google-gemini-3-8-flash-high-provider-adapter"
++NOTES_SENTENCE = "Include any context you want to carry forward in your reply"
++
++TOY_GAME = '''
++from arcengine import ARCBaseGame, Camera, GameAction, Level, Sprite
++
++
++class Toyg(ARCBaseGame):
++    """ACTION1 moves right (column 3 clears a level), ACTION2 loses a life,
++    ACTION3 does nothing. Two levels."""
++
++    def __init__(self, seed: int = 0) -> None:
++        levels = [
++            Level(
++                sprites=[Sprite([[9]], name="player", x=0, y=0)],
++                grid_size=(4, 4),
++                name=f"level-{index}",
++            )
++            for index in range(2)
++        ]
++        super().__init__(
++            game_id="toyg",
++            levels=levels,
++            camera=Camera(width=4, height=4),
++            available_actions=[1, 2, 3],
++            seed=seed,
++        )
++
++    def step(self) -> None:
++        if self.action.id == GameAction.ACTION1:
++            player = self.current_level.get_sprites_by_name("player")[0]
++            player.move(1, 0)
++            if player.x >= 3:
++                self.next_level()
++        elif self.action.id == GameAction.ACTION2:
++            self.lose()
++        self.complete_action()
++'''
++BASELINE_ACTIONS = [3, 3]
++WIN = ["ACTION1"] * 6
++
++
++@pytest.fixture(autouse=True)
++def _loopback_only(monkeypatch):
++    real_connect = socket.socket.connect
++
++    def guarded(sock, address):  # noqa: ANN001
++        host = address[0] if isinstance(address, tuple) else address
++        if host not in {"127.0.0.1", "::1", "localhost"}:
++            raise RuntimeError(f"network access blocked in offline tests: {address}")
++        return real_connect(sock, address)
++
++    monkeypatch.setattr(socket.socket, "connect", guarded)
++
++
++@pytest.fixture
++def environments(tmp_path, monkeypatch):
++    game_dir = tmp_path / "environment_files" / "toyg" / "v1"
++    game_dir.mkdir(parents=True)
++    (game_dir / "toyg.py").write_text(TOY_GAME)
++    (game_dir / "metadata.json").write_text(
++        json.dumps(
++            {
++                "game_id": "toyg-v1",
++                "title": "Toy",
++                "class_name": "Toyg",
++                "baseline_actions": BASELINE_ACTIONS,
++            }
++        )
++    )
++    monkeypatch.chdir(tmp_path)
++    for name in ("ARC_API_KEY", "ARC_BASE_URL", "OPERATION_MODE"):
++        monkeypatch.delenv(name, raising=False)
++    monkeypatch.setenv("ENVIRONMENTS_DIR", str(tmp_path / "environment_files"))
++    monkeypatch.setenv("RECORDINGS_DIR", str(tmp_path / "arc_recordings"))
++    return tmp_path
++
++
++def test_guard_blocks_non_loopback_connections():
++    with pytest.raises(RuntimeError, match="network access blocked"):
++        socket.create_connection(("192.0.2.1", 443), timeout=0.1)
++
++
++# ── Stub models ────────────────────────────────────────────────────────
++
++
++class _StubModel:
++    """Returns canned actions; the last one repeats when the script runs out."""
++
++    def __init__(self, actions: list[str], total_tokens: dict[int, int] | None = None):
++        self.actions = actions
++        self.total_tokens = total_tokens or {}
++        self.bodies: list[dict] = []
++        self.turns = 0
++        self.summaries = 0
++
++    def _next_text(self, body: dict, is_summary: bool) -> tuple[str, int]:
++        if is_summary:
++            self.summaries += 1
++            return f"summary {self.summaries}", 1_000
++        self.turns += 1
++        action = self.actions[min(self.turns, len(self.actions)) - 1]
++        return f"turn {self.turns}: {action}", self.total_tokens.get(self.turns, 120)
++
++
++class _StubInteractions(_StubModel):
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        body = json.loads(request.content)
++        self.bodies.append(body)
++        is_summary = body.get("system_instruction") == SUMMARY_SYSTEM_PROMPT
++        text, total = self._next_text(body, is_summary)
++        steps = [
++            {
++                "type": "thought",
++                "signature": f"opaque-{len(self.bodies)}",
++                "summary": [{"type": "text", "text": f"thinking {len(self.bodies)}"}],
++            },
++            {"type": "model_output", "content": [{"type": "text", "text": text}]},
++        ]
++        return httpx.Response(
++            200,
++            request=request,
++            json={
++                "id": f"interaction-{len(self.bodies)}",
++                "created": "2026-10-01T00:00:00Z",
++                "updated": "2026-10-01T00:00:00Z",
++                "status": "completed",
++                "steps": steps,
++                "usage": {
++                    "total_input_tokens": total - 20,
++                    "total_output_tokens": 10,
++                    "total_thought_tokens": 10,
++                    "total_tokens": total,
++                },
++            },
++        )
++
++
++class _StubChatCompletions(_StubModel):
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        body = json.loads(request.content)
++        self.bodies.append(body)
++        is_summary = body["messages"][0]["content"] == SUMMARY_SYSTEM_PROMPT
++        text, total = self._next_text(body, is_summary)
++        return httpx.Response(
++            200,
++            request=request,
++            json={
++                "id": f"chat-{len(self.bodies)}",
++                "object": "chat.completion",
++                "created": 0,
++                "model": body["model"],
++                "choices": [
++                    {
++                        "index": 0,
++                        "finish_reason": "stop",
++                        "message": {"role": "assistant", "content": text},
++                    }
++                ],
++                "usage": {
++                    "prompt_tokens": total - 10,
++                    "completion_tokens": 10,
++                    "total_tokens": total,
++                },
++            },
++        )
++
++
++def _openai_config() -> dict:
++    return {
++        "id": "openai-chat-offline-test",
++        "agent": {"MAX_ACTIONS_BASELINE_MULTIPLIER": 5.0, "MAX_CONTEXT_LENGTH": 175_000},
++        "runtime": {"sdk": "openai-python", "api": "chat_completions", "state": "manual_rolling"},
++        "client": {
++            "base_url": "https://api.openai.com/v1",
++            "api_key_env": "OPENAI_API_KEY",
++            "transport_retry": {},
++        },
++        "request": {"model": "stub-model", "max_completion_tokens": 512},
++        "pricing": {"input": 1.0, "output": 2.0},
++    }
++
++
++def _play(
++    monkeypatch,
++    config_id: str,
++    stub: _StubModel,
++    *,
++    config: dict | None = None,
++    operation_mode: OperationMode | None = OperationMode.OFFLINE,
++) -> tuple[Swarm, dict, Path]:
++    """Run one Swarm over the toy game; the model client talks to ``stub``."""
++    monkeypatch.setenv("GOOGLE_API_KEY", "offline-stub-key")
++    monkeypatch.setenv("OPENAI_API_KEY", "offline-stub-key")
++    monkeypatch.setattr(
++        "benchmarking.agent.default_http_transport", lambda: httpx.MockTransport(stub)
++    )
++    if config is not None:
++        monkeypatch.setattr("benchmarking.agent.get_model_config", lambda _id: config)
++    swarm = Swarm(
++        ROOT_URL="http://offline.invalid",
++        games=["toyg"],
++        tags=["offline-test"],
++        config=config_id,
++        operation_mode=operation_mode,
++    )
++    swarm.main()
++    agent = swarm.agents[0]
++    run_dir = Path(agent.run_dir)
++    meta = json.loads((run_dir / "run_meta.json").read_text())
++    return swarm, meta, run_dir
++
++
++def _steps(run_dir: Path) -> list[dict]:
++    return [json.loads(path.read_text()) for path in sorted(run_dir.glob("step_*.json"))]
++
++
++def _action_bodies(stub: _StubModel) -> list[dict]:
++    return [
++        body
++        for body in stub.bodies
++        if body.get("system_instruction", "") != SUMMARY_SYSTEM_PROMPT
++    ]
++
++
++# ── Offline games through every path profile ──────────────────────────
++
++
++@pytest.mark.usefixtures("environments")
++class TestOfflinePathProfiles:
++    @pytest.mark.parametrize(
++        ("config_id", "notes", "replays_thoughts", "compacts"),
++        [
++            (STANDARD, True, False, False),
++            (ROLLING_SUMMARY, True, False, True),
++            (NOTES_OFF, False, False, True),
++            (PROVIDER_ADAPTER, False, True, True),
++        ],
++    )
++    def test_full_game_to_a_win(
++        self, monkeypatch, config_id, notes, replays_thoughts, compacts
++    ):
++        # Turn 2 reports usage above the 175k harness-summary trigger.
++        stub = _StubInteractions(WIN, total_tokens={2: 180_000})
++
++        swarm, meta, run_dir = _play(monkeypatch, config_id, stub)
++
++        assert meta["exit_reason"] == ExitReason.GAME_WIN.value
++        assert meta["outcome"] == "WIN"
++        assert meta["arc_environment"] == {"kind": "local"}
++        assert meta["total_steps"] == 6
++        assert swarm.agents[0].frames[-1].levels_completed == 2
++        assert stub.summaries == (1 if compacts else 0)
++        actions = _action_bodies(stub)
++        assert len(actions) == 6
++        for body in actions:
++            assert (NOTES_SENTENCE in body["system_instruction"]) is notes
++        replayed = [
++            any(item["type"] == "thought" for item in body["input"]) for body in actions
++        ]
++        assert any(replayed) is replays_thoughts
++        if compacts:
++            assert (run_dir / "compaction_001.json").exists()
++            assert actions[2]["input"][0]["content"][0]["text"].startswith(
++                "Earlier conversation history was compacted."
++            )
++        assert "transport_retry" in meta
++
++    def test_game_over_forces_a_reset_and_play_continues(self, monkeypatch):
++        stub = _StubInteractions(["ACTION1", "ACTION2"] + WIN)
++
++        swarm, meta, run_dir = _play(monkeypatch, ROLLING_SUMMARY, stub)
++
++        assert meta["exit_reason"] == ExitReason.GAME_WIN.value
++        parsed = [step["parsed_action"] for step in _steps(run_dir)]
++        assert parsed == ["ACTION1", "ACTION2", "RESET"] + ["ACTION1"] * 6
++        # The GAME_OVER frame buffered before the reset reaches the next request.
++        third = _action_bodies(stub)[2]["input"]
++        assert third[-2]["content"][0]["text"].startswith("State: GAME_OVER")
++        assert third[-1]["content"][0]["text"].startswith("State: NOT_FINISHED")
++
++    def test_per_level_action_budget_ends_the_run(self, monkeypatch):
++        stub = _StubInteractions(["ACTION3"])
++
++        _, meta, _ = _play(monkeypatch, STANDARD, stub)
++
++        budget = math.ceil(BASELINE_ACTIONS[0] * 5.0)
++        assert meta["exit_reason"] == ExitReason.ACTION_BUDGET.value
++        assert meta["total_steps"] == budget
++        assert len(stub.bodies) == budget
++
++    def test_cost_guard_in_a_full_loop(self, monkeypatch):
++        config = deepcopy(get_model_config(STANDARD))
++        config["agent"]["MAX_RUN_COST_USD"] = 0.0005
++        stub = _StubInteractions(["ACTION3"])
++
++        _, meta, _ = _play(monkeypatch, STANDARD, stub, config=config)
++
++        # 120 tokens per call: 100 input at $0.75/M plus 20 output at $3.75/M.
++        per_call = 100 * 0.75 / 1e6 + 20 * 3.75 / 1e6
++        assert meta["exit_reason"] == ExitReason.COST_CAP.value
++        assert meta["total_steps"] == math.floor(0.0005 / per_call) + 1
++
++
++@pytest.mark.usefixtures("environments")
++def test_openai_stub_plays_the_same_game(monkeypatch):
++    stub = _StubChatCompletions(WIN)
++
++    _, meta, run_dir = _play(
++        monkeypatch, "openai-chat-offline-test", stub, config=_openai_config()
++    )
++
++    assert meta["exit_reason"] == ExitReason.GAME_WIN.value
++    assert len(stub.bodies) == 6
++    assert stub.bodies[-1]["messages"][0]["role"] == "system"
++    assert _steps(run_dir)[-1]["assistant_response"] == "turn 6: ACTION1"
++
++
++# ── Online mode against a local arc-agi server ─────────────────────────
++
++
++@pytest.fixture
++def local_server(environments):
++    arcade = Arcade(operation_mode=OperationMode.OFFLINE)
++    app, _ = create_app(arcade)
++    server = make_server("127.0.0.1", 0, app, threaded=True)
++    thread = threading.Thread(target=server.serve_forever, daemon=True)
++    thread.start()
++    try:
++        yield f"http://127.0.0.1:{server.server_port}"
++    finally:
++        server.shutdown()
++        thread.join(timeout=5)
++
++
++def test_online_mode_against_a_local_server(monkeypatch, local_server):
++    monkeypatch.setenv("ARC_BASE_URL", local_server)
++    stub = _StubInteractions(WIN)
++
++    swarm, meta, _ = _play(monkeypatch, STANDARD, stub, operation_mode=None)
++
++    assert swarm.operation_mode is OperationMode.ONLINE
++    assert meta["arc_environment"] == {"kind": "remote", "base_url": local_server}
++    assert meta["exit_reason"] == ExitReason.GAME_WIN.value
++    assert swarm.agents[0].frames[-1].levels_completed == 2
+-- 
+2.54.0.windows.1
+

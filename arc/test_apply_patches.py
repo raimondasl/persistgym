@@ -37,10 +37,11 @@ def test_superproject_records_pinned_commit():
 def test_patch_series_is_numbered_and_each_patch_has_tests():
     patches = ap.patch_files()
 
-    assert len(patches) >= 5
+    assert len(patches) >= 12
+    width = len(str(len(patches)))  # format-patch zero-pads from 10 patches on
     for index, patch in enumerate(patches, start=1):
         text = patch.read_text(encoding="utf-8")
-        assert f"[PATCH {index}/{len(patches)}]" in text
+        assert f"[PATCH {index:0{width}d}/{len(patches)}]" in text
         changed = re.findall(r"^diff --git a/(\S+) b/", text, flags=re.MULTILINE)
         assert any(path.startswith("tests/unit/test_") for path in changed), patch.name
         assert "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" in text

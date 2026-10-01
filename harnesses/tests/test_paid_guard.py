@@ -20,7 +20,7 @@ from harnesses.openai_transport import (
     PaidCallsNotAllowed,
 )
 from harnesses.pricing import UsageLedger, cost_usd
-from harnesses.tests.conftest import git_in, prereg_repo
+from harnesses.tests.conftest import decisions_text, git_in, prereg_repo
 
 HARNESS_DIR = Path(__file__).resolve().parent.parent
 
@@ -131,8 +131,13 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     (tmp_path / "PREREG.md").write_text("Version: 0.1\n", encoding="utf-8")
     with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
         _make(tmp_path, factory)
-    # untracked draft in a repo
+    # untracked draft in a repo (whose HEAD approves the block)
     git_in(tmp_path, "init", "-q")
+    (tmp_path / "results").mkdir()
+    (tmp_path / "results" / "decisions.md").write_text(decisions_text("1-pilots"),
+                                                       encoding="utf-8")
+    git_in(tmp_path, "add", "results/decisions.md")
+    git_in(tmp_path, "commit", "-q", "-m", "approve")
     with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
         _make(tmp_path, factory)
     # staged, not committed
@@ -147,6 +152,83 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     with pytest.raises(PaidCallsNotAllowed, match="uncommitted changes"):
         _make(tmp_path, factory)
     assert len(built) == 1  # only the accepted transport built a client
+
+
+def _decisions(repo: Path, text: str) -> None:
+    (repo / "results" / "decisions.md").write_text(text, encoding="utf-8")
+
+
+def test_guard_requires_committed_block_approval(repo, monkeypatch):
+    """PLAN §16.2: a block spends only after the researcher commits the line
+    'approved_block: <name>' to results/decisions.md. A line only in the working tree, a
+    look-alike line or another block's line does not count."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory()
+    assert _make(repo, factory).approval.approved_block == "1-pilots"  # fixture approves it
+    # another block's approval does not carry over
+    with pytest.raises(PaidCallsNotAllowed, match="'2-seed1' is not approved"):
+        _make(repo, factory, approved_block="2-seed1")
+    # added to the working tree but not committed
+    _decisions(repo, decisions_text("1-pilots", "2-seed1"))
+    with pytest.raises(PaidCallsNotAllowed, match="as committed in HEAD"):
+        _make(repo, factory, approved_block="2-seed1")
+    # committed: accepted (the name is stripped like the CLI's)
+    git_in(repo, "add", "results/decisions.md")
+    git_in(repo, "commit", "-q", "-m", "approve block 2")
+    assert _make(repo, factory, approved_block=" 2-seed1 ").approval.approved_block == "2-seed1"
+    # committed, then deleted locally: an uncommitted revocation counts
+    _decisions(repo, decisions_text("1-pilots"))
+    with pytest.raises(PaidCallsNotAllowed, match="missing from the working-tree"):
+        _make(repo, factory, approved_block="2-seed1")
+    (repo / "results" / "decisions.md").unlink()
+    with pytest.raises(PaidCallsNotAllowed, match="missing from the working-tree"):
+        _make(repo, factory)
+    assert len(built) == 2  # only the two accepted transports built a client
+
+
+@pytest.mark.parametrize("line", [
+    "- approved_block: 1-pilots",       # a list item is not the line
+    "approved_block: 1-pilots-extra",   # a longer name
+    "approved_block: 1-pilot",          # a prefix of the name
+    "approved_block:1-pilots",          # no space
+    "Approved_block: 1-pilots",         # case matters
+    "approved_block: 1-pilots (pending)",
+    "  approved_block: 1-pilots",       # indented
+    "`approved_block: 1-pilots`",
+])
+def test_guard_approval_line_must_match_exactly(tmp_path, monkeypatch, line):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    _decisions(tmp_path, f"# Decisions log\n\n{line}\n")
+    git_in(tmp_path, "commit", "-q", "-am", "look-alike")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="as committed in HEAD"):
+        _make(tmp_path, factory)
+    assert built == []
+
+
+def test_guard_approval_line_tolerates_crlf_and_trailing_spaces(tmp_path, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    (tmp_path / "results" / "decisions.md").write_bytes(
+        "# Decisions — log\r\n\r\napproved_block: 1-pilots  \r\n".encode())
+    git_in(tmp_path, "commit", "-q", "-am", "crlf")
+    factory, _ = _factory()
+    assert _make(tmp_path, factory).approval.approved_block == "1-pilots"
+
+
+def test_guard_approval_needs_decisions_in_head(tmp_path, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path)
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    git_in(tmp_path, "rm", "-q", "--cached", "results/decisions.md")
+    git_in(tmp_path, "commit", "-q", "-m", "untrack decisions")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="not in the HEAD commit"):
+        _make(tmp_path, factory)
+    assert built == []
 
 
 def test_guard_counts_logged_spend(repo, monkeypatch):

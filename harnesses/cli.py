@@ -1,16 +1,21 @@
 """Command line for the harness cells.
 
-$0 commands (fake model, no network):
+$0 commands (fake model or local files, no network):
     uv run python -m harnesses cells
     uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far
+    uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
 
 Paid commands (refuse unless PERSISTGYM_ALLOW_PAID=1, --approved-block and --planned-usd are
-given, PREREG.md exists and the phase cap in common/costs.py has room; see
+given, PREREG.md is committed, results/decisions.md holds the committed line
+"approved_block: <name>" and the phase cap in common/costs.py has room; see
 harnesses/openai_transport.py). The OpenAI SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-echo \
         --approved-block "1-pilots" --planned-usd 0.5
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
         --model gpt-6-luna --n 1 --approved-block "1-pilots" --planned-usd 1
+    # D11: sol on derived-far x T_d templates plus observed-far x T_d/3 of them
+    ... python -m harnesses run --cell F-r --model gpt-6.1-sol --split main --matrix d11 \
+        --n 120 --experiment persistgym --approved-block "<block>" --planned-usd <usd>
 """
 
 from __future__ import annotations
@@ -25,10 +30,11 @@ from datetime import UTC, datetime
 import openai
 
 from common import runmeta
-from harnesses import diagnostics, probes
+from harnesses import blinding, diagnostics, probes
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
+from harnesses.matrix import RunMatrix
 from harnesses.openai_transport import (
     BudgetExceeded,
     OpenAIResponsesTransport,
@@ -36,7 +42,7 @@ from harnesses.openai_transport import (
 )
 from harnesses.runner import RAW, RESULTS, run_batch, run_episode
 from persistgym.config import GeneratorConfig
-from persistgym.episode import ALL_CELLS, TaskCell
+from persistgym.episode import TaskCell
 from persistgym.render import generate
 
 PILOT_MAX_EPISODES = 10  # CLAUDE.md: a pilot is <= 10 episodes
@@ -69,12 +75,21 @@ def _harness_config(a) -> HarnessConfig:
                          service_tier=a.service_tier, W_tokens=a.W)
 
 
-def _episodes(a, gen: GeneratorConfig):
-    cells = ALL_CELLS if a.task_cell == ["all"] else [TaskCell.from_id(c) for c in a.task_cell]
-    out = []
-    for _, eps in generate(a.split, range(a.start, a.start + a.n), gen, cells, (a.variant,)):
-        out.extend(eps)
-    return out
+def _run_matrix(a) -> RunMatrix:
+    """--matrix full (default: --task-cell on --n templates), --matrix d11 (D11: derived-far
+    on --n = T_d templates, observed-far on the first --n-observed = T_o of them, default
+    T_d / 3) or --cell-templates TASK_CELL=N ... (a custom matrix)."""
+    if a.cell_templates:
+        if a.matrix != "full" or a.task_cell != ["all"]:
+            raise ValueError("--cell-templates replaces --matrix and --task-cell")
+        return RunMatrix.parse(a.cell_templates)
+    if a.matrix == "d11":
+        if a.task_cell != ["all"]:
+            raise ValueError("--matrix d11 fixes the task cells; leave out --task-cell")
+        return RunMatrix.d11(a.n, a.n_observed)
+    if a.n_observed is not None:
+        raise ValueError("--n-observed applies to --matrix d11 only")
+    return RunMatrix.full(a.n, None if a.task_cell == ["all"] else a.task_cell)
 
 
 def cmd_cells(a) -> int:
@@ -124,7 +139,15 @@ def cmd_run(a) -> int:
               f"{a.split!r}", file=sys.stderr)
         return 2
     gen = _gen_config(a.gen_set)
-    episodes = _episodes(a, gen)
+    try:
+        matrix = _run_matrix(a)
+    except ValueError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    if a.split == "main":
+        for w in matrix.block_warnings(a.start):
+            print(f"note (D7, incomplete balance block): {w}", file=sys.stderr)
+    episodes = matrix.episodes(a.split, a.start, gen, a.variant)
     if a.experiment == PILOT_EXPERIMENT and len(episodes) > PILOT_MAX_EPISODES:
         print(f"refused: a pilot is at most {PILOT_MAX_EPISODES} episodes, got "
               f"{len(episodes)}", file=sys.stderr)
@@ -135,7 +158,9 @@ def cmd_run(a) -> int:
     run_id = a.run_id or _run_id(f"{cell.ascii_id}-{a.model}")
     meta = run_batch(episodes, cell, _harness_config(a), transport, experiment=a.experiment,
                      run_id=run_id, milestone=a.milestone, results_root=RESULTS,
-                     raw_root=RAW, notes=f"{a.split} {a.start}-{a.start + a.n - 1}")
+                     raw_root=RAW, run_matrix=matrix.to_dict(),
+                     notes=(f"{a.split} {a.start}-{a.start + matrix.n_templates - 1}"
+                            f" matrix={matrix.name}"))
     print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason", "reasoning_context_echoed",
                                            "model_returned", "cost_usd")}, indent=2))
     return 0
@@ -209,6 +234,25 @@ def _probe_run(a, kind: str) -> int:
     return status
 
 
+def cmd_pilot_report(a) -> int:
+    """$0: pool every raw pilot run into the allowed pilot report (PREREG §11) and write it to
+    results/<experiment>/pooled-<time>/pilot_report.json."""
+    runs = blinding.load_raw_runs(RAW, a.experiment)
+    if not runs:
+        print(f"no raw runs under {_rel(RAW / a.experiment)}", file=sys.stderr)
+        return 1
+    report = blinding.pooled_report(runs, experiment=a.experiment)
+    report.update(generated_utc=runmeta.utc_now(), prereg_version=runmeta.prereg_version(),
+                  **runmeta.git_state())
+    out = RESULTS / a.experiment / ("pooled-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "pilot_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False)
+                                           + "\n", encoding="utf-8")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    print(f"written: {_rel(out / 'pilot_report.json')}", file=sys.stderr)
+    return 0
+
+
 def cmd_summary_timing(a) -> int:
     print(json.dumps(diagnostics.summary_timing(
         a.n, split=a.split, summary_tokens=a.summary_tokens,
@@ -268,10 +312,23 @@ def main(argv: list[str] | None = None) -> int:
     episode_args(r)
     request_args(r)
     paid_args(r)
-    r.add_argument("--n", type=int, default=1, help="templates")
+    r.add_argument("--n", type=int, default=1,
+                   help="templates per task cell (--matrix d11: T_d, the derived-far count)")
     r.add_argument("--task-cell", nargs="+", default=["all"])
+    r.add_argument("--matrix", choices=("full", "d11"), default="full",
+                   help="full: --task-cell on --n templates; d11: derived-far cells on --n "
+                        "templates and observed-far cells on the first --n-observed (D11)")
+    r.add_argument("--n-observed", type=int, default=None,
+                   help="--matrix d11: observed-far templates T_o (default --n / 3)")
+    r.add_argument("--cell-templates", nargs="+", default=None, metavar="TASK_CELL=N",
+                   help="custom matrix: each task cell on its first N templates from --start")
     r.add_argument("--experiment", default="persistgym_pilot")
     r.set_defaults(fn=cmd_run)
+
+    pr = sub.add_parser("pilot-report",
+                        help="pooled pilot report from the raw pilot runs ($0, PREREG §11)")
+    pr.add_argument("--experiment", default=PILOT_EXPERIMENT)
+    pr.set_defaults(fn=cmd_pilot_report)
 
     for kind in ("echo", "replay"):
         sp = sub.add_parser(f"probe-{kind}", help=f"paid {kind} probe (guarded)")

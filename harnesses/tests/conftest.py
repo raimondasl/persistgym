@@ -93,11 +93,21 @@ def git_in(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
 
 
-def prereg_repo(path: Path, text: str = "Version: 0.1\n") -> Path:
-    """`path` as a git repo whose HEAD holds PREREG.md (what the paid guard requires)."""
+def decisions_text(*blocks: str) -> str:
+    """A results/decisions.md that approves `blocks` the way the paid guard reads it."""
+    return "# Decisions log\n\n" + "".join(f"approved_block: {b}\n" for b in blocks)
+
+
+def prereg_repo(path: Path, text: str = "Version: 0.1\n",
+                approved_blocks: tuple[str, ...] = ("1-pilots",)) -> Path:
+    """`path` as a git repo whose HEAD holds PREREG.md and a results/decisions.md approving
+    `approved_blocks` (what the paid guard requires)."""
     git_in(path, "init", "-q")
     (path / "PREREG.md").write_text(text, encoding="utf-8")
-    git_in(path, "add", "PREREG.md")
+    (path / "results").mkdir(exist_ok=True)
+    (path / "results" / "decisions.md").write_text(decisions_text(*approved_blocks),
+                                                   encoding="utf-8")
+    git_in(path, "add", "PREREG.md", "results/decisions.md")
     git_in(path, "commit", "-q", "-m", "prereg")
     return path
 

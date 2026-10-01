@@ -2,12 +2,15 @@
 
 `OpenAIResponsesTransport` refuses to exist unless ALL of these hold (`require_paid_approval`):
 1. the environment variable PERSISTGYM_ALLOW_PAID is exactly "1";
-2. an approved spending block name is given (`--approved-block <name>`; the researcher's
-   approval is recorded in results/decisions.md, PLAN §16.2);
+2. an approved spending block name is given (`--approved-block <name>`, PLAN §16.2);
 3. PREREG.md is committed: tracked by git, present in HEAD and without uncommitted changes
    (PLAN §16.3: PREREG committed before any paid call);
-4. the planned spend is a positive, finite number of dollars;
-5. the experiment maps to a budget phase in common/costs.py and the phase cap minus the
+4. the researcher's approval of that block is committed: results/decisions.md holds a line
+   that is exactly `approved_block: <name>` in the HEAD commit, and the working-tree copy
+   still holds it (a line that exists only in the working tree, or that was deleted locally,
+   does not count);
+5. the planned spend is a positive, finite number of dollars;
+6. the experiment maps to a budget phase in common/costs.py and the phase cap minus the
    spend logged in results/costs.csv minus the planned spend of this run is >= 0
    (`common.costs.headroom`).
 
@@ -15,7 +18,9 @@ While running it stops before a call once the run's estimated billed cost reache
 spend, logs every response's echoed `reasoning.context`, returned model string and served
 service tier, and `finalize` appends exactly one results/costs.csv row via
 `common.costs.append_row`. A response whose returned model string has no price is still
-logged, priced as the requested model and flagged in the row's notes.
+logged, priced as the requested model and flagged in the row's notes. For a pilot-blinded
+experiment (`harnesses.blinding`, PREREG §11) the row's `reasoning_tokens` is left empty; the
+per-call values stay in the raw transcript under results/raw/.
 
 The OpenAI SDK reads its API key from the environment itself; this module never reads, prints
 or stores a key. Load keys with `uv run --env-file .env ...`.
@@ -36,6 +41,7 @@ from typing import Any
 import openai
 
 from common import costs, runmeta
+from harnesses import blinding
 from harnesses.pricing import UsageLedger, price_for
 
 ALLOW_ENV = "PERSISTGYM_ALLOW_PAID"
@@ -79,6 +85,45 @@ def prereg_not_committed(repo: Path) -> str | None:
     return None
 
 
+DECISIONS_MD = "results/decisions.md"  # relative to the repo root, as git paths are
+
+
+def approval_line(block: str) -> str:
+    """The line results/decisions.md must hold, committed, before block `block` may spend."""
+    return f"approved_block: {block}"
+
+
+def _has_line(text: str, line: str) -> bool:
+    # Exact match; only trailing whitespace (a CR from CRLF files, Markdown spaces) is ignored.
+    return any(x.rstrip() == line for x in text.splitlines())
+
+
+def block_not_approved(repo: Path, block: str) -> str | None:
+    """None if results/decisions.md holds the line `approved_block: <block>` both in the HEAD
+    commit and in the working tree; otherwise the reason the block does not count as
+    approved. The researcher records the approval (PLAN §16.2); the guard only reads it."""
+    line = approval_line(block)
+    try:
+        head = subprocess.run(["git", "-C", str(repo), "show", f"HEAD:./{DECISIONS_MD}"],
+                              capture_output=True, encoding="utf-8", errors="replace",
+                              check=False)
+    except OSError:
+        return "git is not available"
+    if head.returncode != 0:
+        return f"{DECISIONS_MD} is not in the HEAD commit"
+    if not _has_line(head.stdout, line):
+        return f"no line {line!r} in {DECISIONS_MD} as committed in HEAD"
+    path = repo / DECISIONS_MD
+    try:
+        working = path.read_text(encoding="utf-8")
+    except OSError:
+        working = ""
+    if not _has_line(working, line):
+        return (f"the line {line!r} is committed but missing from the working-tree "
+                f"{DECISIONS_MD} (an uncommitted revocation counts)")
+    return None
+
+
 def require_paid_approval(*, approved_block: str | None, experiment: str, planned_usd: float,
                           costs_path: Path = costs.COSTS_CSV,
                           repo: Path = runmeta.REPO_ROOT) -> PaidApproval:
@@ -103,13 +148,19 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
     if reason is not None:
         raise PaidCallsNotAllowed(f"PREREG.md must be committed before any paid call "
                                   f"(PLAN §16.3): {reason}")
+    block = str(approved_block).strip()
+    reason = block_not_approved(repo, block)
+    if reason is not None:
+        raise PaidCallsNotAllowed(
+            f"block {block!r} is not approved: {reason}. The researcher approves a block by "
+            f"committing the line {approval_line(block)!r} to {DECISIONS_MD} (PLAN §16.2)")
     room = costs.headroom(planned_usd, phase, costs.read_rows(costs_path))
     if room < 0:
         raise PaidCallsNotAllowed(
             f"planned ${planned_usd:.2f} would exceed the phase {phase} cap of "
             f"${costs.PHASE_CAPS[phase]:.0f} by ${-room:.2f}: stop and ask the researcher")
-    return PaidApproval(str(approved_block).strip(), experiment, phase, float(planned_usd),
-                        room, prereg, Path(costs_path))
+    return PaidApproval(block, experiment, phase, float(planned_usd), room, prereg,
+                        Path(costs_path))
 
 
 def _default_client(timeout_s: float) -> Any:
@@ -207,5 +258,10 @@ class OpenAIResponsesTransport:
             notes=(f"approved_block={self.approval.approved_block}; "
                    f"context_mismatches={mismatches}; git_dirty={git['git_dirty']}"
                    + (f"; {notes}" if notes else "")))
+        if blinding.is_blinded(self.approval.experiment):
+            # PREREG §11: no per-arm reasoning tokens from pilot data in committed files.
+            # The per-call values stay in the raw transcript (results/raw/, gitignored).
+            row["reasoning_tokens"] = ""
+            row["notes"] = f"{row['notes']}; {blinding.WITHHELD_NOTE}"
         costs.append_row(row, self.approval.costs_path)
         return row

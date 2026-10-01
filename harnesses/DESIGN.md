@@ -10,6 +10,7 @@ uv run pytest -q harnesses && uv run ruff check harnesses       # snapshot tests
 uv run python -m harnesses cells                                 # the cell table
 uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far   # $0, fake model
 uv run python -m harnesses summary-timing --n 20                 # $0, Σ compaction timing (§4.3)
+uv run python -m harnesses pilot-report                          # $0, pooled pilot report (§7.4)
 ```
 `dry-run` prints, for every request, its kind, the pending step, `reasoning.context` and the provenance of every input item (`U<t>` observation of turn t, `R<t>` its reasoning item, `A<t>` its reply, `B<k>` summary bridge k, `Q` the summary request).
 
@@ -88,7 +89,7 @@ The snapshot tests cover both settings.
 - ARC triggers after a response whose *provider-reported* `total_tokens` reach 175k. That total includes reasoning tokens, so in our design it would differ between r and 0 arms. Here the trigger is the pre-send visible count.
 - The threshold is W, not 175k.
 
-**Near cells.** The generator's DESIGN.md §8 warns that a summary cell which compacts the whole history can compact a near reveal. With the default `summary_keep_recent_tokens` = 0, near-cell S in Σ cells is therefore **measured, not designed**. The runner records payload S at every need step.
+**Near cells.** The generator's DESIGN.md §8 warns that a summary cell which compacts the whole history can compact a near reveal. With the default `summary_keep_recent_tokens` = 0, near-cell S in Σ cells is therefore **measured, not designed**. The runner records payload S at every need step, and `compacted_between` (§7.2) for every Σ episode.
 
 `uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config, with every reply at the assumed 1,000 tokens and a 300-token summary:
 
@@ -144,6 +145,13 @@ At the need step's **first** presentation (not a lookup result) it records:
 
 `assistant_carried` in the payload result covers notes kept in earlier replies.
 
+Per episode it also records:
+- `need_phase`: the need-phase tokens (§7.1);
+- `compacted_between` in Σ cells, and the step of every compaction (§7.2);
+- `call_latency_s`: wall-clock seconds of every call, retries and backoff included;
+- `n_unparsed_routine`: unparsed replies at routine steps (a format-error count; the need step is left out because it is an outcome);
+- `model` (requested) and `designed.evidence_steps`.
+
 **Exit reasons:**
 
 | Exit reason | When |
@@ -156,19 +164,81 @@ At the need step's **first** presentation (not a lookup result) it records:
 | `MAX_TURNS` | the episode passed `max_turns` |
 
 `run_batch` writes:
-- `results/<experiment>/<run_id>/meta.json`, with the fields required by CLAUDE.md, via `common.runmeta.write_meta`;
-- `episodes.jsonl`, one line per episode;
+- `results/<experiment>/<run_id>/meta.json`, with the fields required by CLAUDE.md, via `common.runmeta.write_meta`. Its `config` holds the run matrix (§7.3) when the CLI passes one;
+- `results/<experiment>/<run_id>/summary.json`: errors, latency, cost and the echo-match rate, built from an allowlist (§7.4);
+- `episodes.jsonl`, one line per episode, next to `meta.json`. For a pilot-blinded experiment it goes to `results/raw/<experiment>/<run_id>/` instead (§7.4);
 - `results/raw/<experiment>/<run_id>/transcript.jsonl.gz` (gitignored).
 
 For a paid transport, `run_batch` also calls `finalize` in a `finally` block, which appends exactly one `results/costs.csv` row.
 
+### 7.1 Need-phase tokens (D8)
+The researcher chose need-phase tokens as H1's primary token reading (D8, 2026-10-01): R_need = [N(W-0, far) / N(F-0, far)] / [N(W-0, near) / N(F-0, near)] ≥ 1.30. `need_phase` holds one episode's N:
+
+| Field | Meaning |
+|---|---|
+| `tokens` | **N**: provider-reported `input_tokens` + `output_tokens`, summed over every call made while the need step is pending. OpenAI's `input_tokens` includes cached tokens and `output_tokens` includes reasoning tokens, so this is "input incl. cached + output incl. reasoning" |
+| `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens` | The same sum by component |
+| `n_calls`, `n_step_calls`, `n_lookup_result_calls`, `n_summary_calls` | Calls in the phase. Each lookup adds one step call that answers the lookup result |
+| `summary_tokens` | The part of `tokens` spent on summary calls fired while the need step was pending |
+| `first_step_call` | Usage of the need step's first step call: H2's `usage[n]` (D9), for TE |
+| `complete` | The call that returns the scored action was made. False when the episode stopped inside the phase (error, cost cap, echo mismatch) |
+
+The phase runs from the first call at the need step through the call that returns the scored action (a non-lookup reply, or a lookup the environment refuses), with every lookup round-trip in between. It is the run of calls whose pending step is the need step. `need_phase` is `None` when the episode never reached the need step.
+
+A summary call that fires while the need step is pending is a call at the need step, so it is included, and `tokens − summary_tokens` gives the reading without it. H1's cells (W-0, F-0) never summarize, so for H1 the two readings are the same.
+
+### 7.2 `compacted_between` (D12)
+In Σ cells, `compacted_between` = 1 iff a compaction fired at a step s with r_first < s ≤ n, where r_first = min(`evidence_steps`) and n = `need_step`; otherwise 0 (D12, accepted 2026-10-01). Details:
+- Only successful compactions count. A failed summary attempt changes nothing in the session.
+- s is the environment step pending when the summary fired, not the turn. Lookups add turns, so after a lookup `at_turn` = `at_step` + 1. Every entry of `compactions` carries `at_step` and `at_lookup_result`.
+- A compaction while a lookup result at step n is pending counts, as the definition says. It happens after the need payload was sent, so `at_lookup_result` marks it for the reading that leaves it out.
+- `None` in W and F cells, for the withheld variant (no evidence), and when the need step was never presented (for example a summary that failed every attempt).
+
+Σ results are reported split by `compacted_between`, and Σ cells enter no confirmatory test (D12). A test checks the value against the transcript in every Σ cell. With the fake model's short replies near cells give 0; with 150-token replies they give both 0 and 1.
+
+### 7.3 Run matrix (D11)
+`harnesses/matrix.py`. A `RunMatrix` maps each task cell to a template count n. The cell runs on the first n templates from `--start`, so a cell with fewer templates uses a prefix of another cell's templates and every contrast stays within-template. Episodes come out template by template, so a run stopped by its cost cap leaves whole templates. `meta.json` records the matrix.
+
+| CLI | Matrix |
+|---|---|
+| `--n N [--task-cell ...]` (default `--matrix full`) | the chosen task cells (default all 8) on N templates, as before |
+| `--matrix d11 --n T_d [--n-observed T_o]` | the researcher's D11 option A for sol (2026-10-01): derived-far cells (R and NR) on T_d templates, observed-far cells (R and NR) on the first T_o of them (default T_d / 3), no near cells |
+| `--cell-templates CELL=N ...` | a custom matrix |
+
+Central case: `--matrix d11 --n 120` is 320 episodes per harness cell, 640 over F-r and F-0. On the main split the CLI prints a note when the start or a count is not a multiple of 10, since D7 wants whole 10-template balance blocks (T_d a multiple of 30). The pilot limit of 10 episodes counts the matrix's episodes. A test checks that every matrix episode is identical to the fully crossed generation's episode for that template and cell.
+
+### 7.4 Pilot blinding (PREREG §11)
+> Pilots report only validity levels, pooled tokens, errors, latency and cost; never per-arm success, per-arm reasoning tokens (H2's token outcome) or per-config ARC level progress. (PLAN §16.5)
+
+`harnesses/blinding.py` implements this for every experiment in `BLINDED_EXPERIMENTS` (`persistgym_pilot`):
+- `episodes.jsonl`, which holds `need_correct`, the need-phase tokens, per-episode usage and lookups, is written only to `results/raw/<experiment>/<run_id>/` (gitignored).
+- The committed `results/<experiment>/<run_id>/` holds only `meta.json` and `summary.json`:
+  - `meta.json`'s `tokens` sets `reasoning_tokens` to null. A `blinding` field names the rule and the raw episodes path. One run is one harness cell, so its reasoning total would be a per-arm number;
+  - `summary.json` holds errors (exit reasons, exclusions, summary failures, unparsed routine replies), latency (median, p90, max seconds per call), cost (list, billed estimate) and the echo-match rate per cell. The echo-match rate is a toggle check and exempt (PREREG §11, D29). Both summaries are built from an allowlist, so a field added to `EpisodeRun` later cannot leak into a committed pilot file.
+- The paid transport's `results/costs.csv` row leaves `reasoning_tokens` empty and says so in `notes`. The per-call values stay in the raw transcript.
+- `python -m harnesses pilot-report` ($0) is the committed script that produces the pilot report. It reads every raw pilot run and writes `results/persistgym_pilot/pooled-<time>/pilot_report.json`. Per model it reports:
+  - tokens pooled over the harness cells run. Reasoning tokens are shown only when at least 2 cells are pooled, so a pool never equals one arm;
+  - validity levels: the need-correct rate of the restated and withheld variants, pooled over cells and arms, counting finished, non-excluded episodes. The base variant's success is never reported;
+  - errors, latency, cost and the per-cell echo-match rate.
+
+The echo and replay probes (`toggle_pilot`, `replay_probe`) and validity runs (`persistgym_validity`) are not blinded.
+
+What this does not blind (§11): the per-run `costs.csv` row (one per run, required by CLAUDE.md) still holds that run's input and output tokens, calls and cost. Output tokens are mostly reasoning tokens, and calls minus steps counts lookups and summaries, so the row approximates the withheld numbers for one arm. Only the explicit `reasoning_tokens` column is withheld.
+
 ## 8. Paid calls (`openai_transport.py`)
 `OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless all of these hold:
 1. `PERSISTGYM_ALLOW_PAID=1` is set;
-2. `--approved-block <name>` is given. This is the researcher's approved spending block from PLAN §16.2; the approval itself is recorded in `results/decisions.md`;
+2. `--approved-block <name>` is given. This is the researcher's approved spending block from PLAN §16.2;
 3. `PREREG.md` is **committed** (§16.3: PREREG committed before any paid call): tracked by git, present in `HEAD`, and with no uncommitted changes. A draft in the working tree does not count;
-4. `--planned-usd` is a positive, finite number (`nan` would otherwise pass every budget comparison);
-5. the experiment has a budget phase in `common/costs.py`, and `common.costs.headroom(planned_usd, phase, rows)` ≥ 0.
+4. the block's approval is **committed**: `results/decisions.md` holds a line that is exactly `approved_block: <name>`, in the `HEAD` commit, and the working-tree copy still holds it. Details:
+   - only trailing whitespace (a CR, Markdown spaces) is ignored. `- approved_block: <name>`, an indented line, another case, a longer or shorter name, or the line inside backticks do not count;
+   - a line added but not committed does not count;
+   - a committed line deleted in the working tree counts as an uncommitted revocation and refuses;
+   - approving one block never approves another (§16.2).
+
+   The line records the researcher's approval, so it is added only on the researcher's explicit instruction, under that day's entry, and reaches `main` through the researcher's merge like every change. The guard reads the checked-out `HEAD`; it does not check that the commit is on `main` (§11);
+5. `--planned-usd` is a positive, finite number (`nan` would otherwise pass every budget comparison);
+6. the experiment has a budget phase in `common/costs.py`, and `common.costs.headroom(planned_usd, phase, rows)` ≥ 0.
 
 `--planned-usd` is the planned spend of the whole command: for `probe-echo` and `probe-replay` with several models, each model's transport gets only what the earlier models left. `run` refuses a `persistgym_pilot` run on any split other than `pilot` (§16.5: pilot templates use a disjoint seed range).
 
@@ -176,7 +246,7 @@ While running, it:
 - stops before a call once the run's estimated billed cost reaches `--planned-usd` (`COST_CAP`);
 - retries 429s, timeouts and 5xx errors with exponential backoff, but never `insufficient_quota`. Flex 429s are not charged ([Flex guide](https://developers.openai.com/api/docs/guides/flex-processing)). A timed-out or dropped connection may still have been processed and billed; such attempts are not in the ledger;
 - logs the echoed `reasoning.context`, the returned model string and the served service tier of every response;
-- appends one costs.csv row per run, with `approved_block`, the number of context mismatches and the git dirty flag in `notes`. `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
+- appends one costs.csv row per run, with `approved_block`, the number of context mismatches and the git dirty flag in `notes`. For a pilot-blinded experiment `reasoning_tokens` is left empty (§7.4). `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
 
 It never switches service tier. The API can still serve a request on a different tier than requested; the response says so and the row records it.
 
@@ -191,10 +261,13 @@ PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-replay 
     --model gpt-6.1-sol --n 10 --approved-block "<block>" --planned-usd 2
 PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
     --model gpt-6-luna --split pilot --n 1 --approved-block "<block>" --planned-usd 1
+PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
+    --model gpt-6.1-sol --split main --matrix d11 --n 120 --experiment persistgym \
+    --approved-block "<block>" --planned-usd <usd>                # D11 (§7.3)
 ```
 `run` defaults to the pilot split, which has a disjoint seed range, and the `persistgym_pilot` experiment. It refuses more than 10 episodes for a pilot.
 
-`tests/test_cli_end_to_end.py` runs all three commands through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls.
+`tests/test_cli_end_to_end.py` runs all three commands, and a D11 matrix run, through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls. It also checks that a pilot run commits only `meta.json` and `summary.json` and leaves `reasoning_tokens` empty in its costs row.
 
 ## 9. Probes (`probes.py`)
 Both probes are excluded from every analysis (§16.3). Their snapshot tests show that the two arms send identical payloads except `reasoning.context`, at every turn.
@@ -237,6 +310,19 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - [RESEARCHER DECISION] `stop_on_context_mismatch` = true: stop and exclude the episode; abort the run after 2 such episodes.
 - [RESEARCHER DECISION] `output_items_replay`: output items are sent back verbatim with null fields dropped. The pilot confirms that the API accepts this with `store: false`.
 
+**Decided by the researcher on 2026-10-01 and implemented here** (decision-sheet items for the PREREG; D12 and the last two came with the researcher's acceptance of the technical recommendations):
+- D8, need-phase tokens as H1's primary token reading (§7.1);
+- D11 option A, sol on derived-far × T_d plus observed-far × T_d/3 (§7.3);
+- D12, `compacted_between` logged in Σ cells (§7.2);
+- pilot outcomes only under `results/raw/` (§7.4);
+- the paid guard requires the committed `approved_block: <name>` line (§8).
+
+**Technical choices made here** (not D-items; open to the researcher's review):
+- Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
+- A compaction during a lookup round-trip at step n counts for `compacted_between`, as D12's definition says, and is marked (§7.2).
+- A blinded pilot's costs.csv row keeps input and output tokens and cost for the cost audit, and empties only `reasoning_tokens` (§7.4).
+- The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells (§7.4).
+
 ## 11. Known limitations and what this does not show
 - **No payload has been sent to the API.** The tests show that the payloads are what the design says. They do not show that the API accepts them, for example:
   - replayed message items with ids under `store: false`;
@@ -249,3 +335,6 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - **Tokens are tiktoken's.** Provider counts differ by per-message overhead and rendered reasoning. Both are logged.
 - **The fake model's usage numbers are not realistic.** Fake runs check structure, not cost.
 - **Σ cells depend on what the model writes.** Their S is measured, and `carried_in_text` is the intended accounting (generator DESIGN.md §8, §12).
+- **Pilot blinding is partial.** Per-run costs.csv rows still carry one arm's output tokens, calls and cost (§7.4). Running `pilot-report` before and after a run also gives that run's numbers by difference. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data; the code makes them hard to see, not impossible.
+- **The approval check reads the checked-out `HEAD`.** A line committed on a feature branch passes while that branch is checked out. Paid runs are meant to run from `main`, where only the researcher's merges land; the guard does not check that.
+- **Need-phase tokens are provider counts.** They include rendered reasoning in r arms and per-message overhead, unlike W's tiktoken counts (§4).

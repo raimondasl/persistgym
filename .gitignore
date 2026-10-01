@@ -28,3 +28,6 @@ drafts/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local git worktrees made by Claude Code sessions and workflows
+.claude/worktrees/

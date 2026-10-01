@@ -5,13 +5,23 @@ guard is checked to run before the factory is ever called."""
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 
 import httpx
 import openai
 import pytest
 
-from common import costs
+from common import approval, costs
+from common.tests.gitrepo import (
+    add_origin,
+    approval_line,
+    commit_on_origin_only,
+    decisions_text,
+    git_in,
+    push_main,
+    write_decisions,
+)
 from harnesses import cli
 from harnesses.openai_transport import (
     ALLOW_ENV,
@@ -20,7 +30,7 @@ from harnesses.openai_transport import (
     PaidCallsNotAllowed,
 )
 from harnesses.pricing import UsageLedger, cost_usd
-from harnesses.tests.conftest import git_in, prereg_repo
+from harnesses.tests.conftest import prereg_repo
 
 HARNESS_DIR = Path(__file__).resolve().parent.parent
 
@@ -131,8 +141,13 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     (tmp_path / "PREREG.md").write_text("Version: 0.1\n", encoding="utf-8")
     with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
         _make(tmp_path, factory)
-    # untracked draft in a repo
+    # untracked draft in a repo (whose HEAD and origin/main approve the block)
     git_in(tmp_path, "init", "-q")
+    write_decisions(tmp_path, decisions_text("1-pilots"))
+    git_in(tmp_path, "add", "results/decisions.md")
+    git_in(tmp_path, "commit", "-q", "-m", "approve")
+    add_origin(tmp_path)
+    push_main(tmp_path)
     with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
         _make(tmp_path, factory)
     # staged, not committed
@@ -147,6 +162,150 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     with pytest.raises(PaidCallsNotAllowed, match="uncommitted changes"):
         _make(tmp_path, factory)
     assert len(built) == 1  # only the accepted transport built a client
+
+
+def test_guard_requires_merged_block_approval(repo, monkeypatch):
+    """PLAN §16.2: a block spends only after the researcher's approval line is on origin/main,
+    in HEAD and in the working tree. A line only in the working tree, one committed on a
+    branch but not merged, a look-alike line or another block's line does not count, and
+    removing the line anywhere revokes it. (The grammar and every place are covered in
+    common/tests/test_approval.py; this checks that the transport builds no client.)"""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory()
+    assert _make(repo, factory).approval.approved_block == "1-pilots"  # fixture approves it
+    # another block's approval does not carry over
+    with pytest.raises(PaidCallsNotAllowed, match="'2-seed1' is not approved"):
+        _make(repo, factory, approved_block="2-seed1")
+    # added to the working tree but not committed
+    write_decisions(repo, decisions_text("1-pilots", "2-seed1"))
+    with pytest.raises(PaidCallsNotAllowed, match="on origin/main, HEAD; present on the "
+                                                  "working tree"):
+        _make(repo, factory, approved_block="2-seed1")
+    # committed on the checked-out branch, not merged to main
+    git_in(repo, "add", "results/decisions.md")
+    git_in(repo, "commit", "-q", "-m", "approve block 2")
+    with pytest.raises(PaidCallsNotAllowed, match="on origin/main; present on HEAD"):
+        _make(repo, factory, approved_block="2-seed1")
+    # merged: accepted (the name is stripped like the CLI's)
+    push_main(repo)
+    assert _make(repo, factory, approved_block=" 2-seed1 ").approval.approved_block == "2-seed1"
+    # deleted locally: an uncommitted revocation counts
+    write_decisions(repo, decisions_text("1-pilots"))
+    with pytest.raises(PaidCallsNotAllowed, match="on the working tree"):
+        _make(repo, factory, approved_block="2-seed1")
+    # revoked on main by a merge elsewhere, still in HEAD and the working tree
+    write_decisions(repo, decisions_text("1-pilots", "2-seed1"))
+    commit_on_origin_only(repo, decisions_text("1-pilots"), "revoke block 2")
+    with pytest.raises(PaidCallsNotAllowed, match="on origin/main; present on HEAD"):
+        _make(repo, factory, approved_block="2-seed1")
+    (repo / "results" / "decisions.md").unlink()
+    with pytest.raises(PaidCallsNotAllowed, match="file missing on the working tree"):
+        _make(repo, factory)
+    assert len(built) == 2  # only the two accepted transports built a client
+
+
+@pytest.mark.parametrize("line", [
+    "approved_block: 1-pilots",                      # the old grammar
+    "- " + approval_line("1-pilots"),                # a list item is not the line
+    approval_line("1-pilots-extra"),                 # a longer name
+    approval_line("1-pilot"),                        # a prefix of the name
+    approval_line("1-pilots").replace("approved_block: ", "approved_block:"),  # no space
+    approval_line("1-pilots").replace(" | ", "|"),   # spacing
+    approval_line("1-pilots").replace("approved_block", "Approved_block"),     # case
+    approval_line("1-pilots") + " (pending)",
+    "  " + approval_line("1-pilots"),                # indented
+    "`" + approval_line("1-pilots") + "`",
+    approval_line("1-pilots", max_usd="$1000"),
+    approval_line("1-pilots", max_usd="0"),
+    approval_line("1-pilots", ("toggle_pilot", "mystery")),
+    approval_line("1-pilots", ("toggle_pilot", "toggle_pilot")),
+])
+def test_guard_approval_line_must_match_exactly(tmp_path, monkeypatch, line):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    write_decisions(tmp_path, f"# Decisions log\n\n{line}\n")
+    git_in(tmp_path, "commit", "-q", "-am", "look-alike")
+    push_main(tmp_path)
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="no valid approval line"):
+        _make(tmp_path, factory)
+    assert built == []
+
+
+def test_guard_approval_line_tolerates_crlf_and_trailing_spaces(tmp_path, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    (tmp_path / "results" / "decisions.md").write_bytes(
+        f"# Decisions — log\r\n\r\n{approval_line('1-pilots')}  \r\n".encode())
+    git_in(tmp_path, "commit", "-q", "-am", "crlf")
+    push_main(tmp_path)
+    factory, _ = _factory()
+    assert _make(tmp_path, factory).approval.approved_block == "1-pilots"
+
+
+def test_guard_approval_needs_decisions_in_head(tmp_path, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path)
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    git_in(tmp_path, "rm", "-q", "--cached", "results/decisions.md")
+    git_in(tmp_path, "commit", "-q", "-m", "untrack decisions")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="file missing on HEAD"):
+        _make(tmp_path, factory)
+    assert built == []
+
+
+def test_guard_refuses_when_main_cannot_be_fetched(repo, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory()
+    git_in(repo, "remote", "set-url", "origin", str(repo.parent / "nowhere.git"))
+    with pytest.raises(PaidCallsNotAllowed, match="git fetch origin main failed"):
+        _make(repo, factory)
+    # the remote ref is injectable (the default is origin/main)
+    with pytest.raises(PaidCallsNotAllowed, match="git fetch backup main failed"):
+        _make(repo, factory, approval_remote=approval.RemoteRef("backup", "main"))
+    assert built == []
+
+
+def test_guard_refuses_an_experiment_the_block_does_not_list(tmp_path, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    write_decisions(tmp_path, decisions_text("1-pilots", experiments=("toggle_pilot",)))
+    git_in(tmp_path, "commit", "-q", "-am", "approve the echo probe only")
+    push_main(tmp_path)
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="not for experiment 'replay_probe'"):
+        _make(tmp_path, factory, experiment="replay_probe")
+    assert built == []
+    assert _make(tmp_path, factory).approval.experiments == ("toggle_pilot",)
+
+
+def test_guard_counts_the_blocks_own_logged_spend(tmp_path, monkeypatch):
+    """Block spend comes from the costs.csv rows the transport itself writes: after a run,
+    the block has less room, and a run that would pass max_usd is refused."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    write_decisions(tmp_path, decisions_text("1-pilots", max_usd="1"))
+    git_in(tmp_path, "commit", "-q", "-am", "approve $1")
+    push_main(tmp_path)
+    factory, built = _factory([_response()])
+    t = _make(tmp_path, factory, planned_usd=1.0)
+    t.send({"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}})
+    row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    assert row["notes"].startswith(approval.spend_tag("1-pilots"))
+    # list $0.15, billed (Flex) $0.075: the block has spent the larger, $0.15
+    rows = costs.read_rows(tmp_path / "costs.csv")
+    assert float(rows[0]["cost_usd_billed_est"]) == pytest.approx(0.075)
+    assert float(approval.block_spend("1-pilots", rows)) == pytest.approx(0.15)
+    assert _make(tmp_path, factory, planned_usd=0.85).approval.block_spent_usd == (
+        pytest.approx(0.15))
+    with pytest.raises(PaidCallsNotAllowed, match="would exceed it by"):
+        _make(tmp_path, factory, planned_usd=0.86)
+    assert len(built) == 2
 
 
 def test_guard_counts_logged_spend(repo, monkeypatch):
@@ -187,15 +346,43 @@ def test_sends_logs_echo_and_appends_one_costs_row(repo, monkeypatch):
 
 
 def test_stops_at_planned_spend(repo, monkeypatch):
+    """The run stops before a call once its spend reaches the planned spend. Spend is measured
+    like block spend and the phase caps, the larger of list and billed: on Flex, the list
+    cost. (Billed alone, $0.525 a call, would have allowed 4 calls under $2.)"""
     monkeypatch.setenv(ALLOW_ENV, "1")
-    factory, built = _factory([_response(inp=10_000_000)] * 3)  # $0.525 billed each
-    t = _make(repo, factory, planned_usd=1.0)
+    factory, built = _factory([_response(inp=10_000_000)] * 5)  # $1.05 list, $0.525 billed
+    t = _make(repo, factory, planned_usd=2.0)
     p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
     t.send(p)
     t.send(p)
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceeded, match=r"run spend \$2.1000 .*planned \$2.00"):
         t.send(p)
     assert len(built[0].sent) == 2
+    assert t.spent_usd == pytest.approx(2.10) and t.ledger.cost_usd_billed_est == (
+        pytest.approx(1.05))
+
+
+def test_a_run_cannot_spend_past_its_blocks_max_usd(tmp_path, monkeypatch):
+    """A run planned at the block's whole max_usd stops when the block's spend, as the guard
+    counts it, reaches max_usd (plus at most the last call). Stopping on billed cost would
+    let a Flex run log twice max_usd against the block."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, approved_blocks=())
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    write_decisions(tmp_path, decisions_text("1-pilots", max_usd="1"))
+    git_in(tmp_path, "commit", "-q", "-am", "approve $1")
+    push_main(tmp_path)
+    factory, built = _factory([_response()] * 20)  # $0.15 list, $0.075 billed per call
+    t = _make(tmp_path, factory, planned_usd=1.0)
+    p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
+    with pytest.raises(BudgetExceeded):
+        for _ in range(20):
+            t.send(p)
+    t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    spent = approval.block_spend("1-pilots", costs.read_rows(tmp_path / "costs.csv"))
+    assert len(built[0].sent) == 7 and float(spent) == pytest.approx(1.05)  # 1 + one call
+    with pytest.raises(PaidCallsNotAllowed, match="would exceed it"):
+        _make(tmp_path, factory, planned_usd=0.01)
 
 
 def test_retries_rate_limits_then_gives_up(repo, monkeypatch):
@@ -252,6 +439,22 @@ def test_cli_pilot_must_use_pilot_split(monkeypatch, capsys):
     assert cli.main(["run", "--cell", "F-0", "--split", "main", "--task-cell",
                      "observed-nonrec-far", "--approved-block", "x", "--planned-usd", "1"]) == 2
     assert "--split pilot" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("experiment", ["persistgym", "persistgym_validity"])
+def test_cli_pilot_split_only_under_the_blinded_pilot_experiment(monkeypatch, capsys,
+                                                                 experiment):
+    """The reverse (PREREG §11): pilot templates are pilot data, so a run under another
+    experiment (here with the default --split pilot) would commit per-arm outcomes on them
+    unblinded. It is refused before any transport exists."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before building a transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    assert cli.main(["run", "--cell", "F-r", "--experiment", experiment, "--matrix", "d11",
+                     "--n", "3", "--approved-block", "x", "--planned-usd", "1"]) == 2
+    assert "pilot data" in capsys.readouterr().err
 
 
 def test_costs_row_records_requested_and_served_tier(repo, monkeypatch):
@@ -324,6 +527,8 @@ def test_harness_tests_cannot_reach_the_network():
         socket.getaddrinfo("api.openai.com", 443)
     with socket.socket() as s, pytest.raises(NetworkBlocked):
         s.connect(("203.0.113.1", 443))
+    # the guard's `git fetch` runs in a subprocess: git itself may use only local paths
+    assert os.environ["GIT_ALLOW_PROTOCOL"] == "file"
 
 
 def test_no_key_handling_in_harness_code():

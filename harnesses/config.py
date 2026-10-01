@@ -54,7 +54,9 @@ class HarnessConfig:
     """Window / summary threshold in tokens. None = the episode's generator W, so the harness
     evicts exactly where the generator designed near and far."""
     window_counts_system_prompt: bool | None = None
-    """Whether W also has to hold the instructions. None = the episode's generator setting."""
+    """Whether W also has to hold the episode's system prompt (never the notes sentence, so
+    notes pairs evict at the same steps; PREREG D5). None = the episode's generator setting
+    (true since generator 0.2.0)."""
     tokenizer: str = "o200k_base"
     """Tokenizer for window and summary accounting (same as the generator)."""
 
@@ -130,7 +132,8 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "service_tier": ("§12, §16.1", "flex for every cell; never switched per episode"),
     "max_output_tokens": ("§12", "no cap proposed; a cap truncates long reasoning"),
     "W_tokens": ("§5, §6", "taken from the episode so eviction matches the design"),
-    "window_counts_system_prompt": ("§6", "taken from the episode config"),
+    "window_counts_system_prompt": ("§6, D5", ("taken from the episode config (true); the "
+                                               "notes sentence is never counted")),
     "token_accounting": ("§5, §6", ("visible text only: observations, replies, bridge; "
                                      "reasoning items are not counted")),
     "summary_trigger": ("§6", "pre-send: visible context > W (ARC: provider total >= 175k)"),

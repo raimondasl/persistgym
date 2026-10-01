@@ -22,6 +22,20 @@ percentile bootstrap. Reported, for 30/40/60/80 templates:
 - the same superiority test in the confirmatory model (logistic GLM, template and cell fixed
   effects, cluster-robust SEs).
 
+Two options serve decision D11 option A (sol on derived-far and observed-far cells only) and
+D26 (a Holm family of 4 one-sided bootstrap tests):
+- ``--holm-one-sided-alpha A`` adds the one-sided percentile-bootstrap test at the worst Holm
+  step (D26: 0.05 / 4 = 0.0125): p = the share of resamples <= 0, reject iff p <= A. Also
+  reported: the GLM's one-sided test at A, and "supported" (the bootstrap test rejects and the
+  GLM estimate is positive, D26).
+- ``--h2-observed-divisor K`` adds the observed-far cells on T_o = ceil(T_d / K) templates
+  (2 cells, F-r vs F-0, true difference 0, success p_F0). Reported marginally: the chance that
+  the point estimate of the observed difference is under 3pp (PLAN §4 H2's "less than 3pp
+  difference on observed facts") and its mean 90% CI half-width. These draws use their own
+  random stream, so they leave the derived-far columns unchanged.
+``--h2-p0`` takes a comma-separated list; every value reuses the same seed (common random
+numbers across p_F0).
+
 The probability targets are converted to logits either conditionally (the target holds for a
 template with intercept 0) or marginally (the target is the population-average success). Part 1
 runs both by default (``--sec10-calibration``); part 2 always uses the marginal calibration,
@@ -40,10 +54,11 @@ Run: ``uv run python -m analysis.power_sim [--reps 200] [--seed 20260930] [--no-
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 import warnings
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -299,6 +314,15 @@ class H2Setup:
     holm_steps: int = 3  # H1, H2, H3
     sd: float = TEMPLATE_SD
     calibration: str = "marginal"
+    # D26: one-sided bootstrap test at the worst Holm step (None = not reported)
+    holm_one_sided_alpha: float | None = None
+    # D11 option A: observed-far cells on ceil(T_d / divisor) templates (None = not simulated)
+    observed_divisor: int | None = None
+    observed_cells: int = 2  # observed-far cells per template (recoverable, non-recoverable)
+    observed_bound_pp: float = 3.0  # PLAN §4 H2: "less than 3pp difference on observed facts"
+
+    def observed_templates(self, templates: int) -> int:
+        return 0 if self.observed_divisor is None else math.ceil(templates / self.observed_divisor)
 
 
 DEFAULT_H2 = H2Setup()
@@ -347,12 +371,18 @@ def run_h2(reps: int, seed: int, *, templates=(30, 40, 60, 80), boot: int = 2000
            correction: str = "statsmodels") -> pd.DataFrame:
     effects = (0.0, setup.bound)
     holm_level = 1 - ALPHA / setup.holm_steps
+    one_alpha = setup.holm_one_sided_alpha
+    obs_setup = replace(setup, cells=setup.observed_cells)
     rows = []
     seqs = np.random.SeedSequence([seed, 2]).spawn(len(templates) * len(effects))
+    # Observed-far cells get their own stream so the derived-far columns do not depend on them.
+    obs_seqs = np.random.SeedSequence([seed, 3]).spawn(len(templates) * len(effects))
     for i, (t, effect) in enumerate((t, e) for t in templates for e in effects):
-        rng = np.random.default_rng(seqs[i])
+        rng, obs_rng = np.random.default_rng(seqs[i]), np.random.default_rng(obs_seqs[i])
+        t_obs = setup.observed_templates(t)
         tost = sup = sup_holm = glm_sup = glm_fail = 0
-        estimates, halfwidths = [], []
+        sup_one = glm_one = supported = obs_within = 0
+        estimates, halfwidths, obs_halfwidths = [], [], []
         for _ in range(reps):
             y0, y1 = simulate_h2(t, effect, rng, setup)
             diff = (y1 - y0).mean(axis=1)
@@ -368,16 +398,43 @@ def run_h2(reps: int, seed: int, *, templates=(30, 40, 60, 80), boot: int = 2000
                 glm_fail += 1
             else:
                 glm_sup += (fit[2] < ALPHA) and (fit[0] > 0)
+            if one_alpha is not None:
+                # D26: one-sided percentile-bootstrap p-value = share of resamples on the null side.
+                boot_reject = float(np.mean(dist <= 0)) <= one_alpha
+                sup_one += boot_reject
+                if fit is not None:
+                    glm_one += (fit[0] > 0) and (fit[2] / 2 <= one_alpha)
+                    supported += boot_reject and (fit[0] > 0)
+            if t_obs:
+                o0, o1 = simulate_h2(t_obs, 0.0, obs_rng, obs_setup)
+                obs_diff = (o1 - o0).mean(axis=1)
+                # |mean| < bound in integer arithmetic: no float ties at exactly 3pp.
+                net, n = abs(int((o1 - o0).sum())), o0.size
+                obs_within += 100 * net < setup.observed_bound_pp * n
+                lo, hi = percentile_ci(cluster_bootstrap_means(obs_diff, obs_rng, boot), 0.90)
+                obs_halfwidths.append((hi - lo) / 2)
             estimates.append(diff.mean())
             halfwidths.append((hi90 - lo90) / 2)
-        rows.append({"templates": t, "episodes": 2 * t * setup.cells,
-                     "true_effect_pp": effect * 100, "p_F0": setup.p_f0,
-                     "calibration": setup.calibration, "reps": reps, "boot": boot,
-                     "P_tost_equivalent": tost / reps, "P_superior_95": sup / reps,
-                     "P_superior_holm": sup_holm / reps, "P_superior_glm": glm_sup / reps,
-                     "glm_failed_fits": glm_fail,
-                     "mean_estimate_pp": 100 * float(np.mean(estimates)),
-                     "mean_ci90_halfwidth_pp": 100 * float(np.mean(halfwidths))})
+        row = {"templates": t, "episodes": 2 * t * setup.cells,
+               "true_effect_pp": effect * 100, "p_F0": setup.p_f0,
+               "calibration": setup.calibration, "reps": reps, "boot": boot,
+               "P_tost_equivalent": tost / reps, "P_superior_95": sup / reps,
+               "P_superior_holm": sup_holm / reps, "P_superior_glm": glm_sup / reps,
+               "glm_failed_fits": glm_fail,
+               "mean_estimate_pp": 100 * float(np.mean(estimates)),
+               "mean_ci90_halfwidth_pp": 100 * float(np.mean(halfwidths))}
+        if one_alpha is not None:
+            row.update({"holm_one_sided_alpha": one_alpha,
+                        "P_superior_holm_one_sided": sup_one / reps,
+                        "P_superior_glm_one_sided": glm_one / reps,
+                        "P_supported": supported / reps})
+        if t_obs:
+            row.update({"T_o": t_obs, "episodes_observed": 2 * t_obs * setup.observed_cells,
+                        "episodes_total": 2 * (t * setup.cells + t_obs * setup.observed_cells),
+                        "obs_bound_pp": setup.observed_bound_pp,
+                        "obs_P_point_within_bound": obs_within / reps,
+                        "obs_mean_ci90_halfwidth_pp": 100 * float(np.mean(obs_halfwidths))})
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -399,10 +456,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--part", choices=("sec10", "h2", "all"), default="all")
     ap.add_argument("--sec10-calibration", choices=("conditional", "marginal", "both"),
                     default="both")
-    ap.add_argument("--h2-p0", type=float, default=H2Setup.p_f0,
-                    help="success under F-0 on derived-far cells")
+    ap.add_argument("--h2-p0", default=str(H2Setup.p_f0),
+                    help="success under F-0 on derived-far cells (comma-separated list allowed)")
     ap.add_argument("--h2-templates", default="30,40,60,80",
                     help="comma-separated template counts for the H2 case")
+    ap.add_argument("--holm-one-sided-alpha", type=float, default=None,
+                    help="also report the one-sided bootstrap test at this alpha, the worst "
+                         "Holm step (D26: 0.05 / 4 = 0.0125)")
+    ap.add_argument("--h2-observed-divisor", type=int, default=None,
+                    help="also simulate observed-far cells on ceil(T_d / this) templates "
+                         "(D11 option A: 3)")
     ap.add_argument("--engine", choices=("fast", "statsmodels"), default="fast",
                     help="FE-logit implementation (identical model; 'fast' is checked against "
                          "statsmodels in the tests)")
@@ -425,12 +488,15 @@ def main(argv: list[str] | None = None) -> int:
             [run_sec10(args.reps, args.seed, calibration=c, engine=args.engine,
                        correction=args.cluster_correction) for c in cals],
             ignore_index=True)
-    setup = H2Setup(p_f0=args.h2_p0)
+    setups = [H2Setup(p_f0=float(x), holm_one_sided_alpha=args.holm_one_sided_alpha,
+                      observed_divisor=args.h2_observed_divisor)
+              for x in args.h2_p0.split(",") if x.strip()]
     if args.part in ("h2", "all"):
         counts = tuple(int(x) for x in args.h2_templates.split(",") if x.strip())
-        tables["h2_sol_power"] = run_h2(args.reps, args.seed, templates=counts, boot=args.boot,
-                                        setup=setup, engine=args.engine,
-                                        correction=args.cluster_correction)
+        tables["h2_sol_power"] = pd.concat(
+            [run_h2(args.reps, args.seed, templates=counts, boot=args.boot, setup=s,
+                    engine=args.engine, correction=args.cluster_correction) for s in setups],
+            ignore_index=True)
     for name, df in tables.items():
         _print(name, df)
     elapsed = time.perf_counter() - t0
@@ -446,7 +512,8 @@ def main(argv: list[str] | None = None) -> int:
             df.to_csv(out / f"{name}.csv", index=False, float_format="%.6g",
                       lineterminator="\n")
         config = {**{k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
-                  "h2_setup": asdict(setup), "template_sd": TEMPLATE_SD, "alpha": ALPHA,
+                  "h2_setup": asdict(setups[0]), "h2_setups": [asdict(s) for s in setups],
+                  "template_sd": TEMPLATE_SD, "alpha": ALPHA,
                   "sec10_designs": [asdict(d) for d in SEC10_DESIGNS]}
         meta = runmeta.write_meta(
             out, experiment="power_sim", run_id=run_id, cell_or_config="power_sim_v1",

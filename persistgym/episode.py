@@ -6,6 +6,9 @@ only dynamic part is `lookup` in recoverable cells, which `env.EpisodeEnv` handl
 inserts one extra observation and re-asks the pending step (see DESIGN.md "Lookup").
 
 Everything serializes to plain JSON (`to_dict` / `from_dict`), one episode per JSONL line.
+
+Schema 2 (generator 0.2.0) adds the distractor bindings (`Episode.distractors`, step kind
+"distractor", `Step.distractors`), `Component.entity` and `LookupSpec.record_keys`.
 """
 
 from __future__ import annotations
@@ -21,7 +24,11 @@ from persistgym.graph import DependencyGraph
 FACT_KINDS = ("observed", "derived")
 DISTANCES = ("near", "far")
 VARIANTS = ("base", "restated", "withheld")
-STEP_KINDS = ("routine", "reveal", "need")
+STEP_KINDS = ("routine", "reveal", "distractor", "need")
+LOOKUP_EVENT_MARKER = "EVENT: LOOKUP RESULT"
+"""Every lookup response (served, "no such record" or "lookup unavailable") contains this
+text and no scripted observation does. `survival.survival_from_payload` uses it to leave
+lookup responses out of S (PREREG §2.8)."""
 
 
 @dataclass(frozen=True)
@@ -53,15 +60,17 @@ ALL_CELLS: tuple[TaskCell, ...] = tuple(
 @dataclass
 class Component:
     """One piece of revealed information. Observed cells have one ('fact'); derived cells
-    have 2-3 clues plus a 'rule'."""
+    have 2-3 clues plus a 'rule'. Distractor bindings (`Episode.distractors`) use the same
+    shape with role 'distractor': a binding about another entity, never needed."""
 
-    comp_id: str  # "fact" | "clue0" | "clue1" | "clue2" | "rule"
-    role: str  # "fact" | "clue" | "rule"
+    comp_id: str  # "fact" | "clue0" | "clue1" | "clue2" | "rule" | "dist0" | "dist1" ...
+    role: str  # "fact" | "clue" | "rule" | "distractor"
     name: str  # quantity name (fact, rule) or clue name, e.g. "priority offset"
     value: int | None  # None for the rule
     sentence: str  # the information-bearing sentence, verbatim as displayed
     record: str  # the full record line as displayed, "<source> <id>. <sentence>"
     step: int | None  # step index that first shows it; None = system prompt (rule) only
+    entity: str = ""  # the binding's key: the target entity, or another entity (distractor)
 
 
 @dataclass
@@ -73,7 +82,7 @@ class Option:
 @dataclass
 class Step:
     index: int
-    kind: str  # "routine" | "reveal" | "need"
+    kind: str  # "routine" | "reveal" | "distractor" | "need"
     routine_type: str | None  # "route" | "threshold" | "broadcast" | "memo" | None (need)
     event: str  # the EVENT text (the part the action depends on)
     observation: str  # the full user message: log tail + EVENT
@@ -86,6 +95,7 @@ class Step:
     reveals: list[str] = field(default_factory=list)  # component ids first shown here
     restates: list[str] = field(default_factory=list)  # component ids repeated here (control)
     sim_time: str = ""  # simulated clock time of the observation
+    distractors: list[str] = field(default_factory=list)  # distractor ids shown here
 
 
 @dataclass
@@ -93,11 +103,17 @@ class LookupSpec:
     """Lookup semantics (recoverable cells). See env.EpisodeEnv for the exact behaviour."""
 
     available: bool
-    key: str  # the entity name; lookup(<key>) is case-insensitive
+    key: str  # the target entity name; lookup(<key>) is case-insensitive
     syntax: str  # e.g. "lookup(<shipment name>)"
     max_per_episode: int
-    records: dict[str, str]  # comp_id -> record line re-shown by a lookup
-    reveal_steps: dict[str, int]  # comp_id -> step at which the record is first shown
+    records: dict[str, str]  # record id (comp_id, null<k>, dist<k>) -> line re-shown
+    reveal_steps: dict[str, int]  # record id -> step at which the record is first shown
+    record_keys: dict[str, str] = field(default_factory=dict)
+    """record id -> the entity it is about (the target or a distractor); a lookup key
+    matches an entity it contains as a whole word. Missing ids belong to `key`."""
+
+    def key_of(self, record_id: str) -> str:
+        return self.record_keys.get(record_id, self.key)
 
 
 @dataclass
@@ -128,7 +144,10 @@ class Episode:
     correct_label: str
     lookup: LookupSpec
     graph: DependencyGraph
-    design: dict  # designed survival and distances, see render._design
+    design: dict  # designed survival and distances, see survival.episode_design
+    distractors: list[Component] = field(default_factory=list)
+    """Distractor bindings (role 'distractor'): same steps and text in every cell and
+    variant of a template; never needed (PREREG D1)."""
 
     # ------------------------------------------------------------------
     @property
@@ -184,6 +203,7 @@ class Episode:
         d["cell"] = TaskCell.from_id(d["cell"])
         d["steps"] = [Step(**s) for s in d["steps"]]
         d["components"] = [Component(**c) for c in d["components"]]
+        d["distractors"] = [Component(**c) for c in d.get("distractors", [])]
         d["options"] = [Option(**o) for o in d["options"]]
         d["lookup"] = LookupSpec(**d["lookup"])
         d["graph"] = DependencyGraph.from_dict(d["graph"])

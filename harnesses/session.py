@@ -17,9 +17,10 @@ Flow per environment observation (see runner.run_episode):
 History (PLAN §6):
 * full: every earlier turn, verbatim.
 * window: drop oldest whole turns (observation + the model's output items) so that the
-  visible tokens of the kept turns plus the current observation (plus the instructions, if
-  they count) are at most W. This is `persistgym.survival.window_keep_start`, the model the
-  generator used to design near and far. Dropped turns never come back.
+  visible tokens of the kept turns plus the current observation (plus the episode's system
+  prompt, if it counts; never the notes sentence) are at most W. This is
+  `persistgym.survival.window_keep_start`, the model the generator used to design near and
+  far. Dropped turns never come back.
 * summary: when the same visible context would exceed W, first send a summary request (the
   history to compact, then ARC's summary request prompt), then replace the compacted turns
   with ONE user-role bridge message holding the summary (ARC's bridge template). With
@@ -90,7 +91,10 @@ class HarnessSession:
         self.system_prompt = system_prompt
         self.instructions = (system_prompt + cfg.notes_separator + NOTES_INSTRUCTION
                              if cell.notes else system_prompt)
-        self.system_tokens = self._count(self.instructions) if count_system else 0
+        # W counts the episode's system prompt only, never the notes sentence: the two cells
+        # of a notes pair (W-n-0/W-0, Σ-n-r/Σ-0-r) then evict and compact at the same steps,
+        # and the count equals the generator's Episode.system_tokens (PREREG D5).
+        self.system_tokens = self._count(system_prompt) if count_system else 0
         self.turns: list[Turn] = []
         self.start = 0  # first turn still sent verbatim
         self.bridge: str | None = None
@@ -102,9 +106,9 @@ class HarnessSession:
 
     @classmethod
     def for_episode(cls, cell: CellSpec, episode, cfg: HarnessConfig) -> HarnessSession:
-        """Session for a persistgym Episode. W and whether the instructions count default to
-        the episode's generator config, so eviction happens where near and far were
-        designed."""
+        """Session for a persistgym Episode. W and whether the episode's system prompt counts
+        (never the notes sentence) default to the episode's generator config, so eviction
+        happens where near and far were designed."""
         ecfg = episode.config
         if cfg.tokenizer != ecfg["tokenizer"]:
             raise ValueError(f"harness tokenizer {cfg.tokenizer!r} differs from the "

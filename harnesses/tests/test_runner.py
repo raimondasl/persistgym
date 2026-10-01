@@ -105,12 +105,51 @@ def test_lookup_turn_flows_through_the_harness(small_eps):
         events, rec = _record()
         run = run_episode(ep, CELLS[cid], CFG, FakeModel(reply), recorder=rec)
         assert run.n_lookups == 1 and run.n_turns == ep.n_steps + 1
+        assert run.n_lookups_unavailable == 0
         steps = [e for e in events if e["kind"] == "step"]
         lookup = next(e for e in steps if e["is_lookup_result"])
         assert lookup["pending_step"] == ep.need_step
         assert item_text(lookup["payload"]["input"][-1]).count("LOOKUP RESULT") == 1
         # S is taken at the need step's first presentation, before the lookup re-shows it
         assert run.need_payload["S"] is (cid == "F-0")
+
+
+def test_over_cap_lookups_are_recorded_apart_from_lookups(small_eps, tmp_path):
+    """Generator 0.2.0 (D3): once the cap is used, a lookup gets one 'lookup unavailable'
+    turn and the step is asked again. The episode record counts such turns in
+    `n_lookups_unavailable`, next to `n_lookups` (lookups served), as the transcript shows
+    them. Here the agent looks up at the need step until it is told no more are available,
+    then answers."""
+    ep = next(e for e in small_eps if e.cell.id == "observed-rec-far")
+    cap = ep.lookup.max_per_episode
+
+    def reply(payload, i):
+        last = item_text(payload["input"][-1])
+        if "lookup unavailable" in last:
+            return f"ACTION: {ep.need.expected_action}"
+        return f"ACTION: lookup({ep.entity})" if "needs its" in last else "ACTION: ack(none)"
+
+    for cid in ("W-n-0", "F-0", "Σ-n-0"):
+        events, rec = _record()
+        run = run_episode(ep, CELLS[cid], CFG, FakeModel(reply), recorder=rec)
+        refusals = [e for e in events if e["kind"] == "step" and "lookup unavailable"
+                    in item_text(e["payload"]["input"][-1])]
+        served = [e for e in events if e["kind"] == "step" and e["is_lookup_result"]
+                  and e not in refusals]
+        assert (run.n_lookups, run.n_lookups_unavailable) == (cap, 1) == (
+            len(served), len(refusals))
+        assert refusals[0]["pending_step"] == ep.need_step
+        assert run.n_turns == ep.n_steps + cap + 1 and run.need_correct
+        # the refusal is one more round-trip inside the need phase (D8)
+        assert run.need_phase["n_lookup_result_calls"] == cap + 1 and run.need_phase["complete"]
+    # the field is in the per-episode record run_batch writes, next to n_lookups
+    run_batch([ep], CELLS["F-0"], CFG, FakeModel(reply), experiment="persistgym",
+              run_id="over-cap", results_root=tmp_path / "results", raw_root=tmp_path / "raw")
+    path = tmp_path / "results" / "persistgym" / "over-cap" / "episodes.jsonl"
+    (row,) = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()]
+    keys = list(row)
+    assert keys.index("n_lookups_unavailable") == keys.index("n_lookups") + 1
+    assert (row["n_lookups"], row["n_lookups_unavailable"]) == (cap, 1)
 
 
 def test_context_echo_mismatch_excludes_and_stops(small_eps):
@@ -180,10 +219,10 @@ def test_run_batch_writes_meta_and_transcript(small_eps, tmp_path, monkeypatch):
         raise AssertionError("the fake path must never build an OpenAI client")
     monkeypatch.setattr(openai, "OpenAI", no_client)
     eps = small_eps[:3]
-    meta = run_batch(eps, CELLS["W-n-0"], CFG, FakeModel(), experiment="persistgym_pilot",
+    meta = run_batch(eps, CELLS["W-n-0"], CFG, FakeModel(), experiment="persistgym",
                      run_id="test-run", results_root=tmp_path / "results",
                      raw_root=tmp_path / "raw")
-    out = tmp_path / "results" / "persistgym_pilot" / "test-run"
+    out = tmp_path / "results" / "persistgym" / "test-run"
     assert set(runmeta.REQUIRED) <= set(meta)
     assert meta["exit_reason"] == "COMPLETED" and meta["paid"] is False
     assert meta["reasoning_context_requested"] == "current_turn"
@@ -193,7 +232,10 @@ def test_run_batch_writes_meta_and_transcript(small_eps, tmp_path, monkeypatch):
     assert meta["cost_usd"]["costs_csv_row_appended"] is False
     lines = (out / "episodes.jsonl").read_text(encoding="utf-8").splitlines()
     assert [json.loads(x)["episode_id"] for x in lines] == [e.episode_id for e in eps]
-    with gzip.open(tmp_path / "raw" / "persistgym_pilot" / "test-run" / "transcript.jsonl.gz",
+    assert "blinding" not in meta and meta["tokens"]["reasoning_tokens"] > 0
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["n_episodes"] == 3 and summary["blinded"] is False
+    with gzip.open(tmp_path / "raw" / "persistgym" / "test-run" / "transcript.jsonl.gz",
                    "rt", encoding="utf-8") as f:
         events = [json.loads(x) for x in f]
     assert len(events) == sum(e.n_steps for e in eps)

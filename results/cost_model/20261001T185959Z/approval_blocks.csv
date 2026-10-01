@@ -1,0 +1,57 @@
+case,block,payee,low,central,high,high_1a_capped
+flex_cached,1 pilots,total,43.389,44.301,70.3589,70.3589
+flex_cached,1 pilots,Google,13.0819,13.0819,13.0819,13.0819
+flex_cached,1 pilots,OpenAI,30.3071,31.219,57.277,57.277
+flex_cached,2 seed-1 S0+S4,total,74.907,104.103,121.859,121.859
+flex_cached,2 seed-1 S0+S4,Google,74.907,104.103,121.859,121.859
+flex_cached,2 seed-1 S0+S4,OpenAI,0,0,0,0
+flex_cached,3 commitment,total,595.378,763.218,1195.83,785.824
+flex_cached,3 commitment,Google,224.721,312.31,365.578,365.578
+flex_cached,3 commitment,OpenAI,370.657,450.909,830.255,420.246
+flex_cached,4 phase 2,total,440.925,499.538,606.112,606.112
+flex_cached,4 phase 2,Google,427.197,485.811,578.744,578.744
+flex_cached,4 phase 2,OpenAI,13.7274,13.7274,27.3674,27.3674
+flex_cached,blocks 1-2 (before commitment),total,118.296,148.404,192.218,192.218
+flex_cached,blocks 1-3 (by G2),total,713.674,911.622,1388.05,953.937
+standard_cached,1 pilots,total,53.1343,54.0463,80.1042,80.1042
+standard_cached,1 pilots,Google,22.8272,22.8272,22.8272,22.8272
+standard_cached,1 pilots,OpenAI,30.3071,31.219,57.277,57.277
+standard_cached,2 seed-1 S0+S4,total,149.814,208.206,243.719,243.719
+standard_cached,2 seed-1 S0+S4,Google,149.814,208.206,243.719,243.719
+standard_cached,2 seed-1 S0+S4,OpenAI,0,0,0,0
+standard_cached,3 commitment,total,820.099,1075.53,1561.41,1151.4
+standard_cached,3 commitment,Google,449.442,624.619,731.157,731.157
+standard_cached,3 commitment,OpenAI,370.657,450.909,830.255,420.246
+standard_cached,4 phase 2,total,718.122,835.349,1034.86,1034.86
+standard_cached,4 phase 2,Google,704.395,821.622,1007.49,1007.49
+standard_cached,4 phase 2,OpenAI,13.7274,13.7274,27.3674,27.3674
+standard_cached,blocks 1-2 (before commitment),total,202.948,262.253,323.823,323.823
+standard_cached,blocks 1-3 (by G2),total,1023.05,1337.78,1885.23,1451.12
+list_nocache,1 pilots,total,58.3097,59.2217,85.2796,85.2796
+list_nocache,1 pilots,Google,28.0027,28.0027,28.0027,28.0027
+list_nocache,1 pilots,OpenAI,30.3071,31.219,57.277,57.277
+list_nocache,2 seed-1 S0+S4,total,191.316,268.68,316.128,316.128
+list_nocache,2 seed-1 S0+S4,Google,191.316,268.68,316.128,316.128
+list_nocache,2 seed-1 S0+S4,OpenAI,0,0,0,0
+list_nocache,3 commitment,total,944.605,1256.95,1778.64,1368.63
+list_nocache,3 commitment,Google,573.948,806.04,948.384,948.384
+list_nocache,3 commitment,OpenAI,370.657,450.909,830.255,420.246
+list_nocache,4 phase 2,total,880.487,1038.2,1299.31,1299.31
+list_nocache,4 phase 2,Google,866.76,1024.48,1271.94,1271.94
+list_nocache,4 phase 2,OpenAI,13.7274,13.7274,27.3674,27.3674
+list_nocache,blocks 1-2 (before commitment),total,249.626,327.902,401.408,401.408
+list_nocache,blocks 1-3 (by G2),total,1194.23,1584.85,2180.05,1745.93
+flex_nocache,1 pilots,total,45.9767,46.8887,72.9466,72.9466
+flex_nocache,1 pilots,Google,15.6697,15.6697,15.6697,15.6697
+flex_nocache,1 pilots,OpenAI,30.3071,31.219,57.277,57.277
+flex_nocache,2 seed-1 S0+S4,total,95.658,134.34,158.064,158.064
+flex_nocache,2 seed-1 S0+S4,Google,95.658,134.34,158.064,158.064
+flex_nocache,2 seed-1 S0+S4,OpenAI,0,0,0,0
+flex_nocache,3 commitment,total,657.631,853.929,1304.45,894.438
+flex_nocache,3 commitment,Google,286.974,403.02,474.192,474.192
+flex_nocache,3 commitment,OpenAI,370.657,450.909,830.255,420.246
+flex_nocache,4 phase 2,total,522.107,600.965,738.337,738.337
+flex_nocache,4 phase 2,Google,508.38,587.238,710.97,710.97
+flex_nocache,4 phase 2,OpenAI,13.7274,13.7274,27.3674,27.3674
+flex_nocache,blocks 1-2 (before commitment),total,141.635,181.229,231.011,231.011
+flex_nocache,blocks 1-3 (by G2),total,799.266,1035.16,1535.46,1101.34

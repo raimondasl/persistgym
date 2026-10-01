@@ -13,6 +13,7 @@ ARC Prize's harness, [arcprize/arc-agi-3-benchmarking](https://github.com/arcpri
 | `offline_smoke_inner.py` | The stub model and the single-game driver that `offline_smoke.py` runs inside the patched harness environment. |
 | `toy_game/` | A two-level toy game in arc-agi's local layout, written for these tests. It is not an ARC game. |
 | `test_offline_smoke.py` | Root-suite tests for the runner, with the harness mocked. The real run is opt-in (`RUN_OFFLINE_SMOKE=1`). |
+| `draw_games.py`, `test_draw_games.py` | The one-off game draw (D15): a randomness-beacon seed published after the PREREG freeze orders the path games (see Game draw). Tests use mocked HTTP only. |
 | `conftest.py`, `.gitignore`, `.gitattributes` | Keep the submodule and `arc/.work/` out of the root test run and out of git; keep patch files byte-exact. |
 
 Nothing here calls a model API or needs a key. All harness tests use mocked HTTP, and the offline runs use a stub model behind a loopback-only socket guard.
@@ -138,6 +139,26 @@ Gemini Flex answers 503 when it is at capacity and 429 for rate limits, and Goog
 `--usage chars` makes the stub report one provider token per character of request text, so S0's 175k-character limit and the 175k-token summary trigger are reached as the transcript grows; on the toy game with no-op actions (`--script ACTION3`) S0 trims and S1/S2/S4 compact once (see Test results). `--script`, `--trigger-turns` and `--configs` override the defaults.
 
 **ARC's public games (needs approval first).** `uv run arc/offline_smoke.py --games ft09,sb26 --environments-dir <dir>` runs the same checks on real games, with a seeded stub policy that picks among the listed actions (seeded coordinates for ACTION6) and `--usage chars` by default. Not yet run on any real game. It needs each game's `metadata.json` and game class under `<dir>` (default `results/raw/arc_games/`). This repository contains no ARC game code and the runner never downloads; it stops and says so when a game is missing. Getting the files means running ARC's code on this machine: arc-agi's `normal` mode (`Arcade(operation_mode=OperationMode.NORMAL, environments_dir=<dir>).make("ft09")`, with `ARC_API_KEY` set) downloads the game source from ARC's API into `<dir>/<game>/<version>/` and then executes it. Both steps wait for the researcher's approval. Use only path (dev) games, never held-out ones (PLAN §16.3).
+
+## Game draw (`draw_games.py`, D15)
+`uv run python -m arc.draw_games <freeze-commit-sha>` runs once, after the researcher has merged the frozen PREREG.md. It makes no paid calls and uses no key. Rule: T is the freeze commit's committer time plus 10 minutes, and SEED is `int(outputValue[:16], 16)` of the first NIST Randomness Beacon 2.0 pulse at or after T, from `https://beacon.nist.gov/beacon/2.0/pulse/time/<T in ms>`. If NIST has no such pulse within 24 h of T, SEED comes from the first drand `default`-chain round at or after T (`https://api.drand.sh/public/<round>`, `int(randomness[:16], 16)`). Then `perm = random.Random(SEED).sample(['FT09', 'SB26', 'R11L', 'CD82'], 4)`. `perm[0]` is the truncated-pilot game (D17), `perm[3]` is the game dropped under the 3-game fallback (D32), and SEED + 2 and SEED + 3 order blocks 2 and 3 over the sorted (game, config, replicate) tuples (D18).
+
+The script refuses to run (exit 1) unless all of these hold:
+- the checkout is clean;
+- the SHA is on origin/main's first-parent history, so it is the PR's merge or squash commit, not a commit inside the merged branch;
+- PREREG.md there has `Version: x.y` with x.y ≥ 0.2 and no `-draft` suffix, and a `Status:` line starting with "Frozen" (any case);
+- PREREG.md at its first parent is not frozen, so a later commit cannot move T;
+- no draw for that commit exists yet.
+
+Other exit codes: 3 means too early (T has not been reached, or NIST has no pulse yet and less than 24 h has passed), so re-run later; 2 means a beacon error. When NIST cannot be reached at all for 24 h or more after T, the drand fallback needs `--fallback-if-nist-unreachable`, and the reason goes in `results/decisions.md` first.
+
+Checks made on the beacon data:
+- the pulse's timestamp is at or after T;
+- the preceding pulse in the chain is before T;
+- drand's `/info` matches the pinned chain hash, period and genesis time;
+- drand's `randomness` equals SHA-256 of its `signature`.
+
+The beacons' own signatures are not verified. The raw responses are kept so anyone can verify them. Output goes to `results/draw/<run_id>/`: `meta.json`, `draw.json`, the raw beacon responses (byte-exact; `results/draw/.gitattributes` keeps git from changing their line endings) and `decisions_block.md`, which is also printed for pasting into `results/decisions.md`. The module docstring gives the API sources, checked 2026-10-01.
 
 ## Changing or adding patches
 ```bash

@@ -1,0 +1,19 @@
+name,value,unit,source,note
+ops_results_dir,results/arc_public_ops/20261001T185155Z,path,arc/public/ops.py run with the SP80 and TN36 recordings (commit 455315b),recordings_per_action.csv gives every option-A game's list cost (cost_total_usd) and billed estimate (cost_cached_price_usd: cached input re-priced at the cached price)
+path_games,FT09;SB26;R11L;CD82,games,decision D14 option A (researcher 2026-10-01),no seeded draw
+heldout_games,SP80;VC33;TN36,games,decisions D14 option A and D24 option B (researcher 2026-10-01),remaining games with gap >= 20 and a normal Standard ending; the 3 with the lowest max published cost; all three committed (no conditional 2-game cut)
+arc_seeds,2,seeds,PLAN.md §8.3,path study
+heldout_seeds,2,seeds,PLAN.md §9,held-out S0 S4 S0+StateCarry
+g3_runs_per_dev_game,1,runs,PREREG draft D24 (G3 rule),frozen StateCarry v0 runs once per dev game; costed as its own phase-2 line outside the $150 dev cap (task brief for D24 option B)
+rerun_reserve,0.20,fraction of counted runs,PLAN.md §16.3; PREREG draft D28,applied to every counted ARC run: path; G3; held-out
+gemini_probe_flex_calls,0,calls,decision D21 (researcher 2026-10-01),Gemini standard tier for all ARC runs; Flex latency probe dropped; the acceptance calls stay
+sol_td_central,120,templates,assumption,budget-neutral with PLAN §7's 40 sol templates x 8 task cells: 2 x 120 + 2 x 40 = 320 template-cells per arm
+sol_td_grid,90;120;150;180;200;210,templates,decision D11 option A; the power_sim grid,200 is the D11 A ceiling if the researcher raises the 1a cap before the sol main sweep
+sol_to_divisor,3,ratio,decision D11 option A,T_o = T_d / 3 rounded up
+sol_derived_far_cells,2,cells per template,decision D11 option A,derived x far x {recoverable; not}
+sol_observed_far_cells,2,cells per template,decision D11 option A,observed x far x {recoverable; not}; no near cells on sol
+repeat_every,10,templates,decision D7 as amended by the researcher (2026-10-01),template seeds start at 0; every seed divisible by 10 gets a second repeat; on BOTH luna and sol (the luna-only change was rejected)
+cap_phase_0,100,usd,PLAN.md §12,unchanged
+cap_phase_1a,500,usd,proposed 2026-10-01 (confirmed by the researcher merging amendment A2),was 450 (PLAN.md §12)
+cap_phase_1b,900,usd,PLAN.md §12,unchanged
+cap_phase_2,1150,usd,decision D24 option B (proposed 2026-10-01),was 950 (PLAN.md §12)

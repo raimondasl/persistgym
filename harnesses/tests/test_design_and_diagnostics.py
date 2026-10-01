@@ -23,13 +23,14 @@ def test_every_cell_and_the_notes_sentence_are_documented():
 
 
 def test_summary_timing_on_two_templates():
-    """The first compaction comes at turn 10 at the default volume, and keeping the near
-    span verbatim keeps every near reveal (DESIGN.md §4.3; the 20-template table comes from
+    """The first compaction comes at turn 9 at the default volume (the system prompt counts
+    toward W, PREREG D5), and keeping the near span verbatim keeps every near reveal
+    (DESIGN.md §4.3; the 20-template table comes from
     `python -m harnesses summary-timing --n 20`)."""
     out = diagnostics.summary_timing(2)
     assert out["n_episodes"] == 4 and out["reply_tokens"] == 1000
-    ark, keep = out["per_keep_recent"][0], out["per_keep_recent"][16_500]
-    assert all(t.startswith("10,") for t in ark["compaction_turns"])
+    ark, keep = out["per_keep_recent"][0], out["per_keep_recent"][16_650]
+    assert all(t.startswith("9,") for t in ark["compaction_turns"])
     assert keep["need_S0"] == 0
     # keeping the near span verbatim: more, smaller summary calls and larger step requests
     assert keep["summary_calls_per_episode"] > ark["summary_calls_per_episode"] == 2

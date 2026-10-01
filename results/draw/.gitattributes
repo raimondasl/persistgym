@@ -1,0 +1,3 @@
+# Raw beacon responses written by arc/draw_games.py stay byte-exact (their SHA-256 is in draw.json).
+nist_*.json -text
+drand_*.json -text

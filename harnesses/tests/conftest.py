@@ -9,14 +9,13 @@ the session's own bookkeeping, so a bookkeeping bug cannot hide a payload bug.
 from __future__ import annotations
 
 import ipaddress
-import os
 import re
 import socket
-import subprocess
 from pathlib import Path
 
 import pytest
 
+from common.tests.gitrepo import decisions_text, guarded_repo
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT, HarnessConfig
 from harnesses.fake import FakeModel, padded_text
 from harnesses.session import HarnessSession
@@ -77,29 +76,23 @@ def no_network():
     mp.setattr(socket.socket, "connect", connect)
     mp.setattr(socket.socket, "connect_ex", connect_ex)
     mp.setattr(socket, "getaddrinfo", getaddrinfo)
+    # The paid guard runs `git fetch origin main` in a subprocess, which the socket patch
+    # cannot see. Tests point origin at a local bare repo; this makes git refuse any other
+    # transport (https, ssh, git) outright.
+    mp.setenv("GIT_ALLOW_PROTOCOL", "file")
     yield
     mp.undo()
 
 
 # --- a throwaway git repo with a committed PREREG.md (paid-guard tests) --------------------
+# The helpers live in common/tests/gitrepo.py (shared with the common/approval.py tests).
 
-def git_in(repo: Path, *args: str) -> None:
-    """Run git in a test repo, isolated from the user's and the system's git config."""
-    empty = repo / ".test-gitconfig"
-    empty.touch()
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(empty), "GIT_CONFIG_NOSYSTEM": "1",
-           "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.invalid",
-           "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.invalid"}
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
-
-
-def prereg_repo(path: Path, text: str = "Version: 0.1\n") -> Path:
-    """`path` as a git repo whose HEAD holds PREREG.md (what the paid guard requires)."""
-    git_in(path, "init", "-q")
-    (path / "PREREG.md").write_text(text, encoding="utf-8")
-    git_in(path, "add", "PREREG.md")
-    git_in(path, "commit", "-q", "-m", "prereg")
-    return path
+def prereg_repo(path: Path, text: str = "Version: 0.1\n",
+                approved_blocks: tuple[str, ...] = ("1-pilots",)) -> Path:
+    """`path` as a git repo whose HEAD holds PREREG.md and a results/decisions.md approving
+    `approved_blocks`, with a local bare `origin` whose main equals HEAD (what the paid guard
+    requires)."""
+    return guarded_repo(path, prereg=text, decisions=decisions_text(*approved_blocks))
 
 
 def text_with_tokens(prefix: str, n: int) -> str:

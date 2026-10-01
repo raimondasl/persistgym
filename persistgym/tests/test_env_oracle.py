@@ -105,16 +105,24 @@ def test_lookup_before_reveal_and_wrong_key(small_eps):
         return _key(env)
 
     env, seen = _play(ep, policy)
-    assert "no records yet" in seen[1]
-    assert "no records found" in seen[3]
+    # PREREG §2.5: a key without a record shown so far returns "no such record", whether it
+    # appears later (the target before its reveal) or never
+    assert "no such record" in seen[1] and ep.components[0].sentence not in seen[1]
+    assert "no such record" in seen[3]
     assert env.result().n_turns == ep.n_steps + 2
 
 
 def test_lookup_key_matches_entity_as_a_word(small_eps):
     ep = pick(small_eps, "observed-rec-far")
+    long_key = f"the {ep.quantity} record that was logged a while ago for {ep.kind} {ep.entity}"
+    assert len(long_key) > 40 and long_key.find(ep.entity) > 40
     for key, ok in ((ep.entity, True), (ep.entity.lower(), True),
                     (f"{ep.kind} {ep.entity}", True), (f"'{ep.entity}' records", True),
-                    (ep.entity + "S", False), ("x" + ep.entity, False), ("everything", False)):
+                    # punctuation next to the name, and long keys, still name it as a word
+                    (f'key="{ep.entity}"', True), (f"{ep.kind}:{ep.entity}", True),
+                    (f"{ep.entity}'s {ep.quantity}", True), (long_key, True),
+                    (ep.entity + "S", False), ("x" + ep.entity, False), ("everything", False),
+                    (f"{ep.kind}{ep.entity}", False)):
         def policy(env, key=key):
             if env.pending == ep.need_step and env.lookups_used == 0:
                 return f"ACTION: lookup({key})"
@@ -123,21 +131,79 @@ def test_lookup_key_matches_entity_as_a_word(small_eps):
         env, seen = _play(ep, policy)
         lookup_obs = seen[ep.need_step + 1]
         assert (ep.components[0].sentence in lookup_obs) is ok, key
-        assert ("no records found" in lookup_obs) is (not ok), key
+        assert ("no such record" in lookup_obs) is (not ok), key
         assert env.result().n_turns == ep.n_steps + 1
 
 
-def test_lookup_limit_and_nonrecoverable(small_eps):
+def test_lookup_serves_distractor_keys(small_eps):
+    """D3: lookup(key) re-shows a distractor's binding for its key, never the target's
+    records; a key naming two entities re-shows both, in display order."""
+    ep = pick(small_eps, "derived-rec-far")
+    d0, d1 = ep.distractors
+    for key, shows, hides in (
+            (d0.entity, [d0.sentence], [c.sentence for c in ep.components] + [d1.sentence]),
+            (f"{ep.kind} {d1.entity.lower()}", [d1.sentence], [d0.sentence]),
+            (f"{ep.entity}, {d0.entity}", [d0.sentence, *(c.sentence for c in ep.components)],
+             [d1.sentence])):
+        def policy(env, key=key):
+            if env.pending == ep.need_step and env.lookups_used == 0:
+                return f"ACTION: lookup({key})"
+            return _key(env)
+
+        env, seen = _play(ep, policy)
+        lookup_obs = seen[ep.need_step + 1]
+        assert all(s in lookup_obs for s in shows), key
+        assert not any(s in lookup_obs for s in hides), key
+        assert env.result().need_correct and env.result().n_lookups == 1
+    # records in display order: the earlier record comes first
+    both = [(d0.step, d0.sentence), (min(c.step for c in ep.components),
+                                     ep.components[0].sentence)]
+    first, second = (s for _, s in sorted(both))
+    assert lookup_obs.index(first) < lookup_obs.index(second)
+
+
+def test_lookup_over_the_cap_is_unavailable_not_wrong(small_eps):
+    """D3: the 4th lookup returns 'lookup unavailable' at the cost of one turn and is not
+    scored; the agent's next action at the need step is. A second over-cap lookup at the
+    same step is an invalid action."""
     rec = pick(small_eps, "observed-rec-far")
     cap = rec.lookup.max_per_episode
+    n = rec.need_step
 
+    def then_answer(env):
+        if env.pending == n:
+            if env.lookups_used < cap or not env.unavailable_steps:
+                return f"ACTION: lookup({rec.entity})"
+            return f"ACTION: {rec.need.expected_action}"
+        return _key(env)
+
+    env, seen = _play(rec, then_answer)
+    r = env.result()
+    assert r.need_correct and r.step_outcomes[n] == "correct"
+    assert r.n_lookups == cap and r.n_lookups_unavailable == 1
+    assert r.lookup_unavailable_steps == [n] and r.n_turns == rec.n_steps + cap + 1
+    refusal = seen[n + cap + 1]
+    assert "lookup unavailable" in refusal and rec.components[0].sentence not in refusal
+    assert "Pending request (repeated): " + rec.need.event in refusal
+    turn = r.turns[n + cap + 1]
+    assert turn.is_lookup_result and turn.is_lookup_unavailable
+    assert turn.observation_tokens == rec.config["v_tokens"]
+    assert [t.outcome for t in r.turns[n: n + cap + 2]] == (
+        ["lookup"] * cap + ["lookup_unavailable", "correct"])
+
+    # lookups used up before the need step: one refusal per pending step, then invalid
     def spam(env):
-        return f"ACTION: lookup({rec.entity})" if env.pending == rec.need_step else _key(env)
+        return f"ACTION: lookup({rec.entity})" if env.pending in (n - 1, n) else _key(env)
 
     r = _play(rec, spam)[0].result()
-    assert r.n_lookups == cap
-    assert r.step_outcomes[rec.need_step] == "invalid_lookup" and not r.need_correct
+    assert r.n_lookups == cap and r.lookup_steps == [n - 1] * cap
+    assert r.lookup_unavailable_steps == [n - 1, n]
+    assert r.step_outcomes[n - 1] == r.step_outcomes[n] == "invalid_lookup"
+    assert not r.need_correct and r.n_turns == rec.n_steps + cap + 2
 
+
+def test_lookup_in_nonrecoverable_cell_is_invalid(small_eps):
+    """PREREG §2.5: lookup is not offered, so it is an invalid action (scored 0 at need)."""
     non = pick(small_eps, "observed-nonrec-far")
 
     def one_lookup(env):

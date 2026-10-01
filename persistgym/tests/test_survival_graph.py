@@ -64,14 +64,20 @@ def test_far_cells_evicted_for_any_reply_length(small_eps):
 
 
 def test_near_reply_budget_at_defaults_matches_design_doc(default_eps):
-    """DESIGN.md §11: near cells keep S=1 up to uniform replies of 4,125 tokens (observed),
-    3,000 (2 clues) and 2,250 (3 clues) at W=24,000 and v=1,500."""
-    expected = {0: 4_125, 2: 3_000, 3: 2_250}
+    """DESIGN.md §11: with the system prompt (95-150 tokens) counted toward W (D5), near
+    cells keep S=1 up to uniform replies of 4,087-4,101 tokens (observed), 2,970-2,981
+    (2 clues) and 2,225-2,234 (3 clues) at W=24,000 and v=1,500."""
+    expected = {0: (4_087, 4_101), 2: (2_970, 2_981), 3: (2_225, 2_234)}
     for ep in default_eps:
         if ep.variant == "base" and ep.cell.distance == "near":
+            assert ep.config["window_counts_system_prompt"]
+            assert 95 <= ep.system_tokens <= 150
             gap = ep.design["gap_steps_earliest"]
-            assert max_reply_tokens_for_survival(ep) == (24_000 - (gap + 1) * 1_500) // gap
-            assert max_reply_tokens_for_survival(ep) == expected[ep.n_clues]
+            budget = max_reply_tokens_for_survival(ep)
+            assert budget == (24_000 - ep.system_tokens - (gap + 1) * 1_500) // gap
+            lo, hi = expected[ep.n_clues]
+            assert lo <= budget <= hi
+            assert budget > max_reply_tokens_for_survival(ep, count_system=False) - 40
 
 
 def test_flatten_payload_formats():
@@ -105,24 +111,64 @@ def test_survival_from_payload_separates_notes_and_summaries(small_eps):
     assert not s["assistant_carried"]["final_value"]
 
 
+def test_survival_from_payload_ignores_lookup_responses(small_eps):
+    """PREREG §2.8: S_verbatim leaves out every lookup response. A far window episode whose
+    agent looked up two steps before need still has S = 0 at need (S = 1 there is the
+    window-accounting bug stop), although the lookup response re-shows the records."""
+    from persistgym.env import EpisodeEnv
+    from persistgym.episode import LOOKUP_EVENT_MARKER
+
+    for ep in small_eps:  # no scripted observation carries the marker
+        assert not any(LOOKUP_EVENT_MARKER in s.observation for s in ep.steps), ep.episode_id
+    ep = pick(small_eps, "derived-rec-far")
+    n = ep.need_step
+    env = EpisodeEnv(ep)
+    shown = [(env.pending, env.observation)]
+    while env.pending < n:
+        lookup = env.pending == n - 2 and env.lookups_used == 0
+        reply = (f"ACTION: lookup({ep.entity})" if lookup
+                 else f"ACTION: {ep.steps[env.pending].expected_action}")
+        obs, _ = env.step(reply)
+        shown.append((env.pending, obs))
+    lookup_text = next(o for p, o in shown if LOOKUP_EVENT_MARKER in o)
+    assert all(c.sentence in lookup_text for c in ep.components)
+    # what a drop-oldest window sends at need: the last few turns, lookup response included
+    tail = [o for p, o in shown if p >= n - 3]
+    payload = [{"role": "system", "content": ep.system_prompt}]
+    for o in tail[:-1]:
+        payload += [{"role": "user", "content": o}, {"role": "assistant", "content": "ok"}]
+    payload.append({"role": "user", "content": tail[-1]})
+    s = survival_from_payload(ep, payload)
+    assert s["S"] is False and s["n_lookup_responses"] == 1
+    # the same text as an ordinary observation would count, so the exclusion is what bites
+    plain = [dict(m, content=m["content"].replace(LOOKUP_EVENT_MARKER, "EVENT: RECORDS"))
+             for m in payload]
+    assert survival_from_payload(ep, plain)["S"] is True
+
+
 def test_carried_in_text(small_eps):
+    """PREREG §2.8 (D6): whole-word `(?<![0-9A-Za-z])VALUE(?![0-9A-Za-z])` anywhere in the
+    model's text; the value, or for a derived fact every clue value; rule not required."""
     obs = pick(small_eps, "observed-nonrec-far")
     v, e = obs.target_value, obs.entity
     assert carried_in_text(f"{e} goes to {v}", obs)["carried"]
     assert not carried_in_text(f"{e} goes somewhere", obs)["carried"]
     far_away = f"{e}" + " filler" * 100 + f" {v}"
-    assert not carried_in_text(far_away, obs)["carried"]
-    assert carried_in_text(far_away, obs, window_chars=0)["carried"]
-    assert not carried_in_text(f"{e} goes to {v}1", obs)["carried"]  # longer number
+    assert carried_in_text(far_away, obs)["carried"]  # no proximity window any more
+    assert carried_in_text(f"slot={v}; ({v}) [{v}].", obs)["carried"]
+    assert carried_in_text(f"remember {v}", obs)["carried"]  # entity need not appear
+    for miss in (f"{v}1", f"1{v}", f"x{v}", f"{v}b", f"A{v}"):  # digits or letters adjacent
+        assert not carried_in_text(f"{e} goes to {miss}", obs)["carried"], miss
+    assert not carried_in_text(" ".join(str(d.value) for d in obs.distractors), obs)["carried"]
     der = pick(small_eps, "derived-nonrec-near")
     assert carried_in_text(f"{der.entity}: {der.target_value}", der)["carried"]
-    clues = " ".join(f"{c.name} {c.value}" for c in der.components if c.role == "clue")
-    res = carried_in_text(f"{der.entity}: {clues}", der)
-    assert res["carried"] and res["all_clues"] and res["rule_names"]
-    res = carried_in_text(f"{der.entity}: {clues}", der, requires_rule=True)
-    assert res["carried"]
-    nums_only = " ".join(str(c.value) for c in der.components if c.role == "clue")
-    assert not carried_in_text(f"{der.entity}: {nums_only}", der, requires_rule=True)["carried"]
+    clue_vals = [c.value for c in der.components if c.role == "clue"]
+    nums_only = " ".join(map(str, clue_vals))
+    res = carried_in_text(nums_only, der)  # no names, no rule, no entity: still carried
+    assert res["carried"] and res["all_clues"] and not res["final_value"]
+    assert not res["entity_mentioned"]
+    res = carried_in_text(" ".join(map(str, clue_vals[1:])), der)  # base clue lost
+    assert not res["carried"] and not res["all_clues"]
 
 
 def test_dependency_graph(small_eps):

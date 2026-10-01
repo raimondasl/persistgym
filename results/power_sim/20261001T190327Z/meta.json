@@ -1,0 +1,123 @@
+{
+  "experiment": "power_sim",
+  "run_id": "20261001T190327Z",
+  "cell_or_config": "power_sim_v1",
+  "config": {
+    "reps": 1000,
+    "seed": 20260930,
+    "boot": 2000,
+    "part": "h2",
+    "sec10_calibration": "both",
+    "h2_p0": "0.6,0.8",
+    "h2_templates": "90,120,150,180,210",
+    "holm_one_sided_alpha": 0.0125,
+    "h2_observed_divisor": 3,
+    "engine": "fast",
+    "cluster_correction": "clusters",
+    "out_dir": null,
+    "no_write": false,
+    "h2_setup": {
+      "p_f0": 0.6,
+      "cells": 2,
+      "bound": 0.08,
+      "holm_steps": 3,
+      "sd": 1.0,
+      "calibration": "marginal",
+      "holm_one_sided_alpha": 0.0125,
+      "observed_divisor": 3,
+      "observed_cells": 2,
+      "observed_bound_pp": 3.0
+    },
+    "h2_setups": [
+      {
+        "p_f0": 0.6,
+        "cells": 2,
+        "bound": 0.08,
+        "holm_steps": 3,
+        "sd": 1.0,
+        "calibration": "marginal",
+        "holm_one_sided_alpha": 0.0125,
+        "observed_divisor": 3,
+        "observed_cells": 2,
+        "observed_bound_pp": 3.0
+      },
+      {
+        "p_f0": 0.8,
+        "cells": 2,
+        "bound": 0.08,
+        "holm_steps": 3,
+        "sd": 1.0,
+        "calibration": "marginal",
+        "holm_one_sided_alpha": 0.0125,
+        "observed_divisor": 3,
+        "observed_cells": 2,
+        "observed_bound_pp": 3.0
+      }
+    ],
+    "template_sd": 1.0,
+    "alpha": 0.05,
+    "sec10_designs": [
+      {
+        "label": "60 x 5 x 2",
+        "templates": 60,
+        "distances": 5,
+        "seeds": 2
+      },
+      {
+        "label": "120 x 5 x 2",
+        "templates": 120,
+        "distances": 5,
+        "seeds": 2
+      },
+      {
+        "label": "120 x 2 x 2",
+        "templates": 120,
+        "distances": 2,
+        "seeds": 2
+      },
+      {
+        "label": "card: 30 x 5 x 2",
+        "templates": 30,
+        "distances": 5,
+        "seeds": 2
+      },
+      {
+        "label": "luna plan: 100 x 2 x 1",
+        "templates": 100,
+        "distances": 2,
+        "seeds": 1
+      }
+    ]
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": [
+    20260930
+  ],
+  "started_utc": "2026-10-01T19:03:27+00:00",
+  "finished_utc": "2026-10-01T19:05:16+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "h2_sol_power.csv"
+  ],
+  "runtime_s": 109.4,
+  "paid_calls": 0,
+  "config_hash": "85ee2926ab189a3992bd48a4e60cde21e5d2ec48d15b0a720da0027a2b1b4514",
+  "prereg_version": null,
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "d3befc896518193f2f3f1d4f7d1ea6ef839a5823",
+  "git_dirty": false
+}

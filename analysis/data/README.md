@@ -1,6 +1,6 @@
 # analysis/data: committed inputs for the cost model
 
-All files were transcribed on 2026-09-30 from documents in this repo. No API was called and nothing here was downloaded.
+All files were transcribed on 2026-09-30. No API was called and nothing here was downloaded. Most rows come from documents in this repo; the exceptions are the `parameters.csv` rows whose source is "2026-09-30 low-spend review" and the review rows of `plan_a1_reference.csv`, which come from that review's verdict file, a scratch file outside the repo that cannot be re-checked from here.
 
 | File | What it holds | Source |
 |---|---|---|

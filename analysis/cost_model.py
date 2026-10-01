@@ -61,6 +61,14 @@ PHASES = ("0", "1a", "1b", "2")
 B1, B2, B3, B4 = "1 pilots", "2 seed-1 S0+S4", "3 commitment", "4 phase 2"
 BLOCKS = (B1, B2, B3, B4)
 SWEEP_ITEMS = ("luna sweep", "luna control prompts", "sol H2 core")
+# Cap checks ignore float rounding: a phase sized exactly to its cap (cap_1a) must not count as
+# over it because the scaled sum came out at 450.0000000000001.
+CAP_TOL_USD = 1e-6
+
+
+def above_cap(value, cap: float):
+    """value > cap beyond float rounding; works on scalars and pandas Series."""
+    return value > cap + CAP_TOL_USD
 
 
 # --------------------------------------------------------------------------------------------
@@ -561,8 +569,8 @@ def draws_table(m: CostModel) -> pd.DataFrame:
                                values="path_1b").reset_index()
     wide.columns.name = None
     for case in ALL_ARC_CASES:
-        wide[f"above_cap_{case}"] = wide[case] > cap
-        wide[f"above_cap_with_reserve_{case}"] = wide[case] * (1 + reserve) > cap
+        wide[f"above_cap_{case}"] = above_cap(wide[case], cap)
+        wide[f"above_cap_with_reserve_{case}"] = above_cap(wide[case] * (1 + reserve), cap)
     return wide
 
 
@@ -576,8 +584,8 @@ def draws_summary(m: CostModel) -> pd.DataFrame:
             row = {"case": case, "metric": metric, "min": d[metric].min(),
                    "mean": d[metric].mean(), "max": d[metric].max()}
             if metric == "path_1b":
-                row["n_draws_above_cap"] = int((d[metric] > cap).sum())
-                row["n_above_cap_with_reserve"] = int((d[metric] * (1 + reserve) > cap).sum())
+                row["n_draws_above_cap"] = int(above_cap(d[metric], cap).sum())
+                row["n_above_cap_with_reserve"] = int(above_cap(d[metric] * (1 + reserve), cap).sum())
             rows.append(row)
     return pd.DataFrame(rows)
 
@@ -587,12 +595,12 @@ def overcap_games(m: CostModel, case: str = "list_nocache") -> tuple[list[str], 
     is exactly the over-cap condition."""
     cap = m.inp.num("cap_phase_1b")
     d = m.draws.loc[m.draws.case == case]
-    over = d.loc[d.path_1b > cap, "drawn"].map(lambda s: set(s.split("+")))
+    over = d.loc[above_cap(d.path_1b, cap), "drawn"].map(lambda s: set(s.split("+")))
     if over.empty:
         return [], True
     common = set.intersection(*over)
     contains = d.drawn.map(lambda s: common <= set(s.split("+")))
-    return sorted(common), bool((contains == (d.path_1b > cap)).all())
+    return sorted(common), bool((contains == above_cap(d.path_1b, cap)).all())
 
 
 def heldout_table(m: CostModel, cell_costs: Iterable[float] = (10.0, 25.0, 40.0)) -> pd.DataFrame:
@@ -607,7 +615,7 @@ def heldout_table(m: CostModel, cell_costs: Iterable[float] = (10.0, 25.0, 40.0)
     for cell in cell_costs:
         phase2 = wide["list_nocache"] + dev + cell
         wide[f"phase2_list_cell{int(cell)}"] = phase2
-        wide[f"over_cap_cell{int(cell)}"] = phase2 > cap
+        wide[f"over_cap_cell{int(cell)}"] = above_cap(phase2, cap)
     return wide
 
 
@@ -695,7 +703,7 @@ def totals_table(m: CostModel) -> pd.DataFrame:
         df = pivot_payee(m.items(s), "phase")
         df.insert(0, "scenario", label)
         df["cap"] = df["phase"].map(caps)
-        df["over_cap"] = df["total"] > df["cap"]
+        df["over_cap"] = above_cap(df["total"], df["cap"])
         frames.append(df)
     return pd.concat(frames, ignore_index=True)
 
@@ -721,7 +729,7 @@ def computed_values(m: CostModel) -> dict[str, tuple[float, float]]:
     v["arc_1b_list"] = rng(dcase("list_nocache").path_1b)
     mean = float(dcase("list_nocache").path_1b.mean())
     v["arc_1b_list_mean"] = (mean, mean)
-    n_over = float((dcase("list_nocache").path_1b > inp.num("cap_phase_1b")).sum())
+    n_over = float(above_cap(dcase("list_nocache").path_1b, inp.num("cap_phase_1b")).sum())
     v["arc_draws_above_900_list"] = (n_over, n_over)
     v["arc_1b_flex"] = rng(dcase("flex_nocache").path_1b)
     per_action = arc_pooled_usd_per_action(inp)

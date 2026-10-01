@@ -133,6 +133,18 @@ def test_cap_1a_sizing(model):
     assert cm.total(capped, phase="1b") == pytest.approx(cm.total(model.items(s), phase="1b"))
 
 
+def test_phase_sized_to_its_cap_is_not_flagged_over_cap(model):
+    # The scaled 1a sum is 450 only up to float rounding; it must not read as over the cap.
+    t = cm.totals_table(model)
+    capped = t.loc[t.scenario.str.contains("sized to its cap") & (t.phase == "1a")]
+    assert capped.total.item() == pytest.approx(450)
+    assert not capped.over_cap.item()
+    assert cm.above_cap(450.0000000000001, 450) is False and cm.above_cap(450.01, 450) is True
+    # The central case really is over the 1a cap (the repeat subset pushes it to ~$481).
+    central = t.loc[(t.scenario == "central / ARC flex_cached") & (t.phase == "1a")]
+    assert central.over_cap.item()
+
+
 def test_blocks_table_ranges_are_ordered(model):
     b = cm.blocks_table(model)
     assert set(b.case) == set(cm.ALL_ARC_CASES)

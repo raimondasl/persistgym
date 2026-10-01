@@ -40,6 +40,8 @@ from persistgym.episode import ALL_CELLS, TaskCell
 from persistgym.render import generate
 
 PILOT_MAX_EPISODES = 10  # CLAUDE.md: a pilot is <= 10 episodes
+PILOT_EXPERIMENT = "persistgym_pilot"
+PILOT_SPLIT = "pilot"
 
 
 def _run_id(tag: str) -> str:
@@ -104,10 +106,10 @@ def cmd_dry_run(a) -> int:
     return 0
 
 
-def _guarded_transport(a, model: str, experiment: str):
+def _guarded_transport(a, model: str, experiment: str, planned_usd: float | None):
     try:
         return OpenAIResponsesTransport(model=model, approved_block=a.approved_block,
-                                        experiment=experiment, planned_usd=a.planned_usd)
+                                        experiment=experiment, planned_usd=planned_usd)
     except PaidCallsNotAllowed as e:
         print(f"refused: {e}", file=sys.stderr)
         return None
@@ -115,13 +117,19 @@ def _guarded_transport(a, model: str, experiment: str):
 
 def cmd_run(a) -> int:
     cell = get_cell(a.cell)
+    if a.experiment == PILOT_EXPERIMENT and a.split != PILOT_SPLIT:
+        # PLAN §16.5: pilot templates use a disjoint seed range, so a pilot never sees (or
+        # reports outcomes on) the templates of the main sweep.
+        print(f"refused: {PILOT_EXPERIMENT} runs use --split {PILOT_SPLIT} only, got "
+              f"{a.split!r}", file=sys.stderr)
+        return 2
     gen = _gen_config(a.gen_set)
     episodes = _episodes(a, gen)
-    if a.experiment == "persistgym_pilot" and len(episodes) > PILOT_MAX_EPISODES:
+    if a.experiment == PILOT_EXPERIMENT and len(episodes) > PILOT_MAX_EPISODES:
         print(f"refused: a pilot is at most {PILOT_MAX_EPISODES} episodes, got "
               f"{len(episodes)}", file=sys.stderr)
         return 2
-    transport = _guarded_transport(a, a.model, a.experiment)
+    transport = _guarded_transport(a, a.model, a.experiment, a.planned_usd)
     if transport is None:
         return 2
     run_id = a.run_id or _run_id(f"{cell.ascii_id}-{a.model}")
@@ -136,8 +144,16 @@ def cmd_run(a) -> int:
 def _probe_run(a, kind: str) -> int:
     experiment = "toggle_pilot" if kind == "echo" else "replay_probe"
     status = 0
+    # --planned-usd is the total for the whole command: each model's transport may spend only
+    # what the earlier models left (estimated billed cost).
+    spent = 0.0
     for model in a.model:
-        transport = _guarded_transport(a, model, experiment)
+        remaining = None if a.planned_usd is None else a.planned_usd - spent
+        if remaining is not None and remaining <= 0:
+            print(f"refused: --planned-usd {a.planned_usd} is the total for all models and "
+                  f"was used up before {model}", file=sys.stderr)
+            return 2
+        transport = _guarded_transport(a, model, experiment, remaining)
         if transport is None:
             return 2
         run_id = (f"{a.run_id}-{model}" if a.run_id and len(a.model) > 1
@@ -164,6 +180,7 @@ def _probe_run(a, kind: str) -> int:
         except (openai.OpenAIError, BudgetExceeded) as e:
             exit_reason, status = f"ERROR:{type(e).__name__}: {e}", 1
         finally:
+            spent += transport.ledger.cost_usd_billed_est
             row = transport.finalize(run_id=run_id, milestone=a.milestone,
                                      cell_or_config=f"{kind}-probe")
             with (out_dir / "trials.jsonl").open("a", encoding="utf-8") as f:
@@ -228,7 +245,9 @@ def main(argv: list[str] | None = None) -> int:
     def paid_args(sp):
         sp.add_argument("--approved-block", default=None,
                         help="name of the researcher-approved spending block (PLAN §16.2)")
-        sp.add_argument("--planned-usd", type=float, default=None)
+        sp.add_argument("--planned-usd", type=float, default=None,
+                        help="planned spend of the whole command in USD (estimated billed "
+                             "cost; for probes, the total over all --model values)")
 
     sub.add_parser("cells", help="list the harness cells").set_defaults(fn=cmd_cells)
 

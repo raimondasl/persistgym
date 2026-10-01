@@ -11,11 +11,19 @@ Prices (USD per million tokens), checked 2026-09-30 (PLAN.md §12, docs/backgrou
 `cost_usd_list` is the standard-tier price of the usage; `cost_usd_billed_est` applies the
 Flex discount when the response's echoed `service_tier` is `flex`. Both are estimates; the
 provider's invoice is the truth.
+
+costs.csv columns: `service_tier` is the tier requested; the tier the provider reports it
+served, the cache-write tokens and the median seconds per call go into the
+`service_tier_served`, `cache_write_tokens` and `latency_s` columns when
+`common.costs.COLUMNS` has them (schema of 2026-10-01), and into `notes` otherwise.
 """
 
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass, field
+
+from common import costs
 
 PRICE_SOURCE_DATE = "2026-09-30"
 CACHE_WRITE_MULTIPLIER = 1.25
@@ -86,11 +94,23 @@ class UsageLedger:
     cost_usd_billed_est: float = 0.0
     models_returned: dict[str, int] = field(default_factory=dict)
     service_tiers: dict[str, int] = field(default_factory=dict)
+    """Tiers the responses report they were served with."""
+    service_tiers_requested: dict[str, int] = field(default_factory=dict)
+    latencies_s: list[float] = field(default_factory=list)
+    priced_as_requested: dict[str, int] = field(default_factory=dict)
+    """Returned model strings with no known price, priced as the requested model."""
 
-    def add(self, response: dict) -> tuple[float, float]:
+    def add(self, response: dict, *, requested_tier: str | None = None,
+            latency_s: float | None = None) -> tuple[float, float]:
         model = response.get("model") or self.model_requested
         tier = response.get("service_tier")
-        listed, billed = cost_usd(model, response.get("usage"), tier)
+        try:
+            listed, billed = cost_usd(model, response.get("usage"), tier)
+        except KeyError:
+            # The call was made and billed: log it at the requested model's price rather than
+            # losing it from costs.csv, and flag it.
+            listed, billed = cost_usd(self.model_requested, response.get("usage"), tier)
+            self.priced_as_requested[model] = self.priced_as_requested.get(model, 0) + 1
         u = usage_numbers(response.get("usage"))
         self.n_calls += 1
         for k, v in u.items():
@@ -99,6 +119,11 @@ class UsageLedger:
         self.cost_usd_billed_est += billed
         self.models_returned[model] = self.models_returned.get(model, 0) + 1
         self.service_tiers[str(tier)] = self.service_tiers.get(str(tier), 0) + 1
+        if requested_tier is not None:
+            self.service_tiers_requested[requested_tier] = (
+                self.service_tiers_requested.get(requested_tier, 0) + 1)
+        if latency_s is not None:
+            self.latencies_s.append(latency_s)
         return listed, billed
 
     def totals(self) -> dict:
@@ -108,21 +133,36 @@ class UsageLedger:
 
     def costs_row(self, *, timestamp_utc: str, run_id: str, milestone: str, experiment: str,
                   cell_or_config: str, git_commit: str, notes: str = "") -> dict:
-        """One results/costs.csv row (common.costs.COLUMNS)."""
+        """One results/costs.csv row (common.costs.COLUMNS, old or 2026-10-01 schema)."""
         def joined(d: dict[str, int]) -> str:
             return ";".join(sorted(d)) if d else ""
-        return {
+        served = joined(self.service_tiers)
+        requested = joined(self.service_tiers_requested) or served
+        latency = (f"{statistics.median(self.latencies_s):.3f}" if self.latencies_s else "")
+        row = {
             "timestamp_utc": timestamp_utc, "run_id": run_id, "milestone": milestone,
             "experiment": experiment, "cell_or_config": cell_or_config,
             "model_requested": self.model_requested,
             "model_returned": joined(self.models_returned), "provider": "openai",
-            "api": "responses", "service_tier": joined(self.service_tiers),
+            "api": "responses", "service_tier": requested,
             "n_calls": self.n_calls, "input_tokens": self.input_tokens,
             "cached_input_tokens": self.cached_input_tokens,
             "output_tokens": self.output_tokens, "reasoning_tokens": self.reasoning_tokens,
             "cost_usd_list": f"{self.cost_usd_list:.6f}",
             "cost_usd_billed_est": f"{self.cost_usd_billed_est:.6f}",
             "price_source_date": PRICE_SOURCE_DATE, "git_commit": git_commit,
-            "notes": notes + (f"; cache_write_tokens={self.cache_write_tokens}"
-                              if self.cache_write_tokens else ""),
         }
+        extra = []
+        for col, value, in_notes in (
+                ("service_tier_served", served, served != requested),
+                ("cache_write_tokens", self.cache_write_tokens, bool(self.cache_write_tokens)),
+                ("latency_s", latency, bool(latency))):
+            if col in costs.COLUMNS:
+                row[col] = value
+            elif in_notes:
+                extra.append(f"{col}={value}")
+        if self.priced_as_requested:
+            extra.append("priced_as_requested=" + ",".join(
+                f"{m}x{n}" for m, n in sorted(self.priced_as_requested.items())))
+        row["notes"] = "; ".join([notes, *extra]) if notes else "; ".join(extra)
+        return row

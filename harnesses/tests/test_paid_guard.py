@@ -19,9 +19,19 @@ from harnesses.openai_transport import (
     OpenAIResponsesTransport,
     PaidCallsNotAllowed,
 )
-from harnesses.pricing import cost_usd
+from harnesses.pricing import UsageLedger, cost_usd
+from harnesses.tests.conftest import git_in, prereg_repo
 
 HARNESS_DIR = Path(__file__).resolve().parent.parent
+
+# common/costs.py COLUMNS on main after the 2026-10-01 schema change (PR #9).
+COLUMNS_2026_10_01 = [
+    "timestamp_utc", "run_id", "milestone", "experiment", "cell_or_config",
+    "model_requested", "model_returned", "provider", "api", "service_tier", "service_tier_served",
+    "n_calls", "input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens",
+    "reasoning_tokens", "latency_s",
+    "cost_usd_list", "cost_usd_billed_est", "price_source_date", "git_commit", "notes",
+]
 
 
 class _Resp:
@@ -55,7 +65,7 @@ def _response(context="all_turns", tier="flex", inp=1_000_000, out=100_000):
 
 @pytest.fixture
 def repo(tmp_path):
-    (tmp_path / "PREREG.md").write_text("Version: 0.1\n", encoding="utf-8")
+    prereg_repo(tmp_path)
     p = tmp_path / "costs.csv"
     p.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
     return tmp_path
@@ -84,6 +94,10 @@ def _factory(responses=()):
     ("1", {"approved_block": None}, "approved-block"),
     ("1", {"approved_block": "  "}, "approved-block"),
     ("1", {"planned_usd": 0}, "planned"),
+    ("1", {"planned_usd": -1}, "planned"),
+    ("1", {"planned_usd": float("nan")}, "planned"),  # nan passes every `<` comparison
+    ("1", {"planned_usd": float("inf")}, "planned"),
+    ("1", {"planned_usd": None}, "planned"),
     ("1", {"experiment": "mystery"}, "budget phase"),
     ("1", {"planned_usd": 100.01}, "cap"),  # phase 0 cap is $100
 ])
@@ -105,6 +119,34 @@ def test_guard_requires_prereg(repo, monkeypatch):
     with pytest.raises(PaidCallsNotAllowed, match="PREREG"):
         _make(repo, factory)
     assert built == []
+
+
+def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
+    """PLAN §16.3: PREREG.md committed before any paid call. A draft in the working tree, a
+    staged-but-uncommitted file or local edits to the committed file do not count."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    factory, built = _factory()
+    # not a git repo at all
+    (tmp_path / "PREREG.md").write_text("Version: 0.1\n", encoding="utf-8")
+    with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
+        _make(tmp_path, factory)
+    # untracked draft in a repo
+    git_in(tmp_path, "init", "-q")
+    with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
+        _make(tmp_path, factory)
+    # staged, not committed
+    git_in(tmp_path, "add", "PREREG.md")
+    with pytest.raises(PaidCallsNotAllowed, match="not in the HEAD commit"):
+        _make(tmp_path, factory)
+    # committed: accepted
+    git_in(tmp_path, "commit", "-q", "-m", "prereg")
+    assert _make(tmp_path, factory).approval.prereg_version == "0.1"
+    # committed, then edited locally
+    (tmp_path / "PREREG.md").write_text("Version: 0.2\n", encoding="utf-8")
+    with pytest.raises(PaidCallsNotAllowed, match="uncommitted changes"):
+        _make(tmp_path, factory)
+    assert len(built) == 1  # only the accepted transport built a client
 
 
 def test_guard_counts_logged_spend(repo, monkeypatch):
@@ -198,6 +240,90 @@ def test_cli_pilot_size_limit(monkeypatch, capsys):
     assert cli.main(["run", "--cell", "F-0", "--n", "2", "--approved-block", "x",
                      "--planned-usd", "1"]) == 2  # 2 templates x 8 task cells = 16 > 10
     assert "at most 10" in capsys.readouterr().err
+
+
+def test_cli_pilot_must_use_pilot_split(monkeypatch, capsys):
+    """PLAN §16.5: pilot templates come from a disjoint seed range, never the main split."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before building a transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    assert cli.main(["run", "--cell", "F-0", "--split", "main", "--task-cell",
+                     "observed-nonrec-far", "--approved-block", "x", "--planned-usd", "1"]) == 2
+    assert "--split pilot" in capsys.readouterr().err
+
+
+def test_costs_row_records_requested_and_served_tier(repo, monkeypatch):
+    """`service_tier` is the requested tier; the served tier, cache writes and latency go
+    into their own columns if common/costs.py has them, else into notes."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    resp = _response(tier="default")
+    resp["usage"]["input_tokens_details"]["cache_write_tokens"] = 1000
+    factory, _ = _factory([resp])
+    t = _make(repo, factory)
+    t.send({"model": "gpt-6-luna", "input": [], "service_tier": "flex",
+            "reasoning": {"context": "all_turns"}})
+    assert t.echo_log[0]["service_tier_requested"] == "flex"
+    assert t.echo_log[0]["service_tier_returned"] == "default"
+    row = t.finalize(run_id="r", milestone="M0", cell_or_config="c")
+    assert row["service_tier"] == "flex"
+    if "service_tier_served" in costs.COLUMNS:
+        assert row["service_tier_served"] == "default" and row["cache_write_tokens"] == 1000
+        assert row["latency_s"] != ""
+    else:
+        assert "service_tier_served=default" in row["notes"]
+        assert "cache_write_tokens=1000" in row["notes"] and "latency_s=" in row["notes"]
+    assert costs.read_rows(repo / "costs.csv")[0]["service_tier"] == "flex"
+    # billed at the served (standard) tier: no flex discount
+    assert float(row["cost_usd_billed_est"]) == pytest.approx(float(row["cost_usd_list"]))
+
+
+def test_costs_row_fills_the_2026_10_01_columns_when_present(monkeypatch):
+    monkeypatch.setattr(costs, "COLUMNS", COLUMNS_2026_10_01)
+    ledger = UsageLedger("gpt-6-luna")
+    resp = _response(tier="flex")
+    resp["usage"]["input_tokens_details"]["cache_write_tokens"] = 7
+    ledger.add(resp, requested_tier="flex", latency_s=2.0)
+    ledger.add(resp, requested_tier="flex", latency_s=4.0)
+    row = ledger.costs_row(timestamp_utc="t", run_id="r", milestone="M0",
+                           experiment="toggle_pilot", cell_or_config="c", git_commit="g",
+                           notes="approved_block=b")
+    assert set(row) == set(COLUMNS_2026_10_01)
+    assert (row["service_tier"], row["service_tier_served"]) == ("flex", "flex")
+    assert row["cache_write_tokens"] == 14 and row["latency_s"] == "3.000"
+    assert row["notes"] == "approved_block=b"
+
+
+def test_unpriced_returned_model_is_still_logged(repo, monkeypatch):
+    """A paid call whose returned model string has no price must not vanish from costs.csv
+    (it used to raise KeyError after the call was made)."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    resp = {**_response(), "model": "gpt-6-luna"}
+    odd = {**_response(), "model": "luna-experimental-2026"}
+    factory, _ = _factory([resp, odd])
+    t = _make(repo, factory, planned_usd=5.0)
+    p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
+    t.send(p)
+    t.send(p)
+    assert t.ledger.n_calls == 2
+    assert t.ledger.cost_usd_list == pytest.approx(0.30)  # both priced as gpt-6-luna
+    row = t.finalize(run_id="r", milestone="M0", cell_or_config="c")
+    assert "priced_as_requested=luna-experimental-2026x1" in row["notes"]
+    assert costs.read_rows(repo / "costs.csv")[0]["n_calls"] == "2"
+
+
+def test_harness_tests_cannot_reach_the_network():
+    """conftest.no_network blocks outbound connections and DNS for every harness test."""
+    import socket
+
+    from harnesses.tests.conftest import NetworkBlocked
+    with pytest.raises(NetworkBlocked):
+        socket.create_connection(("api.openai.com", 443), timeout=1)
+    with pytest.raises(NetworkBlocked):
+        socket.getaddrinfo("api.openai.com", 443)
+    with socket.socket() as s, pytest.raises(NetworkBlocked):
+        s.connect(("203.0.113.1", 443))
 
 
 def test_no_key_handling_in_harness_code():

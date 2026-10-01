@@ -8,19 +8,97 @@ the session's own bookkeeping, so a bookkeeping bug cannot hide a payload bug.
 
 from __future__ import annotations
 
+import ipaddress
+import os
 import re
+import socket
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT, HarnessConfig
 from harnesses.fake import FakeModel, padded_text
 from harnesses.session import HarnessSession
+from persistgym import tokens
 from persistgym.config import GeneratorConfig
 from persistgym.episode import ALL_CELLS
 from persistgym.render import generate
 
 SYSTEM = "You are the operator.\nReply with one action.\nACTION: <action>"
 BRIDGE_PREFIX = "Earlier conversation history was compacted."
+
+
+# --- no network in harness tests ----------------------------------------------------------
+
+class NetworkBlocked(RuntimeError):
+    pass
+
+
+def _is_loopback(address) -> bool:
+    host = address[0] if isinstance(address, tuple) else address
+    if not isinstance(host, str):
+        return False
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.split("%")[0]).is_loopback
+    except ValueError:
+        return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def no_network():
+    """Every harness test runs with outbound connections blocked, so a test that would reach
+    an API (paid or not) fails loudly instead. Loopback stays open (asyncio uses it on
+    Windows). The tokenizer is loaded first: tiktoken downloads o200k_base once if it is not
+    cached yet, a free public file, never an API call."""
+    tokens.encoding("o200k_base")
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+    real_getaddrinfo = socket.getaddrinfo
+
+    def connect(self, address):
+        if not _is_loopback(address):
+            raise NetworkBlocked(f"network access in a harness test: {address!r}")
+        return real_connect(self, address)
+
+    def connect_ex(self, address):
+        if not _is_loopback(address):
+            raise NetworkBlocked(f"network access in a harness test: {address!r}")
+        return real_connect_ex(self, address)
+
+    def getaddrinfo(host, *args, **kwargs):
+        if not _is_loopback((host,)):
+            raise NetworkBlocked(f"DNS lookup in a harness test: {host!r}")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(socket.socket, "connect", connect)
+    mp.setattr(socket.socket, "connect_ex", connect_ex)
+    mp.setattr(socket, "getaddrinfo", getaddrinfo)
+    yield
+    mp.undo()
+
+
+# --- a throwaway git repo with a committed PREREG.md (paid-guard tests) --------------------
+
+def git_in(repo: Path, *args: str) -> None:
+    """Run git in a test repo, isolated from the user's and the system's git config."""
+    empty = repo / ".test-gitconfig"
+    empty.touch()
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(empty), "GIT_CONFIG_NOSYSTEM": "1",
+           "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.invalid",
+           "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.invalid"}
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
+
+
+def prereg_repo(path: Path, text: str = "Version: 0.1\n") -> Path:
+    """`path` as a git repo whose HEAD holds PREREG.md (what the paid guard requires)."""
+    git_in(path, "init", "-q")
+    (path / "PREREG.md").write_text(text, encoding="utf-8")
+    git_in(path, "add", "PREREG.md")
+    git_in(path, "commit", "-q", "-m", "prereg")
+    return path
 
 
 def text_with_tokens(prefix: str, n: int) -> str:

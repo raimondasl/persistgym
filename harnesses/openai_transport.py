@@ -4,14 +4,18 @@
 1. the environment variable PERSISTGYM_ALLOW_PAID is exactly "1";
 2. an approved spending block name is given (`--approved-block <name>`; the researcher's
    approval is recorded in results/decisions.md, PLAN §16.2);
-3. PREREG.md exists (PLAN §16.3: PREREG before any paid call);
-4. the experiment maps to a budget phase in common/costs.py and the phase cap minus the
+3. PREREG.md is committed: tracked by git, present in HEAD and without uncommitted changes
+   (PLAN §16.3: PREREG committed before any paid call);
+4. the planned spend is a positive, finite number of dollars;
+5. the experiment maps to a budget phase in common/costs.py and the phase cap minus the
    spend logged in results/costs.csv minus the planned spend of this run is >= 0
    (`common.costs.headroom`).
 
 While running it stops before a call once the run's estimated billed cost reaches the planned
-spend, logs every response's echoed `reasoning.context` and returned model string, and
-`finalize` appends exactly one results/costs.csv row via `common.costs.append_row`.
+spend, logs every response's echoed `reasoning.context`, returned model string and served
+service tier, and `finalize` appends exactly one results/costs.csv row via
+`common.costs.append_row`. A response whose returned model string has no price is still
+logged, priced as the requested model and flagged in the row's notes.
 
 The OpenAI SDK reads its API key from the environment itself; this module never reads, prints
 or stores a key. Load keys with `uv run --env-file .env ...`.
@@ -20,7 +24,9 @@ or stores a key. Load keys with `uv run --env-file .env ...`.
 from __future__ import annotations
 
 import logging
+import math
 import os
+import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -55,6 +61,24 @@ class PaidApproval:
     costs_path: Path
 
 
+def prereg_not_committed(repo: Path) -> str | None:
+    """None if PREREG.md is tracked by git, present in HEAD and has no uncommitted changes;
+    otherwise the reason it does not count as committed (PLAN §16.3)."""
+    def ok(*args: str) -> bool:
+        try:
+            return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
+                                  text=True, check=False).returncode == 0
+        except OSError:
+            return False
+    if not ok("ls-files", "--error-unmatch", "--", "PREREG.md"):
+        return "PREREG.md is not tracked by git"
+    if not ok("cat-file", "-e", "HEAD:PREREG.md"):
+        return "PREREG.md is not in the HEAD commit"
+    if not ok("diff", "--quiet", "HEAD", "--", "PREREG.md"):
+        return "PREREG.md has uncommitted changes"
+    return None
+
+
 def require_paid_approval(*, approved_block: str | None, experiment: str, planned_usd: float,
                           costs_path: Path = costs.COSTS_CSV,
                           repo: Path = runmeta.REPO_ROOT) -> PaidApproval:
@@ -66,12 +90,19 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
     if phase not in costs.PHASE_CAPS:
         raise PaidCallsNotAllowed(f"experiment {experiment!r} has no budget phase in "
                                   "common/costs.py")
-    if not planned_usd or planned_usd <= 0:
-        raise PaidCallsNotAllowed("paid calls need a positive planned spend (--planned-usd)")
+    # NaN would pass `<= 0` and every later budget comparison, so require a finite number.
+    if (planned_usd is None or not math.isfinite(float(planned_usd))
+            or float(planned_usd) <= 0):
+        raise PaidCallsNotAllowed("paid calls need a positive, finite planned spend "
+                                  "(--planned-usd)")
     prereg = runmeta.prereg_version(repo)
     if prereg is None:
         raise PaidCallsNotAllowed("PREREG.md must be committed before any paid call "
                                   "(PLAN §16.3)")
+    reason = prereg_not_committed(repo)
+    if reason is not None:
+        raise PaidCallsNotAllowed(f"PREREG.md must be committed before any paid call "
+                                  f"(PLAN §16.3): {reason}")
     room = costs.headroom(planned_usd, phase, costs.read_rows(costs_path))
     if room < 0:
         raise PaidCallsNotAllowed(
@@ -126,6 +157,7 @@ class OpenAIResponsesTransport:
             raise BudgetExceeded(
                 f"run spend ${self.ledger.cost_usd_billed_est:.4f} reached the planned "
                 f"${self.approval.planned_usd:.2f}")
+        started = time.monotonic()
         for attempt in range(1, self.max_attempts + 1):
             try:
                 # to_dict: the keys the API returned (exclude_unset), JSON types only.
@@ -138,12 +170,16 @@ class OpenAIResponsesTransport:
                 log.warning("attempt %d failed (%s); retrying in %.0fs", attempt,
                             type(e).__name__, wait)
                 self.sleep(wait)
-        listed, billed = self.ledger.add(data)
+        latency = time.monotonic() - started
+        listed, billed = self.ledger.add(data, requested_tier=payload.get("service_tier"),
+                                         latency_s=latency)
         echo = {
             "requested_context": (payload.get("reasoning") or {}).get("context"),
             "echoed_context": (data.get("reasoning") or {}).get("context"),
             "model_returned": data.get("model"),
+            "service_tier_requested": payload.get("service_tier"),
             "service_tier_returned": data.get("service_tier"),
+            "latency_s": latency,
             "cost_usd_list": listed, "cost_usd_billed_est": billed,
         }
         self.echo_log.append(echo)

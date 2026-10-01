@@ -3,7 +3,7 @@
     uv run python -m arc.draw_games <freeze-commit-sha> [--run-id ID] [--no-fetch]
                                     [--fallback-if-nist-unreachable] [--out-root DIR]
 
-Run it ONCE, after the researcher has merged the frozen PREREG.md (PREREG §0.3, §7.3). It makes
+Run it ONCE, after the researcher has merged the frozen PREREG.md (PREREG §0.4, §7.3). It makes
 no paid calls and needs no key: it reads git and one or two public randomness beacons.
 
 Rule (PREREG D15, D17, D18, D32):

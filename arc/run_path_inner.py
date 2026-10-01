@@ -140,6 +140,31 @@ class Truncation:
                 "truncated": self.reason is not None, "reason": self.reason}
 
 
+def run_interruptibly(target: Callable[[], Any], *, poll_s: float = 1.0) -> Any:
+    """`target()` in a daemon thread while the main thread polls it, as the harness's
+    main.py runs ``Swarm.main``. Called directly, ``Swarm.main`` waits in a plain
+    ``Thread.join()``, which Ctrl+C cannot interrupt on Windows (Python 3.12: the
+    KeyboardInterrupt is raised only when the joined thread ends), so the game would play
+    on to its end. Returns target's result or re-raises its exception. A KeyboardInterrupt
+    raised in the main thread propagates at once; the daemon thread ends with the
+    process."""
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["result"] = target()
+        except BaseException as e:  # noqa: BLE001 - re-raised in the main thread
+            box["error"] = e
+
+    thread = threading.Thread(target=run, name="swarm-main", daemon=True)
+    thread.start()
+    while thread.is_alive():
+        thread.join(timeout=poll_s)
+    if "error" in box:
+        raise box["error"]
+    return box.get("result")
+
+
 def _log_to(path: Path) -> None:
     """The harness's INFO log to the console and `path`, as main.py logs to logs.log."""
     root = logging.getLogger()
@@ -303,7 +328,7 @@ def play(args: argparse.Namespace) -> int:
                               "started_utc": utc_now(), "error": None, "interrupted": False}
     scorecard = None
     try:
-        scorecard = swarm.main()
+        scorecard = run_interruptibly(swarm.main)
     except KeyboardInterrupt:
         result["interrupted"] = True
         if swarm.card_id:  # close the scorecard as main.py's SIGINT handler does

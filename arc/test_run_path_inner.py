@@ -4,7 +4,10 @@ patched harness and are exercised by the launcher tests with the inner process m
 
 from __future__ import annotations
 
+import _thread
 import json
+import threading
+import time
 
 import httpx
 import pytest
@@ -111,3 +114,28 @@ def test_play_refuses_offline_before_importing_the_harness(monkeypatch, tmp_path
                        "--expect-config-hash", "0" * 64, "--cost-cap-usd", "1"])
 
     assert code == 2
+
+
+def test_run_interruptibly_returns_the_result_or_raises_the_error():
+    assert inner.run_interruptibly(lambda: 42, poll_s=0.01) == 42
+
+    def boom():
+        raise ValueError("from the swarm thread")
+
+    with pytest.raises(ValueError, match="from the swarm thread"):
+        inner.run_interruptibly(boom, poll_s=0.01)
+
+
+def test_ctrl_c_interrupts_a_swarm_that_is_still_playing():
+    """Swarm.main() waits in a plain Thread.join(), which Ctrl+C cannot interrupt on Windows,
+    so play() runs it in a thread it polls, as the harness's main.py does. A KeyboardInterrupt
+    must reach play() at once, not when the game ends."""
+    release = threading.Event()
+    threading.Timer(0.2, _thread.interrupt_main).start()
+    started = time.monotonic()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            inner.run_interruptibly(lambda: release.wait(30), poll_s=0.05)
+        assert time.monotonic() - started < 10
+    finally:
+        release.set()

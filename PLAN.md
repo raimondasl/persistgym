@@ -672,9 +672,9 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 | Phase | Cap before A2 | Cap from A2 | Basis |
 |---|---|---|---|
 | 0 | $100 | $100 | Unchanged |
-| 1a | $450 | $500 | Proposed; the researcher's merge of this amendment approves it |
+| 1a | $450 | $500 | Approved by the researcher, 2026-10-01 |
 | 1b | $900 | $900 | Unchanged; Checkpoint C may ask for up to ~$170 more (D27) |
-| 2 | $950 | $1,150 | D24 option B |
+| 2 | $950 | $1,250 | D24 option B; amount approved by the researcher, 2026-10-01 |
 
 - `PHASE_CAPS` in `common/costs.py` matches this table, and a test checks that it does.
 - **Where $450 came from.** §12 set it just above the original 1a estimate of $65-410. A1 re-costed 1a at about $230-415 and kept $450 by sizing (§16.1). It is a stop-and-ask line, not a provider limit. The nearest provider limit is OpenAI's tier-3 usage limit of $1,000 per month (`results/decisions.md`).

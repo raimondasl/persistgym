@@ -893,7 +893,7 @@ def comparison_table(m: CostModel, threshold: float = 0.05,
 
 
 # --------------------------------------------------------------------------------------------
-# Option A: the researcher's decisions of 2026-10-01 (D7, D11, D14, D21, D23, D24, D27)
+# Option A: the researcher's decisions of 2026-10-01 (D7, D11, D14, D21, D23, D24, D27, D36)
 # --------------------------------------------------------------------------------------------
 # Everything above is unchanged; option A is an extra scenario with its own inputs
 # (``analysis/data/option_a.csv`` plus the committed ops run it names) and its own tables.
@@ -908,8 +908,12 @@ def comparison_table(m: CostModel, threshold: float = 0.05,
 # - 20% re-run reserve on every counted ARC run. G3's 4 runs are a phase-2 line of their own,
 #   outside the $150 dev cap.
 # - PersistGym: sol runs F-r vs F-0 on derived-far cells (T_d templates x 2) and observed-far
-#   cells (T_o = T_d / 3 templates x 2), no near cells (D11 A). Repeats (template seeds from 0,
-#   one extra repeat for every seed divisible by 10) on BOTH luna and sol (D7).
+#   cells (T_o = T_d / 3 templates x 2), no near cells (D11 A). T_d is a multiple of 30, at most
+#   the ceiling of 210 (the researcher's A2 follow-up (b)). Repeats (template seeds from 0, one
+#   extra repeat for every seed divisible by 10) on BOTH luna and sol (D7).
+# - luna controls (D36): restated-at-need runs as full F-0 episodes on all 8 task cells; the
+#   position-matched single-turn control is one prompt on each of the 4 non-recoverable task
+#   cells. (The A1 scenarios above keep PLAN §12's 1,600 single control prompts.)
 OPTION_A_FILE = "option_a.csv"
 OA_BASES = ("billed_standard", "list_nocache")
 OA_BASIS_LABELS = {
@@ -1056,8 +1060,17 @@ class OptionAModel:
         return templates + (math.ceil(templates / self.oa.num("repeat_every")) if on else 0)
 
     def sol_templates(self, s: OptionAScenario) -> tuple[int, int]:
+        """(T_d, T_o). T_d is a positive multiple of sol_td_step (30) and at most sol_td_max
+        (210), so T_o = T_d / 3 is a whole number of 10-template balance blocks (D7, D11)."""
         td = int(self.oa.num("sol_td_central")) if s.sol_td is None else s.sol_td
-        return td, math.ceil(td / self.oa.num("sol_to_divisor"))
+        step, top = int(self.oa.num("sol_td_step")), int(self.oa.num("sol_td_max"))
+        if td <= 0 or td % step or td > top:
+            raise ValueError(f"T_d = {td} is not allowed: it must be a positive multiple of "
+                             f"{step} and at most {top}")
+        to, rest = divmod(td, int(self.oa.num("sol_to_divisor")))
+        if rest:
+            raise ValueError(f"T_d = {td} does not give a whole T_o")
+        return td, to
 
     def sol_lines(self, s: OptionAScenario) -> tuple[float, float]:
         """(derived-far, observed-far) sol cost: F-r and F-0 on each cell's templates."""
@@ -1068,6 +1081,24 @@ class OptionAModel:
         rep = s.repeats and s.sol_repeats
         return (self.with_repeats(td, rep) * oa.num("sol_derived_far_cells") * arms,
                 self.with_repeats(to, rep) * oa.num("sol_observed_far_cells") * arms)
+
+    def luna_controls(self, s: OptionAScenario) -> dict[str, float]:
+        """D36: restated-at-need as full episodes (F-0) on all 8 task cells, and one
+        position-matched single-turn prompt on each of the 4 non-recoverable task cells, on
+        luna's templates (plus the D7 repeats when luna_control_repeats is 1)."""
+        m, oa = self.m, self.oa
+        cell = str(oa.params["luna_restated_harness_cell"])
+        if cell not in PG_CELLS:
+            raise ValueError(f"unknown restated-at-need harness cell {cell!r}")
+        templates = self.with_repeats(int(m.inp.num("pg_templates_luna")),
+                                      s.repeats and bool(oa.num("luna_control_repeats")))
+        episodes = templates * oa.num("luna_restated_cells")
+        prompts = templates * oa.num("luna_single_turn_cells")
+        o, fx, wr = s.output_tokens, s.openai_flex, s.cache_writes
+        return {"restated_episodes": episodes,
+                "restated_usd": episodes * m.episode(LUNA, cell, o, fx, wr),
+                "single_turn_prompts": prompts,
+                "single_turn_usd": prompts * m.control_prompt(LUNA, o, fx, wr)}
 
     # ---- line items -----------------------------------------------------------------------
     def items(self, s: OptionAScenario) -> list[Item]:
@@ -1091,6 +1122,7 @@ class OptionAModel:
                     * inp.num("pg_task_cells"))
         sol_d, sol_o = self.sol_lines(s)
         td, to = self.sol_templates(s)
+        ctl = self.luna_controls(s)
         path_games = "+".join(oa.names("path_games"))
         held_games = "+".join(oa.names("heldout_games"))
         items: list[Item] = [
@@ -1105,8 +1137,9 @@ class OptionAModel:
             ("1b", B3, "Google", "remainder re-run reserve", res * path["remainder_1b"]),
             ("1a", B3, "OpenAI", "luna sweep",
              luna_eps * sum(ep(LUNA, c) for c in m.luna_cells(s.luna_cells))),
-            ("1a", B3, "OpenAI", "luna control prompts",
-             inp.num("pg_control_prompts") * m.control_prompt(LUNA, o, fx, wr)),
+            ("1a", B3, "OpenAI", "luna restated-at-need control (F-0 episodes; D36)",
+             ctl["restated_usd"]),
+            ("1a", B3, "OpenAI", "luna single-turn control prompts (D36)", ctl["single_turn_usd"]),
             ("1a", B3, "OpenAI", f"sol H2 derived-far (T_d={td} x 2 cells)", sol_d),
             ("1a", B3, "OpenAI", f"sol H2 observed-far (T_o={to} x 2 cells)", sol_o),
             ("2", B4, "OpenAI", "StateCarry PersistGym cell (luna)",
@@ -1216,6 +1249,8 @@ class OptionAModel:
                         "sol_h2_usd": sol,
                         "sol_repeats_usd": p1a - total(no_sol_rep, phase="1a"),
                         "luna_sweep_usd": sum(u for *_, n, u in items if n == "luna sweep"),
+                        "luna_controls_usd": sum(u for *_, n, u in items
+                                                 if n.startswith("luna") and "control" in n),
                         "phase_1a_usd": p1a, "cap_1a": self.caps["1a"],
                         "fits_cap": not above_cap(p1a, self.caps["1a"])})
         return pd.DataFrame(rows)
@@ -1261,8 +1296,10 @@ class OptionAModel:
         ph2 = f"phase 2 total (1k output), {mid}"
         L.append(f"- Phase 2 (1k output, billed, SC at the midpoint): {fc(bs, ph2):.2f} with the "
                  f"G3 and held-out reserves, {fc(bs, ph2, 'usd'):.2f} without them, against the "
-                 f"proposed ${self.caps['2']:,.0f} cap (headroom "
-                 f"{fc(bs, ph2, 'headroom_usd'):.2f}).\n")
+                 f"${self.caps['2']:,.0f} cap (headroom "
+                 f"{fc(bs, ph2, 'headroom_usd'):.2f}). With SC at the Checkpoint C rule: "
+                 f"{fc(bs, f'phase 2 total (1k output), {cpc}'):.2f} (headroom "
+                 f"{fc(bs, f'phase 2 total (1k output), {cpc}', 'headroom_usd'):.2f}).\n")
         L.append("## Totals by phase (USD; OpenAI on Flex with cache writes)\n")
         L.append("| scenario | 0 | 1a | 1b | 2 | total |")
         L.append("|---|---|---|---|---|---|")
@@ -1270,7 +1307,19 @@ class OptionAModel:
             L.append(f"| {label} | " + " | ".join(f"{ph(label, p):.2f}" for p in
                                                  (*PHASES, "total")) + " |")
         caps = ", ".join(f"{p} ${c:,.0f}" for p, c in self.caps.items())
-        L.append(f"\nProposed caps: {caps}.\n")
+        L.append(f"\nPhase caps: {caps}.\n")
+        grid = self.m.output_grid
+        ctl = self.luna_controls(replace(OPTION_A_CENTRAL, output_tokens=min(grid)))
+        old = (self.m.inp.num("pg_control_prompts")
+               * self.m.control_prompt(LUNA, min(grid), True, True))
+        L.append(f"## luna controls (D36; {min(grid) // 1000}k output, Flex with cache writes)\n")
+        L.append(f"- Restated-at-need: {ctl['restated_episodes']:.0f} full "
+                 f"{self.oa.params['luna_restated_harness_cell']} episodes, "
+                 f"{ctl['restated_usd']:.2f}. Single-turn: {ctl['single_turn_prompts']:.0f} "
+                 f"prompts, {ctl['single_turn_usd']:.2f}. Together "
+                 f"{ctl['restated_usd'] + ctl['single_turn_usd']:.2f}; PLAN §12's "
+                 f"{self.m.inp.num('pg_control_prompts'):,.0f} single control prompts came to "
+                 f"{old:.2f}.\n")
         L.append("## Phase 1a sizing (8 luna cells; sol F-r vs F-0, repeats on luna and sol)\n")
         L.append("| T_d | T_o | 1k | 2k | 3k | sol repeats at 1k |")
         L.append("|---|---|---|---|---|---|")
@@ -1278,8 +1327,16 @@ class OptionAModel:
         for td, g in z8.groupby("T_d"):
             by_o = g.set_index("output_per_call")
             L.append(f"| {td} | {int(by_o.T_o.iloc[0])} | " + " | ".join(
-                f"{by_o.loc[o, 'phase_1a_usd']:.2f}" for o in self.m.output_grid)
-                + f" | {by_o.loc[min(self.m.output_grid), 'sol_repeats_usd']:.2f} |")
+                f"{by_o.loc[o, 'phase_1a_usd']:.2f}" for o in grid)
+                + f" | {by_o.loc[min(grid), 'sol_repeats_usd']:.2f} |")
+        L.append(f"\nLargest T_d whose phase 1a fits the ${self.caps['1a']:,.0f} cap (\"none\": "
+                 f"not even T_d = {int(z.T_d.min())}):")
+        for cells in sorted(z.luna_cells.unique(), reverse=True):
+            parts = []
+            for o in grid:
+                ok = z.loc[(z.luna_cells == cells) & (z.output_per_call == o) & z.fits_cap, "T_d"]
+                parts.append(f"{o // 1000}k {int(ok.max()) if len(ok) else 'none'}")
+            L.append(f"- {cells} luna cells: " + "; ".join(parts) + ".")
         L.append("\n## What this does not show\n")
         L.append("- These are forecasts from one published run per game and harness, not "
                  "measured costs of our configs; S1, S2 and S0+StateCarry have no published run "
@@ -1289,7 +1346,10 @@ class OptionAModel:
                  "- StateCarry's own extra calls (promotion, digest) are not priced beyond the "
                  "rule above; the dev line is the $150 cap, not a forecast.\n"
                  "- PersistGym costs use the PLAN §12 token profile for every task cell; observed "
-                 "and derived episodes are priced the same.")
+                 "and derived episodes are priced the same.\n"
+                 "- A restated-at-need episode is priced as a main F-0 episode; its slightly "
+                 "longer need observation is not priced. Whether controls get the D7 repeat is "
+                 "not settled; they are priced with it (luna_control_repeats = 1).")
         return L
 
 

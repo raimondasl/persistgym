@@ -31,10 +31,11 @@ def test_append_and_sum(tmp_path):
 
 
 def test_phase_caps_are_the_a2_caps():
-    # PLAN.md amendment A2 (§17.3): 1a 450 -> 500, phase 2 950 -> 1150; 0 and 1b unchanged.
-    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 500.0, "1b": 900.0, "2": 1150.0}
+    # PLAN.md amendment A2 (§17.3), approved by the researcher on 2026-10-01: 1a 450 -> 500,
+    # phase 2 950 -> 1250; 0 and 1b unchanged.
+    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 500.0, "1b": 900.0, "2": 1250.0}
     assert costs.headroom(0, "1a", []) == pytest.approx(500)
-    assert costs.headroom(0, "2", []) == pytest.approx(1150)
+    assert costs.headroom(0, "2", []) == pytest.approx(1250)
 
 
 def _plan_cap_table() -> dict[str, float]:

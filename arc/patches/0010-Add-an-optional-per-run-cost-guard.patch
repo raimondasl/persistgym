@@ -1,7 +1,7 @@
 From c70cb17b380c9a1ef24b2ef33e2832cd37f83546 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:29:36 -0400
-Subject: [PATCH 10/16] Add an optional per-run cost guard
+Subject: [PATCH 10/17] Add an optional per-run cost guard
 
 agent.MAX_RUN_COST_USD (off unless set; no checked-in profile sets it)
 ends a run with the new exit reason COST_CAP once its estimated spend

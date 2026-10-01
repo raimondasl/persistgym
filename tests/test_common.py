@@ -50,3 +50,12 @@ def test_build_meta_requires_fields():
     meta = runmeta.build_meta(**fields)
     assert len(meta["config_hash"]) == 64
     assert "git_commit" in meta and "sdk_versions" in meta
+
+
+def test_optional_columns_default_to_empty(tmp_path):
+    p = tmp_path / "costs.csv"
+    p.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    row = {k: v for k, v in _row().items() if k not in costs.OPTIONAL_COLUMNS}
+    costs.append_row(row, p)
+    (written,) = costs.read_rows(p)
+    assert all(written[c] == "" for c in costs.OPTIONAL_COLUMNS)

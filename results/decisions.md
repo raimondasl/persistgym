@@ -45,7 +45,7 @@ The researcher decided all 39 open items (D1-D39) of the `PREREG.md` draft (PR #
 - **D14, option A.** The ARC games are fixed by rule, with no draw. Path games: FT09, SB26, R11L, CD82. Held-out games: SP80, VC33, TN36. LP85 and SC25 are not used.
 - **D11, option A.** sol runs only far cells: the derived-far cells on T_d templates and the observed-far cells on T_o = T_d/3 of them. The central value is T_d = 120. T_d is always a multiple of 30. It may be raised later to at most 210, and only if that is decided before the sol main sweep starts and before any H2 outcome is computed.
 - **D8.** H1's token clause is read on need-phase tokens. Whole-episode token ratios are reported as secondary.
-- **D2.** The fix is adopted: a derived fact's options are one cluster of consecutive values, so partial memory gives no edge.
+- **D2.** The fix is adopted: a derived fact's options are one cluster of values around the true value (consecutive values in generator 0.2.0, PR #15), so that no proper subset of the clues narrows the options. A $0 check in every derived cell tests that partial memory gives no edge.
 - **D23.** The billed estimate is the primary cost basis. The list cost is reported alongside.
 - **D24, option B.** All 3 held-out games are committed, with no cut to 2. G3's 4 runs are a separate phase-2 budget line.
 - **D21.** Every ARC run uses the Gemini standard tier.

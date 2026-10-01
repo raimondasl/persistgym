@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from analysis import cost_model as cm
+from common import costs
 
 
 @pytest.fixture(scope="module")
@@ -188,6 +189,8 @@ def test_option_a_inputs_and_recorded_costs(model, option_a):
     assert params.name.is_unique and (params.source.str.len() > 0).all()
     # 1a $500 and phase 2 $1,250: approved by the researcher on 2026-10-01 (PLAN §17.3).
     assert option_a.caps == {"0": 100, "1a": 500, "1b": 900, "2": 1250}
+    # The forecasts use the caps the paid guard enforces (common/costs.py, PLAN §17.3).
+    assert option_a.caps == costs.PHASE_CAPS
     arc = option_a.arc
     assert set(arc.loc[arc.role == "path", "game"]) == {"FT09", "SB26", "R11L", "CD82"}
     assert set(arc.loc[arc.role == "heldout", "game"]) == {"SP80", "VC33", "TN36"}

@@ -534,7 +534,7 @@ If it continues, seed-1 S1+S2 and all of seed 2 run as one wave, so the four con
 
 **Where the numbers come from.** Every cost, ops and power figure below is in a committed file, written by a committed script, in a run folder with a `meta.json`:
 - `results/arc_public_ops/20261001T185155Z/` (`arc/public/ops.py`, PR #17): `summary.md` and `recordings_per_action.csv`.
-- `results/cost_model/20261001T203318Z/` (`analysis/cost_model.py`): the `optA_*.csv` files and `option_a_summary.md`. This run replaces PR #17's `20261001T185959Z` for every option-A number. It prices luna's controls per D36, sizes sol for T_d in {90, 120, 150, 180, 210} and uses the $1,250 phase 2 cap. Its ARC tables and all of its A1 tables are identical to that run's.
+- `results/cost_model/20261001T203318Z/` (`analysis/cost_model.py`): the `optA_*.csv` files and `option_a_summary.md`. This run replaces PR #17's `20261001T185959Z` for every option-A number. It prices luna's controls per D36, sizes sol for T_d in {90, 120, 150, 180, 210} and uses the $1,250 phase 2 cap. Its ARC costs and all of its A1 tables are identical to that run's; in `optA_forecasts.csv` only the phase 2 cap and headroom columns change.
 - `results/power_sim/20261001T190327Z/h2_sol_power.csv` (`analysis/power_sim.py`, PR #17).
 
 All costs are in USD. The billed estimate comes first; ARC's no-cache list cost is in parentheses where both are given. These are forecasts from one published run per game and harness. They are not measured costs of our configs.
@@ -685,14 +685,14 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 | 2 | $950 | $1,250 | D24 option B; amount approved by the researcher, 2026-10-01 |
 
 - `PHASE_CAPS` in `common/costs.py` matches this table, and a test checks that it does.
-- **Where $450 came from.** §12 set it just above the original 1a estimate of $65-410. A1 re-costed 1a at about $230-415 and kept $450 by sizing (§16.1). It is a stop-and-ask line, not a provider limit. The nearest provider limit is OpenAI's tier-3 usage limit of $1,000 per month (`results/decisions.md`).
+- **Where $450 came from.** §12 set it just above the original 1a estimate of $65-410. A1 re-costed 1a at about $230-415 and kept $450 by sizing (§16.1). It is a stop-and-ask line, not a provider limit. The provider limits are OpenAI's tier-3 usage limit of $1,000 per month and the project spend limits the researcher set on 2026-10-01, whose amounts are not recorded in the repo (`results/decisions.md`).
 - **Why $500.** The 1a forecast at T_d = 120, 8 luna cells and 1k output is 494.18. That includes $24.85 for sol's repeat subset and $18.72 for luna's controls under D36. It does not fit under $450, and it leaves $5.82 under $500.
 - **Why $1,250.** Phase 2's central forecast is 1,233.19 with the 20% reserves on the G3 and held-out runs, above A2's first proposal of $1,150. $1,250 leaves $16.81. At the Checkpoint C rule phase 2 is 1,704.09, so block 4's approval uses measured costs.
 - The stop-and-ask rule is unchanged: Claude stops and asks the researcher before any cap is exceeded.
 
 ### 17.4 Open after A2
 - **How the guard measures spend.** `common.costs.headroom`, and the paid guard built on it, counts the larger of list and billed spend. On OpenAI Flex, list is twice billed (`harnesses/pricing.py`), so the guard would stop phase 1a at about half its billed forecast. For ARC rows it depends on what `cost_usd_list` will hold; no ARC costs writer exists yet. Before block 3, the researcher decides whether caps are measured on billed spend, as the forecasts here are (D23). PR #19 (open) proposes the billed estimate.
-- **1a has little headroom.** At the central size, 1a is $5.82 under its cap. If calls run longer than 1k output tokens, D11's sizing rule lowers T_d (§17.2 lists the largest T_d that fits), or luna runs only its 4 replay-off cells. The block 1 pilots measure tokens per call before block 3 is approved (§16.1, §16.2).
+- **1a has little headroom.** At the central size, 1a is $5.82 under its cap. If calls run longer than 1k output tokens, D11's sizing rule lowers T_d (§17.2 lists the largest T_d that fits), luna runs only its 4 replay-off cells, or both: at 2k output tokens per call no allowed T_d fits with 8 luna cells, and with 4 luna cells only T_d = 90 fits. Which gives way first is not yet stated: the `PREREG.md` draft (PR #4, §4.6) runs luna's replay-on cells only if the 1a cap allows, and §17.1 gives sol the largest affordable T_d. The block 1 pilots measure tokens per call before block 3 is approved (§16.1, §16.2).
 - **Controls and the D7 repeat.** `PREREG.md` does not say whether the controls get repeat 1. The forecast assumes they do, which adds 10% to the two control lines (conservative).
 - **`PREREG.md` follows A2.** The draft (PR #4) still has the D11 ceiling at 200 with T_o = 67, T_d = 210 "for reference only", 1a $500 as proposed and the phase 2 cap at $1,150. It is updated to the ceiling 210, T_o = T_d/3 always, and caps of $500 and $1,250 before the freeze.
 

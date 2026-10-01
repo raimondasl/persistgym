@@ -1157,7 +1157,7 @@ class OptionAModel:
     # ---- report tables --------------------------------------------------------------------
     def forecasts_table(self) -> pd.DataFrame:
         """Block 2, the G0 forecast (D27 rule 1), the Checkpoint C conservative forecast, G3
-        and the held-out runs, per ARC basis, with the 20% reserve and the proposed caps."""
+        and the held-out runs, per ARC basis, with the 20% reserve and the phase caps."""
         cap1b, cap2 = self.caps["1b"], self.caps["2"]
         rows = []
 

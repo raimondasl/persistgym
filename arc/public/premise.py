@@ -22,6 +22,17 @@ CLAIM_EARLY_STD_HIGH = 11   # "11 of 25 Standard-high runs ended early without a
 CLAIM_EARLY_PA_HIGH = 5     # "vs 5 of 25 for the Adapter"
 CLAIM_ELIGIBLE = ("FT09", "SB26", "R11L", "LP85", "SC25", "CD82")
 
+# Per-action claims in docs/background.md §4 ("Tokens per action", "Caching", "Compaction"),
+# high effort, pooled over all 25 public games. Quoted here so ops.py can set them next to
+# values re-derived from the 8 recorded games; the game sets differ.
+CLAIM_PER_ACTION = {
+    "standard": {"input": 148_000, "reasoning": 15_900, "visible_out": 907,
+                 "cached_share": 0.17},
+    "provider_adapter": {"input": 137_000, "reasoning": 6_100, "visible_out": 200,
+                         "cached_share": 0.53},
+}
+CLAIM_COMPACTIONS = (2611, 17215)   # Adapter compactions, actions ("about every 6.6 actions")
+
 
 def _num(cell: str) -> float:
     return float(cell.strip().replace("−", "-").replace(",", ""))

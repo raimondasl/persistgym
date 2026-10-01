@@ -7,14 +7,16 @@ harness (arcprize/arc-agi-3-benchmarking @ 4ca00e6):
 
 - ``benchmarking/agent.py`` L140-148: per-level budgets are
   ``math.ceil(b * MAX_ACTIONS_BASELINE_MULTIPLIER)`` for each human baseline ``b``;
-  every config in ``benchmarking/model_configs.yaml`` sets the multiplier to 5.0
-  (the class default at L69 is 2.0, so the config value matters).
+  all 15 configs in ``benchmarking/model_configs.yaml`` set the multiplier to 5.0, read at
+  L125-127 (the class default at L69 is 2.0, so the config value matters).
 - ``benchmarking/agent.py`` L734-751 (``is_done``): stop with ``ExitReason.GAME_WIN`` when the
   state is ``WIN``; stop with ``ExitReason.ACTION_BUDGET`` when the current level's action
   counter reaches its budget. The counter is reset only when ``levels_completed`` rises
   (L723-732) and is incremented for every action, including forced RESETs (L678-679, L767-768).
 - ``benchmarking/base.py`` L33 and L90-98: a 12 h wall-clock budget (``MAX_RUNTIME_SECONDS``,
-  not overridden by any checked-in config) ends the run with ``ExitReason.TIME_BUDGET``.
+  not set by any config in ``model_configs.yaml``) ends the run with ``ExitReason.TIME_BUDGET``.
+  A total cap ``MAX_ACTIONS`` = sum of the level budgets also applies (agent.py L148;
+  base.py L86-89, L116-117); hitting it is also reported as ACTION_BUDGET.
 - ``benchmarking/base.py`` L112-114 and ``benchmarking/swarm.py`` ``close_scorecard``: any
   exception ends the run with ``API_ERROR`` / ``AGENT_ERROR``, or ``SCORECARD_CLOSED`` if the
   server closed the scorecard. These are indistinguishable in published data, so they are
@@ -24,9 +26,11 @@ harness (arcprize/arc-agi-3-benchmarking @ 4ca00e6):
 Inference order: GAME_WIN (state WIN) > ACTION_BUDGET (final-level actions >= ceil(5 x
 baseline)) > TIME_BUDGET (duration >= 11.9 h) > ERROR_OR_CLOSED.
 
-Caveat: the server-side ``level_actions`` and the harness's level counter may count RESET
-actions differently. ``budget_margin`` and ``margin_within_resets`` expose how close a run was
-to its budget so borderline cases can be checked.
+Checks on the published data (run by ``ops.py``): the server's ``level_actions`` include
+model-chosen and forced RESETs but not the opening RESET, the same actions the harness counter
+counts (per-level counts re-derived from the 16 recordings match the sessions exactly), and
+every run inferred as ACTION_BUDGET has final-level actions exactly equal to its budget
+(``budget_margin`` 0), so the rule has no off-by-one slack.
 """
 
 from __future__ import annotations
@@ -77,7 +81,6 @@ class SessionRun:
     final_level_baseline: int
     final_level_budget: int
     budget_margin: int            # final_level_budget - final_level_actions
-    margin_within_resets: bool    # 0 < margin <= resets: borderline if resets are not counted
     inferred_ending: str
 
     def as_dict(self) -> dict:
@@ -156,7 +159,6 @@ def parse_session(session: dict, multiplier: float = BUDGET_MULTIPLIER) -> Sessi
         final_level_baseline=final_baseline,
         final_level_budget=final_budget,
         budget_margin=margin,
-        margin_within_resets=bool(resets) and 0 < margin <= int(resets),
         inferred_ending=infer_ending(state, final_actions, final_budget, duration),
     )
 

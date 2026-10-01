@@ -36,7 +36,7 @@ def test_lp85_like_early_stop_is_error_or_closed():
     assert (s.final_level_actions, s.final_level_budget) == (16, 795)
     assert s.duration_s == pytest.approx(1 * 3600 + 56 * 60 + 19.42, abs=0.01)
     assert s.inferred_ending == S.ERROR_OR_CLOSED
-    assert s.budget_margin == 779 and not s.margin_within_resets
+    assert s.budget_margin == 779
 
 
 def test_action_budget_when_final_level_reaches_ceil_5x():
@@ -45,10 +45,9 @@ def test_action_budget_when_final_level_reaches_ceil_5x():
     assert s.inferred_ending == S.ACTION_BUDGET and s.budget_margin == 0
 
 
-def test_borderline_margin_flagged_against_resets():
-    s = S.parse_session(session([10, 48], [10, 10], levels_completed=1, resets=3))
-    assert s.inferred_ending == S.ERROR_OR_CLOSED
-    assert s.budget_margin == 2 and s.margin_within_resets
+def test_one_short_of_budget_is_not_action_budget():
+    s = S.parse_session(session([10, 49], [10, 10], levels_completed=1, resets=3))
+    assert s.inferred_ending == S.ERROR_OR_CLOSED and s.budget_margin == 1
 
 
 def test_win_beats_everything():

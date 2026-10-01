@@ -40,7 +40,7 @@ central / ARC list_nocache,total,2127.2,495.855,0,0,2623.05,,False
 "like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",2,878.73,12.4794,0,0,891.209,950,False
 "like-for-like / ARC list_nocache: no §5 repeat subset, no held-out re-runs",total,1981.45,454.088,0,0,2435.54,,False
 "sensitivity: central / ARC flex_cached, 1a sized to its cap",0,13.0819,1.46475,0,0,14.5467,100,False
-"sensitivity: central / ARC flex_cached, 1a sized to its cap",1a,0,450,0,0,450,450,True
+"sensitivity: central / ARC flex_cached, 1a sized to its cap",1a,0,450,0,0,450,450,False
 "sensitivity: central / ARC flex_cached, 1a sized to its cap",1b,416.413,0,0,0,416.413,900,False
 "sensitivity: central / ARC flex_cached, 1a sized to its cap",2,485.811,13.7274,0,0,499.538,950,False
 "sensitivity: central / ARC flex_cached, 1a sized to its cap",total,915.306,465.192,0,0,1380.5,,False

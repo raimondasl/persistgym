@@ -1,6 +1,6 @@
 {
   "experiment": "cost_model",
-  "run_id": "20261001T033857Z",
+  "run_id": "20261001T035553Z",
   "cell_or_config": "cost_model_v1",
   "config": {
     "parameters": {
@@ -101,8 +101,8 @@
   "template_id": null,
   "repeat_index": null,
   "seeds": null,
-  "started_utc": "2026-10-01T03:38:57+00:00",
-  "finished_utc": "2026-10-01T03:38:58+00:00",
+  "started_utc": "2026-10-01T03:55:53+00:00",
+  "finished_utc": "2026-10-01T03:55:53+00:00",
   "exit_reason": "completed",
   "tokens": null,
   "cost_usd": 0.0,
@@ -129,6 +129,6 @@
     "arc-agi": null,
     "tiktoken": "0.14.0"
   },
-  "git_commit": "d1fec54e3cb45c2749584a67b442931517ea8245",
+  "git_commit": "cc24629c296e28ff8293a9dd7ec9530196f54113",
   "git_dirty": false
 }

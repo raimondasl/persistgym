@@ -371,7 +371,7 @@ Prices were checked 2026-09-29/30 ([Gemini](https://ai.google.dev/gemini-api/doc
 | 1a PersistGym | luna: 3,200-6,400 episodes plus about 1,600 control prompts, at $0.005-0.02 each (Flex) = $25-160. sol core: 640 episodes at $0.05-0.35 = $30-230. Validity runs $10-20. The optional sol H1 replication (+640 episodes, +$30-230) runs only if it fits under the cap. | $65-410 | $450. **[A2]** $500 (§17.3) |
 | 1b ARC path | 32 runs. Eligible games average about $31 (S0) and $25 (S4) per run at ARC's no-cache list accounting, so about $900 at list or about $450 with Flex. | $450-900 | $900. **[A2]** Unchanged; Checkpoint C may ask for up to ~$170 more (§17.3) |
 | **MVP total** | | **~$0.55-1.4k** | |
-| 2 StateCarry | PersistGym cell $10-40; ARC dev ≤ $150; 18 held-out runs $350-750 (two cheap games at ~$30/run, plus VC33 or RE86 at ~$65/run, at list; Flex halves this). **[A2]** Held-out games SP80, VC33, TN36 on the standard tier (§17.1) | $510-940 | $950. **[A2]** $1,150 (§17.3) |
+| 2 StateCarry | PersistGym cell $10-40; ARC dev ≤ $150; 18 held-out runs $350-750 (two cheap games at ~$30/run, plus VC33 or RE86 at ~$65/run, at list; Flex halves this). **[A2]** Held-out games SP80, VC33, TN36 on the standard tier (§17.1) | $510-940 | $950. **[A2]** $1,250 (§17.3) |
 | **Through phase 2** | | **~$1.05-2.35k** | |
 | E1 open weights | 15-50 GPU-hours | $20-80 | |
 | E3 Terminal-Bench | cheap model, 90 trials; sandboxes (Modal's $30/month free credit or local Docker) | $100-300 | |
@@ -532,10 +532,10 @@ If it continues, seed-1 S1+S2 and all of seed 2 run as one wave, so the four con
 ## 17. Amendment A2 (2026-10-01): researcher decisions before the PREREG freeze
 **Why.** On 2026-10-01 the researcher decided the open items (D1-D39) of the `PREREG.md` draft. Several decisions change this plan. This amendment records them before `PREREG.md` is frozen. No paid call has been made. No hypothesis or threshold changes, but two decisions change how a prediction is read: D8 (H1's token clause) and D11 (H2's observed-fact check now uses far cells only). `PREREG.md` records the final wording of every D item; this section covers only what changes the plan. §16 is left as written; §17.5 lists the parts of it that A2 replaces.
 
-**Where the numbers come from.** Every cost, ops and power figure below is in a committed file, written by a committed script, in a run folder with a `meta.json`. The three run folders arrive with PR #17:
-- `results/arc_public_ops/20261001T185155Z/` (`arc/public/ops.py`): `summary.md` and `recordings_per_action.csv`.
-- `results/cost_model/20261001T185959Z/` (`analysis/cost_model.py`): the `optA_*.csv` files and `option_a_summary.md`.
-- `results/power_sim/20261001T190327Z/h2_sol_power.csv` (`analysis/power_sim.py`).
+**Where the numbers come from.** Every cost, ops and power figure below is in a committed file, written by a committed script, in a run folder with a `meta.json`:
+- `results/arc_public_ops/20261001T185155Z/` (`arc/public/ops.py`, PR #17): `summary.md` and `recordings_per_action.csv`.
+- `results/cost_model/20261001T203318Z/` (`analysis/cost_model.py`): the `optA_*.csv` files and `option_a_summary.md`. This run replaces PR #17's `20261001T185959Z` for every option-A number. It prices luna's controls per D36, sizes sol for T_d in {90, 120, 150, 180, 210} and uses the $1,250 phase 2 cap. Its ARC tables and all of its A1 tables are identical to that run's.
+- `results/power_sim/20261001T190327Z/h2_sol_power.csv` (`analysis/power_sim.py`, PR #17).
 
 All costs are in USD. The billed estimate comes first; ARC's no-cache list cost is in parentheses where both are given. These are forecasts from one published run per game and harness. They are not measured costs of our configs.
 
@@ -551,9 +551,10 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 **D11 option A: sol runs far cells only** (§4 H2, §7).
 - sol runs F-r vs F-0 on the derived-far cells (recoverable and not) on T_d templates. It runs the observed-far cells (recoverable and not) on the first T_o = T_d/3 of them. sol runs no near cells.
-- T_d is a multiple of 30, so that T_o is a multiple of 10 and every 10-template balance block is whole (D7).
+- T_d is always a multiple of 30 and T_o = T_d/3, so T_o is a multiple of 10 and every 10-template balance block is whole (D7).
 - Planning value: T_d = 120, T_o = 40. That is 320 template-cells per arm, as many as PLAN's 40 templates × 8 cells. With the 10% repeats it is 704 sol episodes (`optA_sizing_1a.csv`).
-- T_d may rise up to 200 only if the researcher raises the 1a cap before the sol main sweep starts. T_d never changes after any H2 outcome has been computed.
+- **Ceiling: T_d = 210** (T_o = 70), set by the researcher on 2026-10-01. A raise above the planning value may be decided only before the sol main sweep starts and before any H2 outcome has been computed. T_d never changes after that.
+- A T_d that the 1a cap in force does not afford also needs the researcher to raise the 1a cap first (the stop-and-ask rule). At 1k output tokens per call with 8 luna cells, $500 affords T_d = 120 at most; T_d = 210 comes to 699.16 (§17.2).
 - The 0.80 power target stays. If the 1a cap does not afford it (for example because calls run longer than 1k output tokens), sol uses the largest affordable T_d, the achieved power is reported, and a sol result that is neither equivalent nor falsified is called inconclusive (§17.2).
 
 **Power of this design** (`h2_sol_power.csv`). Each row is 1,000 simulated runs, with template SD 1.0 on the logit scale and success under F-0 (p_F0) of 0.6 or 0.8. No variance has been measured yet. H2's derived-far success effect is tested with a one-sided bootstrap test at α = 0.0125, the strictest step of the 4-test Holm family (D26).
@@ -565,6 +566,7 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 | TOST equivalence (±8pp) at a true 0, p_F0 = 0.8 | 0.348 | 0.539 | 0.655 | 0.764 | 0.866 |
 | TOST equivalence (±8pp) at a true 0, p_F0 = 0.6 | 0.074 | 0.278 | 0.378 | 0.542 | 0.675 |
 
+- Every column is an allowed T_d; 210 is the ceiling.
 - Size at a true 0: 0.010-0.018.
 - "Supported" (the bootstrap test rejects and the GLM estimate is positive) equals the bootstrap power in every row.
 - False equivalence at a true +8pp: 0.028-0.063.
@@ -583,6 +585,12 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - For a derived fact, the K = 10 options are one cluster of evenly spaced values around the true value (spacing 1, i.e. consecutive values, in generator 0.2.0, PR #15). With the rule and any proper subset of the clues, every option stays possible, so partial memory gives no edge.
 - New $0 check in every derived cell: no template where a proper subset of the clues narrows the options, and partial-memory heuristics score ≤ 20% (chance + 10pp).
 
+**D36: run matrix** (§5, §7, §12).
+- luna runs the restated-at-need control as full F-0 episodes on all 8 task cells, not as single prompts.
+- luna runs the position-matched single-turn control on the 4 non-recoverable task cells only.
+- sol runs F-r vs F-0 on the D11 cells only.
+- The forecasts in §17.2 price the controls this way, including the D7 repeats.
+
 **D21: Gemini standard tier for all ARC runs** (§8.3, §15).
 - All ARC runs, pilots included, use Gemini's standard tier. Flex is not used for ARC, and runs never switch tier.
 - Block 1's Flex latency probe is dropped; a standard-tier payload acceptance check takes its place.
@@ -600,7 +608,7 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 **D24 option B: all 3 held-out games** (§9, §12).
 - Phase 2 commits to all 3 held-out games: 3 games × {S0, S4, S0+StateCarry} × 2 seeds = 18 runs. There is no conditional cut to 2 games.
 - The 4 G3 runs (frozen StateCarry v0, once per dev game) are their own phase-2 budget line, outside the $150 dev cap (§9 step 2). The phase 2 forecast in §17.2 prices them that way.
-- The phase 2 cap rises from $950 to $1,150 (§17.3).
+- The phase 2 cap rises from $950 to $1,250 (§17.3). A2 first proposed $1,150; on 2026-10-01 the researcher set $1,250, which covers the central forecast with its reserves.
 - The rest of D24 is recorded in `PREREG.md`: closure as a ratio of means, the held-out S0 and S4 runs first, the StateCarry held-out runs only if the held-out gap is ≥ 10 RHAE, and the G4 bands.
 
 **D27 rule 1: cost forecasts** (§11 G0, §14 item 2).
@@ -641,32 +649,32 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - Checkpoint C conservative forecast for 1b: 1,042.92 (1,251.80). On the billed basis, this rule would ask for a 1b cap increase of $142.92, within the ~$170 that D27 lets Claude request (the researcher still decides).
 - Held-out, 18 runs: 967.98 with S0+StateCarry priced at the midpoint; 1,381.11 at the Checkpoint C rule.
 - G3, 4 runs: 101.48 at the midpoint; 159.25 at the Checkpoint C rule.
-- Phase 2, central (1k output tokens per PersistGym call): 1,233.19. That is $83.19 over the new $1,150 cap. Without the G3 and held-out reserves it is 1,054.94. At the Checkpoint C rule it is 1,704.09.
+- Phase 2, central (1k output tokens per PersistGym call): 1,233.19. That is $16.81 under the $1,250 cap. Without the G3 and held-out reserves it is 1,054.94. At the Checkpoint C rule it is 1,704.09, $454.09 over the cap.
+
+**luna controls (D36)** (`option_a_summary.md`; 1k output, Flex with cache writes). Restated-at-need is 880 full F-0 episodes (100 templates plus the 10 repeat templates, × 8 task cells): 17.29. The single-turn control is 440 prompts (110 × 4 non-recoverable task cells): 1.43. Together 18.72, where the earlier forecast priced PLAN §12's 1,600 single prompts at 5.20. Whether controls get the D7 repeat is not settled; pricing them with it is the conservative choice. A restated-at-need episode is priced like a main F-0 episode; its slightly longer need observation is not priced.
 
 **Totals by phase** (`optA_totals_by_phase_payee.csv`; billed; OpenAI on Flex with cache writes). Phase 0 / 1a / 1b / 2:
-- 1k output tokens per call: 24.15 / 480.66 / 811.86 / 1,233.19. Total 2,549.86, of which Google 2,054.00 and OpenAI 495.86.
-- 2k: total 2,759.62, with 1a at 682.62.
-- 3k: total 2,968.90, with 1a at 884.11.
-- ARC at list, 1k: total 3,109.68.
-- luna's 4 replay-off cells only, 1k: 1a is 399.50.
+- 1k output tokens per call: 24.15 / 494.18 / 811.86 / 1,233.19. Total 2,563.38, of which Google 2,054.00 and OpenAI 509.37.
+- 2k: total 2,779.00, with 1a at 702.01.
+- 3k: total 2,994.16, with 1a at 909.37.
+- ARC at list, 1k: total 3,123.20.
+- luna's 4 replay-off cells only, 1k: 1a is 413.02.
 
-**Approval blocks** (`optA_approval_blocks.csv`; billed, 1k): block 1, 53.90; block 2, 202.97; block 3, 1,059.81; block 4, 1,233.19. Blocks 1-3 (through G2): 1,316.67.
+**Approval blocks** (`optA_approval_blocks.csv`; billed, 1k): block 1, 53.90; block 2, 202.97; block 3, 1,073.32; block 4, 1,233.19. Blocks 1-3 (through G2): 1,330.19.
 
-**Phase 1a sizing** (`optA_sizing_1a.csv`; 1k output, 8 luna cells, repeats on luna and sol):
+**Phase 1a sizing** (`optA_sizing_1a.csv`; 1k output, 8 luna cells, repeats on luna and sol, luna controls per D36):
 
-| T_d (T_o) | 1a total | sol repeat subset |
-|---|---|---|
-| 90 (30) | 412.34 | 18.63 |
-| 120 (40) | 480.66 | 24.85 |
-| 150 (50) | 548.99 | 31.06 |
-| 180 (60) | 617.31 | 37.27 |
-| 200 (67) | 663.90 | 41.93 |
-| 210 (70) | 685.64 | 43.48 |
+| T_d (T_o) | 1a total | sol repeat subset | Within $500 |
+|---|---|---|---|
+| 90 (30) | 425.85 | 18.63 | yes |
+| 120 (40) | 494.18 | 24.85 | yes |
+| 150 (50) | 562.51 | 31.06 | no |
+| 180 (60) | 630.83 | 37.27 | no |
+| 210 (70) | 699.16 | 43.48 | no |
 
-- The 200 (67) row is D11's ceiling as the cost model prices it, with T_o rounded up. T_d = 200 is not a multiple of 30, so D7 does not allow it as is (§17.4).
-- With 4 luna cells at 1k, T_d = 150 comes to 467.83.
-- At T_d = 120 and 2k output tokens per call, even 4 luna cells cost 565.80, over $500. D11's sizing rule then lowers T_d (§17.1).
-- luna's controls are priced as single prompts ($5.20, `optA_central_line_items.csv`). Under D36 the restated-at-need control runs as full F-0 episodes on luna, which the cost model does not price yet, so 1a is somewhat understated (§17.4).
+- The largest T_d whose 1a fits $500 (`option_a_summary.md`): with 8 luna cells, 120 at 1k output tokens per call and none at 2k or 3k; with 4 luna cells, 150 at 1k, 90 at 2k and none at 3k.
+- With 4 luna cells at 1k, T_d = 150 comes to 481.34.
+- At T_d = 120 and 2k output tokens per call, even 4 luna cells cost 585.18, over $500. D11's sizing rule then lowers T_d (§17.1).
 
 ### 17.3 Phase caps
 | Phase | Cap before A2 | Cap from A2 | Basis |
@@ -678,15 +686,15 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 - `PHASE_CAPS` in `common/costs.py` matches this table, and a test checks that it does.
 - **Where $450 came from.** §12 set it just above the original 1a estimate of $65-410. A1 re-costed 1a at about $230-415 and kept $450 by sizing (§16.1). It is a stop-and-ask line, not a provider limit. The nearest provider limit is OpenAI's tier-3 usage limit of $1,000 per month (`results/decisions.md`).
-- **Why $500.** The 1a forecast at T_d = 120, 8 luna cells and 1k output is 480.66, including $24.85 for sol's repeat subset. It does not fit under $450.
-- **Phase 2 is tight.** Its central forecast, 1,233.19, is above $1,150 because of the 20% reserves on the G3 and held-out runs.
+- **Why $500.** The 1a forecast at T_d = 120, 8 luna cells and 1k output is 494.18. That includes $24.85 for sol's repeat subset and $18.72 for luna's controls under D36. It does not fit under $450, and it leaves $5.82 under $500.
+- **Why $1,250.** Phase 2's central forecast is 1,233.19 with the 20% reserves on the G3 and held-out runs, above A2's first proposal of $1,150. $1,250 leaves $16.81. At the Checkpoint C rule phase 2 is 1,704.09, so block 4's approval uses measured costs.
 - The stop-and-ask rule is unchanged: Claude stops and asks the researcher before any cap is exceeded.
 
 ### 17.4 Open after A2
-- **How the guard measures spend.** `common.costs.headroom`, and the paid guard built on it, counts the larger of list and billed spend. On OpenAI Flex, list is twice billed (`harnesses/pricing.py`), so the guard would stop phase 1a at about half its billed forecast. For ARC rows it depends on what `cost_usd_list` will hold; no ARC costs writer exists yet. Before block 3, the researcher decides whether caps are measured on billed spend, as the forecasts here are (D23).
-- **T_d's ceiling and D7's whole blocks.** D11 allows T_d up to 200, and D7 needs T_d to be a multiple of 30, so the largest allowed T_d is 180 (T_o = 60). The cost model's T_d = 200 row and the `PREREG.md` draft (T_o = ⌈T_d/3⌉, T_d a multiple of 10) allow a part block (T_o = 67). The researcher confirms 180 as the ceiling, or sets T_o for T_d = 200 (60 or 70), before the sol main sweep; `PREREG.md` follows.
-- **luna control cost.** The 1a forecast prices luna's controls as single prompts. D36 runs restated-at-need as full F-0 episodes on all 8 task cells. The cost model should price that before block 3, since 1a's central forecast (480.66) is already close to $500.
-- **Phase 2 reserves.** At the central forecast they take phase 2 $83.19 over its cap. If they are needed, the researcher is asked then.
+- **How the guard measures spend.** `common.costs.headroom`, and the paid guard built on it, counts the larger of list and billed spend. On OpenAI Flex, list is twice billed (`harnesses/pricing.py`), so the guard would stop phase 1a at about half its billed forecast. For ARC rows it depends on what `cost_usd_list` will hold; no ARC costs writer exists yet. Before block 3, the researcher decides whether caps are measured on billed spend, as the forecasts here are (D23). PR #19 (open) proposes the billed estimate.
+- **1a has little headroom.** At the central size, 1a is $5.82 under its cap. If calls run longer than 1k output tokens, D11's sizing rule lowers T_d (§17.2 lists the largest T_d that fits), or luna runs only its 4 replay-off cells. The block 1 pilots measure tokens per call before block 3 is approved (§16.1, §16.2).
+- **Controls and the D7 repeat.** `PREREG.md` does not say whether the controls get repeat 1. The forecast assumes they do, which adds 10% to the two control lines (conservative).
+- **`PREREG.md` follows A2.** The draft (PR #4) still has the D11 ceiling at 200 with T_o = 67, T_d = 210 "for reference only", 1a $500 as proposed and the phase 2 cap at $1,150. It is updated to the ceiling 210, T_o = T_d/3 always, and caps of $500 and $1,250 before the freeze.
 
 ### 17.5 Parts of §16 that A2 replaces
 §16 stays as written. These parts of it no longer apply:

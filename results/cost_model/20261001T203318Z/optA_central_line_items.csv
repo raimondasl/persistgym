@@ -1,0 +1,28 @@
+phase,block,payee,item,usd
+0,1 pilots,OpenAI,echo check (sol),0.27
+0,1 pilots,OpenAI,echo check (luna),0.0135
+0,1 pilots,OpenAI,replay probe (sol),1.125
+0,1 pilots,OpenAI,replay probe (luna),0.05625
+0,1 pilots,Google,"Gemini acceptance probe (standard tier; no Flex probe, D21)",1.59639
+0,1 pilots,Google,truncated ARC pilot (a path game),21.0841
+1a,1 pilots,OpenAI,luna pilots,1.95914
+1a,1 pilots,OpenAI,luna validity,5.8932
+1a,1 pilots,OpenAI,sol pilot,7.76432
+1a,1 pilots,OpenAI,sol validity,14.1376
+1b,2 seed-1 S0+S4,Google,seed-1 S0+S4 (8 runs; FT09+SB26+R11L+CD82),169.138
+1b,2 seed-1 S0+S4,Google,seed-1 re-run reserve,33.8276
+1b,3 commitment,Google,path remainder (24 runs),507.415
+1b,3 commitment,Google,remainder re-run reserve,101.483
+1a,3 commitment,OpenAI,luna sweep,172.405
+1a,3 commitment,OpenAI,luna restated-at-need control (F-0 episodes; D36),17.2867
+1a,3 commitment,OpenAI,luna single-turn control prompts (D36),1.43
+1a,3 commitment,OpenAI,sol H2 derived-far (T_d=120 x 2 cells),204.978
+1a,3 commitment,OpenAI,sol H2 observed-far (T_o=40 x 2 cells),68.326
+2,4 phase 2,OpenAI,StateCarry PersistGym cell (luna),13.7274
+2,4 phase 2,Google,ARC dev games (at the dev cap),150
+2,4 phase 2,Google,"G3 v0 runs (4, outside the dev cap)",84.5691
+2,4 phase 2,Google,G3 re-run reserve,16.9138
+2,4 phase 2,Google,held-out runs (18; SP80+VC33+TN36),806.647
+2,4 phase 2,Google,held-out re-run reserve,161.329
+1b,2 seed-1 S0+S4,ARC Prize,ARC API (free research preview),0
+2,4 phase 2,GPU,GPU (E1 not in this scenario),0

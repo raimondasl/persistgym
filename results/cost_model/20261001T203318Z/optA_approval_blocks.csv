@@ -1,0 +1,127 @@
+scenario,block,payee,usd
+option A / ARC billed_standard / 1k output,1 pilots,total,53.8995
+option A / ARC billed_standard / 1k output,1 pilots,Google,22.6805
+option A / ARC billed_standard / 1k output,1 pilots,OpenAI,31.219
+option A / ARC billed_standard / 1k output,2 seed-1 S0+S4,total,202.966
+option A / ARC billed_standard / 1k output,2 seed-1 S0+S4,Google,202.966
+option A / ARC billed_standard / 1k output,2 seed-1 S0+S4,OpenAI,0
+option A / ARC billed_standard / 1k output,3 commitment,total,1073.32
+option A / ARC billed_standard / 1k output,3 commitment,Google,608.898
+option A / ARC billed_standard / 1k output,3 commitment,OpenAI,464.425
+option A / ARC billed_standard / 1k output,4 phase 2,total,1233.19
+option A / ARC billed_standard / 1k output,4 phase 2,Google,1219.46
+option A / ARC billed_standard / 1k output,4 phase 2,OpenAI,13.7274
+option A / ARC billed_standard / 1k output,blocks 1-2 (before commitment),total,256.865
+option A / ARC billed_standard / 1k output,blocks 1-3 (by G2),total,1330.19
+option A / ARC billed_standard / 2k output,1 pilots,total,66.9311
+option A / ARC billed_standard / 2k output,1 pilots,Google,22.6805
+option A / ARC billed_standard / 2k output,1 pilots,OpenAI,44.2506
+option A / ARC billed_standard / 2k output,2 seed-1 S0+S4,total,202.966
+option A / ARC billed_standard / 2k output,2 seed-1 S0+S4,Google,202.966
+option A / ARC billed_standard / 2k output,2 seed-1 S0+S4,OpenAI,0
+option A / ARC billed_standard / 2k output,3 commitment,total,1269.1
+option A / ARC billed_standard / 2k output,3 commitment,Google,608.898
+option A / ARC billed_standard / 2k output,3 commitment,OpenAI,660.201
+option A / ARC billed_standard / 2k output,4 phase 2,total,1240.01
+option A / ARC billed_standard / 2k output,4 phase 2,Google,1219.46
+option A / ARC billed_standard / 2k output,4 phase 2,OpenAI,20.5474
+option A / ARC billed_standard / 2k output,blocks 1-2 (before commitment),total,269.897
+option A / ARC billed_standard / 2k output,blocks 1-3 (by G2),total,1539
+option A / ARC billed_standard / 3k output,1 pilots,total,79.9575
+option A / ARC billed_standard / 3k output,1 pilots,Google,22.6805
+option A / ARC billed_standard / 3k output,1 pilots,OpenAI,57.277
+option A / ARC billed_standard / 3k output,2 seed-1 S0+S4,total,202.966
+option A / ARC billed_standard / 3k output,2 seed-1 S0+S4,Google,202.966
+option A / ARC billed_standard / 3k output,2 seed-1 S0+S4,OpenAI,0
+option A / ARC billed_standard / 3k output,3 commitment,total,1464.41
+option A / ARC billed_standard / 3k output,3 commitment,Google,608.898
+option A / ARC billed_standard / 3k output,3 commitment,OpenAI,855.511
+option A / ARC billed_standard / 3k output,4 phase 2,total,1246.83
+option A / ARC billed_standard / 3k output,4 phase 2,Google,1219.46
+option A / ARC billed_standard / 3k output,4 phase 2,OpenAI,27.3674
+option A / ARC billed_standard / 3k output,blocks 1-2 (before commitment),total,282.923
+option A / ARC billed_standard / 3k output,blocks 1-3 (by G2),total,1747.33
+option A / ARC list_nocache / 1k output,1 pilots,total,59.2301
+option A / ARC list_nocache / 1k output,1 pilots,Google,28.0111
+option A / ARC list_nocache / 1k output,1 pilots,OpenAI,31.219
+option A / ARC list_nocache / 1k output,2 seed-1 S0+S4,total,256.187
+option A / ARC list_nocache / 1k output,2 seed-1 S0+S4,Google,256.187
+option A / ARC list_nocache / 1k output,2 seed-1 S0+S4,OpenAI,0
+option A / ARC list_nocache / 1k output,3 commitment,total,1232.98
+option A / ARC list_nocache / 1k output,3 commitment,Google,768.56
+option A / ARC list_nocache / 1k output,3 commitment,OpenAI,464.425
+option A / ARC list_nocache / 1k output,4 phase 2,total,1574.8
+option A / ARC list_nocache / 1k output,4 phase 2,Google,1561.07
+option A / ARC list_nocache / 1k output,4 phase 2,OpenAI,13.7274
+option A / ARC list_nocache / 1k output,blocks 1-2 (before commitment),total,315.417
+option A / ARC list_nocache / 1k output,blocks 1-3 (by G2),total,1548.4
+option A / ARC list_nocache / 2k output,1 pilots,total,72.2617
+option A / ARC list_nocache / 2k output,1 pilots,Google,28.0111
+option A / ARC list_nocache / 2k output,1 pilots,OpenAI,44.2506
+option A / ARC list_nocache / 2k output,2 seed-1 S0+S4,total,256.187
+option A / ARC list_nocache / 2k output,2 seed-1 S0+S4,Google,256.187
+option A / ARC list_nocache / 2k output,2 seed-1 S0+S4,OpenAI,0
+option A / ARC list_nocache / 2k output,3 commitment,total,1428.76
+option A / ARC list_nocache / 2k output,3 commitment,Google,768.56
+option A / ARC list_nocache / 2k output,3 commitment,OpenAI,660.201
+option A / ARC list_nocache / 2k output,4 phase 2,total,1581.62
+option A / ARC list_nocache / 2k output,4 phase 2,Google,1561.07
+option A / ARC list_nocache / 2k output,4 phase 2,OpenAI,20.5474
+option A / ARC list_nocache / 2k output,blocks 1-2 (before commitment),total,328.448
+option A / ARC list_nocache / 2k output,blocks 1-3 (by G2),total,1757.21
+option A / ARC list_nocache / 3k output,1 pilots,total,85.288
+option A / ARC list_nocache / 3k output,1 pilots,Google,28.0111
+option A / ARC list_nocache / 3k output,1 pilots,OpenAI,57.277
+option A / ARC list_nocache / 3k output,2 seed-1 S0+S4,total,256.187
+option A / ARC list_nocache / 3k output,2 seed-1 S0+S4,Google,256.187
+option A / ARC list_nocache / 3k output,2 seed-1 S0+S4,OpenAI,0
+option A / ARC list_nocache / 3k output,3 commitment,total,1624.07
+option A / ARC list_nocache / 3k output,3 commitment,Google,768.56
+option A / ARC list_nocache / 3k output,3 commitment,OpenAI,855.511
+option A / ARC list_nocache / 3k output,4 phase 2,total,1588.44
+option A / ARC list_nocache / 3k output,4 phase 2,Google,1561.07
+option A / ARC list_nocache / 3k output,4 phase 2,OpenAI,27.3674
+option A / ARC list_nocache / 3k output,blocks 1-2 (before commitment),total,341.475
+option A / ARC list_nocache / 3k output,blocks 1-3 (by G2),total,1965.55
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",1 pilots,total,56.274
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",1 pilots,Google,25.055
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",1 pilots,OpenAI,31.219
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",2 seed-1 S0+S4,total,202.966
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",2 seed-1 S0+S4,Google,202.966
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",2 seed-1 S0+S4,OpenAI,0
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",3 commitment,total,1304.38
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",3 commitment,Google,839.956
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",3 commitment,OpenAI,464.425
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",4 phase 2,total,1704.09
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",4 phase 2,Google,1690.36
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",4 phase 2,OpenAI,13.7274
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",blocks 1-2 (before commitment),total,259.24
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",blocks 1-3 (by G2),total,1563.62
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",1 pilots,total,82.3319
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",1 pilots,Google,25.055
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",1 pilots,OpenAI,57.277
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",2 seed-1 S0+S4,total,202.966
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",2 seed-1 S0+S4,Google,202.966
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",2 seed-1 S0+S4,OpenAI,0
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",3 commitment,total,1695.47
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",3 commitment,Google,839.956
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",3 commitment,OpenAI,855.511
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",4 phase 2,total,1717.73
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",4 phase 2,Google,1690.36
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",4 phase 2,OpenAI,27.3674
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",blocks 1-2 (before commitment),total,285.298
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",blocks 1-3 (by G2),total,1980.77
+option A / ARC billed_standard / 1k output / luna replay-off cells only,1 pilots,total,52.9876
+option A / ARC billed_standard / 1k output / luna replay-off cells only,1 pilots,Google,22.6805
+option A / ARC billed_standard / 1k output / luna replay-off cells only,1 pilots,OpenAI,30.3071
+option A / ARC billed_standard / 1k output / luna replay-off cells only,2 seed-1 S0+S4,total,202.966
+option A / ARC billed_standard / 1k output / luna replay-off cells only,2 seed-1 S0+S4,Google,202.966
+option A / ARC billed_standard / 1k output / luna replay-off cells only,2 seed-1 S0+S4,OpenAI,0
+option A / ARC billed_standard / 1k output / luna replay-off cells only,3 commitment,total,993.071
+option A / ARC billed_standard / 1k output / luna replay-off cells only,3 commitment,Google,608.898
+option A / ARC billed_standard / 1k output / luna replay-off cells only,3 commitment,OpenAI,384.174
+option A / ARC billed_standard / 1k output / luna replay-off cells only,4 phase 2,total,1233.19
+option A / ARC billed_standard / 1k output / luna replay-off cells only,4 phase 2,Google,1219.46
+option A / ARC billed_standard / 1k output / luna replay-off cells only,4 phase 2,OpenAI,13.7274
+option A / ARC billed_standard / 1k output / luna replay-off cells only,blocks 1-2 (before commitment),total,255.953
+option A / ARC billed_standard / 1k output / luna replay-off cells only,blocks 1-3 (by G2),total,1249.02

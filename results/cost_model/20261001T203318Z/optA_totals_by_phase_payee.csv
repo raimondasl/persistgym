@@ -1,0 +1,46 @@
+scenario,phase,Google,OpenAI,ARC Prize,GPU,total,cap,over_cap
+option A / ARC billed_standard / 1k output,0,22.6805,1.46475,0,0,24.1452,100,False
+option A / ARC billed_standard / 1k output,1a,0,494.18,0,0,494.18,500,False
+option A / ARC billed_standard / 1k output,1b,811.863,0,0,0,811.863,900,False
+option A / ARC billed_standard / 1k output,2,1219.46,13.7274,0,0,1233.19,1250,False
+option A / ARC billed_standard / 1k output,total,2054,509.372,0,0,2563.38,,False
+option A / ARC billed_standard / 2k output,0,22.6805,2.44125,0,0,25.1217,100,False
+option A / ARC billed_standard / 2k output,1a,0,702.011,0,0,702.011,500,True
+option A / ARC billed_standard / 2k output,1b,811.863,0,0,0,811.863,900,False
+option A / ARC billed_standard / 2k output,2,1219.46,20.5474,0,0,1240.01,1250,False
+option A / ARC billed_standard / 2k output,total,2054,724.999,0,0,2779,,False
+option A / ARC billed_standard / 3k output,0,22.6805,3.41775,0,0,26.0982,100,False
+option A / ARC billed_standard / 3k output,1a,0,909.371,0,0,909.371,500,True
+option A / ARC billed_standard / 3k output,1b,811.863,0,0,0,811.863,900,False
+option A / ARC billed_standard / 3k output,2,1219.46,27.3674,0,0,1246.83,1250,False
+option A / ARC billed_standard / 3k output,total,2054,940.156,0,0,2994.16,,False
+option A / ARC list_nocache / 1k output,0,28.0111,1.46475,0,0,29.4758,100,False
+option A / ARC list_nocache / 1k output,1a,0,494.18,0,0,494.18,500,False
+option A / ARC list_nocache / 1k output,1b,1024.75,0,0,0,1024.75,900,True
+option A / ARC list_nocache / 1k output,2,1561.07,13.7274,0,0,1574.8,1250,True
+option A / ARC list_nocache / 1k output,total,2613.83,509.372,0,0,3123.2,,False
+option A / ARC list_nocache / 2k output,0,28.0111,2.44125,0,0,30.4523,100,False
+option A / ARC list_nocache / 2k output,1a,0,702.011,0,0,702.011,500,True
+option A / ARC list_nocache / 2k output,1b,1024.75,0,0,0,1024.75,900,True
+option A / ARC list_nocache / 2k output,2,1561.07,20.5474,0,0,1581.62,1250,True
+option A / ARC list_nocache / 2k output,total,2613.83,724.999,0,0,3338.83,,False
+option A / ARC list_nocache / 3k output,0,28.0111,3.41775,0,0,31.4288,100,False
+option A / ARC list_nocache / 3k output,1a,0,909.371,0,0,909.371,500,True
+option A / ARC list_nocache / 3k output,1b,1024.75,0,0,0,1024.75,900,True
+option A / ARC list_nocache / 3k output,2,1561.07,27.3674,0,0,1588.44,1250,True
+option A / ARC list_nocache / 3k output,total,2613.83,940.156,0,0,3553.98,,False
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",0,25.055,1.46475,0,0,26.5197,100,False
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",1a,0,494.18,0,0,494.18,500,False
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",1b,1042.92,0,0,0,1042.92,900,True
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",2,1690.36,13.7274,0,0,1704.09,1250,True
+"option A / ARC billed_standard / 1k output / S1, S2, SC at the Checkpoint C rule",total,2758.34,509.372,0,0,3267.71,,False
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",0,25.055,3.41775,0,0,28.4727,100,False
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",1a,0,909.371,0,0,909.371,500,True
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",1b,1042.92,0,0,0,1042.92,900,True
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",2,1690.36,27.3674,0,0,1717.73,1250,True
+"option A / ARC billed_standard / 3k output / S1, S2, SC at the Checkpoint C rule",total,2758.34,940.156,0,0,3698.49,,False
+option A / ARC billed_standard / 1k output / luna replay-off cells only,0,22.6805,1.46475,0,0,24.1452,100,False
+option A / ARC billed_standard / 1k output / luna replay-off cells only,1a,0,413.016,0,0,413.016,500,False
+option A / ARC billed_standard / 1k output / luna replay-off cells only,1b,811.863,0,0,0,811.863,900,False
+option A / ARC billed_standard / 1k output / luna replay-off cells only,2,1219.46,13.7274,0,0,1233.19,1250,False
+option A / ARC billed_standard / 1k output / luna replay-off cells only,total,2054,428.208,0,0,2482.21,,False

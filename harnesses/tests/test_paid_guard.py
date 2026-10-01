@@ -133,7 +133,9 @@ def test_guard_requires_prereg(repo, monkeypatch):
 
 def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     """PLAN §16.3: PREREG.md committed before any paid call. A draft in the working tree, a
-    staged-but-uncommitted file or local edits to the committed file do not count."""
+    staged-but-uncommitted file or local edits to the committed file do not count. Nor does
+    a commit that is not on origin/main: only the merged (frozen) PREREG unlocks paid calls.
+    (This test used to accept the PREREG as soon as it was committed locally.)"""
     monkeypatch.setenv(ALLOW_ENV, "1")
     (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
     factory, built = _factory()
@@ -154,14 +156,34 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     git_in(tmp_path, "add", "PREREG.md")
     with pytest.raises(PaidCallsNotAllowed, match="not in the HEAD commit"):
         _make(tmp_path, factory)
-    # committed: accepted
+    # committed but not merged: origin/main has no PREREG.md
     git_in(tmp_path, "commit", "-q", "-m", "prereg")
+    with pytest.raises(PaidCallsNotAllowed, match="PREREG.md is not on origin/main"):
+        _make(tmp_path, factory)
+    # merged: accepted
+    push_main(tmp_path)
     assert _make(tmp_path, factory).approval.prereg_version == "0.1"
     # committed, then edited locally
     (tmp_path / "PREREG.md").write_text("Version: 0.2\n", encoding="utf-8")
     with pytest.raises(PaidCallsNotAllowed, match="uncommitted changes"):
         _make(tmp_path, factory)
     assert len(built) == 1  # only the accepted transport built a client
+
+
+def test_guard_requires_prereg_identical_to_origin_main(repo, monkeypatch):
+    """PREREG.md in HEAD must be the one on origin/main. A committed amendment that is not
+    merged refuses before any client is built, even with a valid approval."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory()
+    (repo / "PREREG.md").write_text("Version: 0.2\n", encoding="utf-8")
+    git_in(repo, "commit", "-q", "-am", "amend prereg, not merged")
+    with pytest.raises(PaidCallsNotAllowed, match="PREREG.md in HEAD differs from PREREG.md "
+                                                  "on origin/main"):
+        _make(repo, factory)
+    assert built == []
+    push_main(repo)
+    assert _make(repo, factory).approval.prereg_version == "0.2"
+    assert len(built) == 1
 
 
 def test_guard_requires_merged_block_approval(repo, monkeypatch):
@@ -297,26 +319,56 @@ def test_guard_counts_the_blocks_own_logged_spend(tmp_path, monkeypatch):
     t.send({"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}})
     row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
     assert row["notes"].startswith(approval.spend_tag("1-pilots"))
-    # list $0.15, billed (Flex) $0.075: the block has spent the larger, $0.15
+    # list $0.15, billed (Flex) $0.075: the block has spent the billed $0.075 (it used to
+    # count the larger, the list cost; PLAN's caps are in billed dollars, D23). The row keeps
+    # both.
     rows = costs.read_rows(tmp_path / "costs.csv")
+    assert float(rows[0]["cost_usd_list"]) == pytest.approx(0.15)
     assert float(rows[0]["cost_usd_billed_est"]) == pytest.approx(0.075)
-    assert float(approval.block_spend("1-pilots", rows)) == pytest.approx(0.15)
-    assert _make(tmp_path, factory, planned_usd=0.85).approval.block_spent_usd == (
-        pytest.approx(0.15))
+    assert float(approval.block_spend("1-pilots", rows)) == pytest.approx(0.075)
+    assert _make(tmp_path, factory, planned_usd=0.925).approval.block_spent_usd == (
+        pytest.approx(0.075))
     with pytest.raises(PaidCallsNotAllowed, match="would exceed it by"):
-        _make(tmp_path, factory, planned_usd=0.86)
+        _make(tmp_path, factory, planned_usd=0.93)
     assert len(built) == 2
 
 
 def test_guard_counts_logged_spend(repo, monkeypatch):
+    """The phase cap counts billed spend: a Flex row (list $99.5, billed $49.75) leaves $50.25
+    of phase 0's $100. Under the old measure, the larger of the two, it left $0.50."""
     monkeypatch.setenv(ALLOW_ENV, "1")
     row = {c: "" for c in costs.COLUMNS}
     row.update(experiment="replay_probe", cost_usd_list="99.5", cost_usd_billed_est="49.75")
     costs.append_row(row, repo / "costs.csv")
     factory, _ = _factory()
     with pytest.raises(PaidCallsNotAllowed, match="cap"):
+        _make(repo, factory, planned_usd=50.26)  # 100 - 49.75 - 50.26 < 0
+    assert _make(repo, factory, planned_usd=50.25).approval.headroom_usd == pytest.approx(0)
+    assert _make(repo, factory, planned_usd=0.6).approval.headroom_usd == pytest.approx(49.65)
+
+
+def test_guard_counts_list_where_a_row_has_no_billed_estimate(repo, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    row = {c: "" for c in costs.COLUMNS}
+    row.update(experiment="replay_probe", cost_usd_list="99.5", cost_usd_billed_est="",
+               notes="approved_block=1-pilots;")
+    costs.append_row(row, repo / "costs.csv")
+    factory, _ = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="cap"):
         _make(repo, factory, planned_usd=0.6)  # 100 - 99.5 - 0.6 < 0
-    assert _make(repo, factory, planned_usd=0.4).approval.headroom_usd == pytest.approx(0.1)
+    a = _make(repo, factory, planned_usd=0.4).approval
+    assert a.headroom_usd == pytest.approx(0.1) and a.block_spent_usd == pytest.approx(99.5)
+
+
+def test_guard_refuses_a_row_with_no_cost(repo, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    row = {c: "" for c in costs.COLUMNS}
+    row.update(experiment="replay_probe", notes="approved_block=other;")
+    costs.append_row(row, repo / "costs.csv")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="costs.csv line 2: no cost"):
+        _make(repo, factory)
+    assert built == []
 
 
 def test_sends_logs_echo_and_appends_one_costs_row(repo, monkeypatch):
@@ -347,25 +399,28 @@ def test_sends_logs_echo_and_appends_one_costs_row(repo, monkeypatch):
 
 def test_stops_at_planned_spend(repo, monkeypatch):
     """The run stops before a call once its spend reaches the planned spend. Spend is measured
-    like block spend and the phase caps, the larger of list and billed: on Flex, the list
-    cost. (Billed alone, $0.525 a call, would have allowed 4 calls under $2.)"""
+    like block spend and the phase caps: the billed estimate, on Flex half the list cost.
+    (The larger of list and billed, the old measure, stopped this run after 2 calls.)"""
     monkeypatch.setenv(ALLOW_ENV, "1")
     factory, built = _factory([_response(inp=10_000_000)] * 5)  # $1.05 list, $0.525 billed
     t = _make(repo, factory, planned_usd=2.0)
     p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
-    t.send(p)
-    t.send(p)
-    with pytest.raises(BudgetExceeded, match=r"run spend \$2.1000 .*planned \$2.00"):
+    for _ in range(4):
         t.send(p)
-    assert len(built[0].sent) == 2
+    with pytest.raises(BudgetExceeded, match=r"run spend \$2.1000 \(billed estimate\) "
+                                             r"reached the planned \$2.00"):
+        t.send(p)
+    assert len(built[0].sent) == 4
     assert t.spent_usd == pytest.approx(2.10) and t.ledger.cost_usd_billed_est == (
-        pytest.approx(1.05))
+        pytest.approx(2.10))
+    assert t.ledger.cost_usd_list == pytest.approx(4.20)  # still logged
 
 
 def test_a_run_cannot_spend_past_its_blocks_max_usd(tmp_path, monkeypatch):
     """A run planned at the block's whole max_usd stops when the block's spend, as the guard
-    counts it, reaches max_usd (plus at most the last call). Stopping on billed cost would
-    let a Flex run log twice max_usd against the block."""
+    counts it (billed), reaches max_usd, plus at most the last call. The run stops on the
+    same measure the guard counts, so a Flex run cannot log more than that against the
+    block."""
     monkeypatch.setenv(ALLOW_ENV, "1")
     prereg_repo(tmp_path, approved_blocks=())
     (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
@@ -380,7 +435,9 @@ def test_a_run_cannot_spend_past_its_blocks_max_usd(tmp_path, monkeypatch):
             t.send(p)
     t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
     spent = approval.block_spend("1-pilots", costs.read_rows(tmp_path / "costs.csv"))
-    assert len(built[0].sent) == 7 and float(spent) == pytest.approx(1.05)  # 1 + one call
+    # 14 calls at $0.075 billed: $1.05, less than one call over the $1 (the old measure, the
+    # list cost, stopped after 7)
+    assert len(built[0].sent) == 14 and float(spent) == pytest.approx(1.05)
     with pytest.raises(PaidCallsNotAllowed, match="would exceed it"):
         _make(tmp_path, factory, planned_usd=0.01)
 

@@ -308,9 +308,8 @@ def main(argv: list[str] | None = None) -> int:
                              "experiment and leave room under its max_usd")
         sp.add_argument("--planned-usd", type=float, default=None,
                         help="planned spend of the whole command in USD, measured like block "
-                             "spend and the phase caps: the larger of the list and billed "
-                             "estimates, so on Flex the list cost (for probes, the total "
-                             "over all --model values)")
+                             "spend and the phase caps: the billed estimate, so on Flex the "
+                             "Flex price (for probes, the total over all --model values)")
 
     sub.add_parser("cells", help="list the harness cells").set_defaults(fn=cmd_cells)
 

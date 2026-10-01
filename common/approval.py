@@ -33,14 +33,25 @@ moving it into a code block or an HTML comment. Two different valid lines for on
 name are ambiguous and refuse. git replace refs are ignored, so a local object cannot stand
 in for the fetched file.
 
+**PREREG.md must be frozen.** PREREG.md must be committed (tracked, in HEAD, no uncommitted
+changes) and identical in HEAD and on origin/main, read after the same fetch as the approval
+line. A PREREG committed on a branch but not merged, or a HEAD that lacks an amendment
+merged to main, refuses: only the merged (frozen) PREREG unlocks paid calls (PLAN §16.3).
+
 **What it allows.** The run's experiment must be in the line's list. Spend is measured one
-way everywhere (`spend_usd`): the larger of the list and billed estimates, which on Flex is
-the list cost. Block spend is the sum of that over results/costs.csv rows whose `notes`
-contain "approved_block=<name>;". The run is refused if block spend + planned spend
-> max_usd, and the transport stops a run before a call once the run's own spend, measured
-the same way, reaches the planned spend. The phase-cap check (`common.costs.headroom`)
-applies as well. Every costs.csv row must be readable for either check: a cost that is not
-empty or a finite, non-negative number, or an experiment with no budget phase, refuses.
+way everywhere (`spend_usd`, defined in common/costs.py): the billed estimate, or the list
+cost where a row has no billed estimate. Every cap and estimate for PersistGym in PLAN §12,
+§16 and §17 is in Flex-billed dollars, and D23 makes the billed estimate the primary cost
+basis; counting Flex at list would trip the caps at about half the real spend. Block spend
+is the sum of `spend_usd` over results/costs.csv rows whose `notes` contain
+"approved_block=<name>;". The run is refused if block spend + planned spend > max_usd, and
+the transport stops a run before a call once the run's own spend, measured the same way,
+reaches the planned spend. The phase-cap check (`common.costs.headroom`) uses the same
+measure. The list cost is still logged in every row and reported. Every costs.csv row must
+be readable for either check: a cost that is not empty or a finite, non-negative number, a
+row with neither cost, or an experiment with no budget phase, refuses. The billed estimate
+comes from our price table; the provider-side hard spend limits, which the researcher sets
+in real billed dollars, remain the backstop against under-estimation.
 
 The guard protects against mistakes (an example line, a stale or unmerged approval, a
 corrupt ledger), not against someone who edits this code or the repository's git config.
@@ -60,6 +71,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from common import costs, runmeta
+from common.costs import spend_usd  # the one spend measure, re-exported for the launchers
 
 ALLOW_ENV = "PERSISTGYM_ALLOW_PAID"
 DECISIONS_MD = "results/decisions.md"  # relative to the repo root, as git paths are
@@ -227,20 +239,14 @@ def spend_tag(name: str) -> str:
     return f"approved_block={name};"
 
 
-def spend_usd(cost_usd_list, cost_usd_billed_est):
-    """Spend as every budget check measures it: the larger of the list and billed estimates
-    (on Flex, the list cost). Block spend, the phase caps and a run's stop at its planned
-    spend all use it, so a run planned at $x adds at most about $x to its block's spend."""
-    return max(cost_usd_list, cost_usd_billed_est)
-
-
 COST_COLUMNS = ("cost_usd_list", "cost_usd_billed_est")
 
 
-def _usd(value, where: str) -> Decimal:
+def _usd(value, where: str) -> Decimal | None:
+    """The amount in one cost cell, or None if it is empty."""
     s = (value or "").strip()
     if not s:
-        return Decimal(0)
+        return None
     try:
         d = Decimal(s)
     except InvalidOperation:
@@ -250,14 +256,26 @@ def _usd(value, where: str) -> Decimal:
     return d
 
 
+def row_spend(row: dict, line: int) -> Decimal:
+    """`spend_usd` of one costs.csv row (line `line` of the file): its billed estimate, or its
+    list cost if the billed estimate is empty. Both cells are checked even when only one is
+    counted. Raises ValueError if a cell is not empty or a finite, non-negative number, or if
+    both are empty."""
+    listed, billed = (_usd(row.get(k), f"costs.csv line {line} {k}") for k in COST_COLUMNS)
+    if listed is None and billed is None:
+        raise ValueError(f"costs.csv line {line}: no cost (cost_usd_billed_est and "
+                         "cost_usd_list are both empty)")
+    return spend_usd(listed, billed)
+
+
 def check_ledger(rows: list[dict]) -> None:
     """Raise ValueError unless every costs.csv row can be counted: each cost is empty or a
-    finite, non-negative number, and the experiment has a budget phase (or starts with ext_).
-    A NaN would make every budget comparison pass, a negative cost would add headroom, and a
-    row with no phase would count toward no cap."""
+    finite, non-negative number, at least one of the two is filled in, and the experiment
+    has a budget phase (or starts with ext_). A NaN would make every budget comparison pass,
+    a negative cost would add headroom, a row with no cost would count as free, and a row
+    with no phase would count toward no cap."""
     for i, r in enumerate(rows, 2):  # line 1 is the header
-        for k in COST_COLUMNS:
-            _usd(r.get(k), f"costs.csv line {i} {k}")
+        row_spend(r, i)
         experiment = r.get("experiment") or ""
         if not known_experiment(experiment):
             raise ValueError(f"costs.csv line {i}: experiment {experiment!r} has no budget "
@@ -265,14 +283,13 @@ def check_ledger(rows: list[dict]) -> None:
 
 
 def block_spend(name: str, rows: list[dict]) -> Decimal:
-    """Sum of spend_usd(cost_usd_list, cost_usd_billed_est) over costs.csv rows tagged with
-    `spend_tag(name)`. Raises ValueError if a tagged row's cost cannot be read."""
+    """Sum of `spend_usd` (billed estimate, list where there is none) over costs.csv rows
+    tagged with `spend_tag(name)`. Raises ValueError if a tagged row's cost cannot be read."""
     tag = spend_tag(name)
     total = Decimal(0)
     for i, r in enumerate(rows, 2):  # line 1 is the header
         if tag in (r.get("notes") or ""):
-            total += spend_usd(*(_usd(r.get(k), f"costs.csv line {i} {k}")
-                                 for k in COST_COLUMNS))
+            total += row_spend(r, i)
     return total
 
 
@@ -384,6 +401,31 @@ def prereg_not_committed(repo: Path) -> str | None:
     return None
 
 
+def prereg_not_on_remote(repo: Path, remote: RemoteRef = MAIN) -> str | None:
+    """None if PREREG.md in HEAD is identical (the same blob) to PREREG.md on `remote`;
+    otherwise why not. So only the merged, frozen PREREG unlocks paid calls: one committed on
+    a branch but not merged, or a HEAD missing an amendment merged to main, does not.
+
+    It does not fetch. It reads the remote-tracking ref, so call it right after
+    `fetch_remote` (`find_approval` fetches), as `require_paid_approval` does. Replace refs
+    are ignored, as for decisions.md."""
+    def blob(rev: str) -> str | None:
+        try:
+            r = _git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:PREREG.md")
+        except OSError:
+            return None
+        return r.stdout.strip() if r.returncode == 0 else None
+    head = blob("HEAD")
+    if head is None:
+        return "PREREG.md is not in the HEAD commit"
+    merged = blob(remote.tracking)
+    if merged is None:
+        return f"PREREG.md is not on {remote.label}"
+    if head != merged:
+        return f"PREREG.md in HEAD differs from PREREG.md on {remote.label}"
+    return None
+
+
 def require_paid_approval(*, approved_block: str | None, experiment: str, planned_usd: float,
                           costs_path: Path = costs.COSTS_CSV, repo: Path = runmeta.REPO_ROOT,
                           remote: RemoteRef = MAIN) -> PaidApproval:
@@ -396,11 +438,14 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
     5. PREREG.md is committed (PLAN §16.3);
     6. the block's approval line is on `remote` (fetched now), in HEAD and in the working
        tree, identical in all three (`find_approval`);
-    7. the experiment is in the line's list;
-    8. every costs.csv row can be counted (`check_ledger`);
-    9. block spend + planned spend <= max_usd;
-    10. phase cap - phase spend - planned spend >= 0 (`common.costs.headroom`).
-    Planned spend is in the unit of `spend_usd`, which is how the transport measures it."""
+    7. PREREG.md in HEAD is identical to PREREG.md on `remote`, after that same fetch
+       (`prereg_not_on_remote`): only a merged (frozen) PREREG unlocks paid calls;
+    8. the experiment is in the line's list;
+    9. every costs.csv row can be counted (`check_ledger`);
+    10. block spend + planned spend <= max_usd;
+    11. phase cap - phase spend - planned spend >= 0 (`common.costs.headroom`).
+    Spend and planned spend are in the unit of `spend_usd` (the billed estimate, list only
+    where a row has none), which is how the transport measures a run's spend."""
     if os.environ.get(ALLOW_ENV) != "1":
         raise PaidCallsNotAllowed(f"paid calls are off: set {ALLOW_ENV}=1 for an approved block")
     if not approved_block or not str(approved_block).strip():
@@ -430,6 +475,11 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
             f"block {block!r} is not approved: {e}. The researcher approves a block by "
             f"merging a line 'approved_block: {block} | experiments: <exp1>,<exp2>,... | "
             f"max_usd: <amount>' into {DECISIONS_MD} on {remote.label} (PLAN §16.2)") from None
+    reason = prereg_not_on_remote(repo, remote)  # reads what find_approval just fetched
+    if reason is not None:
+        raise PaidCallsNotAllowed(f"PREREG.md must be merged to {remote.label} before any "
+                                  f"paid call; only the frozen PREREG counts (PLAN §16.3): "
+                                  f"{reason}")
     if experiment not in approval.experiments:
         raise PaidCallsNotAllowed(
             f"block {block!r} is approved for {', '.join(approval.experiments)}, not for "
@@ -438,6 +488,7 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
     try:
         check_ledger(rows)
         spent = block_spend(block, rows)
+        room = costs.headroom(planned_usd, phase, rows)
     except ValueError as e:
         raise PaidCallsNotAllowed(f"cannot read the spend of block {block!r} and of phase "
                                   f"{phase}: {e}") from None
@@ -448,7 +499,6 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
             f"block {block!r} has spent ${float(spent):.2f} of its max_usd "
             f"${approval.max_usd}; planned ${float(planned_usd):.2f} would exceed it by "
             f"${float(-block_room):.2f}: stop and ask the researcher")
-    room = costs.headroom(planned_usd, phase, rows)
     if room < 0:
         raise PaidCallsNotAllowed(
             f"planned ${planned_usd:.2f} would exceed the phase {phase} cap of "

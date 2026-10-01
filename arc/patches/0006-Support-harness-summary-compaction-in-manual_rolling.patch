@@ -1,7 +1,7 @@
 From 3c091e4d1242b8d3289a724b12920c9a6c729465 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:10:19 -0400
-Subject: [PATCH 06/15] Support harness summary compaction in manual_rolling
+Subject: [PATCH 06/16] Support harness summary compaction in manual_rolling
 
 manual_rolling drops the oldest user/assistant pair once the estimated
 transcript size exceeds MAX_CONTEXT_LENGTH, and config validation rejected

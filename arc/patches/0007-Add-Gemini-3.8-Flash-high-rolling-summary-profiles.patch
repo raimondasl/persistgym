@@ -1,7 +1,7 @@
 From 9987853df82b96adaf541bea9e20639e74b90cd7 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:12:25 -0400
-Subject: [PATCH 07/15] Add Gemini 3.8 Flash high rolling-summary profiles
+Subject: [PATCH 07/16] Add Gemini 3.8 Flash high rolling-summary profiles
 
 Two profiles between google-gemini-3-8-flash-high (Standard) and
 google-gemini-3-8-flash-high-provider-adapter, so the path changes one

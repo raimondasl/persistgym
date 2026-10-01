@@ -1,7 +1,7 @@
 From 82398a79395b005f9fc222b9cd735d7aa3b0b3d5 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 23:35:42 -0400
-Subject: [PATCH 04/15] Add Gemini 3.8 Flash high profiles for both harnesses
+Subject: [PATCH 04/16] Add Gemini 3.8 Flash high profiles for both harnesses
 
 Published Gemini 3.8 Flash high runs are tagged
 `google-gemini-3-8-flash-high` and

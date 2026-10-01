@@ -16,8 +16,11 @@ Real schema (checked on the 16 pulled recordings, 2026-09-30). One JSON object p
 - ``reasoning`` is null for forced RESETs (no model call) and otherwise the harness's
   ``ActionMetadata`` (pinned harness ``runtime_models.py`` L549-576): ``output``, ``reasoning``
   (summary text, Adapter only), ``usage`` {``input_tokens``, ``input_tokens_details.
-  cached_tokens``, ``output_tokens`` (visible + thinking for Gemini, ``runtime_models.py``
-  L176-205), ``output_tokens_details.reasoning_tokens``, ``total_tokens``}, ``cost``
+  cached_tokens``, ``output_tokens`` (visible + thinking for Gemini: ``runtime_models.py``
+  L161-198 for google-genai and L201-228 for Interactions fold thoughts into
+  ``output_tokens``; the API surface of the published Standard runs is unknown, so
+  ``Summary.n_output_lt_reasoning`` checks the identity on the data: 0 on all 16 recordings),
+  ``output_tokens_details.reasoning_tokens``, ``total_tokens``}, ``cost``
   {``input_cost``, ``output_cost``, ``total_cost``} = tokens x configured list price, no cache
   discount; Adapter runs add ``state`` {``input_items_sent``, ``history_items_before_prune``,
   ``history_items_after_prune``} and, on a step that followed a harness-summary compaction,
@@ -54,7 +57,10 @@ MULTI_ATTEMPT_RULE = (
     "compaction step; i.e. more input than one turn of growth can explain, as when usage sums "
     "two or more attempts (agent.py L1018-1030)")
 METHOD_NOTE = (
-    "Per-step values come from each recording line's action metadata. Cost = summed "
+    "Per-step values come from each recording line's action metadata. Token and cost means "
+    "are per model call (forced RESETs make no call, cost nothing and are excluded; compare "
+    "`n_steps` with `n_model_steps`), so 'per action' in the headline means per model call. "
+    "Cost = summed "
     "`cost.total_cost` (ARC's no-cache list accounting: input and output tokens x $0.75 / "
     "$3.75 per M; includes harness-summary compaction calls). `cost_cached_price_usd` re-prices "
     "cached input at $0.075/M (an estimate of billed cost with implicit caching, not ARC's "
@@ -63,7 +69,9 @@ METHOD_NOTE = (
     "compaction call's input on compaction steps. Plateau: " + PLATEAU_RULE + ". Compaction "
     "events = steps carrying `state.harness_compaction` (Adapter only; the Standard harness "
     "has no compaction, and its drop-oldest truncation leaves no trace in the recording). "
-    "Multi-attempt steps (heuristic): " + MULTI_ATTEMPT_RULE + ".")
+    "Multi-attempt steps (heuristic): " + MULTI_ATTEMPT_RULE + ". `n_output_lt_reasoning` "
+    "counts steps where output_tokens < reasoning_tokens; it must be 0 for visible output = "
+    "output - reasoning to be valid.")
 
 
 @dataclass
@@ -205,6 +213,8 @@ class Summary:
     steps_per_compaction: float | None
     n_multi_attempt_steps: int
     last_step_multi_attempt: bool
+    n_output_lt_reasoning: int    # steps with output_tokens < reasoning_tokens (must be 0 for
+                                  # visible = output - reasoning to hold)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -252,4 +262,5 @@ def summarize(steps: list[Step]) -> Summary:
         steps_per_compaction=(n / n_comp) if n_comp else None,
         n_multi_attempt_steps=len(multi),
         last_step_multi_attempt=bool(multi) and multi[-1] == model[-1].index,
+        n_output_lt_reasoning=sum(1 for s in model if s.output_tokens < s.reasoning_tokens),
     )

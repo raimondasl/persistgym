@@ -116,6 +116,13 @@ def recording_table(runs: pd.DataFrame, recs: dict[str, dict]) -> pd.DataFrame:
 def clean_run_bounds(runs: pd.DataFrame, rec: pd.DataFrame) -> pd.DataFrame:
     """Cost a run would have had if it had not stopped early, at plateau cost per action.
 
+    The action count is a true upper bound (the 5x budget); the price per action is the run's
+    own mean plateau list cost per model call, an estimate. So the dollar figure is a planning
+    bound, not a guaranteed maximum: later levels could cost more per call (longer reasoning,
+    more multi-attempt steps). ``bound_stop_level_overall_mean_usd`` prices the same actions at
+    the run's overall mean cost per model call (warm-up included), the basis of PLAN §16.4's
+    LP85 figure.
+
     ``bound_stop_level_usd`` (the PLAN §16.4 definition): measured cost of every action taken
     + the stopping level's remaining 5x budget x plateau cost per action. This is what the run
     would cost had it kept playing the level it stopped on until its budget ran out.
@@ -152,6 +159,8 @@ def clean_run_bounds(runs: pd.DataFrame, rec: pd.DataFrame) -> pd.DataFrame:
             "measured_cost_usd": r.cost_total_usd,
             "plateau_cost_per_action_usd": plateau,
             "bound_stop_level_usd": r.cost_total_usd + remaining_stop * plateau,
+            "bound_stop_level_overall_mean_usd": (r.cost_total_usd
+                                                  + remaining_stop * r.cost_per_step_mean),
             "bound_full_game_usd": r.cost_total_usd + remaining_full * plateau,
             "bound_stop_level_12h_usd": r.cost_total_usd + remaining_12h * plateau,
             "s_per_action_mean": spa,
@@ -355,7 +364,9 @@ def write_summary(run_dir: Path, runs, ends, rec, bounds, elig, lp85) -> None:
              "`arc/public/sessions.py` for line citations): GAME_WIN if state WIN; "
              "ACTION_BUDGET if the final level's actions >= ceil(5 x its human baseline); "
              "TIME_BUDGET if open_at -> last_update >= 11.9 h; otherwise ERROR_OR_CLOSED "
-             "(API_ERROR, AGENT_ERROR or SCORECARD_CLOSED; not separable from published data).\n")
+             "(API_ERROR, AGENT_ERROR or SCORECARD_CLOSED, or a run stopped outside the harness "
+             "with exit reason UNKNOWN; not separable from published data, so read it as "
+             "\"stopped without a win, an action budget or the clock\", not as \"crashed\").\n")
     L.append(md_table(ends, ["harness", "effort", *sessions.ENDINGS, "early_no_win",
                              "n_runs"]))
     L.append(f"\nRecount of the premise check's \"{premise.CLAIM_EARLY_STD_HIGH} of 25 "
@@ -380,7 +391,14 @@ def write_summary(run_dir: Path, runs, ends, rec, bounds, elig, lp85) -> None:
              f" so the 11.9 h threshold is not borderline either. In the {len(rec)} recordings, the per-level action counts re-derived "
              f"from the NDJSON (opening RESET excluded; model-chosen and forced RESETs included) "
              f"equal the session's `level_actions` for "
-             f"{int(rec.level_actions_match_session.sum())} of {len(rec)} runs.\n")
+             f"{int(rec.level_actions_match_session.sum())} of {len(rec)} runs. Steps with "
+             f"output_tokens < reasoning_tokens (which would break visible = output - "
+             f"reasoning): {int(rec.n_output_lt_reasoning.sum())} of "
+             f"{int(rec.n_model_steps.sum())} model calls.\n")
+    L.append(f"Harness version: the rules are read at `4ca00e6` (2026-09-21); the published "
+             f"sessions opened {runs.open_at.min()[:10]} to {runs.open_at.max()[:10]}. The "
+             f"stopping logic is unchanged since `1aa78da` (2026-09-03), see "
+             f"`arc/public/sessions.py`.\n")
     L.append("## Time, cost and tokens per action (16 recordings)\n")
     L.append(recordings.METHOD_NOTE + "\n")
     L.append(md_table(rec, ["game", "harness", "n_steps", "n_model_steps", "s_per_step_median",
@@ -401,14 +419,14 @@ def write_summary(run_dir: Path, runs, ends, rec, bounds, elig, lp85) -> None:
              "it is reused.\n")
     L.append(md_table(premise_comparison(rec), ["harness", "metric", "this_pull_8_games",
                                                 "background_25_games"], nd=2))
-    L.append("\n## Clean-run cost upper bound (8 games x 2 harnesses)\n")
+    L.append("\n## Clean-run cost bound (8 games x 2 harnesses)\n")
     L.append(clean_run_bounds.__doc__.strip().replace("\n    ", "\n") + "\n")
     L.append(md_table(bounds, ["game", "harness", "inferred_ending", "final_level",
                                "actions_taken", "remaining_stop_level_actions",
                                "measured_cost_usd", "plateau_cost_per_action_usd",
-                               "bound_stop_level_usd", "bound_stop_level_12h_usd",
-                               "bound_full_game_usd", "bound_stop_level_wallclock_h",
-                               "fits_12h_at_stop_level_bound"]))
+                               "bound_stop_level_usd", "bound_stop_level_overall_mean_usd",
+                               "bound_stop_level_12h_usd", "bound_full_game_usd",
+                               "bound_stop_level_wallclock_h", "fits_12h_at_stop_level_bound"]))
     L.append("\n## Eligibility re-check (both published high runs <= $60 and gap >= 20)\n")
     L.append("Gap = Provider Adapter high score - Standard high score (session JSON). Cost: "
              "summed recording `cost.total_cost` for the 8 recorded games; for the other 17 "
@@ -436,17 +454,32 @@ def write_summary(run_dir: Path, runs, ends, rec, bounds, elig, lp85) -> None:
              f"{lp85['duration']} after opening ({lp85['open_at']} -> {lp85['last_update']}). "
              f"Inferred ending: {lp85['inferred_ending']}. Matches the PLAN claim: "
              f"**{'yes' if lp85['matches_plan_claim'] else 'no'}**.\n")
+    lp_b = bounds[(bounds.game == "LP85") & (bounds.harness == "standard")]
+    lp_r = rec[(rec.game == "LP85") & (rec.harness == "standard")]
+    if len(lp_b) and len(lp_r):
+        b, r = lp_b.iloc[0], lp_r.iloc[0]
+        L.append(f"Its clean-run bound is ${b.bound_stop_level_usd:.0f} at its plateau list cost "
+                 f"per model call (${b.plateau_cost_per_action_usd:.3f}) and "
+                 f"${b.bound_stop_level_overall_mean_usd:.0f} at its overall mean "
+                 f"(${r.cost_per_step_mean:.3f}, warm-up included), which reproduces PLAN "
+                 f"§16.4's \"up to about $168\"; capped at the 12 h clock at its own pace it "
+                 f"is ${b.bound_stop_level_12h_usd:.0f}.\n")
     L.append("## What this does not show\n")
     L.append("- Exit reasons are inferred, not observed; ERROR_OR_CLOSED pools API errors, "
-             "agent (parse) errors and scorecard closures.\n"
+             "agent (parse) errors, scorecard closures and runs stopped outside the harness, "
+             "so it does not by itself show that a run crashed.\n"
+             "- The stopping rules are read from the pinned harness, not from the published "
+             "configs (not in the repo); the 5x multiplier and the 12 h clock are confirmed "
+             "only by the data checks above.\n"
              "- One published run per game and config: no seed variance; nothing here is a "
              "harness effect estimate.\n"
              "- Costs are ARC's no-cache list accounting from the recordings, not billed cost; "
              "per-action numbers come from 8 games chosen for the path study, not all 25.\n"
-             "- Clean-run bounds assume the plateau cost per action holds for the remaining "
-             "budget; the uncapped bound ignores the 12 h clock and the capped one assumes "
-             "the run's own mean pace. They are planning numbers, not forecasts of our runs "
-             "(service tier, latency and model behaviour can differ).\n"
+             "- Clean-run bounds cap the number of actions, not the dollars: they assume the "
+             "plateau cost per action holds for the remaining budget; the uncapped bound "
+             "ignores the 12 h clock and the capped one assumes the run's own mean pace. They "
+             "are planning numbers, not forecasts of our runs (service tier, latency and model "
+             "behaviour can differ), and they do not show what a clean run would have scored.\n"
              "- No per-level clear rates by harness (H5) are computed or implied.")
     (run_dir / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")
 

@@ -19,9 +19,21 @@ harness (arcprize/arc-agi-3-benchmarking @ 4ca00e6):
   base.py L86-89, L116-117); hitting it is also reported as ACTION_BUDGET.
 - ``benchmarking/base.py`` L112-114 and ``benchmarking/swarm.py`` ``close_scorecard``: any
   exception ends the run with ``API_ERROR`` / ``AGENT_ERROR``, or ``SCORECARD_CLOSED`` if the
-  server closed the scorecard. These are indistinguishable in published data, so they are
-  pooled as ``ERROR_OR_CLOSED``. ``agent.py`` L1098-1100 raises after ``MAX_RETRIES + 1``
-  failed attempts to get a parseable action.
+  server closed the scorecard (swarm.py L150-156: "closed due to idle/total time limit").
+  These are indistinguishable in published data, so they are pooled as ``ERROR_OR_CLOSED``.
+  ``agent.py`` L1098-1100 raises after ``MAX_RETRIES + 1`` failed attempts to get a parseable
+  action. A run stopped from outside the harness (process killed; agent threads are daemons,
+  swarm.py L87) keeps exit reason ``UNKNOWN`` and also lands in ``ERROR_OR_CLOSED``, so the
+  bucket means "stopped without reaching a win, an action budget or the clock", not
+  necessarily "crashed".
+
+Harness version: the published runs predate the pin (session ``open_at`` 2026-09-09 to
+2026-09-21; 4ca00e6 is dated 2026-09-21). The stopping logic used here is unchanged between
+``1aa78da`` (2026-09-03) and ``4ca00e6``: ``base.py`` and ``swarm.py`` have no diff, and the
+``agent.py`` diff touches neither the budget setup, ``_sync_level_progress``/``is_done`` nor the
+counter increments (checked 2026-09-30 with ``git diff 1aa78da 4ca00e6``). The published
+configs themselves are not in the repo, so the 5.0 multiplier and the 12 h clock are
+confirmed only by the data checks below, not by reading the configs.
 
 Inference order: GAME_WIN (state WIN) > ACTION_BUDGET (final-level actions >= ceil(5 x
 baseline)) > TIME_BUDGET (duration >= 11.9 h) > ERROR_OR_CLOSED.
@@ -30,7 +42,10 @@ Checks on the published data (run by ``ops.py``): the server's ``level_actions``
 model-chosen and forced RESETs but not the opening RESET, the same actions the harness counter
 counts (per-level counts re-derived from the 16 recordings match the sessions exactly), and
 every run inferred as ACTION_BUDGET has final-level actions exactly equal to its budget
-(``budget_margin`` 0), so the rule has no off-by-one slack.
+(``budget_margin`` 0), so the rule has no off-by-one slack. That includes the 11 runs that
+stopped on level 1: the harness's level-0 counter therefore does not include the opening
+RESET either, consistent with that RESET being made by ``Arcade.make()`` (swarm.py L80) before
+the agent loop starts, so no forced RESET is counted at agent.py L679 for it.
 """
 
 from __future__ import annotations

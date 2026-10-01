@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from arc.public import recordings as R
@@ -32,6 +34,15 @@ def test_summary_standard():
     # the doubled-usage step (line 6) is the only multi-attempt step
     assert s.n_multi_attempt_steps == 1 and not s.last_step_multi_attempt
     assert s.input_max == 200_000
+    assert s.n_output_lt_reasoning == 0
+
+
+def test_output_below_reasoning_is_flagged():
+    lines = standard_recording()
+    meta = json.loads(lines[2]["data"]["action_input"]["reasoning"])
+    meta["usage"]["output_tokens"] = 100          # reasoning 15,000 > output: identity broken
+    lines[2]["data"]["action_input"]["reasoning"] = json.dumps(meta)
+    assert R.summarize(R.parse_lines(lines)).n_output_lt_reasoning == 1
 
 
 def test_multi_attempt_detection_uses_frames_and_replayed_output():

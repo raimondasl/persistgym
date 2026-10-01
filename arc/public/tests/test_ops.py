@@ -73,6 +73,7 @@ def test_lp85_example(runs):
 def rec_frame(rows):
     return pd.DataFrame([{"game": g, "harness": h, "guid": guid, "cost_total_usd": cost,
                           "plateau_cost_per_step_mean": plateau, "s_per_step_mean": spa,
+                          "cost_per_step_mean": 0.9 * plateau,
                           "n_steps": 1, "n_compactions": 0}
                          for g, h, guid, cost, plateau, spa in rows])
 
@@ -84,6 +85,7 @@ def test_clean_run_bounds(runs):
     lp = b.loc["LP85"]
     assert lp.remaining_stop_level_actions == 779
     assert lp.bound_stop_level_usd == pytest.approx(24.33 + 779 * 0.2)
+    assert lp.bound_stop_level_overall_mean_usd == pytest.approx(24.33 + 779 * 0.18)
     assert lp.bound_full_game_usd == pytest.approx(lp.bound_stop_level_usd)  # last level
     assert lp.bound_stop_level_wallclock_h == pytest.approx(911 * 50 / 3600)
     assert not lp.fits_12h_at_stop_level_bound

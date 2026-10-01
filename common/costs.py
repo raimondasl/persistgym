@@ -16,10 +16,15 @@ COSTS_CSV = REPO_ROOT / "results" / "costs.csv"
 
 COLUMNS = [
     "timestamp_utc", "run_id", "milestone", "experiment", "cell_or_config",
-    "model_requested", "model_returned", "provider", "api", "service_tier",
-    "n_calls", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens",
+    "model_requested", "model_returned", "provider", "api", "service_tier", "service_tier_served",
+    "n_calls", "input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens",
+    "reasoning_tokens", "latency_s",
     "cost_usd_list", "cost_usd_billed_est", "price_source_date", "git_commit", "notes",
 ]
+
+# Added 2026-10-01 (researcher-approved schema change). Optional in append_row: empty when
+# the provider does not report them, so writers built before the change keep working.
+OPTIONAL_COLUMNS = {"service_tier_served", "cache_write_tokens", "latency_s"}
 
 # Hard caps per budget phase, PLAN.md §12 (USD). Stop and ask the researcher before exceeding.
 PHASE_CAPS = {"0": 100.0, "1a": 450.0, "1b": 900.0, "2": 950.0}
@@ -42,6 +47,7 @@ EXPERIMENT_PHASE = {
 
 def append_row(row: dict, path: Path = COSTS_CSV) -> None:
     """Append one validated row. Never rewrites existing rows."""
+    row = {**{c: "" for c in OPTIONAL_COLUMNS}, **row}
     missing = [c for c in COLUMNS if c not in row]
     extra = [k for k in row if k not in COLUMNS]
     if missing or extra:

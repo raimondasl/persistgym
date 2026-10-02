@@ -779,6 +779,31 @@ def test_calls_without_finalize_keep_the_lock(repo, monkeypatch):
     assert json.loads(t.paid_lock.path.read_text(encoding="utf-8"))["kept_because"] == reason
 
 
+@pytest.mark.parametrize("experiment", ["toggle_pilot", "persistgym_pilot"])
+def test_a_blinded_pilot_logs_no_call_status(repo, monkeypatch, caplog, experiment):
+    """D13 and PREREG §11: an incomplete response is logged with a warning, but not in a
+    blinded pilot. There the warnings, less the routine ones summary.json counts, would count
+    the incomplete responses at the need step, which score 0; the raw transcript keeps every
+    call's status."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    incomplete = {**_response(), "status": "incomplete",
+                  "incomplete_details": {"reason": "max_output_tokens"}}
+    factory, _ = _factory([incomplete, _response()])
+    t = _make(repo, factory, experiment=experiment)
+    with caplog.at_level("INFO", logger="harnesses.openai"):
+        _call(t, 2)
+    assert [e["status"] for e in t.echo_log] == ["incomplete", "completed"]
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    if experiment == "persistgym_pilot":
+        assert "incomplete" not in text and "completed" not in text
+        assert text.count("status=withheld") == 2
+        assert all(r.levelname == "INFO" for r in caplog.records)
+    else:
+        assert "status=incomplete" in text and "status=completed" in text
+        assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
+            "incomplete response (reason=max_output_tokens, max_output_tokens=None)"]
+
+
 # --- sends from several threads (parallel episodes, PREREG §4.6; harnesses/parallel.py) -------
 
 class _SlowStub:

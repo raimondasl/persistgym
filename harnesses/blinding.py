@@ -10,20 +10,47 @@ For an experiment in `BLINDED_EXPERIMENTS`:
 * the committed `results/<experiment>/<run_id>/` gets `meta.json`, whose `tokens` leave out
   `reasoning_tokens`, and `summary.json` (`run_summary`): errors, latency, cost and the
   echo-match rate, nothing else;
+* `meta.json`'s `parallel` (`harnesses.parallel.ParallelPlay.info`) is cut to
+  `PARALLEL_FIELDS` (`blinded_parallel`), and the whole block goes to the gitignored
+  `results/raw/<experiment>/<run_id>/parallel.json` (`runner.PARALLEL_INFO`), next to the
+  reservation log;
 * the transport's `results/costs.csv` row leaves `reasoning_tokens` empty;
 * `pooled_report` (CLI `pilot-report`) is the committed script that reads the raw episodes
   of every run and reports, per model, pooled tokens (summed over the harness cells run),
   validity levels of the restated and withheld variants, errors, latency, cost and the
   per-cell echo-match rate (exempt: a toggle check, not an outcome; PREREG §11, D29).
 
-Both summaries are built from an allowlist of fields, so a field added to `EpisodeRun` later
-never reaches a committed pilot file by accident.
+Both summaries and the committed `parallel` block are built from an allowlist of fields, so
+a field added to `EpisodeRun` or to `ParallelPlay.info` later never reaches a committed pilot
+file by accident.
+
+What `parallel` leaves out for a pilot, and why. One run is one arm, and pilots report cost
+(PREREG §11) but nothing finer than the run's total, which the costs row already holds:
+* `spend_reservation.last_estimate_usd`, twice the largest spend of a finished episode: the
+  spend of one episode of one arm;
+* `peak_episodes_in_flight`: under a spend plan, episodes start only as far as their
+  estimates fit in the planned spend, so the peak bounds the per-episode estimate;
+* `spend_reservation.call_gate.calls_waited` and `.peak_calls_in_flight`: whether a call
+  waits, and so how many overlap, depends on the run's spend as it went and on the most each
+  call can cost, which grows with its payload (in the replay arms, with the reasoning
+  replayed).
+It keeps the planned spend, the estimate rule and factor, the counts of episodes started,
+not started and measured, the calls the gate let through (the run's calls, which
+`summary.json` and the costs row count too, plus any that the transport's stop then refused
+or that failed, each of which ended its episode: COST_CAP, API_ERROR or the run's error),
+the stop reason and the abandoned episodes. Whether the plan held is in what is kept: the
+stop reason (`SPEND_RESERVATION` when the next episode's estimate did not fit, `COST_CAP`
+when the transport's stop fired), `episodes_not_started`, and `cost_usd` against
+`spend_reservation.planned_usd`.
 
 What this does not blind: the per-run `results/costs.csv` row (CLAUDE.md requires one per
 run) and the run's `meta.json` token totals still carry that run's input and output tokens,
 calls and cost, and one run is one harness cell. Output tokens are mostly reasoning tokens,
 so they approximate the withheld column; n_calls approximates lookups. Only the explicit
-`reasoning_tokens` fields are left empty.
+`reasoning_tokens` fields are left empty. For a parallel run, `summary.json`'s count of
+RUN_STOPPED episodes (and the message a Ctrl+C or an error prints) says roughly how many
+episodes were in flight when the run stopped; under a spend plan that bounds the per-episode
+estimate, as the withheld peak does, though more loosely.
 
 The CLI also refuses pilot-split templates under any other experiment, and `run_batch`
 refuses a run id that is not a plain folder name, so pilot episodes cannot be written
@@ -44,6 +71,18 @@ WITHHELD_NOTE = "reasoning_tokens withheld: pilot blinding (PREREG §11)"
 VALIDITY_VARIANTS = ("restated", "withheld")
 TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens",
                 "reasoning_tokens")
+PARALLEL_FIELDS = (
+    "max_episodes_in_flight", "episodes_started", "episodes_not_started", "stop_reason",
+    "abandoned_episode_ids", "abandoned_transcripts",
+    "spend_reservation.planned_usd", "spend_reservation.estimate_rule",
+    "spend_reservation.estimate_factor", "spend_reservation.episodes_started",
+    "spend_reservation.episodes_measured", "spend_reservation.whole_episode_measured",
+    "spend_reservation.call_gate.rule", "spend_reservation.call_gate.calls",
+)
+"""The fields of meta.json's `parallel` that a blinded run commits (module docstring); a dot
+names a field inside a dict."""
+PARALLEL_WITHHELD_NOTE = ("parallel: per-episode spend estimates, call-gate waits and the "
+                          "peaks in flight withheld: pilot blinding (PREREG §11)")
 
 
 def is_blinded(experiment: str) -> bool:
@@ -53,6 +92,31 @@ def is_blinded(experiment: str) -> bool:
 def blinded_tokens(tokens: dict) -> dict:
     """Run-level token totals that a blinded run may commit: all but reasoning (None)."""
     return {**tokens, "reasoning_tokens": None}
+
+
+def _allowlisted(doc: dict, fields: Iterable[str]) -> dict:
+    """The fields of `doc` named in `fields`, in `doc`'s order; "a.b" names field b of the
+    dict in field a. A dict whose fields are not named keeps none of them; a value that is
+    not a dict (None, say) where fields inside it are named is kept as it is."""
+    leaves: set[str] = set()
+    inner: dict[str, list[str]] = {}
+    for f in fields:
+        head, _, rest = f.partition(".")
+        if rest:
+            inner.setdefault(head, []).append(rest)
+        else:
+            leaves.add(head)
+    out = {}
+    for k, v in doc.items():
+        if k in inner or k in leaves:
+            out[k] = _allowlisted(v, inner.get(k, ())) if isinstance(v, dict) else v
+    return out
+
+
+def blinded_parallel(info: dict) -> dict:
+    """meta.json's `parallel` as a blinded run commits it: the fields in `PARALLEL_FIELDS`
+    only. The runner writes the whole block to the raw folder (`runner.PARALLEL_INFO`)."""
+    return _allowlisted(info, PARALLEL_FIELDS)
 
 
 # --- pieces shared by the run summary and the pooled report -----------------------------

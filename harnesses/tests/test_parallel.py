@@ -19,7 +19,7 @@ import openai
 import pytest
 
 from common.costs import spend_usd
-from harnesses import parallel, runner
+from harnesses import blinding, parallel, runner
 from harnesses.cells import CELLS
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -247,6 +247,51 @@ def test_reservations_never_start_an_episode_the_planned_spend_cannot_hold(small
     seq = _Budgeted(FakeModel(ids="payload"), planned)
     meta = _run(eps, "F-r", seq, tmp_path / "seq", 1)
     assert meta["exit_reason"] == "COST_CAP" and seq.refused == 1 and seq.spent_usd > planned
+
+
+def test_a_blinded_run_keeps_its_spend_estimates_in_raw(small_eps, tmp_path):
+    """PREREG §11: a pilot's committed meta.json has no per-episode spend estimate, and none
+    of the call-gate waits and peaks in flight that the estimates and the per-call bounds
+    decide (blinding.blinded_parallel); the whole `parallel` block is in the raw folder,
+    next to the reservation log. A run that is not blinded commits the whole block."""
+    eps = small_eps[:8]
+    planned = 100 * max(_episode_spend(eps, "F-r"))
+    pilot, main = "persistgym_pilot", "persistgym"
+    for experiment in (pilot, main):
+        root = tmp_path / experiment
+        meta = _run(eps, "F-r", _Budgeted(FakeModel(ids="payload"), planned), root, 4,
+                    experiment=experiment)
+        assert meta["exit_reason"] == "COMPLETED"
+        text = (root / "results" / experiment / "r" / "meta.json").read_text(encoding="utf-8")
+        assert json.loads(text) == meta
+        raw = root / "raw" / experiment / "r"
+        log = [json.loads(x) for x in (raw / runner.RESERVATIONS_LOG).read_text(
+            encoding="utf-8").splitlines()]
+        res = meta["parallel"]["spend_reservation"]
+        if experiment == main:
+            assert res["last_estimate_usd"] == pytest.approx(log[-1]["estimate_usd"])
+            assert meta["parallel"]["peak_episodes_in_flight"] == 4
+            assert not (raw / runner.PARALLEL_INFO).exists() and "blinding" not in meta
+            continue
+        for word in ("estimate_usd", "reserved_usd", "spent_usd", "peak_", "calls_waited"):
+            assert word not in text, word
+        assert res["planned_usd"] == planned and res["estimate_factor"] == 2.0
+        assert res["call_gate"]["calls"] == sum(x["n_requests"] for x in _lines(root, pilot))
+        full = json.loads((raw / runner.PARALLEL_INFO).read_text(encoding="utf-8"))
+        assert full["spend_reservation"]["last_estimate_usd"] == pytest.approx(
+            log[-1]["estimate_usd"]) and log[-1]["estimate_usd"] < planned
+        assert full["peak_episodes_in_flight"] == 4
+        assert {"calls_waited", "peak_calls_in_flight"} <= set(
+            full["spend_reservation"]["call_gate"])
+        assert meta["parallel"] == blinding.blinded_parallel(full)
+        assert meta["blinding"]["parallel_path"] == (raw / runner.PARALLEL_INFO).as_posix()
+    # the pilot's raw block has every field the other run commits
+    whole = json.loads((tmp_path / main / "results" / main / "r" / "meta.json")
+                       .read_text(encoding="utf-8"))["parallel"]
+    assert list(full) == list(whole)
+    assert list(full["spend_reservation"]) == list(whole["spend_reservation"])
+    assert (list(full["spend_reservation"]["call_gate"])
+            == list(whole["spend_reservation"]["call_gate"]))
 
 
 def test_a_run_whose_first_episode_does_not_finish_keeps_reserving_all_it_has(small_eps,

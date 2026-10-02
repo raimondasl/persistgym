@@ -1,0 +1,80 @@
+{
+  "experiment": "draw",
+  "run_id": "20261002T033145Z",
+  "cell_or_config": "d15_beacon_draw",
+  "config": {
+    "freeze_commit": "ed340a1cda91153dafe78772861c40343b53dafa",
+    "games": [
+      "FT09",
+      "SB26",
+      "R11L",
+      "CD82"
+    ],
+    "configs": [
+      "S0",
+      "S1",
+      "S2",
+      "S4"
+    ],
+    "replicates": [
+      1,
+      2
+    ],
+    "block2_configs": [
+      "S0",
+      "S4"
+    ],
+    "delay_s": 600,
+    "fallback_after_ms": 86400000,
+    "nist_base": "https://beacon.nist.gov/beacon/2.0",
+    "drand_base": "https://api.drand.sh",
+    "drand_chain_hash": "8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce",
+    "fallback_if_nist_unreachable": false
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": {
+    "seed": 4086943125952605534,
+    "block2": 4086943125952605536,
+    "block3": 4086943125952605537
+  },
+  "started_utc": "2026-10-02T03:31:43+00:00",
+  "finished_utc": "2026-10-02T03:31:48+00:00",
+  "exit_reason": "completed",
+  "tokens": {
+    "paid_calls": 0
+  },
+  "cost_usd": 0.0,
+  "raw_transcript_path": "results/draw/20261002T033145Z (raw beacon responses, committed; see raw_sha256)",
+  "outputs": [
+    "draw.json",
+    "decisions_block.md",
+    "nist_prev_pulse.json",
+    "nist_pulse.json"
+  ],
+  "beacon_source": "nist",
+  "pulse_url": "https://beacon.nist.gov/beacon/2.0/pulse/time/1790911828000",
+  "fallback_reason": null,
+  "freeze_prereg_version": "1.0",
+  "python_version": "3.12.13",
+  "raw_sha256": {
+    "nist_prev_pulse.json": "6df896e25428252734d586e36d47abe532163b9597c5a41a11e9767ff9abd404",
+    "nist_pulse.json": "4ea127b673913e316f988dc3596c380fe26f651aa50ccd6295f2fb97d28abbf5"
+  },
+  "paid_calls": 0,
+  "config_hash": "7b1688171a154bbb521a3872f2247fe1c44bbf4d151d1c3a62114d9019a5b6b3",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "ed340a1cda91153dafe78772861c40343b53dafa",
+  "git_dirty": false
+}

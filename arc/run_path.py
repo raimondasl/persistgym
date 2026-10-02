@@ -40,10 +40,14 @@ It spends money only after every check below passes, in this order:
 
 Then it runs arc/run_path_inner.py in the patched harness with a sanitized environment
 (only the needed keys added), in a short scratch directory, and whatever happens:
-* if the run's `exit_reason` or `agent_exit_reason` is COST_CAP, places a hold
-  (`common.hold`) before anything else, while it still holds the lock, so a run whose
-  accounting fails still places it. Pilots too, whose guard is their planned spend. If the
-  hold cannot be written, the lock stays held with the reason;
+* if the run's `exit_reason` or `agent_exit_reason` is COST_CAP, or a game run's no-cache
+  list spend passed its harness cost guard whatever its ending (the guard is checked only
+  before each action, so the step that crosses it can still fail, or the process can die
+  before the agent records COST_CAP), places a hold (`common.hold`) before anything else,
+  while it still holds the lock and inside the accounting's guard, so a run whose
+  accounting fails, or that is interrupted, still places it or keeps the lock. Pilots too,
+  whose guard is their planned spend. If the hold cannot be written, the lock stays held
+  with the reason, and a later reason is added to it;
 * copies the harness files to results/raw/<experiment>/<run_id>/ (gitignored);
 * appends ONE results/costs.csv row tagged `approved_block=<name>;`, with the list and
   billed estimates priced from the run's per-step usage (arc/pricing.py);
@@ -74,7 +78,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -728,52 +732,100 @@ def blind_ending(reason: str | None) -> str | None:
 # ── The hold after COST_CAP (PREREG §0.3 line 12, §7.7) ────────────────
 
 
-def cost_cap_ending(scratch: Path) -> dict[str, str | None] | None:
-    """The run's endings if any of them is COST_CAP, else None. Read straight from what the
-    harness wrote in `scratch` (each run_meta.json's `exit_reason` and `agent_exit_reason`,
-    and result.json's `exit_reason`), so it does not depend on the accounting. Never
-    raises: what cannot be read is skipped (the accounting then checks again)."""
+def _past_guard(guard: Any) -> float | None:
+    """The harness's spend estimate if run_meta.json's `cost_guard` (patch 0010: `max_usd` and
+    `estimated_cost_usd`, ARC's no-cache list accounting) shows it past the limit, else None.
+    The guard stops a run once the estimate exceeds the limit, so equal is not past."""
+    if not isinstance(guard, dict):
+        return None
+    spent, cap = guard.get("estimated_cost_usd"), guard.get("max_usd")
+    if not all(isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+               for v in (spent, cap)):
+        return None
+    return float(spent) if spent > cap else None
+
+
+def cost_cap_ending(scratch: Path) -> dict[str, Any] | None:
+    """What places the hold, read straight from what the harness wrote in `scratch`, so it
+    does not depend on the accounting: the run's endings if any of them is COST_CAP (each
+    run_meta.json's `exit_reason` and `agent_exit_reason`, and result.json's), or else, if a
+    run_meta.json's `cost_guard` shows the spend past the guard, the endings plus
+    `spent_list_usd`. The guard is checked only before each action, so a run can pass it and
+    end otherwise (the step that crossed it failed, or the process died before the agent
+    recorded COST_CAP). None if neither. Never raises: what cannot be read is skipped (the
+    accounting then checks again)."""
     try:
-        metas = [_read_json(p) for p in sorted(scratch.glob("recordings/*/run_meta.json"))]
+        metas = [d for d in (_read_json(p)
+                             for p in sorted(scratch.glob("recordings/*/run_meta.json")))
+                 if isinstance(d, dict)]
         result = _read_json(scratch / "out" / inner.RESULT_FILE)
+        result = result if isinstance(result, dict) else {}
+
+        def endings(meta: Mapping[str, Any]) -> dict[str, Any]:
+            return {"exit_reason": meta.get("exit_reason") or result.get("exit_reason"),
+                    "agent_exit_reason": meta.get("agent_exit_reason")}
+        if any(d.get(k) == hold.COST_CAP for d in [*metas, result]
+               for k in ("exit_reason", "agent_exit_reason")):
+            return endings(metas[0] if metas else {})
+        for meta in metas:
+            spent = _past_guard(meta.get("cost_guard"))
+            if spent is not None:
+                return {**endings(meta), "spent_list_usd": spent}
     except Exception:  # noqa: BLE001 - a hold check must not stop the accounting
         return None
-    found = [d for d in [*metas, result] if isinstance(d, dict)]
-    if not any(d.get(k) == hold.COST_CAP for d in found
-               for k in ("exit_reason", "agent_exit_reason")):
-        return None
-    meta = next((d for d in metas if isinstance(d, dict)), {})
-    return {"exit_reason": meta.get("exit_reason")
-            or (result.get("exit_reason") if isinstance(result, dict) else None),
-            "agent_exit_reason": meta.get("agent_exit_reason")}
+    return None
 
 
-def place_cost_cap_hold(plan: Plan, ending: Mapping[str, str | None], *, lock: Path,
-                        held: dict) -> dict | None:
-    """Place the hold of run `plan`, which ended COST_CAP (common/hold.py), and say so. The
-    record shows a blinded pilot's endings blinded (PREREG §11). Never raises: if the hold
-    cannot be written, the paid-run lock stays held with the reason (`paidlock.keep`), so no
-    paid run starts either way, and None is returned."""
+def accounted_cost_cap(plan: Plan, acct: Accounting) -> dict[str, Any] | None:
+    """`cost_cap_ending` from the accounting, for a run whose harness files that check could
+    not read: a COST_CAP ending, or (for a game run) a no-cache list cost past the harness
+    guard, which the accounting prices as the guard does (the same prices, checked by
+    `make_plan`). None if neither."""
+    ending = {"exit_reason": acct.exit_reason, "agent_exit_reason": acct.agent_exit_reason}
+    if hold.COST_CAP in ending.values():
+        return ending
+    if not plan.acceptance and acct.cost_list > plan.cost_cap_usd:
+        return {**ending, "spent_list_usd": acct.cost_list}
+    return None
+
+
+def place_cost_cap_hold(plan: Plan, ending: Mapping[str, Any], *, lock: Path,
+                        keep: Callable[[str], None]) -> dict | None:
+    """Place the hold of run `plan` (common/hold.py), which ended COST_CAP or whose spend
+    passed its harness cost guard (`ending`, from `cost_cap_ending` or `accounted_cost_cap`),
+    and say so. The record shows a blinded pilot's endings blinded (PREREG §11). If the hold
+    cannot be written, the paid-run lock stays held with the reason (`keep`), so no paid run
+    starts either way, and None is returned. What still escapes (a Ctrl+C) reaches the
+    accounting's guard in `execute`, which runs this inside it and then keeps the lock."""
     exit_reason, agent_exit = ending.get("exit_reason"), ending.get("agent_exit_reason")
     if plan.blinded:
         exit_reason, agent_exit = blind_ending(exit_reason), blind_ending(agent_exit)
     guard = "D22's run guard" if plan.experiment == "arc_path" else "set at its planned spend"
-    reason = (f"ended COST_CAP at its harness cost guard of ${plan.cost_cap_usd:.2f} list "
-              f"({guard})")
+    limit = f"its harness cost guard of ${plan.cost_cap_usd:.2f} list ({guard})"
+    spent = ending.get("spent_list_usd")
+    if hold.COST_CAP in (ending.get("exit_reason"), ending.get("agent_exit_reason")):
+        reason = f"ended COST_CAP at {limit}"
+    else:
+        ended = (exit_reason if agent_exit == exit_reason
+                 else f"{exit_reason} (the agent's own ending {agent_exit})")
+        amount = "an unknown amount" if spent is None else f"${spent:.2f}"
+        reason = (f"spent {amount} list, past {limit}, and ended {ended} before the guard "
+                  f"stopped it")
+    details = {} if spent is None else {"spent_list_usd": round(float(spent), 6)}
     line = approval.format_clear_line(plan.run_id)
     try:
         record = hold.place_hold(lock, run_id=plan.run_id, experiment=plan.experiment,
                                  reason=reason, what=plan.describe(),
                                  approved_block=plan.approved_block,
                                  cost_cap_usd=plan.cost_cap_usd, exit_reason=exit_reason,
-                                 agent_exit_reason=agent_exit)
+                                 agent_exit_reason=agent_exit, **details)
     except Exception as e:  # noqa: BLE001 - the lock stops paid runs instead
         why = (f"run {plan.run_id} ({plan.describe()}) {reason}, and its hold could not be "
                f"written to {hold.holds_path(lock)} ({type(e).__name__}: {e}). Add the hold "
                f"there by hand (one JSON line with run_id {plan.run_id!r}) before deleting "
                f"this lock file; the researcher clears it with the line '{line}' "
                f"(PREREG §7.7)")
-        paidlock.keep(lock, held, why)
+        keep(why)
         print(f"ERROR: {why}: {lock}", file=sys.stderr, flush=True)
         return None
     print(f"HOLD: run {plan.run_id} {reason}. No further paid run starts in either stream "
@@ -898,32 +950,53 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
         code = run_inner(command, scratch, inner_env(plan, harness, scratch),
                          log_path=raw_dir / BLINDED_LOG if plan.blinded else None)
     finally:
-        # The hold first, while the lock is still held and before the accounting, so that a
-        # run whose accounting fails still places it (PREREG §7.7).
-        ending = cost_cap_ending(scratch)
-        placed = (place_cost_cap_hold(plan, ending, lock=lock, held=held)
-                  if ending is not None else None)
+        # Every reason this run keeps the lock for goes into the lock file: a second one is
+        # added to the first (`paidlock.keep` returns the file it wrote), not lost.
+        kept = {"info": held}
+
+        def keep(why: str) -> None:
+            kept["info"] = paidlock.keep(lock, kept["info"], why) or kept["info"]
         row = None
+        placed = None
+        # True once the hold is settled: written, not needed, or its failure is in the lock.
+        hold_settled = False
         try:
+            # The hold first, while the lock is still held and before the accounting, so
+            # that a run whose accounting fails still places it (PREREG §7.7); and inside
+            # this guard, so that a Ctrl+C or an error here keeps the lock too.
+            ending = cost_cap_ending(scratch)
+            if ending is not None:
+                placed = place_cost_cap_hold(plan, ending, lock=lock, keep=keep)
+                hold_settled = True
             collect_outputs(scratch, raw_dir)
             account = account_acceptance if plan.acceptance else account_game
             acct = account(plan, raw_dir, price)
-            if ending is None and hold.COST_CAP in (acct.exit_reason, acct.agent_exit_reason):
-                ending = {"exit_reason": acct.exit_reason,
-                          "agent_exit_reason": acct.agent_exit_reason}
-                placed = place_cost_cap_hold(plan, ending, lock=lock, held=held)
+            if not hold_settled:
+                ending = accounted_cost_cap(plan, acct)
+                if ending is not None:
+                    placed = place_cost_cap_hold(plan, ending, lock=lock, keep=keep)
+                hold_settled = True
             if acct.any_call:
                 candidate = costs_row(plan, acct, git=runmeta.git_state(paths.repo))
                 costs.append_row(candidate, paths.costs)
                 row = candidate
         except BaseException:
             # The run may have spent money the ledger does not show: keep the lock so that
-            # no paid run starts until the row is added by hand.
+            # no paid run starts until the row is added by hand. If the hold was not settled
+            # (the ending could not be read, or a Ctrl+C came first), the operator must
+            # check for one too.
             why = (f"run {plan.run_id} ({plan.describe()}) may have spent money that "
                    f"{paths.costs} does not show: add its row by hand (tagged "
                    f"{approval.spend_tag(plan.approved_block)}; harness files in {scratch} "
-                   f"and {raw_dir}), then delete this lock file")
-            paidlock.keep(lock, held, why)
+                   f"and {raw_dir})")
+            if not hold_settled:
+                why += (f"; and if it ended COST_CAP or its list cost passed its harness cost "
+                        f"guard of ${plan.cost_cap_usd:.2f} (run_meta.json: exit_reason, "
+                        f"agent_exit_reason, cost_guard), add its hold to "
+                        f"{hold.holds_path(lock)} (one JSON line with run_id "
+                        f"{plan.run_id!r}; the researcher clears it with the line "
+                        f"'{approval.format_clear_line(plan.run_id)}', PREREG §7.7)")
+            keep(why + "; then delete this lock file")
             print(f"ERROR: could not account for the run. {why}: {lock}", file=sys.stderr)
             raise
         if row is not None:

@@ -21,7 +21,8 @@ refuses unless that row is in its own ledger (`last_run_missing`), since each ch
 its own results/costs.csv.
 
 Also next to the lock, `persistgym-paid-holds.jsonl` records the holds placed by paid runs
-that ended COST_CAP (common/hold.py); a paid run refuses while one is not cleared.
+that ended COST_CAP or passed their run guard (common/hold.py); a paid run refuses
+while one is not cleared.
 
 Both paid launchers take this lock before their spend checks: the ARC launcher
 (arc/run_path.py) and the PersistGym launcher (harnesses/cli.py), whose transport refuses
@@ -41,6 +42,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+from common.hold import HOLDS_NAME
 
 LOCK_NAME = "persistgym-paid-run.lock"
 
@@ -101,7 +104,10 @@ def paid_run_lock(path: Path, *, run_id: str, what: str) -> Iterator[dict]:
             held = "(unreadable)"
         raise LockHeld(
             f"another paid run holds {path}: {held}. One paid run at a time: wait for it to "
-            "end. If no paid run is going (it crashed), delete that file by hand.") from None
+            "end. If no paid run is going (it crashed), check that results/costs.csv has its "
+            "row and, if it ended COST_CAP or passed its run guard (its run_meta.json), that "
+            f"its hold is in {path.with_name(HOLDS_NAME)} "
+            "(common/hold.py), then delete that file by hand.") from None
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(info, f)
     try:
@@ -114,20 +120,33 @@ def paid_run_lock(path: Path, *, run_id: str, what: str) -> Iterator[dict]:
             pass
 
 
-def keep(path: Path, info: dict, reason: str) -> None:
+ALSO = " ALSO: "   # joins the reasons of a lock kept for more than one problem
+
+
+def keep(path: Path, info: dict, reason: str) -> dict | None:
     """Leave the lock held after the run ends, with `reason`: for a run that may have spent
     money that results/costs.csv does not show. The file (if it is still ours) gets the
     reason and a new token, so `paid_run_lock` does not remove it and every later paid run
     refuses, printing the reason, until the operator has added the missing row and deleted
-    the file by hand."""
+    the file by hand.
+
+    Returns the file's new contents (with the new token), or None if the file is not this
+    run's and was left alone. A run that finds a second problem passes that return value as
+    `info`: the second reason is then added to the first, not lost, so the operator who
+    follows the file fixes both."""
     try:
         held = json.loads(path.read_text(encoding="utf-8"))
-        if held.get("token") != info["token"]:
-            return
+        if not isinstance(held, dict) or held.get("token") != info["token"]:
+            return None
+        earlier = held.get("kept_because")
+        if isinstance(earlier, str) and earlier:
+            reason = (earlier if reason in earlier.split(ALSO)
+                      else f"{earlier}{ALSO}{reason}")
         held.update(token=uuid.uuid4().hex, kept_because=reason)
         path.write_text(json.dumps(held), encoding="utf-8")
+        return held
     except (OSError, ValueError):
-        pass
+        return None
 
 
 # ── The last paid run's ledger ─────────────────────────────────────────

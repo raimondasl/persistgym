@@ -8,8 +8,8 @@ $0 commands (fake model or local files, no network):
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other paid run (ARC or PersistGym)
 holds the paid-run lock, this checkout's results/costs.csv holds the last paid run's row, no
-hold stands (a paid run that ended COST_CAP, until the researcher merges
-"cleared_hold: <run_id>" into results/decisions.md; common/hold.py),
+hold stands (a paid run that ended COST_CAP or passed its run guard, until the researcher
+merges "cleared_hold: <run_id>" into results/decisions.md; common/hold.py),
 --approved-block and --planned-usd are given, PREREG.md is committed, merged to origin/main
 and frozen, and results/decisions.md holds the researcher's line
 "approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>" on origin/main,

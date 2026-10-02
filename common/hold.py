@@ -1,11 +1,12 @@
 """The hold after a COST_CAP ending (PREREG §0.3 line 12, §7.7, §12): the record of runs that
 placed one.
 
-A paid run that ends `COST_CAP` at its run guard places a hold. While a hold stands, no
-further paid run starts in either stream, ARC or PersistGym, until the researcher clears it
-by merging the line `cleared_hold: <run_id>` into results/decisions.md. The clearing grammar,
-and the check that refuses a paid run while a hold stands, are in common/approval.py
-(`require_paid_run`). This module only writes and reads the record.
+A paid run that ends `COST_CAP` at its run guard, or whose spend passed that guard before it
+could stop the run, places a hold. While a hold stands, no further paid run starts in either
+stream, ARC or PersistGym, until the researcher clears it by merging the line
+`cleared_hold: <run_id>` into results/decisions.md. The clearing grammar, and the check that
+refuses a paid run while a hold stands, are in common/approval.py (`require_paid_run`). This
+module only writes and reads the record.
 
 **The record.** `persistgym-paid-holds.jsonl`, in the same folder as the paid-run lock
 (common/paidlock.py): the git common directory, shared by every worktree of the clone, so a
@@ -17,14 +18,19 @@ never removes or edits a hold. A hold is cleared by the researcher's merged line
 deleting the record, and removing that line again puts the hold back.
 
 **Who writes it.** The ARC launcher (arc/run_path.py), whenever a run's `exit_reason` or
-`agent_exit_reason` is `COST_CAP`, before it accounts for the run, so a run whose accounting
-fails still places its hold. It writes one for a pilot too, whose harness guard is its
-planned spend rather than D22's $120 (stricter than §7.7, which names the $120 guard). The
-acceptance check never ends COST_CAP: once its guard is reached it skips the profiles left
-and ends NOT_ALL_ACCEPTED, with no hold. The PersistGym transport writes none: it stops a run before a call once the run's
-spend reaches `--planned-usd`, a stop its runner labels `COST_CAP`, but that is the planned
-spend, not a per-run cost guard. A PersistGym per-run guard, if one is ever added, must call
-`place_hold` when it ends a run.
+`agent_exit_reason` is `COST_CAP`, or a game run's no-cache list spend passed its harness
+cost guard whatever its ending (the guard is checked only before each action, so the step
+that crosses it can still end in an error, or the process can die before the agent records
+COST_CAP; such a run has reached its guard, and an AGENT_ERROR or UNKNOWN ending would
+otherwise be re-run without the researcher being asked). It writes the hold before it
+accounts for the run, so a run whose accounting fails still places its hold. It writes one
+for a pilot too, whose harness guard is its planned spend rather than D22's $120 (stricter
+than §7.7, which names the $120 guard). The acceptance check never ends COST_CAP: once its
+guard is reached it skips the profiles left and ends NOT_ALL_ACCEPTED, with no hold. The
+PersistGym transport writes none: it stops a run before a call once the run's spend reaches
+`--planned-usd`, a stop its runner labels `COST_CAP`, but that is the planned spend, not a
+per-run cost guard. A PersistGym per-run guard, if one is ever added, must call `place_hold`
+when it ends a run.
 
 **Reading it** never ignores a line. A line that is not a JSON object, or whose `run_id` is
 not a run ID that a clearing line can name (`[A-Za-z0-9._-]+`), raises `HoldRecordError`,

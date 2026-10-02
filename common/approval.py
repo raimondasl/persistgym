@@ -46,9 +46,9 @@ paid-run lock (common/paidlock.py), taken before these checks so that two runs c
 pass them, and unless this checkout's costs.csv holds the last paid run's row.
 
 **No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12). A paid run that ends
-`COST_CAP` places a hold (common/hold.py, a record next to the lock). `require_paid_run`
-refuses while any hold in that record is not cleared, naming each run and the line that
-clears it. The researcher clears the hold of run <run_id> with one line in
+`COST_CAP`, or whose spend passed its run guard before the guard could stop it, places a
+hold (common/hold.py, a record next to the lock). `require_paid_run` refuses while any hold
+in that record is not cleared, naming each run and the line that clears it. The researcher clears the hold of run <run_id> with one line in
 results/decisions.md:
 
     cleared_hold: <run_id>
@@ -567,8 +567,9 @@ def holds_not_cleared(repo: Path, lock_path: Path, *, run_id: str | None = None,
     lines = "; ".join(f"'{format_clear_line(h.run_id)}'" for h, _ in standing)
     return (f"{len(standing)} hold{'s' if many else ''} stand{'' if many else 's'}: "
             + "; ".join(why for _, why in standing)
-            + f". A paid run that ends COST_CAP places a hold, and no further paid run starts "
-            f"in either stream, ARC or PersistGym, until the researcher clears it (PREREG "
+            + f". A paid run that ends COST_CAP, or whose spend passed its run guard, places a "
+            f"hold, and no further paid run starts in either stream, ARC or PersistGym, "
+            f"until the researcher clears it (PREREG "
             f"§0.3 line 12, §7.7). The researcher clears {'them' if many else 'it'} by "
             f"merging {'one line per run' if many else 'this line'} into {DECISIONS_MD} on "
             f"{remote.label}, at column 0 and outside any code block or HTML comment: "

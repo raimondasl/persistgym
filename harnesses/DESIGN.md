@@ -266,7 +266,7 @@ The probes send the same 32,000 cap (§9). They record each trial's `incomplete_
 `OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless every check passes. The checks are `common.approval.require_paid_run`, which the ARC launcher (`arc/run_path.py`) runs too. First:
 - the run holds the **paid-run lock** (below), which `cli.py` takes before any of these checks, so two paid runs cannot both pass them;
 - this checkout's `results/costs.csv` can be read and holds the **last paid run's row** (below);
-- **no hold stands** (below): every paid run that ended `COST_CAP` at its run guard has been cleared by the researcher.
+- **no hold stands** (below): every paid run that ended `COST_CAP` at its run guard, or whose spend passed that guard before it could stop the run, has been cleared by the researcher.
 
 Then come the checks of the shared guard, `common.approval.require_paid_approval`. It lives in `common/` so that the ARC launcher can reuse it, and `harnesses.openai_transport` re-exports its names. The checks:
 1. `PERSISTGYM_ALLOW_PAID=1` is set;
@@ -288,7 +288,7 @@ Last, `PREREG.md` (the blob check 7 compared) must be **frozen**: a `Version:` l
 - *Spend the ledger does not show.* If a run made calls whose row is not in costs.csv, the lock stays held, with the reason and the run's usage totals in the file (`keep_lock_if_unaccounted`; reasoning tokens left out for a blinded pilot, §7.4). That covers a row that cannot be built or written (`finalize` keeps the lock and raises) and a run whose `finalize` never ran (the CLI checks every transport after its run). Every later paid run refuses and prints the reason until the operator has added the row by hand and deleted the lock file. A process that is killed leaves the lock behind too.
 - *Tests.* Every harness test points `cli.LOCK_PATH` into a folder that does not exist (`conftest.no_shared_paid_lock`), so a test cannot take the shared lock, write its last-run record or read or write the hold record next to it; the paid-path tests use a temporary lock of their own.
 
-**No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12; `common/hold.py`). A paid run that ends `COST_CAP` at its run guard places a hold: a line in `persistgym-paid-holds.jsonl`, next to the lock, naming the run ID, the experiment, the reason and the time. While any hold stands, `require_paid_run` refuses every paid command, ARC or PersistGym (exit 2, before the transport builds a client), naming each run and the exact line that clears it. Only the researcher clears a hold, by merging this line into `results/decisions.md`:
+**No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12; `common/hold.py`). A paid run that ends `COST_CAP` at its run guard, or whose spend passed that guard before it could stop the run (the step that crossed it failed, or the process died first), places a hold: a line in `persistgym-paid-holds.jsonl`, next to the lock, naming the run ID, the experiment, the reason and the time. While any hold stands, `require_paid_run` refuses every paid command, ARC or PersistGym (exit 2, before the transport builds a client), naming each run and the exact line that clears it. Only the researcher clears a hold, by merging this line into `results/decisions.md`:
 
 ```
     cleared_hold: <run_id>

@@ -7,7 +7,7 @@ import subprocess
 
 import pytest
 
-from common import paidlock
+from common import hold, paidlock
 from common.tests.gitrepo import git_in
 
 
@@ -20,6 +20,9 @@ def test_lock_is_exclusive_and_released(tmp_path):
               paidlock.paid_run_lock(path, run_id="run-2", what="second")):
             pytest.fail("a second paid run got the lock")
         assert "delete that file by hand" in str(e.value)
+        # a crashed run may have reached its run guard: the operator checks for its hold too
+        assert "if it ended COST_CAP or passed its run guard" in str(e.value)
+        assert str(path.with_name(hold.HOLDS_NAME)) in str(e.value)
         assert path.exists()                       # the refused run left it alone
     assert not path.exists()
 
@@ -89,6 +92,27 @@ def test_keep_leaves_the_lock_held_with_the_reason(tmp_path):
     held = json.loads(path.read_text(encoding="utf-8"))
     assert held["run_id"] == "run-1" and held["token"] != info["token"]
     with (pytest.raises(paidlock.LockHeld, match="costs.csv does not show"),
+          paidlock.paid_run_lock(path, run_id="run-2", what="y")):
+        pass
+
+
+def test_a_second_keep_adds_its_reason_to_the_first(tmp_path):
+    """A run with two problems (say, a hold that could not be written and a costs row that
+    could not be written) keeps both reasons, so the operator who follows the file fixes
+    both. The second keep passes what the first returned; the run's own token no longer
+    matches after the first."""
+    path = tmp_path / paidlock.LOCK_NAME
+    with paidlock.paid_run_lock(path, run_id="run-1", what="x") as info:
+        first = paidlock.keep(path, info, "add the hold by hand")
+        assert first is not None and first["token"] != info["token"]
+        assert paidlock.keep(path, info, "lost") is None           # the old token: left alone
+        second = paidlock.keep(path, first, "add the costs row by hand")
+        assert second is not None and second["token"] != first["token"]
+        assert paidlock.keep(path, second, "add the costs row by hand") is not None  # no repeat
+    held = json.loads(path.read_text(encoding="utf-8"))
+    assert held["kept_because"] == "add the hold by hand ALSO: add the costs row by hand"
+    assert held["run_id"] == "run-1"
+    with (pytest.raises(paidlock.LockHeld, match="hold by hand ALSO: add the costs row"),
           paidlock.paid_run_lock(path, run_id="run-2", what="y")):
         pass
 

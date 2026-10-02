@@ -60,8 +60,10 @@ both use the same room.
 **No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12). A paid run that ends
 `COST_CAP`, or whose spend passed its run guard before the guard could stop it, places a
 hold (common/hold.py, a record next to the lock). `require_paid_run` refuses while any hold
-in that record is not cleared, naming each run and the line that clears it. The researcher clears the hold of run <run_id> with one line in
-results/decisions.md:
+in that record is not cleared, naming each run and the line that clears it, and while a
+paid-run lock of either stream is kept by a run that may have placed a hold the record does
+not show (`paidlock.unrecorded_hold`). The researcher clears the hold of run <run_id> with
+one line in results/decisions.md:
 
     cleared_hold: <run_id>
 
@@ -693,10 +695,12 @@ def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | No
     3. this checkout's costs.csv can be read and holds the row of each stream's last paid
        run (`paidlock.last_run_missing`): the locks are shared by every checkout, the
        ledger is not, so a run elsewhere would undercount the block and phase spend;
-    4. no hold stands (`holds_not_cleared`): every run in the hold record next to the lock
-       has its line `cleared_hold: <run_id>` on `remote` (fetched now if a hold is
-       recorded), HEAD and the working tree, and this run does not reuse the run ID (the
-       lock's `run_id`) of a run that placed a hold;
+    4. no hold stands: no paid-run lock of either stream is kept by a run that may have
+       placed a hold the record does not show (`paidlock.unrecorded_hold`), and every run
+       in the hold record next to the lock has its line `cleared_hold: <run_id>` on
+       `remote` (fetched now if a hold is recorded), HEAD and the working tree
+       (`holds_not_cleared`), and this run does not reuse the run ID (the lock's `run_id`)
+       of a run that placed a hold;
     5. `require_paid_approval`: the paid switch, the block's approval line on `remote`
        (fetched now), HEAD and the working tree, PREREG.md committed and the same blob as on
        `remote`, the experiment listed, block and phase room;
@@ -742,6 +746,9 @@ def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | No
     if reason is not None:
         raise PaidCallsNotAllowed(reason)
     run_id = lock.info.get("run_id") if isinstance(lock.info, dict) else None
+    reason = paidlock.unrecorded_hold(lock.path)   # a hold that could not be recorded
+    if reason is not None:
+        raise PaidCallsNotAllowed(reason)
     try:  # the holds this check sees; one placed after it refuses in reserve_spend
         holds_seen = {h.run_id for h in hold.read_holds(lock.path)}
     except hold.HoldRecordError:
@@ -781,7 +788,8 @@ def reserve_spend(lock: paidlock.HeldLock, granted: PaidApproval, *,
        run's stream that this run did not write is left over from a run that did not end
        cleanly, and refuses until the operator has deleted it by hand;
     2. the hold record: a hold placed since `require_paid_run` checked it (`holds_seen`; by
-       a run of the other stream that ended meanwhile) refuses;
+       a run of the other stream that ended meanwhile) refuses, and so does a lock kept
+       meanwhile by a run whose hold could not be recorded (`paidlock.unrecorded_hold`);
     3. costs.csv and the last-run records, after the reservations, because a run that ends
        writes its row and its record before it removes its reservation: what this reads
        counts that run's spend once or twice, never not at all;
@@ -826,6 +834,9 @@ def reserve_spend(lock: paidlock.HeldLock, granted: PaidApproval, *,
                     f"{', '.join(new_holds)} (in {hold.holds_path(lock.path)}): no further "
                     f"paid run starts in either stream until the researcher clears it "
                     f"(PREREG §0.3 line 12, §7.7). Run again to see the line that clears it")
+            reason = paidlock.unrecorded_hold(lock.path)   # a lock kept meanwhile
+            if reason is not None:
+                raise PaidCallsNotAllowed(reason)
             try:
                 rows = costs.read_rows(granted.costs_path)
             except (OSError, ValueError) as e:

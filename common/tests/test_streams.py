@@ -256,6 +256,76 @@ def test_a_hold_placed_while_the_run_is_checked_refuses(tmp_path, armed, monkeyp
     assert not any(s.folder.glob(f"{paidlock.RESERVATION_PREFIX}*"))
 
 
+def test_a_lock_kept_with_a_hold_not_recorded_stops_both_streams(tmp_path, armed):
+    """An ARC run whose hold could not be written keeps its lock in place of the hold. With
+    one lock per stream that lock alone would stop only ARC runs, while a hold stops both
+    (PREREG §0.3 line 12, §7.7): the mark stops PersistGym runs too, survives a second keep
+    without it, and goes when the operator deletes the lock."""
+    s = Streams(tmp_path, _repo(tmp_path, ("1-pilots", "70")), _costs(tmp_path))
+    with paidlock.paid_run_lock(s.lock(ARC), run_id="arc-capped", what="x",
+                                stream=ARC) as info:
+        first = paidlock.keep(s.lock(ARC), info, "its hold could not be written",
+                              hold_not_recorded=True)
+        second = paidlock.keep(s.lock(ARC), first, "add its row by hand")
+    assert second[paidlock.HOLD_NOT_RECORDED] is True                 # never unmarked
+    assert paidlock.unrecorded_hold(s.lock(PERSISTGYM)) == paidlock.unrecorded_hold(
+        s.lock(ARC))
+    with (paidlock.paid_run_lock(s.lock(PERSISTGYM), run_id="pg", what="y",
+                                 stream=PERSISTGYM) as pi,
+          pytest.raises(PaidCallsNotAllowed) as e):
+        s.require(_held(s.lock(PERSISTGYM), pi), block="1-pilots",
+                  experiment="toggle_pilot", planned=1)
+    msg = str(e.value)
+    assert f"the arc stream's paid-run lock {s.lock(ARC)} is kept by a run" in msg
+    assert "its hold could not be written ALSO: add its row by hand" in msg
+    assert "no paid run starts in either stream" in msg
+    assert not paidlock.reservation_path(s.lock(PERSISTGYM), PERSISTGYM).exists()
+
+    s.lock(ARC).unlink()                    # the operator added the hold (here: none needed)
+    with paidlock.paid_run_lock(s.lock(PERSISTGYM), run_id="pg", what="y",
+                                stream=PERSISTGYM) as pi:
+        assert s.require(_held(s.lock(PERSISTGYM), pi), block="1-pilots",
+                         experiment="toggle_pilot", planned=1).stream == PERSISTGYM
+
+
+def test_a_kept_lock_without_the_mark_stops_only_its_own_stream(tmp_path, armed):
+    """A run whose costs row could not be written keeps its lock and its reservation; no
+    hold is missing, so the other stream goes on, counting that reservation (PREREG §12)."""
+    s = Streams(tmp_path, _repo(tmp_path, ("1-pilots", "70")), _costs(tmp_path))
+    with paidlock.paid_run_lock(s.lock(ARC), run_id="arc-1", what="x", stream=ARC) as info:
+        s.require(_held(s.lock(ARC), info), block="1-pilots", experiment="arc_pilot",
+                  planned=15)
+        paidlock.keep(s.lock(ARC), info, "add its row by hand")
+    assert paidlock.unrecorded_hold(s.lock(ARC)) is None
+    with paidlock.paid_run_lock(s.lock(PERSISTGYM), run_id="pg", what="y",
+                                stream=PERSISTGYM) as pi:
+        assert s.require(_held(s.lock(PERSISTGYM), pi), block="1-pilots",
+                         experiment="toggle_pilot", planned=1).reserved_block_usd == 15
+
+
+def test_a_lock_kept_with_a_hold_not_recorded_while_the_run_is_checked_refuses(
+        tmp_path, armed, monkeypatch):
+    """The other stream's run keeps its lock, its hold not recorded, after this run's first
+    check and before its reservation: the check under the mutex refuses."""
+    s = Streams(tmp_path, _repo(tmp_path, ("1-pilots", "70")), _costs(tmp_path))
+    real = approval.prereg_not_frozen
+    with paidlock.paid_run_lock(s.lock(ARC), run_id="arc-capped", what="x",
+                                stream=ARC) as arc_info:
+        def meanwhile(repo, remote=approval.MAIN):
+            paidlock.keep(s.lock(ARC), arc_info, "its hold could not be written",
+                          hold_not_recorded=True)
+            return real(repo, remote)
+        monkeypatch.setattr(approval, "prereg_not_frozen", meanwhile)
+        with (paidlock.paid_run_lock(s.lock(PERSISTGYM), run_id="pg", what="y",
+                                     stream=PERSISTGYM) as info,
+              pytest.raises(PaidCallsNotAllowed, match="arc stream's paid-run lock .* is "
+                                                       "kept by a run that may have placed "
+                                                       "a hold")):
+            s.require(_held(s.lock(PERSISTGYM), info), block="1-pilots",
+                      experiment="toggle_pilot", planned=1)
+    assert not any(s.folder.glob(f"{paidlock.RESERVATION_PREFIX}*"))
+
+
 def test_a_row_written_while_the_run_is_checked_counts(tmp_path, armed, monkeypatch):
     """The other stream's run may write its row (and drop its reservation) after this run's
     first spend check: the check under the mutex reads the ledger again, so that spend counts

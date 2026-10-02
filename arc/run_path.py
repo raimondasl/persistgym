@@ -52,7 +52,10 @@ Then it runs arc/run_path_inner.py in the patched harness with a sanitized envir
   while it still holds the lock and inside the accounting's guard, so a run whose
   accounting fails, or that is interrupted, still places it or keeps the lock. Pilots too,
   whose guard is their planned spend. If the hold cannot be written, the lock stays held
-  with the reason, and a later reason is added to it;
+  with the reason, and a later reason is added to it. A lock kept with a hold that may not
+  be recorded (not written, or the accounting stopped before it could rule one out) is
+  marked, and stops PersistGym runs too, as the hold would
+  (`common.paidlock.unrecorded_hold`);
 * copies the harness files to results/raw/<experiment>/<run_id>/ (gitignored);
 * appends ONE results/costs.csv row tagged `approved_block=<name>;`, with the list and
   billed estimates priced from the run's per-step usage (arc/pricing.py), records it as the
@@ -799,13 +802,15 @@ def accounted_cost_cap(plan: Plan, acct: Accounting) -> dict[str, Any] | None:
 
 
 def place_cost_cap_hold(plan: Plan, ending: Mapping[str, Any], *, lock: Path,
-                        keep: Callable[[str], None]) -> dict | None:
+                        keep: Callable[..., None]) -> dict | None:
     """Place the hold of run `plan` (common/hold.py), which ended COST_CAP or whose spend
     passed its harness cost guard (`ending`, from `cost_cap_ending` or `accounted_cost_cap`),
     and say so. The record shows a blinded pilot's endings blinded (PREREG §11). If the hold
-    cannot be written, the paid-run lock stays held with the reason (`keep`), so no paid run
-    starts either way, and None is returned. What still escapes (a Ctrl+C) reaches the
-    accounting's guard in `execute`, which runs this inside it and then keeps the lock."""
+    cannot be written, the paid-run lock stays held with the reason (`keep`), marked so that
+    it stops PersistGym runs too (`paidlock.unrecorded_hold`), so no paid run of either
+    stream starts either way, and None is returned. What still escapes (a Ctrl+C) reaches
+    the accounting's guard in `execute`, which runs this inside it and then keeps the lock,
+    marked the same way."""
     exit_reason, agent_exit = ending.get("exit_reason"), ending.get("agent_exit_reason")
     if plan.blinded:
         exit_reason, agent_exit = blind_ending(exit_reason), blind_ending(agent_exit)
@@ -834,7 +839,7 @@ def place_cost_cap_hold(plan: Plan, ending: Mapping[str, Any], *, lock: Path,
                f"there by hand (one JSON line with run_id {plan.run_id!r}) before deleting "
                f"this lock file; the researcher clears it with the line '{line}' "
                f"(PREREG §7.7)")
-        keep(why)
+        keep(why, hold_not_recorded=True)
         print(f"ERROR: {why}: {lock}", file=sys.stderr, flush=True)
         return None
     print(f"HOLD: run {plan.run_id} {reason}. No further paid run starts in either stream "
@@ -978,8 +983,11 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
         # added to the first (`paidlock.keep` returns the file it wrote), not lost.
         kept = {"info": held}
 
-        def keep(why: str) -> None:
-            kept["info"] = paidlock.keep(lock, kept["info"], why) or kept["info"]
+        def keep(why: str, *, hold_not_recorded: bool = False) -> None:
+            # hold_not_recorded: the lock then stops PersistGym runs too, as the hold would
+            # (`paidlock.unrecorded_hold`; the ARC lock alone stops only ARC runs).
+            kept["info"] = paidlock.keep(lock, kept["info"], why,
+                                         hold_not_recorded=hold_not_recorded) or kept["info"]
         row = None
         placed = None
         # True once the hold is settled: written, not needed, or its failure is in the lock.
@@ -1021,7 +1029,8 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
                         f"{plan.run_id!r}; the researcher clears it with the line "
                         f"'{approval.format_clear_line(plan.run_id)}', PREREG §7.7)")
             keep(why + f"; then delete this lock file and the run's spend reservation "
-                       f"{paidlock.reservation_path(lock, STREAM)}")
+                       f"{paidlock.reservation_path(lock, STREAM)}",
+                 hold_not_recorded=not hold_settled)
             print(f"ERROR: could not account for the run. {why}: {lock}", file=sys.stderr)
             raise
         if row is not None:

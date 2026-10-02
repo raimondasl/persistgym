@@ -22,6 +22,8 @@ stream" (arc/README.md) in code; it protects against mistakes, not against someo
 the file while a run is going. A run whose spend could not be written to results/costs.csv
 leaves the lock held on purpose (`keep`), with the reason, so no paid run of its stream
 starts on an incomplete ledger (and its reservation, below, keeps counting for the other).
+A lock kept by a run that may have placed a hold the hold record does not show is marked,
+and stops paid runs of both streams (`unrecorded_hold`), as the hold would.
 
 **The old single lock.** Before the per-stream locks, both launchers took one lock,
 `persistgym-paid-run.lock` (`LEGACY_LOCK_NAME`). While that file exists (a run started by
@@ -238,14 +240,23 @@ def paid_run_lock(path: Path, *, run_id: str, what: str, stream: str) -> Iterato
 
 
 ALSO = " ALSO: "   # joins the reasons of a lock kept for more than one problem
+# In a kept lock: the run may have placed a hold that the hold record does not show.
+HOLD_NOT_RECORDED = "hold_not_recorded"
 
 
-def keep(path: Path, info: dict, reason: str) -> dict | None:
+def keep(path: Path, info: dict, reason: str, *,
+         hold_not_recorded: bool = False) -> dict | None:
     """Leave the lock held after the run ends, with `reason`: for a run that may have spent
     money that results/costs.csv does not show. The file (if it is still ours) gets the
     reason and a new token, so `paid_run_lock` does not remove it (nor the run's spend
     reservation) and every later paid run of the stream refuses, printing the reason, until
     the operator has added the missing row and deleted the file by hand.
+
+    `hold_not_recorded`: the run may have placed a hold (PREREG §0.3 line 12, §7.7) that the
+    hold record does not show, because it could not be written or the run's accounting
+    stopped before it could rule one out. The file is then marked (`HOLD_NOT_RECORDED`, never unmarked by
+    a later keep), and paid runs of the other stream refuse too while it stands
+    (`unrecorded_hold`): a hold stops both streams, and the lock stands in for it.
 
     Returns the file's new contents (with the new token), or None if the file is not this
     run's and was left alone. A run that finds a second problem passes that return value as
@@ -260,10 +271,36 @@ def keep(path: Path, info: dict, reason: str) -> dict | None:
             reason = (earlier if reason in earlier.split(ALSO)
                       else f"{earlier}{ALSO}{reason}")
         held.update(token=uuid.uuid4().hex, kept_because=reason)
+        if hold_not_recorded:
+            held[HOLD_NOT_RECORDED] = True
         path.write_text(json.dumps(held), encoding="utf-8")
         return held
     except (OSError, ValueError):
         return None
+
+
+def unrecorded_hold(lock: Path) -> str | None:
+    """None unless a paid-run lock next to `lock`, of either stream, was kept by a run that
+    may have placed a hold the hold record does not show (`keep(..., hold_not_recorded=
+    True)`); otherwise why no paid run of either stream may start. With one lock per stream,
+    the kept lock alone would stop only its own stream's runs, while a hold stops both
+    (PREREG §0.3 line 12, §7.7). A lock file that cannot be read is skipped here: it stops
+    its own stream, and one being written is a run starting or being kept at this moment."""
+    for stream in STREAMS:
+        path = lock.with_name(lock_name(stream))
+        try:
+            held = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(held, dict) or held.get(HOLD_NOT_RECORDED) is not True:
+            continue
+        return (f"the {stream} stream's paid-run lock {path} is kept by a run that may have "
+                f"placed a hold that {path.with_name(HOLDS_NAME)} does not show: "
+                f"{held.get('kept_because') or '(no reason recorded)'}. A hold stops paid "
+                f"runs of both streams, so no paid run starts in either stream until the "
+                f"operator has added that run's hold to the record (or checked that it "
+                f"placed none) and deleted the lock file (PREREG §0.3 line 12, §7.7)")
+    return None
 
 
 # ── The budget mutex ───────────────────────────────────────────────────

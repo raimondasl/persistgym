@@ -1,0 +1,3 @@
+# The G1 spot-check CSVs (findings template and the researcher's export) are RFC 4180 with
+# CRLF line ends: keep them byte for byte, without line-end conversion.
+results/spotcheck/**/*.csv -text

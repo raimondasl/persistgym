@@ -165,6 +165,16 @@ def test_manifest_fields(built):
     assert manifest["findings_path"] in readme and "spotcheck-findings" in readme
 
 
+def test_git_keeps_the_spotcheck_csvs_byte_for_byte():
+    """`.gitattributes` turns off line-end conversion for the package CSVs, so the committed
+    findings template and the researcher's export keep their CRLF record ends."""
+    res = subprocess.run(
+        ["git", "check-attr", "text", "--", "results/spotcheck/x/findings.csv",
+         "results/spotcheck/x/findings_template.csv"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+    assert [line.rsplit(": ", 1)[1] for line in res.stdout.splitlines()] == ["unset", "unset"]
+
+
 def test_findings_template_shape(built):
     manifest, _, pkg_dir = built
     raw = (pkg_dir / "findings_template.csv").read_bytes()

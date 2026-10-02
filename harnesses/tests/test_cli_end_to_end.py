@@ -88,10 +88,11 @@ def test_probe_planned_usd_is_a_total_over_models(paid_env, monkeypatch, capsys)
     monkeypatch.setattr(cli, "_guarded_transport", spy)
     assert cli.main(["probe-echo", "--approved-block", "1-pilots", "--planned-usd", "0.5",
                      "--run-id", "e"]) == 0
-    # spend is measured like block spend: the larger of list and billed (Flex: the list)
+    # spend is measured like block spend: the billed estimate (Flex: half the list cost; the
+    # split used to subtract the list cost, the larger of the two)
     row = costs.read_rows(costs_csv)[0]
-    first = max(float(row["cost_usd_list"]), float(row["cost_usd_billed_est"]))
-    assert first > float(row["cost_usd_billed_est"])  # Flex: billed alone would undercount
+    first = float(row["cost_usd_billed_est"])
+    assert float(row["cost_usd_list"]) > first  # Flex: list would over-count the spend
     assert first > 0 and planned == [0.5, pytest.approx(0.5 - first)]
     # a total smaller than one model's spend: the first model stops at the cap
     # (BudgetExceeded) and the second is refused

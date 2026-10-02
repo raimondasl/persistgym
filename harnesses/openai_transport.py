@@ -2,8 +2,9 @@
 
 `OpenAIResponsesTransport` refuses to exist, before it builds any client, unless every check
 of the shared guard passes (`common.approval.require_paid_approval`, which documents them):
-PERSISTGYM_ALLOW_PAID=1; `--approved-block <name>`; PREREG.md committed (PLAN §16.3); a
-positive, finite planned spend; and the researcher's approval line
+PERSISTGYM_ALLOW_PAID=1; `--approved-block <name>`; PREREG.md committed and identical to
+PREREG.md on origin/main (PLAN §16.3); a positive, finite planned spend; and the researcher's
+approval line
 
     approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>
 
@@ -15,13 +16,14 @@ The costs.csv row's notes start with `common.approval.spend_tag(<name>)`
 ("approved_block=<name>;"), which is how the guard sums a block's spend.
 
 While running it stops before a call once the run's spend reaches the planned spend. Spend is
-measured as block spend and the phase caps measure it (`common.approval.spend_usd`, the
-larger of the list and billed estimates; on Flex, the list cost). It logs every response's
-echoed `reasoning.context`, returned model string and served service tier, and `finalize`
-appends exactly one results/costs.csv row via `common.costs.append_row`. A response whose returned model string has no price is still
-logged, priced as the requested model and flagged in the row's notes. For a pilot-blinded
-experiment (`harnesses.blinding`, PREREG §11) the row's `reasoning_tokens` is left empty; the
-per-call values stay in the raw transcript under results/raw/.
+measured as block spend and the phase caps measure it (`common.approval.spend_usd`: the
+billed estimate, so the Flex price on Flex; PLAN's caps are in billed dollars, D23). It logs
+every response's echoed `reasoning.context`, returned model string and served service tier,
+and `finalize` appends exactly one results/costs.csv row via `common.costs.append_row`, with
+both the list cost and the billed estimate. A response whose returned model string has no
+price is still logged, priced as the requested model and flagged in the row's notes. For a
+pilot-blinded experiment (`harnesses.blinding`, PREREG §11) the row's `reasoning_tokens` is
+left empty; the per-call values stay in the raw transcript under results/raw/.
 
 The OpenAI SDK reads its API key from the environment itself; this module never reads, prints
 or stores a key. Load keys with `uv run --env-file .env ...`.
@@ -104,9 +106,9 @@ class OpenAIResponsesTransport:
     @property
     def spent_usd(self) -> float:
         """This run's spend so far, measured as block spend and the phase caps measure it
-        (`common.approval.spend_usd`: on Flex, the list cost). The run stops before a call
-        once it reaches the planned spend, so the guard's check `block spend + planned <=
-        max_usd` holds after the run too, up to the last call's cost."""
+        (`common.approval.spend_usd`: the billed estimate, the Flex price on Flex). The run
+        stops before a call once it reaches the planned spend, so the guard's check `block
+        spend + planned <= max_usd` holds after the run too, up to the last call's cost."""
         return spend_usd(self.ledger.cost_usd_list, self.ledger.cost_usd_billed_est)
 
     # ------------------------------------------------------------------
@@ -117,7 +119,7 @@ class OpenAIResponsesTransport:
             raise ValueError(f"payload model {payload.get('model')!r} != {self.model!r}")
         if self.spent_usd >= self.approval.planned_usd:
             raise BudgetExceeded(
-                f"run spend ${self.spent_usd:.4f} (the larger of list and billed estimates) "
+                f"run spend ${self.spent_usd:.4f} (billed estimate) "
                 f"reached the planned ${self.approval.planned_usd:.2f}")
         started = time.monotonic()
         for attempt in range(1, self.max_attempts + 1):

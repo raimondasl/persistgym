@@ -1,0 +1,17 @@
+case,metric,min,mean,max,n_draws_above_cap,n_above_cap_with_reserve
+flex_cached,seed1_s0s4,62.4225,86.7527,101.55,,
+flex_cached,seed1_path,124.845,173.505,203.099,,
+flex_cached,remainder_1b,187.268,260.258,304.649,,
+flex_cached,path_1b,249.69,347.011,406.198,0,0
+standard_cached,seed1_s0s4,124.845,173.505,203.099,,
+standard_cached,seed1_path,249.69,347.011,406.198,,
+standard_cached,remainder_1b,374.535,520.516,609.297,,
+standard_cached,path_1b,499.38,694.021,812.396,0,6
+list_nocache,seed1_s0s4,159.43,223.9,263.44,,
+list_nocache,seed1_path,318.86,447.8,526.88,,
+list_nocache,remainder_1b,478.29,671.7,790.32,,
+list_nocache,path_1b,637.72,895.6,1053.76,6,14
+flex_nocache,seed1_s0s4,79.715,111.95,131.72,,
+flex_nocache,seed1_path,159.43,223.9,263.44,,
+flex_nocache,remainder_1b,239.145,335.85,395.16,,
+flex_nocache,path_1b,318.86,447.8,526.88,0,0

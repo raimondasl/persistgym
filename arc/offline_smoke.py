@@ -60,6 +60,8 @@ SUMMARY_SYSTEM_PROMPT = (
 )
 SUMMARY_TRIGGER_TOKENS = 175_000
 SUMMARY_MAX_OUTPUT_TOKENS = 8_192
+# Patch 0017 (D21): every request of every path config asks for the standard tier.
+SERVICE_TIER = "standard"
 TOY_DIR = ap.ARC_DIR / "toy_game"
 TOY_GAME = "toyg"
 # Toy run: two moves, a lost life (forced RESET), then six moves to the win.
@@ -185,8 +187,11 @@ def check_run(label: str, result: dict[str, Any], bodies: list[dict[str, Any]]) 
         config = body.get("generation_config", {})
         if config.get("thinking_level") != "high":
             problems.append(f"request {index}: thinking_level {config.get('thinking_level')!r}")
-        if "service_tier" in body:
-            problems.append(f"request {index}: unexpected service_tier")
+    for index, body in enumerate(bodies, start=1):
+        if body.get("service_tier") != SERVICE_TIER:
+            kind = "summary request" if _is_summary(body) else "request"
+            problems.append(f"{kind} body {index}: service_tier {body.get('service_tier')!r}, "
+                            f"expected {SERVICE_TIER!r}")
     replayed = any(
         item.get("type") == "thought" for body in actions for item in body.get("input", [])
     )

@@ -239,6 +239,7 @@ def _body(system: str, items: list[tuple[str, str]], max_out: int = 65_536) -> d
     return {
         "model": "gemini-3.8-flash",
         "store": False,
+        "service_tier": "standard",
         "generation_config": {
             "max_output_tokens": max_out,
             "thinking_level": "high",
@@ -323,6 +324,8 @@ class TestCheckRun:
             ("S4", lambda r, b: r["run_meta"].pop("reported_models"), "reported_models"),
             ("S0", lambda r, b: r["run_meta"].update(arc_environment={"kind": "remote"}), "arc_environment"),
             ("S1", lambda r, b: b[0].update(service_tier="flex"), "service_tier"),
+            ("S0", lambda r, b: b[1].pop("service_tier"), "service_tier None"),
+            ("S4", lambda r, b: b[2].update(service_tier="flex"), "summary request body 3"),
             ("S0", lambda r, b: b[0]["generation_config"].update(thinking_level="low"), "thinking_level"),
         ],
     )

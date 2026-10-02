@@ -1,4 +1,5 @@
 import csv
+import re
 
 import pytest
 
@@ -25,8 +26,51 @@ def test_append_and_sum(tmp_path):
     rows = costs.read_rows(p)
     assert costs.sums_by_phase(rows)["0"] == pytest.approx(0.75)
     assert costs.sums_by_phase(rows, "cost_usd_list")["1b"] == pytest.approx(20)
-    # headroom uses the larger of list and billed spend, conservatively
-    assert costs.headroom(100, "1b", rows) == pytest.approx(900 - 20 - 100)
+    # Headroom counts billed spend (spend_usd), not the larger of list and billed as before:
+    # PLAN's caps are in billed dollars (D23), and on Flex list is twice billed, so counting
+    # list would stop a phase at about half its real spend.
+    assert costs.headroom(100, "1b", rows) == pytest.approx(900 - 10 - 100)
+
+
+def test_spend_usd_is_billed_falling_back_to_list():
+    assert costs.spend_usd(1.50, 0.75) == 0.75          # Flex: billed, half the list cost
+    assert costs.spend_usd(1.50, 0.0) == 0.0            # 0 is a billed estimate; only None
+                                                        # (an empty cell) falls back
+    assert costs.spend_usd(1.50, None) == 1.50          # no billed estimate: list
+    with pytest.raises(ValueError, match="both empty"):
+        costs.spend_usd(None, None)
+
+
+def test_headroom_falls_back_to_list_and_refuses_rows_without_cost():
+    rows = [_row(cost_usd_billed_est=""), _row(cost_usd_list="", cost_usd_billed_est="2")]
+    assert costs.spend_by_phase(rows)["0"] == pytest.approx(1.50 + 2)
+    assert costs.headroom(10, "0", rows) == pytest.approx(100 - 3.50 - 10)
+    for bad in ({"cost_usd_list": "", "cost_usd_billed_est": ""},
+                {"cost_usd_billed_est": "nan"}, {"cost_usd_billed_est": "-1"}):
+        with pytest.raises(ValueError, match="costs.csv line 3"):
+            costs.headroom(10, "0", [_row(), _row(**bad)])
+
+
+def test_phase_caps_are_the_a2_caps():
+    # PLAN.md amendment A2 (§17.3), approved by the researcher on 2026-10-01: 1a 450 -> 500,
+    # phase 2 950 -> 1250; 0 and 1b unchanged.
+    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 500.0, "1b": 900.0, "2": 1250.0}
+    assert costs.headroom(0, "1a", []) == pytest.approx(500)
+    assert costs.headroom(0, "2", []) == pytest.approx(1250)
+
+
+def _plan_cap_table() -> dict[str, float]:
+    """'Cap from A2' column of the PLAN.md §17.3 table, by phase."""
+    plan = (costs.REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
+    heading = re.search(r"^### 17\.3 Phase caps$", plan, flags=re.MULTILINE)
+    assert heading, "PLAN.md has no '### 17.3 Phase caps' heading"
+    section = plan[heading.end():].split("\n#", 1)[0]
+    row = re.compile(r"^\| (0|1a|1b|2) \| \$([\d,]+) \| \$([\d,]+) \|", flags=re.MULTILINE)
+    return {m[1]: float(m[3].replace(",", "")) for m in row.finditer(section)}
+
+
+def test_phase_caps_match_plan_section_17_3():
+    assert _plan_cap_table() == costs.PHASE_CAPS
 
 
 def test_append_rejects_bad_rows(tmp_path):
@@ -59,3 +103,18 @@ def test_optional_columns_default_to_empty(tmp_path):
     costs.append_row(row, p)
     (written,) = costs.read_rows(p)
     assert all(written[c] == "" for c in costs.OPTIONAL_COLUMNS)
+
+
+def test_summary_prints_spend_billed_and_list(monkeypatch, capsys):
+    """`python -m common.costs` shows the spend the caps count next to both logged sums."""
+    rows = [_row(), _row(experiment="arc_path", cost_usd_list="20", cost_usd_billed_est="")]
+    monkeypatch.setattr(costs, "read_rows", lambda: rows)
+    assert costs.main() == 0
+    lines = {x.split()[0]: x.split()[1:] for x in capsys.readouterr().out.splitlines()[2:]}
+    assert lines["0"] == ["0.75", "0.75", "1.50", "100"]   # Flex row: spend is billed
+    assert lines["1b"] == ["20.00", "0.00", "20.00", "900"]  # no billed: spend is list
+    assert lines["total"] == ["20.75", "0.75", "21.50"]
+    monkeypatch.setattr(costs, "read_rows", lambda: [_row(cost_usd_list="",
+                                                           cost_usd_billed_est="")])
+    assert costs.main() == 1
+    assert "line 2: no cost" in capsys.readouterr().err

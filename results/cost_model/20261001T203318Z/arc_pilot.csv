@@ -1,0 +1,17 @@
+case,config,actions,usd_per_action,usd
+list_nocache,S0,50,0.203405,10.1703
+list_nocache,S1,19,0.165544,3.14533
+list_nocache,S2,30,0.165544,4.96631
+list_nocache,S4,50,0.127682,6.38411
+flex_nocache,S0,50,0.101703,5.08513
+flex_nocache,S1,19,0.0827719,1.57267
+flex_nocache,S2,30,0.0827719,2.48316
+flex_nocache,S4,50,0.0638411,3.19206
+standard_cached,S0,50,0.183601,9.18005
+standard_cached,S1,19,0.130809,2.48538
+standard_cached,S2,30,0.130809,3.92428
+standard_cached,S4,50,0.0780177,3.90089
+flex_cached,S0,50,0.0918005,4.59002
+flex_cached,S1,19,0.0654047,1.24269
+flex_cached,S2,30,0.0654047,1.96214
+flex_cached,S4,50,0.0390089,1.95044

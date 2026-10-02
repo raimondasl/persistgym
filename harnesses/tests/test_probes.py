@@ -47,7 +47,8 @@ def test_echo_check_payloads_literal(model):
         base = {"model": model,
                 "reasoning": {"effort": "medium", "mode": "standard", "context": ctx},
                 "store": False, "include": ["reasoning.encrypted_content"],
-                "service_tier": "flex", "truncation": "disabled"}
+                "service_tier": "flex", "truncation": "disabled",
+                "max_output_tokens": 32000}
         t1, t2 = probes.ECHO_CHECK_TURNS
         assert trial["payloads"] == [
             {**base, "input": [_user(t1)]},
@@ -79,7 +80,7 @@ def test_replay_probe_turn3_payload_literal_and_summaries_stripped():
         "reasoning": {"effort": "medium", "mode": "standard", "context": "all_turns",
                       "summary": "auto"},
         "store": False, "include": ["reasoning.encrypted_content"],
-        "service_tier": "flex", "truncation": "disabled",
+        "service_tier": "flex", "truncation": "disabled", "max_output_tokens": 32000,
     }
     # the fake returned a summary naming the number; it is not sent back
     assert "427" in trial["reasoning_summaries"][0]
@@ -93,7 +94,8 @@ def test_probe_prompts_contain_no_digits():
 def test_replay_probe_scoring():
     s = probes.run_replay_probe("gpt-6.1-sol", "all_turns", _fake())["score"]
     assert s == {"picked": [427], "answer": 427, "answered_a_number": True, "leak": False,
-                 "echo_ok": True, "scorable": True, "match": True, "ready_ok": True}
+                 "echo_ok": True, "incomplete_turns": [], "scorable": True, "match": True,
+                 "ready_ok": True}
     s = probes.run_replay_probe("gpt-6.1-sol", "current_turn",
                                 _fake({**REPLIES, 2: "I cannot recall it."}))["score"]
     assert s["scorable"] and not s["match"] and s["answer"] is None
@@ -106,6 +108,46 @@ def test_replay_probe_scoring():
     assert two["score"]["picked"] == [427, 815] and not two["score"]["scorable"]
     mm = probes.run_replay_probe("gpt-6-luna", "all_turns", _fake(echo_context="current_turn"))
     assert not mm["score"]["echo_ok"] and not mm["score"]["scorable"]
+
+
+@pytest.mark.parametrize("run", [probes.run_echo_check, probes.run_replay_probe])
+def test_every_probe_request_sends_the_output_cap(run):
+    """D13: 32,000 on every probe request, both arms, both models; configurable, never
+    omitted."""
+    for model in probes.ECHO_CHECK_MODELS:
+        for ctx in probes.CONTEXTS:
+            trial = run(model, ctx, _fake())
+            assert [p["max_output_tokens"] for p in trial["payloads"]] == \
+                [32000] * len(trial["payloads"])
+    cfg = probes.ProbeConfig(max_output_tokens=2000)
+    trial = probes.run_echo_check("gpt-6-luna", "all_turns", _fake(), cfg)
+    assert {p["max_output_tokens"] for p in trial["payloads"]} == {2000}
+    for bad in (None, 0, True, "32000"):
+        with pytest.raises(ValueError, match="must be a positive int"):
+            probes.ProbeConfig(max_output_tokens=bad)
+
+
+def _capped(turns, **kw):
+    """_fake() whose turns (0-based) stop at the output cap, keeping their partial text."""
+    return _fake(status_fn=lambda p, tag: "incomplete" if tag in {f"t{t}" for t in turns}
+                 else "completed", **kw)
+
+
+def test_replay_probe_incomplete_turns():
+    """D13: an incomplete turn-3 response is an invalid answer (a miss), even if its partial
+    text holds the number; an incomplete turn 1 or 2 makes the trial unscorable (replaced,
+    like a leak). Every trial records its incomplete turns."""
+    s = probes.run_replay_probe("gpt-6.1-sol", "all_turns", _capped({2}))["score"]
+    assert s["incomplete_turns"] == [2] and s["scorable"] and not s["match"]
+    assert s["answer"] is None and not s["answered_a_number"]
+    for t in (0, 1):
+        trial = probes.run_replay_probe("gpt-6.1-sol", "all_turns", _capped({t}))
+        assert trial["incomplete_turns"] == [t]
+        assert trial["score"]["incomplete_turns"] == [t] and not trial["score"]["scorable"]
+        assert trial["echoes"][t]["status"] == "incomplete"
+        assert trial["echoes"][t]["incomplete_reason"] == "max_output_tokens"
+    echo = probes.run_echo_check("gpt-6-luna", "current_turn", _capped({1}))
+    assert echo["incomplete_turns"] == [1] and echo["echo_ok"]
 
 
 def test_echo_check_flags_mismatch():

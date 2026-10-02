@@ -24,6 +24,7 @@ from harnesses.config import (
     ARC_SUMMARY_SYSTEM_PROMPT,
     HarnessConfig,
 )
+from harnesses.fake import FakeModel
 from harnesses.tests.conftest import (
     SYSTEM,
     label_payload,
@@ -83,6 +84,9 @@ EXPECTED = {
 
 FIXED_KEYS = {"store": False, "include": ["reasoning.encrypted_content"],
               "service_tier": "flex", "truncation": "disabled", "model": "gpt-6-luna"}
+STEP_MAX_OUTPUT_TOKENS = 32_000  # PREREG D13
+# PREREG §6 (D13): every luna and sol request carries 32,000; §5 freezes the summary cap here
+SUMMARY_MAX_OUTPUT_TOKENS = 32_000
 
 
 def test_every_cell_has_a_snapshot():
@@ -105,15 +109,15 @@ def test_cell_payloads_exactly(cell_id):
     for (kind, _), p in zip(expected, model.calls, strict=True):
         assert {k: p[k] for k in FIXED_KEYS} == FIXED_KEYS
         assert p["reasoning"] == {"effort": "medium", "mode": "standard", "context": context}
+        assert set(p) == set(FIXED_KEYS) | {"instructions", "input", "reasoning",
+                                            "max_output_tokens"}
         if kind == "step":
             assert p["instructions"] == instructions
-            assert set(p) == set(FIXED_KEYS) | {"instructions", "input", "reasoning"}
+            assert p["max_output_tokens"] == STEP_MAX_OUTPUT_TOKENS
         else:
             assert p["instructions"] == ARC_SUMMARY_SYSTEM_PROMPT
-            assert p["max_output_tokens"] == 8192
+            assert p["max_output_tokens"] == SUMMARY_MAX_OUTPUT_TOKENS
             assert p["input"][-1]["content"][0]["text"] == ARC_SUMMARY_REQUEST_PROMPT
-            assert set(p) == set(FIXED_KEYS) | {"instructions", "input", "reasoning",
-                                                "max_output_tokens"}
 
 
 @pytest.mark.parametrize("cell_id", ["Σ-n-r", "Σ-n-0", "Σ-0-r"])
@@ -153,6 +157,7 @@ def test_full_payload_literal_window_cell_at_boundary():
         "include": ["reasoning.encrypted_content"],
         "service_tier": "flex",
         "truncation": "disabled",
+        "max_output_tokens": 32000,
     }
 
 
@@ -168,10 +173,74 @@ def test_full_payload_literal_summary_trigger():
         history += [_user(obs_text(t)), _reasoning(t), _assistant(t)]
     assert model.calls[4] == {**common, "instructions": ARC_SUMMARY_SYSTEM_PROMPT,
                               "input": [*history, _user(ARC_SUMMARY_REQUEST_PROMPT)],
-                              "max_output_tokens": 8192}
+                              "max_output_tokens": 32000}
     bridge = ARC_SUMMARY_BRIDGE_TEMPLATE.format(summary=summary_text(1))
     assert model.calls[5] == {**common, "instructions": SYSTEM + "\n" + NOTES_INSTRUCTION,
-                              "input": [_user(bridge), _user(obs_text(4))]}
+                              "input": [_user(bridge), _user(obs_text(4))],
+                              "max_output_tokens": 32000}
+
+
+# --- output caps (PREREG D13) -------------------------------------------------------------
+
+def test_default_step_output_cap_is_the_registered_one():
+    assert HarnessConfig().max_output_tokens == STEP_MAX_OUTPUT_TOKENS
+    assert HarnessConfig().summary_max_output_tokens == SUMMARY_MAX_OUTPUT_TOKENS
+
+
+@pytest.mark.parametrize("cell_id", list(CELLS))
+def test_every_request_sends_its_output_cap_explicitly(cell_id):
+    """D13: every request of every cell, step and summary, carries `max_output_tokens`
+    32,000 by default; each configured cap reaches its own kind of request only."""
+    for cfg, step_cap, summary_cap in (
+            (HarnessConfig(), 32_000, 32_000),
+            (HarnessConfig(max_output_tokens=4_000), 4_000, 32_000),
+            (HarnessConfig(summary_max_output_tokens=2_000), 32_000, 2_000)):
+        _, model, requests = run_synthetic(CELLS[cell_id], cfg=cfg)
+        caps = {(r.kind, p["max_output_tokens"]) for r, p in zip(requests, model.calls,
+                                                                  strict=True)}
+        expected = {("step", step_cap)}
+        if CELLS[cell_id].history == "summary":
+            expected.add(("summary", summary_cap))
+        assert caps == expected
+
+
+@pytest.mark.parametrize("cell_id", list(CELLS))
+def test_default_config_sends_exactly_32000_on_every_request(cell_id):
+    """PREREG §6 (D13): luna and sol requests carry `max_output_tokens: 32000`, with no
+    exception for summary calls."""
+    _, model, _ = run_synthetic(CELLS[cell_id])
+    assert model.calls and {p["max_output_tokens"] for p in model.calls} == {32_000}
+
+
+def _stops_at_cap_while_reasoning(turn: int) -> FakeModel:
+    """Fake whose step call `turn` stops at the output cap before any visible text."""
+    return FakeModel(lambda p, i: "" if i == turn else reply_text(i),
+                     summary_fn=lambda p, j: summary_text(j),
+                     status_fn=lambda p, tag: "incomplete" if tag == f"t{turn}" else "completed")
+
+
+def test_incomplete_step_response_is_replayed_as_returned():
+    """D13: a step response that hit the cap while reasoning has a reasoning item and no
+    message. Later requests send that turn as returned (its observation and reasoning item,
+    no reply), and its empty reply counts 0 tokens toward W. At W = 1150, step 4 keeps every
+    turn (200 + 250 + 200 + 250 + 250 = 1150), where 50-token replies would drop turn 0."""
+    _, model, _ = run_synthetic(CELLS["F-r"], n_steps=5, fake=_stops_at_cap_while_reasoning(2))
+    assert label_payload(model.calls[3]) == [*turns(0, 2), "U2", "R2", "U3"]
+    assert model.calls[3]["max_output_tokens"] == 32_000
+    _, model, _ = run_synthetic(CELLS["W-n-0"], n_steps=5, W=1150,
+                                fake=_stops_at_cap_while_reasoning(2))
+    assert label_payload(model.calls[4]) == [*turns(0, 2), "U2", "R2", *turns(3, 4), "U4"]
+    _, model, _ = run_synthetic(CELLS["W-n-0"], n_steps=5, W=1150)
+    assert label_payload(model.calls[4]) == step(1, 4)
+
+
+@pytest.mark.parametrize("bad", [None, 0, -1, True, 32000.0, "32000"])
+def test_output_caps_must_be_positive_ints(bad):
+    """No config can drop the cap from the payload (None used to mean "omitted")."""
+    with pytest.raises(ValueError, match="must be a positive int"):
+        HarnessConfig(max_output_tokens=bad)
+    with pytest.raises(ValueError, match="must be a positive int"):
+        HarnessConfig(summary_max_output_tokens=bad)
 
 
 # --- window boundary and summary trigger at exact equality -----------------------------

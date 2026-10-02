@@ -173,7 +173,9 @@ class HarnessSession:
 
     # ------------------------------------------------------------------
     def _base_payload(self, instructions: str, input_items: list[dict],
-                      max_output_tokens: int | None) -> dict:
+                      max_output_tokens: int) -> dict:
+        """The request body. `max_output_tokens` is always sent: the step cap or the summary
+        cap, both 32,000 under PREREG D13."""
         cfg = self.cfg
         reasoning = {"effort": cfg.reasoning_effort, "mode": cfg.reasoning_mode,
                      "context": self.cell.reasoning_context}
@@ -188,9 +190,8 @@ class HarnessSession:
             "include": [ENCRYPTED_REASONING],
             "service_tier": cfg.service_tier,
             "truncation": "disabled",
+            "max_output_tokens": max_output_tokens,
         }
-        if max_output_tokens is not None:
-            payload["max_output_tokens"] = max_output_tokens
         if cfg.prompt_cache_key is not None:
             payload["prompt_cache_key"] = cfg.prompt_cache_key
         return payload
@@ -245,7 +246,12 @@ class HarnessSession:
     # ------------------------------------------------------------------
     def record(self, request: Request, response: dict) -> str | None:
         """Take the response to `request`. Returns the visible reply for a step request and
-        None for a summary request (after which `next_request` gives the step request)."""
+        None for a summary request (after which `next_request` gives the step request).
+
+        A step response with status `incomplete` (it hit `max_output_tokens`, D13) is kept
+        like any other: its output items as returned (only a reasoning item if it stopped
+        while reasoning) and its partial text, if any. The runner scores its step as an
+        invalid action. An incomplete or empty summary raises `EmptySummaryError`."""
         if request.turn != len(self.turns) or self.pending is None:
             raise RuntimeError("response does not belong to the pending request")
         if request.kind == "summary":

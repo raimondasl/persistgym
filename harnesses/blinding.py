@@ -63,6 +63,9 @@ def _errors(eps: list[dict]) -> dict:
         "n_excluded": sum(bool(e.get("excluded")) for e in eps),
         "n_summary_failures": sum(int(e.get("n_summary_failures") or 0) for e in eps),
         "n_unparsed_routine": sum(int(e.get("n_unparsed_routine") or 0) for e in eps),
+        # D13: step responses that stopped at the output cap, at routine steps only. At the
+        # need step one scores 0, so it is an outcome and stays in the raw episodes.
+        "n_incomplete_routine": sum(int(e.get("n_incomplete_routine") or 0) for e in eps),
     }
 
 

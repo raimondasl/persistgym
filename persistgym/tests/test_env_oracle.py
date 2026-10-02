@@ -214,6 +214,43 @@ def test_lookup_in_nonrecoverable_cell_is_invalid(small_eps):
     assert r.step_outcomes[non.need_step] == "invalid_lookup"
 
 
+def test_reply_declared_incomplete_is_scored_invalid_without_parsing(small_eps):
+    """PREREG §6, §13 (D13): a response that stopped at its output cap is a content failure.
+    `step(reply, invalid="incomplete")` scores the pending step wrong with no action, even
+    when the partial text holds the correct answer or a lookup, and the episode advances."""
+    rec = pick(small_eps, "observed-rec-far")
+    n = rec.need_step
+
+    def incomplete_at(steps, text_for):
+        env = EpisodeEnv(rec)
+        done = False
+        while not done:
+            if env.pending in steps:
+                _, done = env.step(text_for(env), invalid="incomplete")
+            else:
+                _, done = env.step(_key(env))
+        return env.result()
+
+    # the partial text is the correct answer: still scored wrong, with no action or label
+    r = incomplete_at({n}, _key)
+    assert not r.need_correct and r.step_outcomes[n] == "incomplete"
+    assert r.need_action is None and r.need_label is None
+    assert r.n_turns == rec.n_steps and r.turns[n].reply == _key_at(rec, n)
+    # a lookup in the partial text is not served (no extra turn), at a routine step too
+    r = incomplete_at({n - 1, n}, lambda env: f"ACTION: lookup({rec.entity})")
+    assert r.n_lookups == 0 and r.n_turns == rec.n_steps
+    assert r.step_outcomes[n - 1] == r.step_outcomes[n] == "incomplete"
+    assert r.routine_correct == r.routine_total - 1
+    # an empty reply (stopped while reasoning) is scored the same way
+    assert incomplete_at({n}, lambda env: "").step_outcomes[n] == "incomplete"
+    with pytest.raises(ValueError, match="invalid must be one of"):
+        EpisodeEnv(rec).step("ACTION: ack(none)", invalid="wrong")
+
+
+def _key_at(ep: Episode, step: int) -> str:
+    return f"ACTION: {ep.steps[step].expected_action}"
+
+
 def test_env_works_on_episode_loaded_from_json(small_eps):
     ep = pick(small_eps, "observed-rec-far")
     back = Episode.from_dict(json.loads(json.dumps(ep.to_dict())))

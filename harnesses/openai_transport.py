@@ -143,13 +143,19 @@ class OpenAIResponsesTransport:
             "model_returned": data.get("model"),
             "service_tier_requested": payload.get("service_tier"),
             "service_tier_returned": data.get("service_tier"),
+            "status": data.get("status"),
+            "incomplete_reason": (data.get("incomplete_details") or {}).get("reason"),
             "latency_s": latency,
             "cost_usd_list": listed, "cost_usd_billed_est": billed,
         }
         self.echo_log.append(echo)
-        log.info("model=%s reasoning.context requested=%s echoed=%s tier=%s",
+        log.info("model=%s reasoning.context requested=%s echoed=%s tier=%s status=%s",
                  echo["model_returned"], echo["requested_context"], echo["echoed_context"],
-                 echo["service_tier_returned"])
+                 echo["service_tier_returned"], echo["status"])
+        if echo["status"] == "incomplete":
+            # D13: the caller scores it (an invalid action at a step; a retry for a summary)
+            log.warning("incomplete response (reason=%s, max_output_tokens=%s)",
+                        echo["incomplete_reason"], payload.get("max_output_tokens"))
         return data
 
     def finalize(self, *, run_id: str, milestone: str, cell_or_config: str,

@@ -215,6 +215,7 @@ def _probe_run(a, kind: str) -> int:
                         raw.write(json.dumps({"repeat": rep, **t}, ensure_ascii=False) + "\n")
                         trials.append({"repeat": rep, "context_requested": ctx,
                                        "echoes": t["echoes"], "outputs": t["outputs"],
+                                       "incomplete_turns": t["incomplete_turns"],
                                        **({"score": t["score"]} if "score" in t else {})})
             exit_reason = "COMPLETED"
         except (openai.OpenAIError, BudgetExceeded) as e:

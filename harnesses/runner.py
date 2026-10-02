@@ -21,7 +21,10 @@ Per episode it also logs (harnesses/DESIGN.md §7):
   step r_first and before the agent first saw the need-step observation (a compaction
   applied to the payload of the need step's first call counts; one fired during a lookup
   round-trip at the need step does not, and is marked `at_lookup_result` = 1);
-* the wall-clock seconds of every call (`call_latency_s`).
+* the wall-clock seconds of every call (`call_latency_s`);
+* every step response with status `incomplete` (`incomplete`, D13; e.g. one that hit
+  `max_output_tokens`). Its step is scored as an invalid action (PREREG §6, §13: at the need
+  step a content failure that scores 0) and the episode goes on.
 
 Pilot-blinded experiments (`harnesses.blinding`, PREREG §11) keep `episodes.jsonl` under the
 gitignored results/raw/ only.
@@ -74,6 +77,7 @@ def check_echo(payload: dict, response: dict) -> dict:
         "service_tier_requested": payload.get("service_tier"),
         "service_tier_returned": response.get("service_tier"),
         "status": response.get("status"),
+        "incomplete_reason": (response.get("incomplete_details") or {}).get("reason"),
     }
 
 
@@ -110,6 +114,9 @@ class EpisodeRun:
     exclusion_reason: str | None = None
     need_correct: bool = False
     need_label: str | None = None
+    # the need step's outcome (persistgym.env: correct, wrong, unparsed, invalid_lookup,
+    # incomplete); None if it was never scored
+    need_outcome: str | None = None
     routine_accuracy: float | None = None
     n_lookups: int = 0
     n_lookups_unavailable: int = 0  # over-cap lookups answered "lookup unavailable" (D3)
@@ -118,6 +125,10 @@ class EpisodeRun:
     n_summary_requests: int = 0
     n_summary_failures: int = 0
     n_unparsed_routine: int = 0  # unparsed replies at routine (non-need) steps
+    # step responses with status `incomplete` (D13), each scored as an invalid action; see
+    # _incomplete_record. Summary responses are not here: they are retried (n_summary_failures)
+    incomplete: list[dict] = field(default_factory=list)
+    n_incomplete_routine: int = 0  # those at routine (non-need) steps
     # each with at_step and at_lookup_result (D12)
     compactions: list[dict] = field(default_factory=list)
     compacted_between: int | None = None  # D12; summary cells only, see run_episode
@@ -173,6 +184,20 @@ def _need_phase_add(run: EpisodeRun, req, info: dict, response: dict) -> None:
         n["n_lookup_result_calls"] += bool(info["is_lookup_result"])
         if n["first_step_call"] is None:  # H2's usage[n]: the need step's first step call
             n["first_step_call"] = u
+
+
+def _incomplete_record(info: dict, need: int, payload: dict, response: dict,
+                       reply: str) -> dict:
+    """One step response with status `incomplete` (D13): where it happened, why, and whether
+    it used the whole output cap. Its step is scored as an invalid action."""
+    details = response.get("incomplete_details") or {}
+    return {"turn": info["turn"], "pending_step": info["pending_step"],
+            "at_need": int(info["pending_step"] == need),
+            "is_lookup_result": int(info["is_lookup_result"]),
+            "reason": details.get("reason"),
+            "max_output_tokens": payload.get("max_output_tokens"),
+            "output_tokens": usage_numbers(response.get("usage"))["output_tokens"],
+            "reply_chars": len(reply or "")}
 
 
 def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport: Transport,
@@ -257,7 +282,16 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 if req.kind == "step":
                     break
                 failures = 0  # a compaction succeeded; the next one gets its own attempts
-            obs, done = env.step(reply)
+            # PREREG §6, §13 (D13): a step response that stopped short (status `incomplete`,
+            # e.g. at max_output_tokens) is a content failure. Its step is scored as an
+            # invalid action whatever its partial text says, and the episode goes on. The
+            # session keeps the turn's output items as returned.
+            invalid = None
+            if response.get("status") == "incomplete":
+                invalid = "incomplete"
+                run.incomplete.append(_incomplete_record(info, need, req.payload, response,
+                                                         reply))
+            obs, done = env.step(reply, invalid=invalid)
     except BudgetExceeded as e:
         run.exit_reason, run.error = "COST_CAP", str(e)
     except openai.OpenAIError as e:  # API errors after retries, rejected payloads
@@ -270,8 +304,10 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
         run.n_lookups = res.n_lookups
         run.n_lookups_unavailable = res.n_lookups_unavailable
         run.n_turns = res.n_turns
+        run.need_outcome = res.step_outcomes.get(need)
         run.n_unparsed_routine = sum(o == "unparsed" for s, o in res.step_outcomes.items()
                                      if s != need)
+        run.n_incomplete_routine = sum(not r["at_need"] for r in run.incomplete)
         if run.need_phase is not None:
             run.need_phase["complete"] = need in res.step_outcomes
         # Session turn t is environment turn t (one observation each), so env.turns maps a

@@ -15,8 +15,9 @@ import pytest
 
 from harnesses.cells import CELLS, NOTES_INSTRUCTION, REPLAY_OFF_CELLS, REPLAY_PAIRS
 from harnesses.config import HarnessConfig
+from harnesses.fake import FakeModel
 from harnesses.items import n_reasoning_items
-from harnesses.tests.conftest import SYSTEM, run_synthetic
+from harnesses.tests.conftest import SYSTEM, reply_text, run_synthetic, summary_text
 
 CONFIGS = [HarnessConfig(), HarnessConfig(summary_keep_recent_tokens=500),
            HarnessConfig(reasoning_effort="high", service_tier="default",
@@ -47,6 +48,26 @@ def test_replay_pairs_differ_only_in_reasoning_context(r_id, o_id, cfg):
         n_replies = sum(1 for i in p["input"] if i.get("role") == "assistant")
         assert n_reasoning_items(p["input"]) == n_replies
     assert sum(n_reasoning_items(p["input"]) for p in mo.calls) > 0
+
+
+@pytest.mark.parametrize("r_id, o_id", REPLAY_PAIRS)
+def test_replay_pairs_stay_identical_after_incomplete_responses(r_id, o_id):
+    """D13: step calls 2 (stopped while reasoning: no message) and 5 (stopped with partial
+    text) hit the output cap. Both arms replay those turns the same way, so the payloads
+    still differ only in `reasoning.context`."""
+    def fake():
+        return FakeModel(lambda p, i: "" if i == 2 else reply_text(i),
+                         summary_fn=lambda p, j: summary_text(j),
+                         status_fn=lambda p, tag: ("incomplete" if tag in ("t2", "t5")
+                                                   else "completed"))
+    _, mr, _ = run_synthetic(CELLS[r_id], fake=fake())
+    _, mo, _ = run_synthetic(CELLS[o_id], fake=fake())
+    assert len(mr.calls) == len(mo.calls) > 5
+    for pr, po in zip(mr.calls, mo.calls, strict=True):
+        assert _without(pr, "reasoning", "context") == _without(po, "reasoning", "context")
+    # the reasoning-only turn 2 is sent without a reply wherever it is still verbatim
+    sent = [p for p in mo.calls if any(i.get("id") == "rs_t2" for i in p["input"])]
+    assert sent and all(not any(i.get("id") == "msg_t2" for i in p["input"]) for p in sent)
 
 
 @pytest.mark.parametrize("cfg", CONFIGS[:2])

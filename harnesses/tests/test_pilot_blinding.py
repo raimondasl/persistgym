@@ -13,6 +13,7 @@ from harnesses import blinding, cli
 from harnesses.cells import CELLS
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
+from harnesses.items import item_text
 from harnesses.runner import run_batch
 from harnesses.tests.conftest import SMALL
 from persistgym.episode import TaskCell
@@ -23,7 +24,10 @@ PILOT = "persistgym_pilot"
 # Per-episode or per-arm outcome fields that must never appear in a committed pilot file.
 OUTCOMES = {"need_correct", "need_label", "routine_accuracy", "need_phase", "need_payload",
             "need_bridge_carried", "n_lookups", "n_lookups_unavailable", "compacted_between",
-            "usage", "rate"}
+            "usage", "rate",
+            # D13: the need step's outcome and the per-step incomplete records (one at the
+            # need step is a 0) are per-episode outcomes too
+            "need_outcome", "incomplete"}
 
 
 def _pilot_eps(variants=("base",), cells=("derived-nonrec-far", "observed-rec-far")):
@@ -81,6 +85,37 @@ def test_pilot_run_commits_no_per_episode_outcomes(tmp_path):
     assert [r["episode_id"] for r in rows] == [e.episode_id for e in eps]
     assert all("need_correct" in r and r["need_phase"]["tokens"] > 0 for r in rows)
     assert (raw / "transcript.jsonl.gz").exists()
+
+
+def test_pilot_commits_only_routine_incomplete_counts(tmp_path):
+    """D13: an incomplete response at the need step scores 0, so it is an outcome. A pilot's
+    committed summary counts incomplete responses at routine steps only; the per-step
+    records, need step included, stay in the raw episodes."""
+    eps = _pilot_eps(cells=("derived-nonrec-far",))
+    (ep,) = eps
+    capped = {ep.steps[0].observation, ep.steps[ep.need_step].observation}
+    hit = set()
+
+    def reply(payload, i):
+        if item_text(payload["input"][-1]) in capped:
+            hit.add(f"t{i}")
+            return ""
+        return "ACTION: ack(none)"
+
+    run_batch(eps, CELLS["F-r"], CFG,
+              FakeModel(reply, status_fn=lambda p, tag: "incomplete" if tag in hit
+                        else "completed"),
+              experiment=PILOT, run_id="inc", results_root=tmp_path / "results",
+              raw_root=tmp_path / "raw")
+    for p in _committed_files(tmp_path / "results"):
+        _assert_blinded(json.loads(p.read_text(encoding="utf-8")))
+    summary = json.loads((tmp_path / "results" / PILOT / "inc" / "summary.json")
+                         .read_text(encoding="utf-8"))
+    assert summary["errors"]["n_incomplete_routine"] == 1
+    (row,) = [json.loads(x) for x in (tmp_path / "raw" / PILOT / "inc" / "episodes.jsonl")
+              .read_text(encoding="utf-8").splitlines()]
+    assert [r["at_need"] for r in row["incomplete"]] == [0, 1]
+    assert row["need_outcome"] == "incomplete"
 
 
 @pytest.mark.parametrize("run_id", ["../../x", "..", "a/b", "a\\b", "C:x", "", " p1"])
@@ -177,7 +212,8 @@ def test_validity_levels_count_finished_unexcluded_episodes_only():
         "restated": {"n_episodes": 4, "n_counted": 2, "n_need_correct": 1, "rate": 0.5},
         "withheld": {"n_episodes": 2, "n_counted": 2, "n_need_correct": 1, "rate": 0.5}}
     assert m["errors"] == {"exit_reasons": {"API_ERROR": 1, "DONE": 7}, "n_excluded": 1,
-                           "n_summary_failures": 0, "n_unparsed_routine": 8}
+                           "n_summary_failures": 0, "n_unparsed_routine": 8,
+                           "n_incomplete_routine": 0}
     assert m["latency"] == {"n_calls": 16, "median_s": 2.0, "p90_s": 3.0, "max_s": 3.0}
     assert m["cost_usd"] == {"cost_usd_list": 4.0, "cost_usd_billed_est": 2.0}
     assert m["tokens_pooled"]["reasoning_tokens"] == 24

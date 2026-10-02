@@ -94,7 +94,7 @@ def no_shared_paid_lock(monkeypatch, tmp_path_factory):
     CLI's lock points into a directory that does not exist, so a test that reaches the lock
     without naming its own (`cli.LOCK_PATH`) fails instead."""
     monkeypatch.setattr(cli, "LOCK_PATH", tmp_path_factory.getbasetemp()
-                        / "no-shared-paid-lock" / paidlock.LOCK_NAME)
+                        / "no-shared-paid-lock" / paidlock.lock_name(cli.STREAM))
 
 
 # --- a throwaway git repo with a committed PREREG.md (paid-guard tests) --------------------

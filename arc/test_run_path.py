@@ -14,6 +14,7 @@ import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -421,11 +422,71 @@ def test_a_run_that_cannot_be_accounted_keeps_the_lock(world, capsys):
     held = json.loads(paths.lock.read_text(encoding="utf-8"))
     assert "add its row by hand" in held["kept_because"]
     assert "could not account" in capsys.readouterr().err
+    # its reservation stays, counting against PersistGym runs, and the reason names it
+    reservation = paidlock.reservation_path(paths.lock, rp.STREAM)
+    assert reservation.exists() and str(reservation) in held["kept_because"]
 
     h.inner = lambda command, cwd: fake_game(cwd)
     assert rp.main(GAME_ARGS, paths=paths) == 2
     assert "add its row by hand" in capsys.readouterr().err
     assert h.calls.count("inner") == 1
+
+    # the operator deletes the lock but forgets the reservation: the next ARC run refuses
+    paths.lock.unlink()
+    assert rp.main(GAME_ARGS, paths=paths) == 2
+    err = capsys.readouterr().err
+    assert "spend reservation of the arc stream is left over" in err and str(reservation) in err
+    assert h.calls.count("inner") == 1 and not paths.lock.exists()
+    reservation.unlink()
+    assert rp.main(GAME_ARGS, paths=paths) == 0 and h.calls.count("inner") == 2
+
+
+def test_a_run_reserves_its_planned_spend_until_its_row_is_written(world):
+    """PREREG §12, "Operational": while an ARC run goes, its planned spend is reserved next
+    to the lock, so a PersistGym run that starts meanwhile counts it. Once the costs row is
+    written, the run is recorded as the ARC stream's last run and the reservation goes."""
+    paths, h = world
+    seen = []
+
+    def game(command, cwd):
+        with paidlock.budget_mutex(paths.lock):
+            seen.extend(paidlock.read_reservations(paths.lock))
+        return fake_game(cwd)
+    h.inner = game
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    (r,) = seen
+    assert (r.stream, r.experiment, r.approved_block, r.phase) == ("arc", "arc_path", BLOCK,
+                                                                   "1b")
+    assert r.planned_usd == Decimal(125)
+    assert not r.path.exists() and not paths.lock.exists()
+    (row,) = _rows(paths)
+    assert row["run_id"] == r.run_id
+    last = json.loads(paidlock.last_run_path(paths.lock, rp.STREAM).read_text(encoding="utf-8"))
+    assert last["run_id"] == r.run_id and last["stream"] == "arc"
+
+
+def test_a_running_persistgym_runs_reservation_counts_against_the_block(world, capsys):
+    """Block 1 lists experiments of both streams: a PersistGym run going in the same block
+    holds its planned spend against max_usd until its row is written, so an ARC run that
+    would need that room is refused before anything is spent."""
+    paths, h = world                                 # BLOCK's max_usd is 500
+    h.inner = lambda command, cwd: fake_game(cwd)
+    pg_lock = paths.lock.with_name(paidlock.lock_name(paidlock.PERSISTGYM))
+    with paidlock.paid_run_lock(pg_lock, run_id="luna-pilot", what="persistgym_pilot",
+                                stream=paidlock.PERSISTGYM) as info:
+        with paidlock.budget_mutex(pg_lock):
+            paidlock.write_reservation(paidlock.HeldLock(pg_lock, info), approved_block=BLOCK,
+                                       experiment="persistgym_pilot", phase="1a",
+                                       planned_usd=Decimal(400))
+        assert rp.main(GAME_ARGS, paths=paths) == 2
+        err = capsys.readouterr().err
+        assert "reserved $400.00 of it" in err and "run luna-pilot (persistgym stream" in err
+        assert "would exceed it by $25.00" in err
+        assert h.calls.count("inner") == 0 and _rows(paths) == []
+        assert not paths.lock.exists()
+        assert not paidlock.reservation_path(paths.lock, rp.STREAM).exists()
+    # the PersistGym run has ended (here: spent nothing): the room is back
+    assert rp.main(GAME_ARGS, paths=paths) == 0 and h.calls.count("inner") == 1
 
 
 def test_the_last_run_must_be_in_this_checkouts_ledger(world, tmp_path, capsys):
@@ -435,7 +496,7 @@ def test_the_last_run_must_be_in_this_checkouts_ledger(world, tmp_path, capsys):
     h.inner = lambda command, cwd: fake_game(cwd)
     assert rp.main(GAME_ARGS, paths=paths) == 0
     (row,) = _rows(paths)
-    last = json.loads(paidlock.last_run_path(paths.lock).read_text(encoding="utf-8"))
+    last = json.loads(paidlock.last_run_path(paths.lock, rp.STREAM).read_text(encoding="utf-8"))
     assert last["run_id"] == row["run_id"]
     assert last["row_timestamp_utc"] == row["timestamp_utc"]   # the row, not just its ID
 
@@ -825,6 +886,9 @@ def test_no_model_call_means_no_costs_row(world):
     assert _rows(paths) == []
     meta = _meta(paths, "arc_path")
     assert meta["cost_usd"]["costs_csv_row_appended"] is False and meta["n_calls"] == 0
+    # nothing spent: the reservation goes, and no last run is recorded
+    assert not paidlock.reservation_path(paths.lock, rp.STREAM).exists()
+    assert not paidlock.last_run_path(paths.lock, rp.STREAM).exists()
 
 
 def test_acceptance_check(world):

@@ -6,18 +6,20 @@ $0 commands (fake model or local files, no network):
     uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
     uv run python -m harnesses probe-summary <run_id> ...   # replay-probe counts per arm
 
-Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other paid run (ARC or PersistGym)
-holds the paid-run lock, this checkout's results/costs.csv holds the last paid run's row, no
-hold stands (a paid run that ended COST_CAP or passed its run guard, until the researcher
-merges "cleared_hold: <run_id>" into results/decisions.md; common/hold.py),
---approved-block and --planned-usd are given, PREREG.md is committed, merged to origin/main
-and frozen, and results/decisions.md holds the researcher's line
+Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the
+PersistGym stream's paid-run lock (an ARC run, with its own lock, may go beside it; PREREG
+§0.3 line 15), the experiment is a PersistGym one, this checkout's results/costs.csv holds
+the row of each stream's last paid run, no hold stands (a paid run that ended COST_CAP or
+passed its run guard, until the researcher merges "cleared_hold: <run_id>" into
+results/decisions.md; common/hold.py), --approved-block and --planned-usd are given,
+PREREG.md is committed, merged to origin/main and frozen, and results/decisions.md holds the
+researcher's line
 "approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>" on origin/main,
 in HEAD and in the working tree, listing the experiment, with room under max_usd and the
-phase cap (common/approval.py). The lock (common/paidlock.py, in the git common directory,
-shared with the ARC launcher) is taken before those checks and held until the command ends;
-a run whose costs.csv row could not be written leaves it held, with the reason. The OpenAI
-SDK reads the key from the environment:
+phase cap, counting the planned spend a running ARC run has reserved (common/approval.py).
+The lock (common/paidlock.py, in the git common directory) is taken before those checks and
+held until the command ends; a run whose costs.csv row could not be written leaves it held,
+with the reason. The OpenAI SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-echo \
         --approved-block "1-pilots" --planned-usd 0.5
     # D29 as amended by R1 (PREREG §17.1): sol and luna, 20 scorable trials per arm
@@ -64,9 +66,11 @@ from persistgym.render import generate
 PILOT_MAX_EPISODES = 10  # CLAUDE.md: a pilot is <= 10 episodes
 PILOT_EXPERIMENT = "persistgym_pilot"
 PILOT_SPLIT = "pilot"
-# The paid-run lock. None: persistgym-paid-run.lock in the git common directory of this
-# checkout, shared with every other checkout and with the ARC launcher. Tests point it at a
-# temporary file, so that they never take the real lock or write its last-run record.
+# The PersistGym stream's paid-run lock. None: persistgym-paid-run-persistgym.lock in the git
+# common directory of this checkout, shared with every other checkout; the ARC launcher has
+# its own lock next to it. Tests point it at a temporary file, so that they never take the
+# real lock or write the last-run records, reservations or holds next to it.
+STREAM = paidlock.PERSISTGYM
 LOCK_PATH: Path | None = None
 
 
@@ -154,18 +158,20 @@ def _guarded_transport(a, model: str, experiment: str, planned_usd: float | None
 
 
 def _with_paid_lock(run_id: str, what: str, body: Callable[[paidlock.HeldLock], int]) -> int:
-    """`body(held)` while this command holds the paid-run lock: one paid run at a time,
-    whether ARC or PersistGym (PREREG §12). The lock is taken before the transport's spend
-    checks, so two paid runs cannot both pass them. Refuses (2) when paid calls are off, which
-    the transport would refuse anyway, so a command that cannot spend never touches the
-    shared lock, or when another paid run holds it or kept it after an unaccounted run."""
+    """`body(held)` while this command holds the PersistGym stream's paid-run lock: one
+    PersistGym paid run at a time, beside at most one ARC run, which has its own lock
+    (PREREG §0.3 line 15, §12). The lock is taken before the transport's spend checks, so
+    two PersistGym runs cannot both pass them. Refuses (2) when paid calls are off, which the
+    transport would refuse anyway, so a command that cannot spend never touches the shared
+    lock, or when another PersistGym run holds it or kept it after an unaccounted run, or
+    while the old single lock of a launcher from before the per-stream locks exists."""
     if os.environ.get(ALLOW_ENV) != "1":
         print(f"refused: paid calls are off: set {ALLOW_ENV}=1 for an approved block",
               file=sys.stderr)
         return 2
     try:
-        lock = LOCK_PATH or paidlock.lock_path(runmeta.REPO_ROOT)
-        with paidlock.paid_run_lock(lock, run_id=run_id, what=what) as info:
+        lock = LOCK_PATH or paidlock.lock_path(runmeta.REPO_ROOT, STREAM)
+        with paidlock.paid_run_lock(lock, run_id=run_id, what=what, stream=STREAM) as info:
             return body(paidlock.HeldLock(lock, info))
     except paidlock.LockHeld as e:
         print(f"refused: {e}", file=sys.stderr)

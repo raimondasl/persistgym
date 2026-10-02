@@ -82,6 +82,41 @@ def test_append_rejects_bad_rows(tmp_path):
         costs.append_row(_row(experiment="mystery"), p)
 
 
+def test_append_writes_whole_rows_with_the_old_bytes(tmp_path):
+    """The locked append (common/oslock.py) writes what the csv module wrote before: one
+    "\\r\\n"-terminated row at the end of the file."""
+    p = tmp_path / "costs.csv"
+    header = (",".join(costs.COLUMNS) + "\n").encode()   # as committed: LF
+    p.write_bytes(header)
+    costs.append_row(_row(run_id="r1", notes="a, \"quoted\" note"), p)
+    data = p.read_bytes()
+    assert data.startswith(header) and data.endswith(b"\r\n")
+    assert data.count(b"\r\n") == 1
+    (row,) = costs.read_rows(p)
+    assert (row["run_id"], row["notes"]) == ("r1", "a, \"quoted\" note")
+
+
+def test_append_never_glues_a_row_to_a_torn_last_line(tmp_path):
+    """A row cut short by a crash stays a separate, unreadable row (the paid guard refuses
+    it), instead of swallowing the next one."""
+    p = tmp_path / "costs.csv"
+    p.write_text(",".join(costs.COLUMNS) + "\n2026-10-03T00:00:00+00:00,torn,M0",
+                 encoding="utf-8")
+    costs.append_row(_row(run_id="r2"), p)
+    rows = costs.read_rows(p)
+    assert [r["run_id"] for r in rows] == ["torn", "r2"]
+    assert rows[1]["cost_usd_billed_est"] == "0.75" and rows[0]["cost_usd_list"] is None
+    p.write_bytes(p.read_bytes() + b"x,half\r")          # torn right after its CR
+    costs.append_row(_row(run_id="r3"), p)
+    assert [r["run_id"] for r in costs.read_rows(p)] == ["torn", "r2", "half", "r3"]
+
+
+def test_append_to_a_missing_ledger_writes_the_header(tmp_path):
+    p = tmp_path / "costs.csv"
+    costs.append_row(_row(run_id="r1"), p)
+    assert [r["run_id"] for r in costs.read_rows(p)] == ["r1"]
+
+
 def test_config_hash_is_order_independent():
     assert runmeta.config_hash({"a": 1, "b": [1, 2]}) == runmeta.config_hash({"b": [1, 2], "a": 1})
 

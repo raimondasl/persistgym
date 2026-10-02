@@ -46,7 +46,7 @@ CLEAR_TEMPLATE = "cleared_hold: <run_id>"
 def _lock(tmp_path: Path) -> Path:
     folder = tmp_path / "gitdir"
     folder.mkdir(exist_ok=True)
-    return folder / paidlock.LOCK_NAME
+    return folder / paidlock.lock_name(paidlock.PERSISTGYM)
 
 
 def _place(lock: Path, run_id: str = RUN, **kw) -> dict:
@@ -413,7 +413,8 @@ def test_require_paid_run_refuses_while_a_hold_stands(repo, tmp_path):
         return approval.require_paid_run(lock=held, approved_block=block,
                                          experiment="toggle_pilot", planned_usd=1.0,
                                          costs_path=c, repo=repo)
-    with paidlock.paid_run_lock(lock, run_id="next-run", what="test") as info:
+    with paidlock.paid_run_lock(lock, run_id="next-run", what="test",
+                                stream=paidlock.PERSISTGYM) as info:
         held = paidlock.HeldLock(lock, info)
         assert run(held).approved_block == "1-pilots"
         _place(lock)
@@ -424,7 +425,8 @@ def test_require_paid_run_refuses_while_a_hold_stands(repo, tmp_path):
             run(held, block="2-seed1")        # before the approval is even looked up
         _clear(repo, RUN)
         assert run(held).approved_block == "1-pilots"
-    with (paidlock.paid_run_lock(lock, run_id=RUN, what="reused id") as info,
+    with (paidlock.paid_run_lock(lock, run_id=RUN, what="reused id",
+                                 stream=paidlock.PERSISTGYM) as info,
           pytest.raises(PaidCallsNotAllowed, match="is that of a run that placed a hold")):
         run(paidlock.HeldLock(lock, info))
 

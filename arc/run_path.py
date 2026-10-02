@@ -13,10 +13,12 @@ It spends money only after every check below passes, in this order:
    the pilot, the experiment's mode, the price table valid today, the frozen profile asks
    for the standard tier, and GOOGLE_API_KEY (plus ARC_API_KEY for a game) is set. Keys
    are never printed.
-2. No other paid run holds the lock (`common.paidlock`): one paid run at a time. The lock
-   is taken before the spend checks, so two runs cannot both pass them. A run that could
-   not write its costs row leaves the lock held, and the last paid run's costs row must be
-   in this checkout's results/costs.csv (each checkout has its own ledger).
+2. No other ARC run holds the ARC stream's lock (`common.paidlock`): one paid run at a time
+   per stream, so one PersistGym run may go beside it (PREREG §0.3 line 15, §12). The lock
+   is taken before the spend checks, so two ARC runs cannot both pass them. A run that
+   could not write its costs row leaves the lock held, and the costs row of each stream's
+   last paid run must be in this checkout's results/costs.csv (each checkout has its own
+   ledger).
 3. No hold stands (`common.hold`, PREREG §0.3 line 12, §7.7): every paid run that ended
    COST_CAP has its line `cleared_hold: <run_id>` in results/decisions.md on origin/main
    (fetched now), HEAD and the working tree.
@@ -25,9 +27,12 @@ It spends money only after every check below passes, in this order:
    origin/main (fetched now), HEAD and the working tree, the experiment listed, block spend
    + planned spend <= max_usd, and phase headroom.
 5. PREREG.md frozen (`common.prereg.prereg_state`, the rule draw_games.py uses) and the
-   same blob in HEAD and on origin/main (read after the guard's fetch). Steps 2-5 are
-   `common.approval.require_paid_run`, which the PersistGym launcher (harnesses/cli.py)
-   runs too; steps 6-8 are this launcher's own.
+   same blob in HEAD and on origin/main (read after the guard's fetch), then the run's
+   spend reservation: block and phase room counting the planned spend of a PersistGym run
+   that is going, and this run's own planned spend reserved until its costs row is written
+   (`common.approval.reserve_spend`). Steps 2-5 are `common.approval.require_paid_run`,
+   which the PersistGym launcher (harnesses/cli.py) runs too; steps 6-8 are this
+   launcher's own.
 6. arc/config_freeze.json the same blob in HEAD and on origin/main, the record this run
    loaded equal to it, and its four profile hashes, patch-series SHA-256 and pin (and the
    patched commit and tree, where listed) equal to the config freeze table in that frozen
@@ -50,7 +55,9 @@ Then it runs arc/run_path_inner.py in the patched harness with a sanitized envir
   with the reason, and a later reason is added to it;
 * copies the harness files to results/raw/<experiment>/<run_id>/ (gitignored);
 * appends ONE results/costs.csv row tagged `approved_block=<name>;`, with the list and
-  billed estimates priced from the run's per-step usage (arc/pricing.py);
+  billed estimates priced from the run's per-step usage (arc/pricing.py), records it as the
+  ARC stream's last paid run and removes the run's spend reservation (a run whose
+  accounting fails keeps both its lock and its reservation);
 * writes results/<experiment>/<run_id>/meta.json via common.runmeta.
 
 The harness cost guard (patch 0010, ARC's no-cache list accounting) stops a run at
@@ -94,6 +101,7 @@ from arc import run_path_inner as inner
 from common import approval, costs, hold, paidlock, runmeta
 from common.approval import MAIN, PaidCallsNotAllowed, RemoteRef
 
+STREAM = paidlock.ARC                              # PREREG §0.3 line 15: its own lock
 PATH_GAMES = ("ft09", "sb26", "r11l", "cd82")      # D14: the path (dev) games
 HELD_OUT_GAMES = ("sp80", "vc33", "tn36")          # D14: never played by this launcher yet
 PLAY_EXPERIMENTS = {"arc_pilot": "M0", "arc_path": "M1"}   # experiment -> default milestone
@@ -431,11 +439,12 @@ def patches_not_merged(repo: Path, patches: Sequence[Path],
 def check_paid(plan: Plan, paths: Paths, lock: paidlock.HeldLock,
                record: Mapping[str, Any]) -> approval.PaidApproval:
     """Steps 2-7 of the module docstring. Steps 2-5 are shared with the PersistGym launcher
-    (`common.approval.require_paid_run`): the lock is held by this run, this checkout's
-    costs.csv holds the last paid run's row, no hold stands, the paid guard, and a frozen,
-    merged PREREG. Steps 6-7 are ARC's own and run after that guard's fetch: the merged
-    freeze record (`record` is what this run loaded) equal to the frozen PREREG §7.1 table,
-    and the merged patch series."""
+    (`common.approval.require_paid_run`): the ARC stream's lock is held by this run, this
+    checkout's costs.csv holds each stream's last paid run's row, no hold stands, the paid
+    guard, a frozen, merged PREREG, and the run's spend reservation (which releasing the
+    lock removes if a later step refuses). Steps 6-7 are ARC's own and run after that
+    guard's fetch: the merged freeze record (`record` is what this run loaded) equal to the
+    frozen PREREG §7.1 table, and the merged patch series."""
     granted = approval.require_paid_run(
         lock=lock, approved_block=plan.approved_block, experiment=plan.experiment,
         planned_usd=plan.planned_usd, costs_path=paths.costs, repo=paths.repo,
@@ -937,6 +946,21 @@ def _rel(path: Path) -> str:
         return path.as_posix()
 
 
+def release_reservation(lock: Path, granted: approval.PaidApproval) -> None:
+    """Remove this run's spend reservation (`common.paidlock`), once its costs row is written
+    or it made no model call. If that fails the reservation stays, counting against the
+    other stream until the operator deletes it, and the next ARC run refuses and says so."""
+    if not granted.reservation_id:
+        return
+    try:
+        paidlock.release_reservation(lock, stream=STREAM,
+                                     reservation_id=granted.reservation_id)
+    except OSError as e:
+        print(f"warning: could not remove this run's spend reservation "
+              f"{paidlock.reservation_path(lock, STREAM)}: {e}. Delete it by hand: its "
+              f"spend is in costs.csv", file=sys.stderr)
+
+
 def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths: Paths,
             record: Mapping[str, Any], *, lock: Path, held: dict) -> int:
     raw_dir = paths.raw / plan.experiment / plan.run_id
@@ -996,16 +1020,22 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
                         f"{hold.holds_path(lock)} (one JSON line with run_id "
                         f"{plan.run_id!r}; the researcher clears it with the line "
                         f"'{approval.format_clear_line(plan.run_id)}', PREREG §7.7)")
-            keep(why + "; then delete this lock file")
+            keep(why + f"; then delete this lock file and the run's spend reservation "
+                       f"{paidlock.reservation_path(lock, STREAM)}")
             print(f"ERROR: could not account for the run. {why}: {lock}", file=sys.stderr)
             raise
         if row is not None:
             try:
-                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs,
+                paidlock.record_last_run(lock, stream=STREAM, run_id=plan.run_id,
+                                         costs_csv=paths.costs,
                                          timestamp_utc=row["timestamp_utc"])
             except OSError as e:
                 print(f"warning: could not record the last paid run next to {lock}: {e}",
                       file=sys.stderr)
+        # The run's spend is in costs.csv now (or it made no model call): its reservation
+        # stops counting against the PersistGym stream's runs (PREREG §12). After the
+        # record, so a run starting in between counts this spend twice, not never.
+        release_reservation(lock, granted)
         meta = write_meta(plan, acct, harness, granted, out_dir=out_dir, raw_dir=raw_dir,
                           started=started, row=row, record=record,
                           hold_placed=placed is not None)
@@ -1057,18 +1087,21 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
     try:
         record = freeze.load_record(paths.freeze)
         plan = make_plan(args, record)
-        lock = paths.lock or paidlock.lock_path(paths.repo)
+        lock = paths.lock or paidlock.lock_path(paths.repo, STREAM)
     except (Refused, freeze.FreezeError, paidlock.LockHeld) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
     harness: Harness | None = None
     try:
-        with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe()) as held:
+        with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe(),
+                                    stream=STREAM) as held:
             granted = check_paid(plan, paths, paidlock.HeldLock(lock, held), record)
             print(f"approved: block {plan.approved_block!r} ({granted.phase}), planned "
                   f"${plan.planned_usd:.2f}, block headroom after this run "
-                  f"${granted.block_headroom_usd:.2f}; harness cost guard "
-                  f"${plan.cost_cap_usd:.2f} (list)", flush=True)
+                  f"${granted.block_headroom_usd:.2f}"
+                  + (f" (counting ${granted.reserved_block_usd:.2f} reserved by the running "
+                     f"PersistGym run)" if granted.reserved_block_usd else "")
+                  + f"; harness cost guard ${plan.cost_cap_usd:.2f} (list)", flush=True)
             harness = prepare_harness(plan, record)
             return execute(plan, granted, harness, paths, record, lock=lock, held=held)
     except (Refused, PaidCallsNotAllowed, paidlock.LockHeld, ap.PatchError,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from decimal import Decimal
 
 import pytest
 
@@ -48,7 +49,7 @@ def paid_env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "RESULTS", tmp_path / "results")
     monkeypatch.setattr(cli, "RAW", tmp_path / "raw")
     (tmp_path / "lock").mkdir()
-    monkeypatch.setattr(cli, "LOCK_PATH", tmp_path / "lock" / paidlock.LOCK_NAME)
+    monkeypatch.setattr(cli, "LOCK_PATH", tmp_path / "lock" / paidlock.lock_name(cli.STREAM))
     fakes = []
 
     def turn(payload):  # 0-based turn within one probe conversation
@@ -342,7 +343,8 @@ def _lock() -> dict:
 
 
 def _last_run() -> dict:
-    return json.loads(paidlock.last_run_path(cli.LOCK_PATH).read_text(encoding="utf-8"))
+    return json.loads(paidlock.last_run_path(cli.LOCK_PATH, cli.STREAM).read_text(
+        encoding="utf-8"))
 
 
 def test_run_holds_the_lock_and_records_the_last_run(paid_env, monkeypatch):
@@ -355,9 +357,11 @@ def test_run_holds_the_lock_and_records_the_last_run(paid_env, monkeypatch):
     monkeypatch.setattr(cli, "run_batch", spy)
     assert cli.main(RUN) == 0
     (held,) = seen
-    assert held["run_id"] == "r"
+    assert held["run_id"] == "r" and held["stream"] == "persistgym"
     assert held["what"] == "persistgym_pilot: W-n-0 on gpt-6-luna, 2 episodes"
     assert not cli.LOCK_PATH.exists()                        # released after the run
+    # its spend is in costs.csv: its reservation no longer counts against ARC runs
+    assert not paidlock.reservation_path(cli.LOCK_PATH, cli.STREAM).exists()
     assert _last_run()["run_id"] == "r" == costs.read_rows(costs_csv)[0]["run_id"]
     assert cli.main([*RUN[:-1], "r2"]) == 0                  # the next run may start
     assert _last_run()["run_id"] == "r2"
@@ -380,19 +384,63 @@ def test_probe_holds_one_lock_for_all_its_models(paid_env, monkeypatch):
 
 
 def test_refused_while_another_paid_run_holds_the_lock(paid_env, capsys):
-    """One paid run at a time, ARC or PersistGym: refused before the transport is built."""
+    """One PersistGym paid run at a time: refused before the transport is built."""
     _, costs_csv, fakes = paid_env
-    cli.LOCK_PATH.write_text('{"run_id": "arc-pilot-ft09"}', encoding="utf-8")
+    cli.LOCK_PATH.write_text('{"run_id": "luna-pilot-0"}', encoding="utf-8")
     assert cli.main(RUN) == 2
     err = capsys.readouterr().err
-    assert "arc-pilot-ft09" in err and "One paid run at a time" in err
+    assert "luna-pilot-0" in err and "One paid run at a time per stream" in err
     assert fakes == [] and costs.read_rows(costs_csv) == []
-    assert _lock() == {"run_id": "arc-pilot-ft09"}           # left alone
+    assert _lock() == {"run_id": "luna-pilot-0"}             # left alone
+
+
+def test_an_arc_run_does_not_block_a_persistgym_run(paid_env, monkeypatch):
+    """PREREG §0.3 line 15: the ARC stream has its own lock, so a PersistGym run may go
+    beside an ARC run; the ARC run's lock is left alone. Its reservation, in another block
+    and phase, takes no room from this run."""
+    _, costs_csv, _ = paid_env
+    arc_lock = cli.LOCK_PATH.with_name(paidlock.lock_name(paidlock.ARC))
+    with paidlock.paid_run_lock(arc_lock, run_id="arc-path-ft09", what="arc_path",
+                                stream=paidlock.ARC) as info:
+        with paidlock.budget_mutex(arc_lock):
+            paidlock.write_reservation(paidlock.HeldLock(arc_lock, info),
+                                       approved_block="2-seed1", experiment="arc_path",
+                                       phase="1b", planned_usd=Decimal(120))
+        seen, real = [], cli._guarded_transport
+
+        def spy(a, model, experiment, planned_usd, held):
+            t = real(a, model, experiment, planned_usd, held)
+            seen.append(t.approval)
+            return t
+        monkeypatch.setattr(cli, "_guarded_transport", spy)
+        assert cli.main(RUN) == 0
+        assert json.loads(arc_lock.read_text(encoding="utf-8"))["token"] == info["token"]
+        assert paidlock.reservation_path(arc_lock, paidlock.ARC).exists()
+    (granted,) = seen
+    assert granted.stream == "persistgym" and granted.reserved_block_usd == 0
+    assert granted.reserved_phase_usd == 0
+    assert costs.read_rows(costs_csv)[0]["run_id"] == "r"
+    assert not arc_lock.exists() and not paidlock.reservation_path(arc_lock,
+                                                                   paidlock.ARC).exists()
+
+
+def test_refused_while_the_old_single_lock_exists(paid_env, capsys):
+    """A launcher from before the per-stream locks takes `persistgym-paid-run.lock`; while
+    it exists, no paid run of either stream starts."""
+    _, costs_csv, fakes = paid_env
+    legacy = cli.LOCK_PATH.with_name(paidlock.LEGACY_LOCK_NAME)
+    legacy.write_text('{"run_id": "old-arc-pilot"}', encoding="utf-8")
+    assert cli.main(RUN) == 2
+    err = capsys.readouterr().err
+    assert "old-arc-pilot" in err and "old single paid-run lock" in err
+    assert fakes == [] and costs.read_rows(costs_csv) == [] and not cli.LOCK_PATH.exists()
+    assert legacy.read_text(encoding="utf-8") == '{"run_id": "old-arc-pilot"}'
 
 
 def test_refused_when_the_last_runs_row_is_not_in_this_ledger(paid_env, capsys):
+    """The ARC stream's last run counts too: its row must be in this checkout's ledger."""
     tmp, costs_csv, fakes = paid_env
-    paidlock.record_last_run(cli.LOCK_PATH, run_id="arc-pilot-ft09",
+    paidlock.record_last_run(cli.LOCK_PATH, stream=paidlock.ARC, run_id="arc-pilot-ft09",
                              costs_csv=tmp / "elsewhere" / "costs.csv")
     assert cli.main(RUN) == 2
     err = capsys.readouterr().err
@@ -430,7 +478,10 @@ def test_a_run_whose_row_cannot_be_written_keeps_the_lock(paid_env, monkeypatch,
     held = _lock()
     assert held["run_id"] == "r" and "add its row by hand" in held["kept_because"]
     assert f"made {len(fakes[0].calls)} paid calls" in held["kept_because"]
-    assert not paidlock.last_run_path(cli.LOCK_PATH).exists()
+    assert not paidlock.last_run_path(cli.LOCK_PATH, cli.STREAM).exists()
+    # its reservation stays too, counting against ARC runs, and the reason names it
+    reservation = paidlock.reservation_path(cli.LOCK_PATH, cli.STREAM)
+    assert reservation.exists() and str(reservation) in held["kept_because"]
 
     monkeypatch.setattr(costs, "append_row", real_append)
     assert cli.main([*RUN[:-1], "r2"]) == 2
@@ -510,21 +561,24 @@ def test_paid_calls_off_never_touch_the_lock(monkeypatch, capsys):
 
 
 def test_the_default_lock_is_the_shared_one(monkeypatch, tmp_path):
-    """With no test override, the CLI takes the lock in this checkout's git common directory
-    (`paidlock.lock_path`), the one the ARC launcher takes."""
+    """With no test override, the CLI takes the PersistGym stream's lock in this checkout's
+    git common directory (`paidlock.lock_path`); the ARC launcher takes the ARC stream's lock
+    next to it."""
     monkeypatch.setenv(ALLOW_ENV, "1")
     monkeypatch.setattr(cli, "LOCK_PATH", None)
     asked, seen = [], []
+    name = paidlock.lock_name(paidlock.PERSISTGYM)
 
-    def lock_path(repo):
-        asked.append(repo)
-        return tmp_path / paidlock.LOCK_NAME
+    def lock_path(repo, stream):
+        asked.append((repo, stream))
+        return tmp_path / name
     monkeypatch.setattr(paidlock, "lock_path", lock_path)
 
     def refuse(a, model, experiment, planned_usd, held):  # as when the guard refuses: None
-        seen.append((held.path, held.holds()))
+        seen.append((held.path, held.holds(), held.stream))
     monkeypatch.setattr(cli, "_guarded_transport", refuse)
     assert cli.main(["probe-echo", "--model", "gpt-6-luna", "--approved-block", "1-pilots",
                      "--planned-usd", "1"]) == 2
-    assert asked == [runmeta.REPO_ROOT] and seen == [(tmp_path / paidlock.LOCK_NAME, True)]
-    assert not (tmp_path / paidlock.LOCK_NAME).exists()
+    assert asked == [(runmeta.REPO_ROOT, "persistgym")]
+    assert seen == [(tmp_path / name, True, "persistgym")]
+    assert not (tmp_path / name).exists()

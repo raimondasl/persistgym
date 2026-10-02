@@ -15,6 +15,11 @@ from common.approval import format_line
 DEFAULT_EXPERIMENTS = ("toggle_pilot", "replay_probe", "persistgym_pilot")
 DEFAULT_MAX_USD = "1000"
 
+# PREREG.md texts in the form of PREREG §0.4: a frozen one, which `require_paid_run` accepts
+# (common/prereg.py), and a draft, which it refuses even when merged.
+FROZEN_PREREG = "Version: 1.0\n\n**Status: Frozen on 2026-10-03 by the researcher.**\n"
+DRAFT_PREREG = "Version: 0.3-draft\n\n**Status: DRAFT for the researcher's sign-off.**\n"
+
 
 def _env(repo: Path) -> dict:
     empty = repo.parent / ".test-gitconfig"

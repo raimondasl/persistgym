@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from common import approval, costs
+from common import approval, costs, paidlock
 from common.approval import (
     ALLOW_ENV,
     PaidCallsNotAllowed,
@@ -26,6 +26,8 @@ from common.approval import (
     require_paid_approval,
 )
 from common.tests.gitrepo import (
+    DRAFT_PREREG,
+    FROZEN_PREREG,
     add_origin,
     approval_line,
     commit_on_origin_only,
@@ -680,6 +682,63 @@ def test_prereg_check_reads_the_injected_remote(repo):
     assert _require(repo, c).prereg_version == "0.2"
     with pytest.raises(PaidCallsNotAllowed, match="differs from PREREG.md on upstream/release"):
         _require(repo, c, remote=other)
+
+
+# --- require_paid_run: the lock, the last run's row and a frozen PREREG ----------------------
+
+def test_prereg_not_frozen_reads_the_merged_text(repo):
+    """The merged PREREG.md must be frozen too: the guard's own PREREG check accepts the
+    fixture's 'Version: 0.1', which is not."""
+    git_in(repo, "fetch", "-q", "origin")
+    assert "PREREG.md is not frozen: version 0.1 is below 0.2" == (
+        approval.prereg_not_frozen(repo))
+    _commit_prereg(repo, FROZEN_PREREG)
+    assert approval.prereg_not_frozen(repo) == PREREG_DIFFERS     # frozen, not merged yet
+    push_main(repo)
+    git_in(repo, "fetch", "-q", "origin")
+    assert approval.prereg_not_frozen(repo) is None
+    _commit_prereg(repo, DRAFT_PREREG)                               # a draft, merged
+    push_main(repo)
+    git_in(repo, "fetch", "-q", "origin")
+    assert "not a release version" in approval.prereg_not_frozen(repo)
+
+
+def test_require_paid_run_checks_the_lock_the_ledger_the_guard_and_a_frozen_prereg(
+        tmp_path, armed):
+    """In that order: no lock refuses before the ledger is read, a missing last-run row
+    before the approval is looked up, and a draft only after the guard has passed."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    guarded_repo(repo, prereg=DRAFT_PREREG)
+    c = _costs(tmp_path)
+    lock = tmp_path / "lock" / paidlock.LOCK_NAME
+    lock.parent.mkdir()
+
+    def run(held, block="1-pilots"):
+        return approval.require_paid_run(lock=held, approved_block=block,
+                                         experiment="toggle_pilot", planned_usd=1.0,
+                                         costs_path=c, repo=repo)
+    with pytest.raises(PaidCallsNotAllowed, match="need the paid-run lock"):
+        run(None)
+    with paidlock.paid_run_lock(lock, run_id="r", what="test") as info:
+        held = paidlock.HeldLock(lock, info)
+        with pytest.raises(PaidCallsNotAllowed, match="does not hold the paid-run lock"):
+            run(paidlock.HeldLock(lock, {"token": "another run's"}))
+        with pytest.raises(PaidCallsNotAllowed, match="not approved"):
+            run(held, block="2-seed1")
+        with pytest.raises(PaidCallsNotAllowed, match=r"frozen, merged PREREG.md \(PLAN "
+                                                      r"§16.3\): PREREG.md is not frozen"):
+            run(held)
+        _commit_prereg(repo, FROZEN_PREREG)
+        push_main(repo)
+        assert run(held).prereg_version == "1.0"
+
+        paidlock.record_last_run(lock, run_id="elsewhere-1", costs_csv=tmp_path / "x.csv")
+        with pytest.raises(PaidCallsNotAllowed, match="elsewhere-1.*not in this checkout"):
+            run(held, block="2-seed1")      # before the approval is even looked up
+        c.write_text("timestamp_utc,run_id\n", encoding="utf-8")
+        with pytest.raises(PaidCallsNotAllowed, match="cannot read .*costs.csv"):
+            run(held)
 
 
 # --- what the approval allows --------------------------------------------------------------

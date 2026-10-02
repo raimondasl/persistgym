@@ -254,6 +254,14 @@ def test_prereg_state(text, frozen):
     assert dg.prereg_state(text).frozen is frozen
 
 
+def test_the_draw_and_the_paid_launchers_share_one_freeze_rule():
+    """The draw and both paid launchers read "frozen" the same way (common/prereg.py)."""
+    from arc import run_path
+    from common import approval, prereg
+    assert dg.prereg_state is prereg.prereg_state is approval.prereg_state
+    assert run_path.prereg_not_frozen is approval.prereg_not_frozen
+
+
 def test_nist_draw_end_to_end(repo, tmp_path, capsys):
     beacons = nist_ok()
     code, run_dir = run_draw(repo, tmp_path, beacons, T_MS + 3_600_000)

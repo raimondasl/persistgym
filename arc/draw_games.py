@@ -86,6 +86,7 @@ from typing import Self
 import httpx
 
 from common import runmeta
+from common.prereg import prereg_state
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_ROOT = REPO_ROOT / "results" / "draw"
@@ -97,7 +98,6 @@ BLOCK2_CONFIGS = ("S0", "S4")                  # block 2 = replicate 1 of these 
 
 DELAY_S = 10 * 60
 FALLBACK_AFTER_MS = 24 * 3600 * 1000
-MIN_PREREG_VERSION = (0, 2)
 
 NIST_BASE = "https://beacon.nist.gov/beacon/2.0"
 DRAND_BASE = "https://api.drand.sh"
@@ -113,9 +113,6 @@ TIMEOUT = httpx.Timeout(30.0)
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _SHA_RE = re.compile(r"[0-9a-fA-F]{7,64}")
-_VERSION_RE = re.compile(r"^\**Version:?\**:?\s*(\S+)", re.MULTILINE)
-_STATUS_RE = re.compile(r"^\**Status:?\**:?\s*(.*)$", re.MULTILINE)
-_RELEASE_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
 
 
 class DrawStop(RuntimeError):
@@ -178,35 +175,6 @@ def _rev(repo: Path, ref: str) -> str | None:
 def _file_at(repo: Path, sha: str, path: str) -> str | None:
     p = _git(repo, "show", f"{sha}:{path}")
     return p.stdout if p.returncode == 0 else None
-
-
-@dataclass(frozen=True)
-class PreregState:
-    version: str | None
-    status: str | None
-    frozen: bool
-    why_not: str = ""
-
-
-def prereg_state(text: str | None) -> PreregState:
-    """Frozen iff ``Version: x.y`` (x.y >= 0.2, no suffix) and a status line starting "Frozen"."""
-    if text is None:
-        return PreregState(None, None, False, "PREREG.md does not exist at this commit")
-    vm, sm = _VERSION_RE.search(text), _STATUS_RE.search(text)
-    version = vm.group(1) if vm else None
-    status = sm.group(1).strip().strip("*").strip() if sm else None
-    rel = _RELEASE_RE.fullmatch(version or "")
-    if rel is None:
-        why = (f"version {version!r} is not a release version x.y" if version
-               else "PREREG.md has no 'Version:' line")
-        return PreregState(version, status, False, why)
-    if (int(rel.group(1)), int(rel.group(2))) < MIN_PREREG_VERSION:
-        return PreregState(version, status, False,
-                           f"version {version} is below {'.'.join(map(str, MIN_PREREG_VERSION))}")
-    if not (status or "").lower().startswith("frozen"):
-        return PreregState(version, status, False,
-                           f"status line does not start with 'Frozen': {status!r}")
-    return PreregState(version, status, True)
 
 
 def check_freeze_commit(repo: Path, ref: str, *, fetch: bool = True) -> dict:

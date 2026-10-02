@@ -181,3 +181,24 @@ approved_block: 1-pilots | experiments: toggle_pilot,replay_probe,gemini_probe,a
 - **Operational fix:** every paid run is launched as a process of its own, with its own console, never from a shell that a time limit can stop.
 - **The check's verdict waits for the recovery:** `reasoning-check` reads both runs' `meta.json`, so it runs only once the F-0 run is accounted for.
 - **Spend:** this entry's pull request is $0. The block's spend to date is stated once the F-0 run's row is in `results/costs.csv`; a total now, against the $22.84 of the last entry, would give the F-r run's cost alone.
+
+## 2026-10-02: Engagement check (PREREG §17.2): NOT ENGAGED
+- **Accounting recovered:** after PR #39 merged, `uv run python -m harnesses account-run 20261002T180358Z-F-0-gpt-6.1-sol ... --git-commit 9c535120a1094e825ab0aeced6cfafb813e67229 --git-dirty true` checked every rebuilt total against the totals kept in the lock (all matched; `--check` first, then the real run), appended the F-0 run's costs row, wrote its `summary.json` and `meta.json` (with `recovered`), and released the reservation and the lock.
+- **Verdict** (`uv run python -m harnesses reasoning-check 20261002T173710Z-F-r-gpt-6.1-sol 20261002T180358Z-F-0-gpt-6.1-sol --reference 20261002T083238Z-F-r-gpt-6.1-sol 20261002T083706Z-F-0-gpt-6.1-sol`; `results/persistgym_pilot/reasoning-check-20261002T225917Z/reasoning_check.json`): **E = 0/20 = 0.00 < 0.50, NOT_ENGAGED.** None of the 20 evidence-step calls of the 8 derived-far episodes, pooled over both arms, reported 32 or more reasoning tokens. All 8 derived-far episodes ended normally, so the check is scorable.
+- **Descriptive, pooled over both arms** (PREREG §17.2):
+
+  | | check, effort high | block-1 pilot, effort medium (reference) |
+  |---|---|---|
+  | Episodes; calls | 16; 360 | 16; 360 |
+  | Step calls before the need step | 336 | 336 |
+  | Reasoning tokens per such call: mean; median | 0.432; 0 | 0.0; 0 |
+  | Share of such calls with any reasoning | 3.3% | 0% |
+  | Output tokens, all calls | 4,398 | 4,119 |
+  | Billed cost; per episode | $0.699; $0.0437 | $0.652; $0.0408 |
+  | Errors | none (16 `DONE`, 0 excluded) | none |
+  | Echo match: `reasoning.context`; `reasoning.effort` | 360/360; 360/360 (`high`) | 360/360; 360/360 (`medium`) |
+
+- **What it means:** at high effort, sol still answers this task almost without reasoning before the need step, as at medium. Replay therefore has almost nothing to carry, and H2's success branch would be a weak test at either effort.
+- **What it does not show:** anything about either arm, about success, or about reasoning at the need step. Token counts do not show content.
+- **Consequence (PREREG §17.2, "Does not engage"):** no sol validity run and no sol main-sweep run, at either effort. Claude proposes option (c), making derived facts need more reasoning, to the researcher as a further amendment; the researcher decides. Nothing else waits on this: luna's runs, the ARC blocks and G0 (Oct 7) are unaffected.
+- **Spend:** the check cost $0.699 billed for both runs. Block 1: **$23.54 billed of $70** (phase 0 $20.57, phase 1a $2.98), 21 rows in `results/costs.csv`.

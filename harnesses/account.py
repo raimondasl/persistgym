@@ -29,12 +29,15 @@ is already in costs.csv; the PersistGym lock is not kept by this run, or the pro
 took it may still be running; the spend reservation is another run's; raw files are missing,
 or summary.json or meta.json already exist; episodes.jsonl holds an episode twice, or other
 episodes than the plan's in its order, or stops where the stop rule does not; the transcript
-and episodes.jsonl disagree, or the requests do not carry the given settings; the run was
-played in parallel (not supported: the order its episodes finished in and its `parallel`
-block are not on disk); or a rebuilt total differs from the totals kept in the lock. It then
-writes the costs row first, then summary.json and meta.json, then the last-run record, the
-reservation and the lock. If a step after the row fails, it says what was done and what
-remains, and the lock stays kept, with that added to its reason.
+and episodes.jsonl disagree, or the requests do not carry the given settings; `--git-dirty
+false` is given for a run that started while the ledger held a costs row its commit lacks
+(the ledger is a tracked file, so the run read git_dirty=True, as every run started after an
+uncommitted row does); the raw transcript was last written before the run's start or after
+the lock was kept; the run was played in parallel (not supported: the order its episodes
+finished in and its `parallel` block are not on disk); or a rebuilt total differs from the
+totals kept in the lock. It then writes the costs row first, then summary.json and meta.json,
+then the last-run record, the reservation and the lock. If a step after the row fails, it
+says what was done and what remains, and the lock stays kept, with that added to its reason.
 
 Blinding (PREREG §11): nothing here prints a reasoning-token value, a per-episode outcome or
 success; for a pilot-blinded experiment it prints no token or cost value but the number of
@@ -43,7 +46,9 @@ calls. The totals check prints key names and whether each matched.
 
 from __future__ import annotations
 
+import csv
 import gzip
+import io
 import json
 import re
 import subprocess
@@ -81,6 +86,8 @@ KEPT_RE = re.compile(
     r"paid calls that (?P<costs>.+?) does not show(?: \((?P<cause>.*)\))?: add its row by "
     r"hand, with (?P<tag>approved_block=\S+;) at the start of its notes and these totals: ")
 EPISODE_FIELDS = tuple(f.name for f in fields(runner.EpisodeRun))
+# Seconds a file's last-write time may run ahead of a later write's (file-system timing)
+_KEPT_SLACK_S = 2
 
 
 class Refused(ValueError):
@@ -88,11 +95,13 @@ class Refused(ValueError):
 
 
 class Incomplete(RuntimeError):
-    """A write step after the costs row failed: `done` were done, `remaining` remain."""
+    """A write step failed: `done` were done, `remaining` remain. `lock_noted`: whether the
+    kept lock's reason now says that the costs row was appended (only when it was)."""
 
-    def __init__(self, message: str, done: list[str], remaining: list[str]):
+    def __init__(self, message: str, done: list[str], remaining: list[str],
+                 lock_noted: bool = False):
         super().__init__(message)
-        self.done, self.remaining = done, remaining
+        self.done, self.remaining, self.lock_noted = done, remaining, lock_noted
 
 
 @dataclass
@@ -353,9 +362,37 @@ def _check_files(run: Run, out_dir: Path, raw_dir: Path, raw_path: Path,
                       "parallel): not supported")
 
 
+def _uncommitted_rows(rows: list[dict], commit: str, before: str) -> list[str]:
+    """The run ids of the ledger rows `rows` written before `before` (an ISO time) that
+    results/costs.csv at `commit` does not hold, by run id and timestamp; [] if that file is
+    not in the commit. The ledger is append-only and tracked, so such a row was an
+    uncommitted change when the run started: `git status` showed a tracked file that differed
+    from the commit, and the run read git_dirty=True."""
+    rel = costs.COSTS_CSV.relative_to(costs.REPO_ROOT).as_posix()
+    try:
+        committed = runmeta.run_git("show", f"{commit}:{rel}")
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    held = {(r.get("run_id"), r.get("timestamp_utc"))
+            for r in csv.DictReader(io.StringIO(committed))}
+    cutoff = datetime.fromisoformat(before)
+    out = []
+    for r in rows:
+        try:
+            written = datetime.fromisoformat(str(r.get("timestamp_utc")))
+        except ValueError:
+            continue
+        if (written.tzinfo is not None and written < cutoff
+                and (r.get("run_id"), r.get("timestamp_utc")) not in held):
+            out.append(str(r.get("run_id")))
+    return out
+
+
 def _git_and_start(plan: dict | None, git_given: dict | None, started_given: str | None,
-                   lock_info: dict) -> tuple[dict, str, str]:
-    """The run's git state, its start time and where the start time came from."""
+                   lock_info: dict, rows: list[dict]) -> tuple[dict, str, str]:
+    """The run's git state, its start time and where the start time came from. For a run
+    without a plan, the git state given is checked against the ledger `rows`: a run started
+    while the ledger held a row its commit lacks read git_dirty=True (`_uncommitted_rows`)."""
     if plan is not None:
         try:
             git = runmeta.check_git_state(plan.get("git"))
@@ -381,8 +418,18 @@ def _git_and_start(plan: dict | None, git_given: dict | None, started_given: str
         raise Refused(f"--git-commit {git_given['git_commit']} is not a commit of this "
                       "repository") from None
     if started_given is not None:
-        return git, _utc(started_given, "--started-utc"), "given"
-    return git, _utc(lock_info.get("started_utc"), "the lock's started_utc"), "lock"
+        start, start_from = _utc(started_given, "--started-utc"), "given"
+    else:
+        start, start_from = _utc(lock_info.get("started_utc"), "the lock's started_utc"), "lock"
+    if not git["git_dirty"]:
+        uncommitted = _uncommitted_rows(rows, git["git_commit"], start)
+        if uncommitted:
+            raise Refused(f"--git-dirty false, but when the run started ({start}) the ledger "
+                          f"held costs rows that results/costs.csv at {git['git_commit']} "
+                          f"does not ({', '.join(uncommitted)}): a tracked file differed from "
+                          "the commit, so the run read git_dirty=True, as every run started "
+                          "after an uncommitted costs row does. Give --git-dirty true")
+    return git, start, start_from
 
 
 def _first_payload(run: Run, episode: Episode) -> dict:
@@ -420,11 +467,14 @@ def _check_episodes(run: Run, records: list[dict], transcript: list[dict]) -> li
         n = rec["n_requests"]
         calls = transcript[k:k + n]
         k += n
+        # No call count in these messages: an episode's calls follow its lookups, an outcome
+        # that stays in the raw files for a pilot (PREREG §11).
         if (len(calls) != n or [c.get("episode_id") for c in calls] != [ep.episode_id] * n
                 or [c.get("request_index") for c in calls] != list(range(n))):
-            raise Refused(f"{where}: the transcript does not hold its {n} calls in order")
+            raise Refused(f"{where}: the transcript does not hold its calls (n_requests) in "
+                          "order")
         if len(rec["call_latency_s"]) != n:
-            raise Refused(f"{where}: call_latency_s does not time its {n} calls")
+            raise Refused(f"{where}: call_latency_s does not time each of its calls")
         usage: dict[str, int] = {}
         counts = {key: Counter() for key in ("context_echoed", "effort_echoed",
                                              "models_returned", "service_tiers_returned")}
@@ -464,9 +514,8 @@ def _check_episodes(run: Run, records: list[dict], transcript: list[dict]) -> li
             raise Refused(f"{where}: n_summary_requests does not count its summary calls")
         latencies += rec["call_latency_s"]
     if k != len(transcript):
-        raise Refused(f"the transcript holds {len(transcript) - k} calls after the last "
-                      "episode in episodes.jsonl (an episode stopped by an error or an "
-                      "interruption): not supported")
+        raise Refused("the transcript holds calls after the last episode in episodes.jsonl "
+                      "(an episode stopped by an error or an interruption): not supported")
     return latencies
 
 
@@ -513,7 +562,7 @@ def prepare(run: Run, *, plan: dict | None, plan_path: Path | None, git: dict | 
     lock_info, kept_totals, cause = _check_lock(run, lock_path, costs_path, blinded)
     reservation = _check_reservation(run, lock_path, plan)
     _check_files(run, out_dir, raw_dir, raw_path, episodes_path, blinded)
-    git_state, start, start_from = _git_and_start(plan, git, started, lock_info)
+    git_state, start, start_from = _git_and_start(plan, git, started, lock_info, rows)
 
     records = _read_jsonl(episodes_path, "episodes file")
     transcript = _read_jsonl(raw_path, "raw transcript")
@@ -537,7 +586,18 @@ def prepare(run: Run, *, plan: dict | None, plan_path: Path | None, git: dict | 
         raise Refused("the rebuilt totals differ from those the run kept in its paid-run lock "
                       f"in {', '.join(k for k, ok in match.items() if not ok)}")
 
-    end = datetime.fromtimestamp(raw_path.stat().st_mtime, UTC).isoformat(timespec="seconds")
+    # The run's end: the raw transcript's last write. Its recorder is closed before
+    # `finalize` runs, and so before the lock was kept: a later write is not the run's.
+    written = raw_path.stat().st_mtime
+    end = datetime.fromtimestamp(written, UTC).isoformat(timespec="seconds")
+    if datetime.fromisoformat(end) < datetime.fromisoformat(start):
+        raise Refused(f"the raw transcript was last written ({end}) before the run started "
+                      f"({start}): its time is not the end of the run (a copied or restored "
+                      "file?)")
+    if written > lock_path.stat().st_mtime + _KEPT_SLACK_S:
+        raise Refused(f"the raw transcript was last written ({end}) after the paid-run lock "
+                      "was kept, which the run did after closing it: its time is not the end "
+                      "of the run (a copied or restored file?)")
     accounted = runmeta.utc_now()
     cause_text = cause or "the run's finalize did not run"
     row = build_costs_row(
@@ -725,15 +785,16 @@ def write(rec: Recovery) -> list[str]:
             raise
         except BaseException as e:
             remaining = [w for w, _ in steps[i:]]
+            noted = False
             if done:
                 # The row is in costs.csv: say so in the lock, so that nobody adds it again.
-                paidlock.keep(rec.lock_path, rec.lock_info,
-                              f"account-run appended run {run.run_id}'s costs row "
-                              f"(timestamp_utc {rec.row['timestamp_utc']}) to "
-                              f"{rec.costs_path}; do not add it again. It could not "
-                              f"{'; '.join(remaining)} ({type(e).__name__}: {e}): do that "
-                              f"by hand")
-            raise Incomplete(f"{type(e).__name__}: {e}", done, remaining) from e
+                noted = paidlock.keep(
+                    rec.lock_path, rec.lock_info,
+                    f"account-run appended run {run.run_id}'s costs row (timestamp_utc "
+                    f"{rec.row['timestamp_utc']}) to {rec.costs_path}; do not add it again. "
+                    f"It could not {'; '.join(remaining)} ({type(e).__name__}: {e}): do "
+                    f"that by hand") is not None
+            raise Incomplete(f"{type(e).__name__}: {e}", done, remaining, noted) from e
         done.append(what)
     return done
 

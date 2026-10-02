@@ -12,7 +12,9 @@ fail, at the row's write: the lock then holds the reason the incident's held."""
 
 from __future__ import annotations
 
+import csv
 import gzip
+import io
 import json
 import os
 import re
@@ -26,7 +28,7 @@ import pytest
 
 from common import costs, paidlock, runmeta
 from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
-from harnesses import blinding, cli, runner
+from harnesses import account, blinding, cli, runner
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
 from harnesses.pricing import usage_numbers
@@ -132,10 +134,11 @@ def _run(args, rid=RID) -> int:
     return cli.main(["run", *args, "--run-id", rid])
 
 
-def _incident(env: Env, monkeypatch, args=RUN_ARGS, rid=RID) -> World:
-    """The 2026-10-02 incident in world "incident": the costs row cannot be written after
-    the run's calls, with the exception the real run got."""
-    world = env.use(World(env.tmp, "incident"))
+def _incident(env: Env, monkeypatch, args=RUN_ARGS, rid=RID,
+              world: World | None = None) -> World:
+    """The 2026-10-02 incident in world "incident" (or `world`): the costs row cannot be
+    written after the run's calls, with the exception the real run got."""
+    world = env.use(world or World(env.tmp, "incident"))
     real = costs.append_row
 
     def git_could_not_start(row, path):
@@ -370,6 +373,25 @@ def test_a_failure_after_the_row_says_what_remains_and_keeps_the_lock(env, monke
     assert len(world.rows()) == 1
 
 
+def test_a_row_that_cannot_be_appended_leaves_everything_as_it_was(env, monkeypatch, capsys):
+    """The first write fails (the ledger open in another program, say): nothing is written,
+    and the lock and the reservation are left as they were, so account-run can run again."""
+    world = _incident(env, monkeypatch)
+    real = costs.append_row
+
+    def locked(row, path):
+        raise PermissionError("the ledger is open in another program")
+    monkeypatch.setattr(costs, "append_row", locked)
+    before = _files(env.tmp)
+    capsys.readouterr()
+    assert _account() == 1
+    err = capsys.readouterr().err
+    assert "NOT done: append the costs row" in err and "nothing was written" in err
+    assert _files(env.tmp) == before
+    monkeypatch.setattr(costs, "append_row", real)
+    assert _account() == 0 and len(world.rows()) == 1 and not world.lock.exists()
+
+
 # --- refusals: nothing written ----------------------------------------------------------------
 
 def _edit_json(path: Path, **changes) -> None:
@@ -406,6 +428,11 @@ def _echo_off(env: Env) -> None:
     records = _transcript(env.dirs()[1])
     records[3]["echo"]["context_echoed"] = "all_turns"
     _write_transcript(env.dirs()[1], records)
+
+
+def _written_after_the_lock(env: Env, world: World) -> None:
+    later = world.lock.stat().st_mtime + 60
+    os.utime(env.dirs()[1] / "transcript.jsonl.gz", (later, later))
 
 
 def _usage_off(env: Env) -> None:
@@ -461,6 +488,8 @@ REFUSALS = {
                                                    "the recorded echo is not the response's"),
     "an episode's usage that is not its calls'": (lambda env, w, mp: _usage_off(env),
                                                   "its usage is not the sum"),
+    "a transcript written after the lock was kept": (
+        lambda env, w, mp: _written_after_the_lock(env, w), "after the paid-run lock was kept"),
     "run plan holds no arguments and none given": (
         lambda env, w, mp: (env.dirs()[1] / runner.RUN_PLAN).unlink(),
         "the run has no run_plan.json with its arguments"),
@@ -517,6 +546,9 @@ def test_arguments_that_differ_from_the_run_plan_refuse(env, monkeypatch, capsys
      "the request's effort differ from the run's settings"),
     (RUN_ARGS + ["--git-commit", "f" * 40, "--git-dirty", "true"],
      "is not a commit of this repository"),
+    (RUN_ARGS + ["--git-commit", "GIT", "--git-dirty", "true",
+                 "--started-utc", "2099-01-01T00:00:00+00:00"],
+     "before the run started (2099-01-01T00:00:00+00:00)"),
 ])
 def test_a_run_without_its_plan_needs_its_arguments(env, monkeypatch, capsys, args, message):
     """Given the arguments the run was started with, the episodes, settings and git state are
@@ -528,6 +560,111 @@ def test_a_run_without_its_plan_needs_its_arguments(env, monkeypatch, capsys, ar
     assert _account(*args) == 2
     assert message in capsys.readouterr().err
     assert _files(env.tmp) == before
+
+
+EARLIER = "2026-01-01T00:00:00+00:00"
+
+
+def test_git_dirty_false_after_an_uncommitted_costs_row_refuses(env, monkeypatch, capsys):
+    """The incident's F-0 run started seconds after the F-r run had appended its row to
+    results/costs.csv, uncommitted: a tracked file differed from the commit, so the git
+    state it would have read says dirty, as for every run started after an uncommitted row.
+    Given --git-dirty false, account-run sees the earlier row in the ledger, which the
+    commit's results/costs.csv lacks, and refuses; --git-dirty true goes through."""
+    world = env.use(World(env.tmp, "incident"))
+    assert _run(RUN_ARGS, "before") == 0   # the F-r run: its row, not in any commit
+    # its row was written before the incident run started (whole seconds: set it earlier)
+    text = world.costs.read_text(encoding="utf-8")
+    (stamp,) = [r["timestamp_utc"] for r in world.rows()]
+    world.costs.write_text(text.replace(stamp, EARLIER), encoding="utf-8")
+    _edit_json(paidlock.last_run_path(world.lock, cli.STREAM), row_timestamp_utc=EARLIER)
+    _incident(env, monkeypatch, world=world)
+    out, raw = env.dirs()
+    (raw / runner.RUN_PLAN).unlink()
+    args = [*RUN_ARGS, "--git-commit", runmeta.git_state()["git_commit"], "--git-dirty"]
+    before = _files(env.tmp)
+    capsys.readouterr()
+    assert _account(*args, "false") == 2
+    err = capsys.readouterr().err
+    assert "--git-dirty false, but when the run started" in err and "(before)" in err, err
+    assert _files(env.tmp) == before
+    assert _account(*args, "true") == 0
+    row = world.rows()[-1]
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert row["run_id"] == RID and "git_dirty=True" in row["notes"]
+    assert meta["git_dirty"] is True and not world.lock.exists()
+
+
+SOL_RID = "20261002T180358Z-F-0-gpt-6.1-sol"
+CHECK_ARGS = ["--model", "gpt-6.1-sol", "--effort", "high", "--split", "pilot", "--start", "0",
+              "--n", "2", "--task-cell", "observed-nonrec-far", "observed-rec-far",
+              "derived-nonrec-far", "derived-rec-far", "--experiment", "persistgym_pilot",
+              "--approved-block", "1-pilots", "--planned-usd", "6"]
+# The order of the incident run's episodes.jsonl (episode ids only, read from its raw file),
+# which is that of the F-r run's committed meta.json
+CHECK_EPISODES = [f"pilot-00000{t}/{c}/base" for t in (0, 1) for c in (
+    "observed-nonrec-far", "observed-rec-far", "derived-nonrec-far", "derived-rec-far")]
+
+
+def test_the_incident_command(env, monkeypatch, capsys):
+    """The 2026-10-02 incident as it happened, with the fake model: the engagement check's
+    F-r run writes its row (left uncommitted), then the F-0 run's row cannot be written.
+    The account-run command for the real run (harnesses/DESIGN.md §8.1) parses, rebuilds
+    the 8 episodes in the run's order, refuses --git-dirty false (the F-r row was in the
+    ledger, uncommitted, when F-0 started) and goes through with --git-dirty true."""
+    world = env.use(World(env.tmp, "incident"))
+    assert _run(["--cell", "F-r", *CHECK_ARGS], "20261002T173710Z-F-r-gpt-6.1-sol") == 0
+    # the F-r row was written seconds before F-0 started (whole seconds: set it earlier)
+    text = world.costs.read_text(encoding="utf-8")
+    (stamp,) = [r["timestamp_utc"] for r in world.rows()]
+    world.costs.write_text(text.replace(stamp, EARLIER), encoding="utf-8")
+    _edit_json(paidlock.last_run_path(world.lock, cli.STREAM), row_timestamp_utc=EARLIER)
+    _incident(env, monkeypatch, ["--cell", "F-0", *CHECK_ARGS], rid=SOL_RID, world=world)
+    out, raw = env.dirs(rid=SOL_RID)
+    (raw / runner.RUN_PLAN).unlink()   # the incident's run predates run plans
+    command = ["account-run", SOL_RID, "--check", "--cell", "F-0", *CHECK_ARGS,
+               "--git-commit", runmeta.git_state()["git_commit"], "--git-dirty"]
+    before = _files(env.tmp)
+    capsys.readouterr()
+    assert cli.main([*command, "false"]) == 2
+    assert "--git-dirty false, but when the run started" in capsys.readouterr().err
+    assert cli.main([*command, "true"]) == 0
+    printed = capsys.readouterr().out
+    assert _files(env.tmp) == before
+    assert (f"run {SOL_RID}: persistgym_pilot: F-0 on gpt-6.1-sol, 8 episodes; 8 in "
+            "episodes.jsonl") in printed and "gpt-6.1-sol at effort high" in printed
+    assert cli.main([c for c in command if c != "--check"] + ["true"]) == 0
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["config"]["episode_ids"] == CHECK_EPISODES and meta["git_dirty"] is True
+    assert meta["reasoning_effort"] == "high" and meta["exit_reason"] == "COMPLETED"
+    rows = world.rows()
+    assert [r["run_id"] for r in rows] == ["20261002T173710Z-F-r-gpt-6.1-sol", SOL_RID]
+    assert rows[1]["notes"].startswith("approved_block=1-pilots; context_mismatches=0; "
+                                       "effort_mismatches=0; git_dirty=True; pilot 0-1 "
+                                       "matrix=full; " + blinding.WITHHELD_NOTE)
+    assert rows[1]["reasoning_tokens"] == "" and not world.lock.exists()
+    assert not world.reservation.exists()
+
+
+def test_uncommitted_rows_are_the_ledger_rows_the_commit_lacks():
+    """`_uncommitted_rows`: rows written before the start that the commit's
+    results/costs.csv does not hold, by run id and timestamp. A committed row, a row written
+    after the start and a row with no time zone do not count."""
+    head = runmeta.git_state()["git_commit"]
+    committed = list(csv.DictReader(io.StringIO(runmeta.run_git(
+        "show", f"{head}:results/costs.csv"))))
+    assert committed, "this repository's results/costs.csv has rows"
+    rows = [committed[0],
+            {"run_id": "uncommitted", "timestamp_utc": EARLIER},
+            {"run_id": "after", "timestamp_utc": "2099-01-01T00:00:01+00:00"},
+            {"run_id": "no-zone", "timestamp_utc": "2026-01-01T00:00:00"},
+            {"run_id": "no-time", "timestamp_utc": ""},
+            {**committed[0], "timestamp_utc": EARLIER}]   # same run id, another row
+    assert account._uncommitted_rows(rows, head, "2099-01-01T00:00:00+00:00") == [
+        "uncommitted", committed[0]["run_id"]]
+    # a tree without results/costs.csv (here git's empty tree): nothing to compare with
+    assert account._uncommitted_rows(rows, "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+                                     "2099-01-01T00:00:00+00:00") == []
 
 
 def test_a_parallel_run_is_not_supported(env, monkeypatch, capsys):

@@ -49,10 +49,12 @@ def run_git(*args: str, repo: Path = REPO_ROOT) -> str:
     """The stripped standard output of `git <args>` in `repo`. Raises CalledProcessError if
     git fails, OSError if it cannot be started. On Windows git starts without a console
     window (`CREATE_NO_WINDOW`), so that it also starts from a process that has lost its
-    console."""
+    console; and with its standard input closed (`DEVNULL`), so that it never inherits a
+    console handle of the caller's that is no longer valid."""
     flags = CREATE_NO_WINDOW if sys.platform == "win32" else 0
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, encoding="utf-8",
-                          errors="replace", check=True, creationflags=flags).stdout.strip()
+    return subprocess.run(["git", *args], cwd=repo, stdin=subprocess.DEVNULL,
+                          capture_output=True, encoding="utf-8", errors="replace", check=True,
+                          creationflags=flags).stdout.strip()
 
 
 def git_state(repo: Path = REPO_ROOT) -> dict:

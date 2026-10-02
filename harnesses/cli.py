@@ -41,11 +41,12 @@ with the reason, until `account-run` (harnesses/account.py) accounts for it. A p
 its git state once, before its first call, and `run` writes its plan,
 results/raw/<experiment>/<run_id>/run_plan.json, before its first call too; a run without
 one (started before account-run existed) is accounted for with its `run` arguments and git
-state given again:
+state given again (--git-dirty true if any tracked file differed from the commit when it
+started, results/costs.csv with an earlier run's uncommitted row included):
     uv run python -m harnesses account-run <run_id> --cell F-0 --model gpt-6.1-sol \
         --effort high --split pilot --start 0 --n 2 --task-cell observed-nonrec-far \
         observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot \
-        --approved-block "1-pilots" --planned-usd 6 --git-commit <commit> --git-dirty false
+        --approved-block "1-pilots" --planned-usd 6 --git-commit <commit> --git-dirty true
 Launch every paid run as a process of its own, with its own console (not from a shell that a
 time limit can stop): a process that has lost its console cannot start git or any other
 console program. The OpenAI SDK reads the key from the environment:
@@ -633,10 +634,17 @@ def cmd_account_run(a) -> int:
             print(f"  done: {what}", file=sys.stderr)
         for what in e.remaining:
             print(f"  NOT done: {what}", file=sys.stderr)
-        if e.done:
+        if not e.done:
+            print("  nothing was written: the lock and the reservation are as they were",
+                  file=sys.stderr)
+        elif e.lock_noted:
             print(f"  the costs row is in {rec.costs_path}: do not add it again. The lock "
                   f"{rec.lock_path} stays kept, with this in its reason: do what is not done "
                   f"by hand, then delete it", file=sys.stderr)
+        else:
+            print(f"  the costs row is in {rec.costs_path}: do not add it again. This could "
+                  f"not be added to the reason of the lock {rec.lock_path} (changed or "
+                  f"gone): do what is not done by hand", file=sys.stderr)
         return 1
     for what in done:
         print(f"done: {what}")
@@ -754,7 +762,9 @@ def build_parser() -> argparse.ArgumentParser:
                          "checkout's HEAD)")
     ac.add_argument("--git-dirty", choices=("true", "false"), default=None,
                     help="a run without run_plan.json: whether tracked files differed from "
-                         "that commit")
+                         "that commit when it started (true if results/costs.csv held an "
+                         "earlier run's uncommitted row; false is refused when the ledger "
+                         "shows one)")
     ac.add_argument("--started-utc", default=None,
                     help="a run without run_plan.json: when it started (default: its "
                          "paid-run lock's started_utc)")

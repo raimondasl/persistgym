@@ -178,7 +178,8 @@ def test_git_starts_without_a_console_window_on_windows(monkeypatch, platform, f
     assert runmeta.git_state() == {"git_commit": "0" * 40, "git_dirty": True}
     assert [s["args"][1:] for s in seen] == [["rev-parse", "HEAD"],
                                              ["status", "--porcelain", "--untracked-files=no"]]
-    assert all(s["creationflags"] == flags and s["check"] is True for s in seen)
+    assert all(s["creationflags"] == flags and s["check"] is True
+               and s["stdin"] == subprocess.DEVNULL for s in seen)
     assert runmeta.CREATE_NO_WINDOW == 0x08000000
 
 

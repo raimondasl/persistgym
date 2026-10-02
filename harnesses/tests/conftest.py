@@ -92,9 +92,13 @@ def no_shared_paid_lock(monkeypatch, tmp_path_factory):
     every checkout shares (common/paidlock.py). No harness test may take that lock or write
     that record: one would block a real paid run, the other would make it refuse. Here the
     CLI's lock points into a directory that does not exist, so a test that reaches the lock
-    without naming its own (`cli.LOCK_PATH`) fails instead."""
+    without naming its own (`cli.LOCK_PATH`) fails instead. `account-run`'s ledger
+    (`cli.COSTS_PATH`) points there too, so that no test appends to this checkout's
+    results/costs.csv."""
     monkeypatch.setattr(cli, "LOCK_PATH", tmp_path_factory.getbasetemp()
                         / "no-shared-paid-lock" / paidlock.lock_name(cli.STREAM))
+    monkeypatch.setattr(cli, "COSTS_PATH", tmp_path_factory.getbasetemp()
+                        / "no-shared-paid-lock" / "costs.csv")
 
 
 # --- a throwaway git repo with a committed PREREG.md (paid-guard tests) --------------------

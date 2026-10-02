@@ -6,6 +6,10 @@ $0 commands (fake model or local files, no network):
     uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
     uv run python -m harnesses probe-summary <run_id>       # replay-probe counts per arm
     uv run python -m harnesses echo-count        # context and effort echoes of raw runs
+    # a paid run whose costs.csv row could not be written (its lock is kept, naming it):
+    # rebuild the row, summary.json and meta.json from its raw files, then release the lock
+    # and its spend reservation; --check verifies and prints the plan, writing nothing
+    uv run python -m harnesses account-run <run_id> --check
     # PREREG §17.2 (amendment R2): score sol's engagement check from its two pilot runs,
     # with block 1's medium-effort sol pilot as the descriptive reference
     uv run python -m harnesses reasoning-check <F-r run_id> <F-0 run_id> \
@@ -33,7 +37,18 @@ in HEAD and in the working tree, listing the experiment, with room under max_usd
 phase cap, counting the planned spend a running ARC run has reserved (common/approval.py).
 The lock (common/paidlock.py, in the git common directory) is taken before those checks and
 held until the command ends; a run whose costs.csv row could not be written leaves it held,
-with the reason. The OpenAI SDK reads the key from the environment:
+with the reason, until `account-run` (harnesses/account.py) accounts for it. A paid run reads
+its git state once, before its first call, and `run` writes its plan,
+results/raw/<experiment>/<run_id>/run_plan.json, before its first call too; a run without
+one (started before account-run existed) is accounted for with its `run` arguments and git
+state given again:
+    uv run python -m harnesses account-run <run_id> --cell F-0 --model gpt-6.1-sol \
+        --effort high --split pilot --start 0 --n 2 --task-cell observed-nonrec-far \
+        observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot \
+        --approved-block "1-pilots" --planned-usd 6 --git-commit <commit> --git-dirty false
+Launch every paid run as a process of its own, with its own console (not from a shell that a
+time limit can stop): a process that has lost its console cannot start git or any other
+console program. The OpenAI SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-echo \
         --approved-block "1-pilots" --planned-usd 0.5
     # D29 as amended by R1 (PREREG §17.1): sol and luna, 20 scorable trials per arm
@@ -71,8 +86,8 @@ from pathlib import Path
 
 import openai
 
-from common import paidlock, runmeta
-from harnesses import blinding, diagnostics, probes, reasoning_check, registered
+from common import costs, paidlock, runmeta
+from harnesses import account, blinding, diagnostics, probes, reasoning_check, registered
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -98,6 +113,14 @@ PILOT_SPLIT = "pilot"
 # real lock or write the last-run records, reservations or holds next to it.
 STREAM = paidlock.PERSISTGYM
 LOCK_PATH: Path | None = None
+# The ledger `account-run` appends to. None: this checkout's results/costs.csv. Tests point it
+# at a temporary file.
+COSTS_PATH: Path | None = None
+RUN_ARGS = ("cell", "split", "start", "variant", "W", "gen_set", "model", "effort", "mode",
+            "service_tier", "milestone", "approved_block", "planned_usd", "n", "task_cell",
+            "matrix", "n_observed", "cell_templates", "experiment", "parallel")
+"""The arguments of `run` that decide what it runs and how it is accounted for (all but
+--run-id): its run plan records them, and `account-run` takes them."""
 
 
 def _run_id(tag: str) -> str:
@@ -141,6 +164,18 @@ def _run_matrix(a) -> RunMatrix:
     if a.n_observed is not None:
         raise ValueError("--n-observed applies to --matrix d11 only")
     return RunMatrix.full(a.n, None if a.task_cell == ["all"] else a.task_cell)
+
+
+def _run_notes(a, matrix: RunMatrix) -> str:
+    """The run's notes in its costs row: the split, the templates, the matrix, the parallel."""
+    return (f"{a.split} {a.start}-{a.start + matrix.n_templates - 1} matrix={matrix.name}"
+            + (f" parallel={a.parallel}" if a.parallel > 1 else ""))
+
+
+def _run_what(a, cell, n_episodes: int) -> str:
+    """What the run's paid-run lock says it does."""
+    return (f"{a.experiment}: {cell.cell_id} on {a.model}, {n_episodes} episodes"
+            + (f", {a.parallel} at once" if a.parallel > 1 else ""))
 
 
 def cmd_cells(a) -> int:
@@ -270,10 +305,8 @@ def cmd_run(a) -> int:
             meta = run_batch(episodes, cell, _harness_config(a), transport,
                              experiment=a.experiment, run_id=run_id, milestone=a.milestone,
                              results_root=RESULTS, raw_root=RAW, run_matrix=matrix.to_dict(),
-                             notes=(f"{a.split} {a.start}-{a.start + matrix.n_templates - 1}"
-                                    f" matrix={matrix.name}"
-                                    + (f" parallel={a.parallel}" if a.parallel > 1 else "")),
-                             parallel=a.parallel)
+                             notes=_run_notes(a, matrix), parallel=a.parallel,
+                             run_args={k: getattr(a, k) for k in RUN_ARGS})
         finally:
             _check_accounted(transport, run_id)
         print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason",
@@ -281,10 +314,7 @@ def cmd_run(a) -> int:
                                                "cost_usd")}, indent=2))
         return 0
 
-    return _with_paid_lock(run_id, f"{a.experiment}: {cell.cell_id} on {a.model}, "
-                                   f"{len(episodes)} episodes"
-                                   + (f", {a.parallel} at once" if a.parallel > 1 else ""),
-                           paid)
+    return _with_paid_lock(run_id, _run_what(a, cell, len(episodes)), paid)
 
 
 def _fork_design(a, kind: str) -> bool:
@@ -427,7 +457,8 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
                 cost_usd={"list": transport.ledger.cost_usd_list,
                           "billed_est": transport.ledger.cost_usd_billed_est,
                           "costs_csv_row_appended": row is not None},
-                raw_transcript_path=_rel(raw_dir / "transcript.jsonl.gz"))
+                raw_transcript_path=_rel(raw_dir / "transcript.jsonl.gz"),
+                git=transport.git)  # read before the first call (common/runmeta.py)
             if fork:
                 report = probes.fork_report(trials, target=a.n, max_attempts=a.max_attempts)
                 report = {"run_id": run_id, "model_requested": model,
@@ -550,6 +581,68 @@ def cmd_echo_count(a) -> int:
     return 0
 
 
+def _run_defaults() -> dict:
+    """`run`'s default for every argument in RUN_ARGS but --cell (--effort: None, the
+    model's registered effort)."""
+    d = vars(build_parser().parse_args(["run", "--cell", "F-0"]))
+    return {k: d[k] for k in RUN_ARGS if k != "cell"}
+
+
+def cmd_account_run(a) -> int:
+    """$0: account for a PersistGym paid run whose costs.csv row could not be written
+    (`harnesses.account`): rebuild the row, summary.json and meta.json from the run's raw
+    files, then record the last paid run and release the run's spend reservation and kept
+    lock. --check verifies everything and prints the plan, writing nothing."""
+    given = {k: getattr(a, k) for k in RUN_ARGS if hasattr(a, k)}
+    git = (None if a.git_commit is None and a.git_dirty is None
+           else {"git_commit": a.git_commit, "git_dirty": a.git_dirty == "true"})
+    try:
+        if (a.git_commit is None) != (a.git_dirty is None):
+            raise account.Refused("give --git-commit and --git-dirty together")
+        plan_path, plan = account.find_plan(RAW, a.run_id, given.get("experiment"))
+        args = argparse.Namespace(**account.run_arguments(plan, given, _run_defaults()))
+        if args.effort is None:
+            args.effort = registered.registered_effort(args.model)
+        cell = get_cell(args.cell)
+        matrix = _run_matrix(args)
+        episodes = matrix.episodes(args.split, args.start, _gen_config(args.gen_set),
+                                   args.variant)
+        run = account.Run(run_id=a.run_id, args=args, cell=cell, cfg=_harness_config(args),
+                          matrix=matrix, episodes=episodes, notes=_run_notes(args, matrix),
+                          what=_run_what(args, cell, len(episodes)))
+        lock = LOCK_PATH or paidlock.lock_path(runmeta.REPO_ROOT, STREAM)
+        rec = account.prepare(run, plan=plan, plan_path=plan_path, git=git,
+                              started=a.started_utc, lock_path=lock,
+                              costs_path=COSTS_PATH or costs.COSTS_CSV, results_root=RESULTS,
+                              raw_root=RAW)
+    except (ValueError, KeyError, paidlock.LockHeld) as e:  # account.Refused included
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    print("\n".join(rec.describe()))
+    if a.check:
+        print("--check: nothing written")
+        return 0
+    try:
+        done = account.write(rec)
+    except account.Refused as e:
+        print(f"refused: {e}; nothing written", file=sys.stderr)
+        return 2
+    except account.Incomplete as e:
+        print(f"ERROR: account-run stopped: {e}", file=sys.stderr)
+        for what in e.done:
+            print(f"  done: {what}", file=sys.stderr)
+        for what in e.remaining:
+            print(f"  NOT done: {what}", file=sys.stderr)
+        if e.done:
+            print(f"  the costs row is in {rec.costs_path}: do not add it again. The lock "
+                  f"{rec.lock_path} stays kept, with this in its reason: do what is not done "
+                  f"by hand, then delete it", file=sys.stderr)
+        return 1
+    for what in done:
+        print(f"done: {what}")
+    return 0
+
+
 def cmd_summary_timing(a) -> int:
     print(json.dumps(diagnostics.summary_timing(
         a.n, split=a.split, summary_tokens=a.summary_tokens,
@@ -561,38 +654,72 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m harnesses")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    def adder(sp, account: bool):
+        """`sp.add_argument`, or for `account-run` (account=True) the same argument with no
+        default and never required, so that the arguments given can be told from the rest
+        (which come from the run plan, or are `run`'s defaults)."""
+        def add(*names, **kw):
+            if account:
+                kw.update(default=argparse.SUPPRESS, required=False)
+            sp.add_argument(*names, **kw)
+        return add
+
     def request_args(sp, model_default="gpt-6-luna", multi_model=False,
-                     effort_default: str | None = None):
+                     effort_default: str | None = None, account=False):
+        add = adder(sp, account)
         if multi_model:
-            sp.add_argument("--model", action="append", default=None)
+            add("--model", action="append", default=None)
         else:
-            sp.add_argument("--model", default=model_default)
-        sp.add_argument("--effort", default=effort_default,
-                        help=("default: the model's registered effort (harnesses/registered.py"
-                              "; PREREG §6 as amended by R2, §17.2)" if effort_default is None
-                              else f"default: {effort_default}"))
-        sp.add_argument("--mode", default="standard")
-        sp.add_argument("--service-tier", default="flex")
-        sp.add_argument("--milestone", default="M0")
-        sp.add_argument("--run-id", default=None)
+            add("--model", default=model_default)
+        add("--effort", default=effort_default,
+            help=("default: the model's registered effort (harnesses/registered.py; PREREG §6 "
+                  "as amended by R2, §17.2)" if effort_default is None
+                  else f"default: {effort_default}"))
+        add("--mode", default="standard")
+        add("--service-tier", default="flex")
+        add("--milestone", default="M0")
+        if not account:
+            add("--run-id", default=None)
 
-    def episode_args(sp):
-        sp.add_argument("--cell", required=True)
-        sp.add_argument("--split", default="pilot")
-        sp.add_argument("--start", type=int, default=0)
-        sp.add_argument("--variant", default="base")
-        sp.add_argument("--W", type=int, default=None, help="default: the episode's W")
-        sp.add_argument("--gen-set", action="append", default=[], metavar="FIELD=JSON")
+    def episode_args(sp, account=False):
+        add = adder(sp, account)
+        add("--cell", required=True)
+        add("--split", default="pilot")
+        add("--start", type=int, default=0)
+        add("--variant", default="base")
+        add("--W", type=int, default=None, help="default: the episode's W")
+        add("--gen-set", action="append", default=[], metavar="FIELD=JSON")
 
-    def paid_args(sp):
-        sp.add_argument("--approved-block", default=None,
-                        help="name of the researcher-approved spending block (PLAN §16.2); "
-                             "its approval line in results/decisions.md must list the "
-                             "experiment and leave room under its max_usd")
-        sp.add_argument("--planned-usd", type=float, default=None,
-                        help="planned spend of the whole command in USD, measured like block "
-                             "spend and the phase caps: the billed estimate, so on Flex the "
-                             "Flex price (for probes, the total over all --model values)")
+    def paid_args(sp, account=False):
+        add = adder(sp, account)
+        add("--approved-block", default=None,
+            help="name of the researcher-approved spending block (PLAN §16.2); its approval "
+                 "line in results/decisions.md must list the experiment and leave room under "
+                 "its max_usd")
+        add("--planned-usd", type=float, default=None,
+            help="planned spend of the whole command in USD, measured like block spend and "
+                 "the phase caps: the billed estimate, so on Flex the Flex price (for probes, "
+                 "the total over all --model values)")
+
+    def run_args(sp, account=False):
+        """The arguments of `run` besides episode_args, request_args and paid_args."""
+        add = adder(sp, account)
+        add("--n", type=int, default=1,
+            help="templates per task cell (--matrix d11: T_d, the derived-far count)")
+        add("--task-cell", nargs="+", default=["all"])
+        add("--matrix", choices=("full", "d11"), default="full",
+            help="full: --task-cell on --n templates; d11: derived-far cells on --n templates "
+                 "and observed-far cells on the first --n-observed (D11)")
+        add("--n-observed", type=int, default=None,
+            help="--matrix d11: observed-far templates T_o (default --n / 3)")
+        add("--cell-templates", nargs="+", default=None, metavar="TASK_CELL=N",
+            help="custom matrix: each task cell on its first N templates from --start")
+        add("--experiment", default="persistgym_pilot")
+        add("--parallel", type=int, default=1, metavar="N",
+            help=f"episodes played at once, 1 to {MAX_PARALLEL} (PREREG §4.6): the same "
+                 "payloads, cell assignment, seeds and per-episode outputs as one at a time, "
+                 "written in the same order; the run reserves spend for the episodes in "
+                 "flight, so that it stays within --planned-usd")
 
     sub.add_parser("cells", help="list the harness cells").set_defaults(fn=cmd_cells)
 
@@ -613,23 +740,31 @@ def build_parser() -> argparse.ArgumentParser:
     episode_args(r)
     request_args(r)
     paid_args(r)
-    r.add_argument("--n", type=int, default=1,
-                   help="templates per task cell (--matrix d11: T_d, the derived-far count)")
-    r.add_argument("--task-cell", nargs="+", default=["all"])
-    r.add_argument("--matrix", choices=("full", "d11"), default="full",
-                   help="full: --task-cell on --n templates; d11: derived-far cells on --n "
-                        "templates and observed-far cells on the first --n-observed (D11)")
-    r.add_argument("--n-observed", type=int, default=None,
-                   help="--matrix d11: observed-far templates T_o (default --n / 3)")
-    r.add_argument("--cell-templates", nargs="+", default=None, metavar="TASK_CELL=N",
-                   help="custom matrix: each task cell on its first N templates from --start")
-    r.add_argument("--experiment", default="persistgym_pilot")
-    r.add_argument("--parallel", type=int, default=1, metavar="N",
-                   help=f"episodes played at once, 1 to {MAX_PARALLEL} (PREREG §4.6): the same "
-                        "payloads, cell assignment, seeds and per-episode outputs as one at a "
-                        "time, written in the same order; the run reserves spend for the "
-                        "episodes in flight, so that it stays within --planned-usd")
+    run_args(r)
     r.set_defaults(fn=cmd_run)
+
+    ac = sub.add_parser("account-run",
+                        help="account for a paid run whose costs.csv row could not be written: "
+                             "its row, summary.json and meta.json from its raw files ($0)")
+    ac.add_argument("run_id", metavar="RUN_ID")
+    ac.add_argument("--check", action="store_true",
+                    help="verify everything and print what would be written; write nothing")
+    ac.add_argument("--git-commit", default=None,
+                    help="a run without run_plan.json: the commit it ran (its launch "
+                         "checkout's HEAD)")
+    ac.add_argument("--git-dirty", choices=("true", "false"), default=None,
+                    help="a run without run_plan.json: whether tracked files differed from "
+                         "that commit")
+    ac.add_argument("--started-utc", default=None,
+                    help="a run without run_plan.json: when it started (default: its "
+                         "paid-run lock's started_utc)")
+    # `run`'s arguments, for a run without run_plan.json, with no defaults here, so that the
+    # ones given can be checked against the plan's (RUN_ARGS)
+    episode_args(ac, account=True)
+    request_args(ac, account=True)
+    paid_args(ac, account=True)
+    run_args(ac, account=True)
+    ac.set_defaults(fn=cmd_account_run)
 
     pr = sub.add_parser("pilot-report",
                         help="pooled pilot report from the raw pilot runs ($0, PREREG §11)")

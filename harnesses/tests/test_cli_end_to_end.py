@@ -407,7 +407,7 @@ def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypat
     assert meta["blinding"]["parallel_path"].endswith(
         f"raw/persistgym_pilot/par/{runner.PARALLEL_INFO}")
     assert sorted(p.name for p in (raw / "par").iterdir()) == [
-        "episodes.jsonl", runner.PARALLEL_INFO, runner.RESERVATIONS_LOG,
+        "episodes.jsonl", runner.PARALLEL_INFO, runner.RUN_PLAN, runner.RESERVATIONS_LOG,
         "transcript.jsonl.gz"]
     assert sorted(p.name for p in out.rglob("*") if p.is_file()) == [
         "meta.json", "meta.json", "summary.json", "summary.json"]

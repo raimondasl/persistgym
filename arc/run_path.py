@@ -63,6 +63,9 @@ Then it runs arc/run_path_inner.py in the patched harness with a sanitized envir
   accounting fails keeps both its lock and its reservation);
 * writes results/<experiment>/<run_id>/meta.json via common.runmeta.
 
+The costs row and meta.json record the git state read once, before the harness starts
+(common/runmeta.py): no git process runs after the run's model calls.
+
 The harness cost guard (patch 0010, ARC's no-cache list accounting) stops a run at
 `--planned-usd` for pilots and probes, and at D22's $120 for counted runs (which therefore
 need `--planned-usd` >= 120). Since list >= billed, a run's spend exceeds its planned spend
@@ -886,7 +889,8 @@ def costs_row(plan: Plan, acct: Accounting, *, git: dict) -> dict[str, Any]:
 
 def write_meta(plan: Plan, acct: Accounting, harness: Harness, granted: approval.PaidApproval,
                *, out_dir: Path, raw_dir: Path, started: str, row: dict | None,
-               record: Mapping[str, Any], hold_placed: bool = False) -> Path:
+               record: Mapping[str, Any], hold_placed: bool = False,
+               git: dict | None = None) -> Path:
     if plan.acceptance:
         config: Any = {lb: plan.profiles[lb]["config"] for lb in plan.labels}
     else:
@@ -927,7 +931,7 @@ def write_meta(plan: Plan, acct: Accounting, harness: Harness, granted: approval
         latency=acct.latency, n_calls=acct.n_calls, n_http_requests=acct.n_http_requests,
         approved_block=plan.approved_block, planned_usd=plan.planned_usd, phase=granted.phase,
         cost_cap_usd=plan.cost_cap_usd, hold_placed=hold_placed, rerun_of=plan.rerun_of,
-        paid=True, **acct.detail, **extra)
+        paid=True, git=git, **acct.detail, **extra)
 
 
 def redact_keys(path: Path, values: Sequence[str]) -> bool:
@@ -971,6 +975,9 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
     raw_dir = paths.raw / plan.experiment / plan.run_id
     out_dir = paths.results / plan.experiment / plan.run_id
     price = pricing.price_for(plan.model, pricing.TIER)
+    # Once, before the harness makes any model call; the costs row and meta.json use it, so
+    # no git process runs after the calls (common/runmeta.py).
+    git = runmeta.git_state(paths.repo)
     scratch = Path(tempfile.mkdtemp(prefix="arcrun-"))
     started = runmeta.utc_now()
     code = 1
@@ -1009,7 +1016,7 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
                     placed = place_cost_cap_hold(plan, ending, lock=lock, keep=keep)
                 hold_settled = True
             if acct.any_call:
-                candidate = costs_row(plan, acct, git=runmeta.git_state(paths.repo))
+                candidate = costs_row(plan, acct, git=git)
                 costs.append_row(candidate, paths.costs)
                 row = candidate
         except BaseException:
@@ -1047,7 +1054,7 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
         release_reservation(lock, granted)
         meta = write_meta(plan, acct, harness, granted, out_dir=out_dir, raw_dir=raw_dir,
                           started=started, row=row, record=record,
-                          hold_placed=placed is not None)
+                          hold_placed=placed is not None, git=git)
         committed = [meta]
         if not plan.blinded and not plan.acceptance:
             scorecard = (_read_json(raw_dir / inner.RESULT_FILE) or {}).get("scorecard")

@@ -45,6 +45,21 @@ common/prereg.py), so a draft merged to main does not unlock paid calls either.
 paid-run lock (common/paidlock.py), taken before these checks so that two runs cannot both
 pass them, and unless this checkout's costs.csv holds the last paid run's row.
 
+**No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12). A paid run that ends
+`COST_CAP` places a hold (common/hold.py, a record next to the lock). `require_paid_run`
+refuses while any hold in that record is not cleared, naming each run and the line that
+clears it. The researcher clears the hold of run <run_id> with one line in
+results/decisions.md:
+
+    cleared_hold: <run_id>
+
+It follows the rules of the approval line: exactly this spacing, at column 0 (only trailing
+whitespace is ignored), <run_id> matching [A-Za-z0-9._-]+, not in a fenced code block or an
+HTML comment, and in all three of origin/main (fetched fresh), HEAD and the working tree.
+Removing it, or hiding it in a code block or comment, in any of the three puts the hold
+back. The refusal names look-alike lines. A run may not reuse the run ID of a run that
+placed a hold, so a clearing line names one run only.
+
 **What it allows.** The run's experiment must be in the line's list. Spend is measured one
 way everywhere (`spend_usd`, defined in common/costs.py): the billed estimate, or the list
 cost where a row has no billed estimate. Every cap and estimate for PersistGym in PLAN §12,
@@ -77,7 +92,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from common import costs, paidlock, runmeta
+from common import costs, hold, paidlock, runmeta
 from common.costs import spend_usd  # the one spend measure, re-exported for the launchers
 from common.prereg import prereg_state
 
@@ -92,6 +107,7 @@ LINE_RE = re.compile(
     rf" \| experiments: (?P<experiments>{_TOKEN}(?:,{_TOKEN})*)"
     r" \| max_usd: (?P<max_usd>[0-9]+(?:\.[0-9]+)?)",
     re.ASCII)
+CLEAR_RE = re.compile(rf"cleared_hold: (?P<run_id>{_TOKEN})", re.ASCII)
 
 
 class PaidCallsNotAllowed(RuntimeError):
@@ -235,11 +251,41 @@ def approvals_in(text: str, name: str) -> set[Approval]:
 def look_alikes(text: str, name: str) -> list[int]:
     """1-based numbers of lines that mention approved_block and `name` but do not count: they
     do not parse, or they are in a code block or an HTML comment."""
+    return _look_alikes(text, "approved_block", name, parse_line)
+
+
+def _look_alikes(text: str, keyword: str, name: str, parse) -> list[int]:
     mention = re.compile(rf"(?<![A-Za-z0-9._-]){re.escape(name)}(?![A-Za-z0-9._-])")
     lines = _lines(text)
     return [i for i, (x, shown) in enumerate(zip(lines, shown_lines(lines), strict=True), 1)
-            if "approved_block" in x.lower() and mention.search(x)
-            and (not shown or parse_line(x) is None)]
+            if keyword in x.lower() and mention.search(x)
+            and (not shown or parse(x) is None)]
+
+
+# --- clearing a hold -----------------------------------------------------------------------
+
+def format_clear_line(run_id: str) -> str:
+    """The line that clears the hold of run `run_id` (no check that it is valid)."""
+    return f"cleared_hold: {run_id}"
+
+
+def parse_clear_line(line: str) -> str | None:
+    """The run ID whose hold `line` clears, or None if it is not a valid clearing line."""
+    m = CLEAR_RE.fullmatch(line.rstrip())
+    return None if m is None else m["run_id"]
+
+
+def clearances_in(text: str) -> set[str]:
+    """The run IDs that valid clearing lines in `text` name, outside code blocks and HTML
+    comments."""
+    lines = _lines(text)
+    return {r for r, shown in zip(map(parse_clear_line, lines), shown_lines(lines), strict=True)
+            if shown and r is not None}
+
+
+def clear_look_alikes(text: str, run_id: str) -> list[int]:
+    """1-based numbers of lines that mention cleared_hold and `run_id` but do not count."""
+    return _look_alikes(text, "cleared_hold", run_id, parse_clear_line)
 
 
 def spend_tag(name: str) -> str:
@@ -347,6 +393,21 @@ def _show(repo: Path, rev: str) -> str | None:
     return r.stdout if r.returncode == 0 else None
 
 
+WORKING_TREE = "the working tree"
+
+
+def _decisions_copies(repo: Path, remote: RemoteRef) -> dict[str, str | None]:
+    """results/decisions.md on `remote` (the remote-tracking ref, so fetch first), in HEAD
+    and in the working tree; None where it is missing."""
+    try:
+        # decoded like the git copies, so an invalid byte elsewhere cannot crash the check
+        working = (repo / DECISIONS_MD).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        working = None
+    return {remote.label: _show(repo, remote.tracking), "HEAD": _show(repo, "HEAD"),
+            WORKING_TREE: working}
+
+
 def find_approval(repo: Path, name: str, remote: RemoteRef = MAIN) -> Approval:
     """The approval of block `name`, present and identical in `remote` (fetched now), HEAD
     and the working tree. Raises PaidCallsNotAllowed with the reason otherwise."""
@@ -356,13 +417,8 @@ def find_approval(repo: Path, name: str, remote: RemoteRef = MAIN) -> Approval:
     if reason is not None:
         raise PaidCallsNotAllowed(f"cannot check that the approval of block {name!r} is on "
                                   f"{remote.label}: {reason}")
-    try:
-        # decoded like the git copies, so an invalid byte elsewhere cannot crash the check
-        working = (repo / DECISIONS_MD).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        working = None
-    texts = {remote.label: _show(repo, remote.tracking), "HEAD": _show(repo, "HEAD"),
-             "the working tree": working}
+    texts = _decisions_copies(repo, remote)
+    working = texts[WORKING_TREE]
     found = {where: approvals_in(text or "", name) for where, text in texts.items()}
     for where, lines in found.items():
         if len(lines) > 1:
@@ -461,6 +517,65 @@ def prereg_not_frozen(repo: Path, remote: RemoteRef = MAIN) -> str | None:
     return None if state.frozen else f"PREREG.md is not frozen: {state.why_not}"
 
 
+def holds_not_cleared(repo: Path, lock_path: Path, *, run_id: str | None = None,
+                      remote: RemoteRef = MAIN) -> str | None:
+    """None if no hold stands; otherwise why a paid run may not start (PREREG §0.3 line 12,
+    §7.7). A hold stands for every run in the record next to `lock_path` (common/hold.py)
+    whose clearing line `cleared_hold: <run_id>` is not in results/decisions.md on `remote`
+    (fetched now), in HEAD and in the working tree, under the rules of the approval line. A
+    record that cannot be read refuses, and so does a run whose `run_id` is that of a run
+    that placed a hold. Fetches only when a hold is recorded."""
+    path = hold.holds_path(lock_path)
+    try:
+        holds = hold.read_holds(lock_path)
+    except hold.HoldRecordError as e:
+        return (f"{e}. While it cannot be read, every hold in it stands: no paid run starts "
+                f"(PREREG §7.7)")
+    if run_id is not None and any(h.run_id == run_id for h in holds):
+        return (f"run ID {run_id!r} is that of a run that placed a hold ({path}): give this "
+                f"run a new run ID, so that 'cleared_hold: {run_id}' names one run only")
+    first: dict[str, hold.Hold] = {}
+    for h in holds:  # in the order placed; one clearing line clears a run's every record
+        first.setdefault(h.run_id, h)
+    runs = list(first.values())
+    if not runs:
+        return None
+    reason = fetch_remote(repo, remote)
+    if reason is not None:
+        return (f"cannot check whether the researcher has cleared the hold of "
+                f"{', '.join(h.run_id for h in runs)} on {remote.label}: {reason}")
+    texts = _decisions_copies(repo, remote)
+    cleared = {where: clearances_in(text or "") for where, text in texts.items()}
+    standing = []
+    for h in runs:
+        missing = [w for w in texts if h.run_id not in cleared[w]]
+        if not missing:
+            continue
+        present = [w for w in texts if w not in missing]
+        absent_file = [w for w in missing if texts[w] is None]
+        hint = clear_look_alikes(texts[WORKING_TREE] or "", h.run_id)
+        standing.append(
+            (h, f"run {h.run_id} ({h.describe()}): '{format_clear_line(h.run_id)}' is not on "
+                f"{', '.join(missing)}"
+                + (f" (file missing on {', '.join(absent_file)})" if absent_file else "")
+                + (f"; present on {', '.join(present)}" if present else "")
+                + (f"; malformed or hidden (code block, HTML comment) look-alike lines in "
+                   f"the working tree: {', '.join(map(str, hint[:5]))}" if hint else "")))
+    if not standing:
+        return None
+    many = len(standing) > 1
+    lines = "; ".join(f"'{format_clear_line(h.run_id)}'" for h, _ in standing)
+    return (f"{len(standing)} hold{'s' if many else ''} stand{'' if many else 's'}: "
+            + "; ".join(why for _, why in standing)
+            + f". A paid run that ends COST_CAP places a hold, and no further paid run starts "
+            f"in either stream, ARC or PersistGym, until the researcher clears it (PREREG "
+            f"§0.3 line 12, §7.7). The researcher clears {'them' if many else 'it'} by "
+            f"merging {'one line per run' if many else 'this line'} into {DECISIONS_MD} on "
+            f"{remote.label}, at column 0 and outside any code block or HTML comment: "
+            f"{lines}. Each line must also be in HEAD and the working tree; removing it "
+            f"anywhere puts the hold back. Hold record: {path}")
+
+
 def require_paid_approval(*, approved_block: str | None, experiment: str, planned_usd: float,
                           costs_path: Path = costs.COSTS_CSV, repo: Path = runmeta.REPO_ROOT,
                           remote: RemoteRef = MAIN) -> PaidApproval:
@@ -555,10 +670,14 @@ def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | No
     2. this checkout's costs.csv can be read and holds the last paid run's row
        (`paidlock.last_run_missing`): the lock is shared by every checkout, the ledger is
        not, so a run elsewhere would undercount the block and phase spend;
-    3. `require_paid_approval`: the paid switch, the block's approval line on `remote`
+    3. no hold stands (`holds_not_cleared`): every run in the hold record next to the lock
+       has its line `cleared_hold: <run_id>` on `remote` (fetched now if a hold is
+       recorded), HEAD and the working tree, and this run does not reuse the run ID (the
+       lock's `run_id`) of a run that placed a hold;
+    4. `require_paid_approval`: the paid switch, the block's approval line on `remote`
        (fetched now), HEAD and the working tree, PREREG.md committed and the same blob as on
        `remote`, the experiment listed, block and phase room;
-    4. that PREREG.md is frozen (`prereg_not_frozen`), read after 3's fetch."""
+    5. that PREREG.md is frozen (`prereg_not_frozen`), read after 4's fetch."""
     if lock is None:
         raise PaidCallsNotAllowed(
             "paid calls need the paid-run lock (common/paidlock.py), taken by the launcher "
@@ -573,6 +692,11 @@ def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | No
     except (OSError, ValueError) as e:
         raise PaidCallsNotAllowed(f"cannot read {costs_path}: {e}") from None
     reason = paidlock.last_run_missing(lock.path, rows)
+    if reason is not None:
+        raise PaidCallsNotAllowed(reason)
+    run_id = lock.info.get("run_id") if isinstance(lock.info, dict) else None
+    reason = holds_not_cleared(repo, lock.path, run_id=run_id if isinstance(run_id, str)
+                               else None, remote=remote)
     if reason is not None:
         raise PaidCallsNotAllowed(reason)
     granted = require_paid_approval(approved_block=approved_block, experiment=experiment,

@@ -4,7 +4,9 @@
 of the shared guard passes (`common.approval.require_paid_run`, which the ARC launcher runs
 too, and `require_paid_approval`, which document them): it holds the paid-run lock
 (`common.paidlock`, taken by harnesses/cli.py before these checks: one paid run at a time);
-this checkout's results/costs.csv holds the last paid run's row; PERSISTGYM_ALLOW_PAID=1;
+this checkout's results/costs.csv holds the last paid run's row; no hold stands (a paid run,
+ARC or PersistGym, that ended COST_CAP and that the researcher has not cleared with a merged
+line `cleared_hold: <run_id>`, common/hold.py); PERSISTGYM_ALLOW_PAID=1;
 `--approved-block <name>`; PREREG.md committed, identical to PREREG.md on origin/main and
 frozen (PLAN §16.3; a release version of at least 0.2 and a "Frozen" status line,
 common/prereg.py); a positive, finite planned spend; and the researcher's approval line
@@ -20,7 +22,10 @@ The costs.csv row's notes start with `common.approval.spend_tag(<name>)`
 
 While running it stops before a call once the run's spend reaches the planned spend. Spend is
 measured as block spend and the phase caps measure it (`common.approval.spend_usd`: the
-billed estimate, so the Flex price on Flex; PLAN's caps are in billed dollars, D23). It logs
+billed estimate, so the Flex price on Flex; PLAN's caps are in billed dollars, D23). The
+runner records that stop as `COST_CAP`, but it is the planned spend, not a per-run cost guard
+(PREREG §7.7's hold is about the ARC run guard), so it places no hold; a per-run guard, if
+one is ever added here, must place one (`common.hold.place_hold`). It logs
 every response's echoed `reasoning.context`, returned model string and served service tier,
 and `finalize` appends exactly one results/costs.csv row via `common.costs.append_row`, with
 both the list cost and the billed estimate. A response whose returned model string has no

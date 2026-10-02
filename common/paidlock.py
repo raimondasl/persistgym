@@ -20,6 +20,9 @@ costs.csv row (its run ID and the row's timestamp) and the ledger it went to; a 
 refuses unless that row is in its own ledger (`last_run_missing`), since each checkout has
 its own results/costs.csv.
 
+Also next to the lock, `persistgym-paid-holds.jsonl` records the holds placed by paid runs
+that ended COST_CAP (common/hold.py); a paid run refuses while one is not cleared.
+
 Both paid launchers take this lock before their spend checks: the ARC launcher
 (arc/run_path.py) and the PersistGym launcher (harnesses/cli.py), whose transport refuses
 to spend unless it is handed a lock this run holds (`HeldLock`). The checks themselves are

@@ -168,7 +168,7 @@ Per episode it also records:
 | `REASONING_CONTEXT_MISMATCH` | an echoed `reasoning.context` differed from the request (the episode is excluded) |
 | `AGENT_ERROR` | one compaction's summary failed `summary_max_attempts` times (each compaction gets its own attempts) |
 | `API_ERROR` | an OpenAI error after retries |
-| `COST_CAP` | the run's spend reached the planned amount |
+| `COST_CAP` | the run's spend reached the planned amount (the transport's stop at `--planned-usd`, not a per-run cost guard: it places no hold, §8) |
 | `MAX_TURNS` | the episode passed `max_turns` |
 
 `run_batch` writes:
@@ -265,7 +265,8 @@ The probes send the same 32,000 cap (§9). They record each trial's `incomplete_
 ## 8. Paid calls (`openai_transport.py`)
 `OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless every check passes. The checks are `common.approval.require_paid_run`, which the ARC launcher (`arc/run_path.py`) runs too. First:
 - the run holds the **paid-run lock** (below), which `cli.py` takes before any of these checks, so two paid runs cannot both pass them;
-- this checkout's `results/costs.csv` can be read and holds the **last paid run's row** (below).
+- this checkout's `results/costs.csv` can be read and holds the **last paid run's row** (below);
+- **no hold stands** (below): every paid run that ended `COST_CAP` at its run guard has been cleared by the researcher.
 
 Then come the checks of the shared guard, `common.approval.require_paid_approval`. It lives in `common/` so that the ARC launcher can reuse it, and `harnesses.openai_transport` re-exports its names. The checks:
 1. `PERSISTGYM_ALLOW_PAID=1` is set;
@@ -285,7 +286,16 @@ Last, `PREREG.md` (the blob check 7 compared) must be **frozen**: a `Version:` l
 **One paid run at a time: the lock.** `run`, `probe-echo` and `probe-replay` take the paid-run lock (`common/paidlock.py`): `persistgym-paid-run.lock` in the git common directory, shared by every checkout and with the ARC launcher. They take it after their argument checks and before the transport's checks, and hold it for the whole command (all models of a probe). A command refuses (exit 2) while another paid run, ARC or PersistGym, holds it. With `PERSISTGYM_ALLOW_PAID` unset the command refuses before it touches the lock.
 - *The last run's row.* After appending its costs.csv row, `finalize` records the run in `persistgym-paid-last-run.json` next to the lock: its run ID and the row's `timestamp_utc`, because a `--run-id` can be given again and an older row with the same ID must not stand in for the newest one. A paid run whose own `results/costs.csv` lacks that row refuses: each checkout has its own ledger, so a run started in another checkout would undercount the block and phase spend. Run from one checkout, or bring the row over first.
 - *Spend the ledger does not show.* If a run made calls whose row is not in costs.csv, the lock stays held, with the reason and the run's usage totals in the file (`keep_lock_if_unaccounted`; reasoning tokens left out for a blinded pilot, §7.4). That covers a row that cannot be built or written (`finalize` keeps the lock and raises) and a run whose `finalize` never ran (the CLI checks every transport after its run). Every later paid run refuses and prints the reason until the operator has added the row by hand and deleted the lock file. A process that is killed leaves the lock behind too.
-- *Tests.* Every harness test points `cli.LOCK_PATH` into a folder that does not exist (`conftest.no_shared_paid_lock`), so a test cannot take the shared lock or write its last-run record; the paid-path tests use a temporary lock of their own.
+- *Tests.* Every harness test points `cli.LOCK_PATH` into a folder that does not exist (`conftest.no_shared_paid_lock`), so a test cannot take the shared lock, write its last-run record or read or write the hold record next to it; the paid-path tests use a temporary lock of their own.
+
+**No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12; `common/hold.py`). A paid run that ends `COST_CAP` at its run guard places a hold: a line in `persistgym-paid-holds.jsonl`, next to the lock, naming the run ID, the experiment, the reason and the time. While any hold stands, `require_paid_run` refuses every paid command, ARC or PersistGym (exit 2, before the transport builds a client), naming each run and the exact line that clears it. Only the researcher clears a hold, by merging this line into `results/decisions.md`:
+
+```
+    cleared_hold: <run_id>
+```
+
+It follows the rules of the approval line below: exactly this spacing, at column 0, `<run_id>` matching `[A-Za-z0-9._-]+`, outside any fenced code block or HTML comment, and on `origin/main` (fetched first; the fetch runs only when a hold is recorded), in `HEAD` and in the working tree. Removing it from any of the three, or hiding it in a code block or comment, puts the hold back, and the refusal names look-alike lines. One line clears one run's hold. A record line that cannot be read as a hold refuses until fixed by hand, and a run may not reuse the run ID (the lock's `run_id`) of a run that placed a hold, so a clearing line never clears a later run.
+- *Who places holds.* Today only the ARC launcher (`arc/run_path.py`): its harness cost guard is D22's $120 run guard for a counted run and the planned spend for a pilot or check. The PersistGym transport has no per-run cost guard. It stops a run before a call once the run's spend reaches `--planned-usd`, which the runner records as the exit reason `COST_CAP` (§7), but that is the planned spend, not a run guard in the sense of PREREG §7.7, so it places no hold. A PersistGym per-run guard, if one is ever added, must call `common.hold.place_hold` when it ends a run.
 
 **The approval line.** One line, with exactly this spacing:
 
@@ -343,7 +353,7 @@ PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-
 ```
 `run` defaults to the pilot split, which has a disjoint seed range, and the `persistgym_pilot` experiment. It refuses more than 10 episodes for a pilot.
 
-`tests/test_cli_end_to_end.py` runs all three commands, and a D11 matrix run, through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls. It also checks that a pilot run commits only `meta.json` and `summary.json` and leaves `reasoning_tokens` empty in its costs row, and that the commands hold the paid-run lock while they run, refuse while another run holds it, under a merged draft PREREG or when the last run's row is missing, and keep it held when a run's row cannot be written or `finalize` never ran.
+`tests/test_cli_end_to_end.py` runs all three commands, and a D11 matrix run, through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls. It also checks that a pilot run commits only `meta.json` and `summary.json` and leaves `reasoning_tokens` empty in its costs row, and that the commands hold the paid-run lock while they run, refuse while another run holds it, while a hold stands (until its clearing line is merged), under a merged draft PREREG or when the last run's row is missing, and keep it held when a run's row cannot be written or `finalize` never ran. It also checks that a run stopped at its planned spend (`COST_CAP`) places no hold.
 
 ## 9. Probes (`probes.py`)
 The probes are excluded from every analysis (§16.3). Their snapshot tests show that the two arms send identical payloads except `reasoning.context`, at every turn. Every probe request carries `max_output_tokens` 32,000, as the harness cells (`ProbeConfig.max_output_tokens`, D13), and every trial records its `incomplete_turns` (the turns whose response came back `incomplete`).

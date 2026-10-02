@@ -27,8 +27,15 @@ from arc import run_path_inner as inner
 from arc import run_path_offline as rpo
 from arc.test_prereg_freeze import HEADER as FROZEN_HEADER
 from arc.test_prereg_freeze import prereg_text
-from common import approval, costs, paidlock, runmeta
-from common.tests.gitrepo import DRAFT_PREREG, decisions_text, git_in, guarded_repo, push_main
+from common import approval, costs, hold, paidlock, runmeta
+from common.tests.gitrepo import (
+    DRAFT_PREREG,
+    decisions_text,
+    git_in,
+    guarded_repo,
+    push_main,
+    write_decisions,
+)
 
 RECORD = freeze.load_record()
 RECORD_BYTES = freeze.FREEZE_PATH.read_bytes()
@@ -149,7 +156,9 @@ def _write(path: Path, data) -> None:
 
 
 def fake_game(cwd: Path, *, exit_reason="GAME_WIN", steps=2, tiers=("standard",) * 2,
-              total_extra=None, result=True, calls=((200, 1.0), (503, 0.1), (200, 3.0))):
+              total_extra=None, result=True, calls=((200, 1.0), (503, 0.1), (200, 3.0)),
+              agent_exit_reason=None):
+    agent_exit_reason = agent_exit_reason or exit_reason
     run = cwd / "recordings" / "ft09.benchmarkingagent.0123"
     total = {k: v * steps if isinstance(v, int) else v for k, v in STEP_USAGE.items()}
     for k, v in (total_extra or {}).items():
@@ -159,7 +168,7 @@ def fake_game(cwd: Path, *, exit_reason="GAME_WIN", steps=2, tiers=("standard",)
                {"step": i, "usage": STEP_USAGE, "retries": 0,
                 **({"service_tier": tiers[i - 1]} if tiers[i - 1] else {})})
     _write(run / "run_meta.json", {
-        "exit_reason": exit_reason, "agent_exit_reason": exit_reason,
+        "exit_reason": exit_reason, "agent_exit_reason": agent_exit_reason,
         "requested_service_tier": "standard", "reported_models": ["gemini-3.8-flash"],
         "total_usage": total, "duration_seconds": 12.5,
         "arc_environment": {"kind": "remote", "base_url": "https://three.arcprize.org"},
@@ -447,6 +456,191 @@ def test_an_unreadable_ledger_refuses(world):
     paths.costs.write_text("timestamp_utc,run_id\n", encoding="utf-8")
     assert rp.main(GAME_ARGS, paths=paths) == 2
     assert "create" not in h.calls and not paths.lock.exists()
+
+
+# ── The hold after COST_CAP (PREREG §0.3 line 12, §7.7) ───────────────
+# The hold record is next to the test's own lock (tmp_path), never next to the real one.
+
+# Later runs use seed 2: run IDs carry the start time to the second, and a run may not reuse
+# the run ID of a run that placed a hold.
+GAME_ARGS_2 = [*GAME_ARGS[:GAME_ARGS.index("--seed") + 1], "2",
+               *GAME_ARGS[GAME_ARGS.index("--seed") + 2:]]
+
+
+def _holds(paths: rp.Paths) -> list[hold.Hold]:
+    return hold.read_holds(paths.lock)
+
+
+def _clear(paths: rp.Paths, run_id: str) -> None:
+    """The researcher's merge of the line that clears run `run_id`'s hold."""
+    text = (paths.repo / "results" / "decisions.md").read_text(encoding="utf-8")
+    write_decisions(paths.repo, text + approval.format_clear_line(run_id) + "\n")
+    git_in(paths.repo, "commit", "-q", "-am", f"clear the hold of {run_id}")
+    push_main(paths.repo)
+
+
+def test_a_counted_run_that_ends_cost_cap_places_a_hold_until_cleared(world, capsys):
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason="COST_CAP")
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+
+    meta = _meta(paths, "arc_path")
+    run_id = meta["run_id"]
+    (placed,) = _holds(paths)
+    r = placed.record
+    assert placed.run_id == run_id and r["what"] == "arc_path: S0 on ft09, seed 1"
+    assert (r["experiment"], r["approved_block"], r["cost_cap_usd"]) == ("arc_path", BLOCK,
+                                                                         120.0)
+    assert r["exit_reason"] == r["agent_exit_reason"] == "COST_CAP" and r["placed_utc"]
+    assert r["reason"] == ("ended COST_CAP at its harness cost guard of $120.00 list (D22's "
+                           "run guard)")
+    assert meta["hold_placed"] is True and meta["exit_reason"] == "COST_CAP"
+    (row,) = _rows(paths)                                  # accounted as usual (D22: final)
+    assert "exit_reason=COST_CAP" in row["notes"]
+    out = capsys.readouterr()
+    assert f"HOLD: run {run_id} ended COST_CAP" in out.err
+    assert f"HOLD placed: no paid run starts until the researcher merges 'cleared_hold: " \
+           f"{run_id}'" in out.out
+    assert not paths.lock.exists()                         # released; the hold stops runs
+
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS_2, paths=paths) == 2          # refused before anything runs
+    err = capsys.readouterr().err
+    assert f"1 hold stands: run {run_id} (arc_path; arc_path: S0 on ft09" in err
+    assert f"'cleared_hold: {run_id}'" in err and "either stream, ARC or PersistGym" in err
+    assert h.calls.count("inner") == 1 and not paths.lock.exists()
+
+    _clear(paths, run_id)
+    assert rp.main(GAME_ARGS_2, paths=paths) == 0
+    assert h.calls.count("inner") == 2 and len(_holds(paths)) == 1   # the record stays
+
+
+@pytest.mark.parametrize("exit_reason, agent_exit_reason", [
+    ("SCORECARD_CLOSED", "COST_CAP"),       # ARC rewrote the ending after the game
+    ("COST_CAP", "AGENT_ERROR"),
+])
+def test_either_ending_field_places_the_hold(world, exit_reason, agent_exit_reason):
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason=exit_reason,
+                                             agent_exit_reason=agent_exit_reason)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    (placed,) = _holds(paths)
+    assert (placed.record["exit_reason"], placed.record["agent_exit_reason"]) == (
+        exit_reason, agent_exit_reason)
+
+
+@pytest.mark.parametrize("ending", ["GAME_WIN", "ACTION_BUDGET", "AGENT_ERROR",
+                                    "TIME_BUDGET", "UNKNOWN"])
+def test_other_endings_place_no_hold(world, ending):
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason=ending)
+    rp.main(GAME_ARGS, paths=paths)
+    assert not hold.holds_path(paths.lock).exists()
+    assert _meta(paths, "arc_path")["hold_placed"] is False
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS_2, paths=paths) == 0
+
+
+def test_a_blinded_pilot_that_ends_cost_cap_places_a_blinded_hold(world, capsys):
+    """Pilots and checks place a hold too (their guard is their planned spend). The record
+    and the refusal show no game outcome (PREREG §11)."""
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason="GAME_WIN",
+                                             agent_exit_reason="COST_CAP")
+    assert rp.main(PILOT_ARGS, paths=paths) == 0
+    (placed,) = _holds(paths)
+    assert placed.record["experiment"] == "arc_pilot"
+    assert placed.record["exit_reason"] == rp.BLINDED_ENDING
+    assert placed.record["agent_exit_reason"] == "COST_CAP"
+    assert placed.record["reason"] == ("ended COST_CAP at its harness cost guard of $15.00 "
+                                       "list (set at its planned spend)")
+    assert "GAME_WIN" not in hold.holds_path(paths.lock).read_text(encoding="utf-8")
+    assert "GAME_WIN" not in capsys.readouterr().err
+    assert rp.main(GAME_ARGS, paths=paths) == 2
+    err = capsys.readouterr().err
+    assert f"1 hold stands: run {placed.run_id} (arc_pilot;" in err and "GAME_WIN" not in err
+
+
+def test_the_hold_is_placed_even_when_the_accounting_fails(world, capsys):
+    """The hold is written before the accounting: a run whose costs row cannot be written
+    keeps the lock and has placed its hold, so clearing the lock alone starts nothing."""
+    paths, h = world
+    bad = {**STEP_USAGE, "cached_tokens": STEP_USAGE["prompt_tokens"] + 1}  # unpriceable
+
+    def odd_usage(command, cwd):
+        fake_game(cwd, exit_reason="COST_CAP")
+        _write(cwd / "recordings" / "ft09.benchmarkingagent.0123" / "step_002.json",
+               {"step": 2, "usage": bad})
+        return 0
+
+    h.inner = odd_usage
+    with pytest.raises(pricing.PriceError):
+        rp.main(GAME_ARGS, paths=paths)
+    assert _rows(paths) == []
+    (placed,) = _holds(paths)
+    assert "add its row by hand" in json.loads(paths.lock.read_text())["kept_because"]
+    assert f"HOLD: run {placed.run_id}" in capsys.readouterr().err
+
+    paths.lock.unlink()                # the operator adds the row by hand and frees the lock
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS_2, paths=paths) == 2
+    assert f"1 hold stands: run {placed.run_id}" in capsys.readouterr().err
+    assert h.calls.count("inner") == 1
+
+
+def test_the_hold_is_placed_even_when_collecting_the_outputs_fails(world, monkeypatch):
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason="COST_CAP")
+
+    def disk_full(scratch, raw_dir):
+        raise OSError("disk full")
+    monkeypatch.setattr(rp, "collect_outputs", disk_full)
+    with pytest.raises(OSError, match="disk full"):
+        rp.main(GAME_ARGS, paths=paths)
+    assert len(_holds(paths)) == 1 and paths.lock.exists()
+
+
+def test_the_accounting_places_the_hold_if_the_first_check_missed_it(world, monkeypatch):
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason="COST_CAP")
+    monkeypatch.setattr(rp, "cost_cap_ending", lambda scratch: None)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    (placed,) = _holds(paths)
+    assert placed.record["exit_reason"] == "COST_CAP"
+    assert _meta(paths, "arc_path")["hold_placed"] is True
+
+
+def test_a_hold_that_cannot_be_written_keeps_the_lock(world, monkeypatch, capsys):
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason="COST_CAP")
+
+    def read_only(*a, **k):
+        raise PermissionError("read-only folder")
+    monkeypatch.setattr(hold, "place_hold", read_only)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    assert len(_rows(paths)) == 1                          # the run is still accounted
+    meta = _meta(paths, "arc_path")
+    assert meta["hold_placed"] is False
+    kept = json.loads(paths.lock.read_text(encoding="utf-8"))["kept_because"]
+    assert "its hold could not be written" in kept and meta["run_id"] in kept
+    assert f"'cleared_hold: {meta['run_id']}'" in kept
+    assert "its hold could not be written" in capsys.readouterr().err
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS_2, paths=paths) == 2          # the kept lock stops the next run
+    assert "its hold could not be written" in capsys.readouterr().err
+
+
+def test_cost_cap_ending_reads_the_harness_files(tmp_path):
+    assert rp.cost_cap_ending(tmp_path) is None            # nothing written
+    fake_game(tmp_path, exit_reason="ACTION_BUDGET")
+    assert rp.cost_cap_ending(tmp_path) is None
+    _write(tmp_path / "out" / inner.RESULT_FILE, {"exit_reason": "COST_CAP"})
+    assert rp.cost_cap_ending(tmp_path) == {"exit_reason": "ACTION_BUDGET",
+                                            "agent_exit_reason": "ACTION_BUDGET"}
+    (tmp_path / "recordings" / "ft09.benchmarkingagent.0123" / "run_meta.json").write_text(
+        "garbage", encoding="utf-8")
+    assert rp.cost_cap_ending(tmp_path) == {"exit_reason": "COST_CAP",
+                                            "agent_exit_reason": None}
 
 
 def test_no_model_call_means_no_costs_row(world):

@@ -346,7 +346,7 @@ PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-
 `tests/test_cli_end_to_end.py` runs all three commands, and a D11 matrix run, through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls. It also checks that a pilot run commits only `meta.json` and `summary.json` and leaves `reasoning_tokens` empty in its costs row, and that the commands hold the paid-run lock while they run, refuse while another run holds it, under a merged draft PREREG or when the last run's row is missing, and keep it held when a run's row cannot be written or `finalize` never ran.
 
 ## 9. Probes (`probes.py`)
-Both probes are excluded from every analysis (§16.3). Their snapshot tests show that the two arms send identical payloads except `reasoning.context`, at every turn. Every probe request carries `max_output_tokens` 32,000, as the harness cells (`ProbeConfig.max_output_tokens`, D13), and every trial records its `incomplete_turns` (the turns whose response came back `incomplete`).
+The probes are excluded from every analysis (§16.3). Their snapshot tests show that the two arms send identical payloads except `reasoning.context`, at every turn. Every probe request carries `max_output_tokens` 32,000, as the harness cells (`ProbeConfig.max_output_tokens`, D13), and every trial records its `incomplete_turns` (the turns whose response came back `incomplete`).
 
 ### 9.1 Echo check
 For gpt-6.1-sol and gpt-6-luna, each in both contexts, the probe runs a two-turn stateless conversation ("Reply with only the word: ready", then "...: done"). It passes when every response echoes the requested `reasoning.context`. The second turn carries the first turn's reasoning item, so the echo is observed with earlier reasoning present.
@@ -366,6 +366,28 @@ The prompts contain no digits. Under `all_turns`, the turn-3 sample can see the 
 The summary text is stripped from the reasoning items sent back (`summary: []`), so the only channel for the number is the encrypted reasoning.
 
 **Chance.** Chance is 1/900 (100-999; §16.3 says 1/1000) only for uniform guesses. Models pick "random" numbers unevenly, so a no-replay arm can match by sharing number preferences. Report `chance_agreement(picks, answers)` next to the two match rates, and also the share of turn-3 answers that are not a number at all (e.g. "I cannot recall").
+
+**Block 1 (2026-10-02).** This design could not score: sol's turn-1 summaries were empty in 40 of 40 trials and luna's named exactly one number in 2 of 40, so 0 and 2 trials were scorable. It stays available, unchanged, as `probe-replay` (the default `--design original`). PREREG §17.1 (amendment R1) replaces it for D29 with §9.3.
+
+### 9.3 Fork-consistency replay-use probe (PREREG §17.1)
+`probe-replay --design fork`. It needs no summary to know the pick: it asks the same question twice from the same state and checks that the answers agree.
+1. Turn 1 shows a fresh list of L = 20 distinct three-digit numbers and asks the model to privately pick one at random, write neither the number nor a hint, and reply only "ready". The list comes from `random.Random(seed)` (`sample` from 100-999, then `shuffle`), with seed = 290,000 + the attempt index (0-39): a dedicated stream outside every template range. Attempt *i* shows the same list in both arms and for both models.
+2. Turn 2 is the original filler.
+3. Turn 3 asks which number from the list it picked, with the number only, in K = 2 forks: two API calls whose requests are copies of one built request (the same history, the same stripped reasoning items as §9.2, the same settings). Each trial records the SHA-256 of each fork's request body.
+
+Both arms send identical payloads except `reasoning.context`, with the settings of §9.2: medium effort, standard mode, Flex, `max_output_tokens` 32,000 and `reasoning.summary: "auto"`. The summary setting each response echoes is recorded too; all 240 responses of the block-1 replay probe (§9.2) echoed `"detailed"`.
+
+**Scoring** (`score_fork_probe`):
+- *scorable*: the turn-1 and turn-2 responses completed, neither visible reply contains a three-digit number, and every echoed `reasoning.context` (four per trial) equals the request. Unscorable trials are replaced, up to 40 attempts per arm per model (`run_fork_arms`; an arm stops once it has 20 scorable trials).
+- *fork answer*: the first three-digit number in the turn-3 reply, if it is in the list; otherwise `None`. A refusal, a number outside the list and an incomplete turn-3 response (D13) all give `None`, and the trial stays scorable.
+- *agree*: both fork answers are not `None` and are equal.
+
+**Report** (`fork_report.json` next to `meta.json`, one per model): per arm, the attempts, scorable trials and why the others were not; agreements; for each fork the counts answered in the list, out of the list, with no number and incomplete; the distribution of answers and of list positions answered (1 = first shown), to expose value or position preferences; the position-coincidence rate; and echo mismatches. The `current_turn` arm's agreement rate is the chance baseline; 1/20 is the uniform reference. `condition_b` applies the registered thresholds (all_turns ≥ 15 of 20, current_turn ≤ 5 of 20, with 20 scorable per arm) and is `met: false` unless the run used 20 scorable trials and 40 attempts. Condition (a), D29's echo condition, also covers the block-1 echo check, so the verdict is the researcher's, from both reports.
+
+```
+PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-replay \
+    --design fork --approved-block "<block>" --planned-usd 1      # sol and luna
+```
 
 ## 10. Researcher decisions
 Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RESEARCHER_DECISIONS`. Each needs the researcher's confirmation in PREREG.md.
@@ -437,7 +459,8 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
   - a turn whose response stopped at `max_output_tokens` while reasoning, replayed as a reasoning item with no message after it (§7.5). A pilot reaches this only if a response hits the 32,000 cap. If the API rejects it, the next call fails with `API_ERROR`, so the episode is lost rather than scored, and the run aborts after 2 such episodes.
 
   The first paid pilot checks this. A 400 error is not billed.
-- **The echo check shows the reported mode, not use.** That the API reports `all_turns` does not show that the model uses earlier reasoning. The replay-use probe tests that, and its scoring depends on reasoning summaries naming the picked number. If they rarely do, most trials are unscorable and the probe needs a redesign.
+- **The echo check shows the reported mode, not use.** That the API reports `all_turns` does not show that the model uses earlier reasoning. The replay-use probe tests that, and its scoring depends on reasoning summaries naming the picked number. If they rarely do, most trials are unscorable and the probe needs a redesign. In block 1 they almost never did, and §9.3 is that redesign.
+- **The fork probe shows consistency, not recall of a known pick.** Agreement under `all_turns` well above the `current_turn` baseline shows that the forks share something from the turn-1 reasoning. It does not show what the model "picked", that the model reads every replayed item, or that replay carries larger or older state in the harness cells.
 - **The r arms see more than W.** Under `all_turns`, rendered reasoning adds tokens that W does not count. The r and 0 arms then share eviction points, but the r arms' real contexts are larger.
 - **Tokens are tiktoken's.** Provider counts differ by per-message overhead and rendered reasoning. Both are logged.
 - **The fake model's usage numbers are not realistic.** Fake runs check structure, not cost.

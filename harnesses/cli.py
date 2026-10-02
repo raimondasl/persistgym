@@ -17,6 +17,9 @@ a run whose costs.csv row could not be written leaves it held, with the reason. 
 SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-echo \
         --approved-block "1-pilots" --planned-usd 0.5
+    # D29 as amended by R1 (PREREG §17.1): sol and luna, 20 scorable trials per arm
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-replay \
+        --design fork --approved-block "1-pilots" --planned-usd 1
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
         --model gpt-6-luna --n 1 --approved-block "1-pilots" --planned-usd 1
     # D11: sol on derived-far x T_d templates plus observed-far x T_d/3 of them
@@ -234,11 +237,51 @@ def cmd_run(a) -> int:
                                    f"{len(episodes)} episodes", paid)
 
 
+def _fork_design(a, kind: str) -> bool:
+    return kind == "replay" and a.design == "fork"
+
+
+def _probe_args(a, kind: str) -> str | None:
+    """Fill the design-dependent defaults of a probe command; why it refuses, or None.
+    `probe-replay --design fork` (PREREG §17.1): --n is the scorable trials per arm (default
+    and at most 20) and --max-attempts the attempts per arm (default and at most 40). The
+    other probes keep --n as trials per context (echo 1, original replay design 10)."""
+    if not _fork_design(a, kind):
+        if getattr(a, "max_attempts", None) is not None:
+            return "--max-attempts applies to probe-replay --design fork only"
+        if a.n is None:
+            a.n = 10
+        return None
+    a.n = probes.FORK_TARGET_SCORABLE if a.n is None else a.n
+    a.max_attempts = probes.FORK_MAX_ATTEMPTS if a.max_attempts is None else a.max_attempts
+    try:
+        probes.check_fork_limits(a.n, a.max_attempts)
+    except ValueError as e:
+        return str(e)
+    return None
+
+
 def _probe_run(a, kind: str) -> int:
     experiment = "toggle_pilot" if kind == "echo" else "replay_probe"
-    return _with_paid_lock(a.run_id or _run_id(f"{kind}-probe"),
-                           f"{experiment}: {kind} probe on {', '.join(a.model)}",
+    why = _probe_args(a, kind)
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
+        return 2
+    tag = "replay-fork" if _fork_design(a, kind) else kind
+    return _with_paid_lock(a.run_id or _run_id(f"{tag}-probe"),
+                           f"{experiment}: {tag} probe on {', '.join(a.model)}",
                            lambda held: _probe_locked(a, kind, experiment, held))
+
+
+def _fork_config(a) -> dict:
+    """What the fork design adds to meta.json's config (PREREG §17.1)."""
+    return {"design": "fork", "target_scorable_per_arm": a.n,
+            "max_attempts_per_arm": a.max_attempts, "list_len": probes.FORK_LIST_LEN,
+            "forks": probes.FORK_K, "seed_start": probes.FORK_SEED_START,
+            "turns": [probes.FORK_TURN1, probes.FORK_TURN2, probes.FORK_TURN3],
+            "pass_rule": {"min_agree_all_turns": probes.FORK_MIN_AGREE_ALL_TURNS,
+                          "max_agree_current_turn": probes.FORK_MAX_AGREE_CURRENT_TURN,
+                          "of_scorable": probes.FORK_TARGET_SCORABLE}}
 
 
 def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int:
@@ -256,8 +299,10 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
         transport = _guarded_transport(a, model, experiment, remaining, held)
         if transport is None:
             return 2
+        fork = _fork_design(a, kind)
+        tag = "replay-fork" if fork else kind
         run_id = (f"{a.run_id}-{model}" if a.run_id and len(a.model) > 1
-                  else a.run_id or _run_id(f"{kind}-{model}"))
+                  else a.run_id or _run_id(f"{tag}-{model}"))
         out_dir, raw_dir = RESULTS / experiment / run_id, RAW / experiment / run_id
         out_dir.mkdir(parents=True, exist_ok=True)
         raw_dir.mkdir(parents=True, exist_ok=True)
@@ -268,15 +313,25 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
         exit_reason = "INCOMPLETE"
         try:
             with gzip.open(raw_dir / "transcript.jsonl.gz", "at", encoding="utf-8") as raw:
-                for rep in range(a.n):
-                    for ctx in a.contexts:
-                        t = (probes.run_echo_check(model, ctx, transport, cfg) if kind == "echo"
-                             else probes.run_replay_probe(model, ctx, transport, cfg))
-                        raw.write(json.dumps({"repeat": rep, **t}, ensure_ascii=False) + "\n")
-                        trials.append({"repeat": rep, "context_requested": ctx,
-                                       "echoes": t["echoes"], "outputs": t["outputs"],
-                                       "incomplete_turns": t["incomplete_turns"],
-                                       **({"score": t["score"]} if "score" in t else {})})
+                if fork:
+                    def keep(t, raw=raw, trials=trials):
+                        raw.write(json.dumps(t, ensure_ascii=False) + "\n")
+                        trials.append(probes.fork_record(t))
+                    probes.run_fork_arms(model, transport, cfg, contexts=a.contexts,
+                                         target=a.n, max_attempts=a.max_attempts,
+                                         on_trial=keep)
+                else:
+                    for rep in range(a.n):
+                        for ctx in a.contexts:
+                            t = (probes.run_echo_check(model, ctx, transport, cfg)
+                                 if kind == "echo"
+                                 else probes.run_replay_probe(model, ctx, transport, cfg))
+                            raw.write(json.dumps({"repeat": rep, **t}, ensure_ascii=False)
+                                      + "\n")
+                            trials.append({"repeat": rep, "context_requested": ctx,
+                                           "echoes": t["echoes"], "outputs": t["outputs"],
+                                           "incomplete_turns": t["incomplete_turns"],
+                                           **({"score": t["score"]} if "score" in t else {})})
             exit_reason = "COMPLETED"
         except (openai.OpenAIError, BudgetExceeded) as e:
             exit_reason, status = f"ERROR:{type(e).__name__}: {e}", 1
@@ -284,7 +339,7 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
             spent += transport.spent_usd
             try:
                 row = transport.finalize(run_id=run_id, milestone=a.milestone,
-                                         cell_or_config=f"{kind}-probe")
+                                         cell_or_config=f"{tag}-probe")
             finally:
                 _check_accounted(transport, run_id)
             with (out_dir / "trials.jsonl").open("a", encoding="utf-8") as f:
@@ -294,22 +349,39 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
             for t in trials:
                 for e in t["echoes"]:
                     echoed[str(e["context_echoed"])] = echoed.get(str(e["context_echoed"]), 0) + 1
+            config = {"probe": kind, "probe_config": dataclasses.asdict(cfg),
+                      "contexts": a.contexts, "n_per_context": a.n}
+            if fork:
+                config["fork"] = _fork_config(a)
             runmeta.write_meta(
-                out_dir, experiment=experiment, run_id=run_id, cell_or_config=f"{kind}-probe",
-                config={"probe": kind, "probe_config": dataclasses.asdict(cfg),
-                        "contexts": a.contexts, "n_per_context": a.n},
+                out_dir, experiment=experiment, run_id=run_id, cell_or_config=f"{tag}-probe",
+                config=config,
                 model_requested=model,
                 model_returned=sorted({str(e["model_returned"]) for t in trials
                                        for e in t["echoes"]}),
                 reasoning_effort=cfg.reasoning_effort, reasoning_context_requested=a.contexts,
                 reasoning_context_echoed=echoed, template_id=None, repeat_index=None,
-                seeds=None, started_utc=started, finished_utc=runmeta.utc_now(),
+                seeds=({"seed_start": probes.FORK_SEED_START,
+                        "seeds": sorted({t["seed"] for t in trials})} if fork else None),
+                started_utc=started, finished_utc=runmeta.utc_now(),
                 exit_reason=exit_reason, tokens=transport.ledger.totals(),
                 cost_usd={"list": transport.ledger.cost_usd_list,
                           "billed_est": transport.ledger.cost_usd_billed_est,
                           "costs_csv_row_appended": row is not None},
                 raw_transcript_path=_rel(raw_dir / "transcript.jsonl.gz"))
+            if fork:
+                report = probes.fork_report(trials, target=a.n, max_attempts=a.max_attempts)
+                report = {"run_id": run_id, "model_requested": model,
+                          "exit_reason": exit_reason, **report}
+                (out_dir / "fork_report.json").write_text(
+                    json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"{model}: {exit_reason}; echoed {echoed}; results in {out_dir}")
+        if fork:
+            b = report["condition_b"]
+            print(f"{model}: forks agree in {b['all_turns_agreements']} (all_turns) and "
+                  f"{b['current_turn_agreements']} (current_turn) scorable trials; "
+                  f"scorable {[arm['scorable'] for arm in report['arms'].values()]}; "
+                  f"condition (b) met: {b['met']} (fork_report.json)")
     return status
 
 
@@ -417,8 +489,17 @@ def main(argv: list[str] | None = None) -> int:
         request_args(sp, multi_model=True)
         paid_args(sp)
         sp.add_argument("--contexts", nargs="+", default=list(probes.CONTEXTS))
-        sp.add_argument("--n", type=int, default=1 if kind == "echo" else 10,
-                        help="trials per context")
+        sp.add_argument("--n", type=int, default=1 if kind == "echo" else None,
+                        help="trials per context (default 1 for echo, 10 for the original "
+                             "replay design); --design fork: scorable trials per arm "
+                             "(default and at most 20)")
+        if kind == "replay":
+            sp.add_argument("--design", choices=("original", "fork"), default="original",
+                            help="original: the summary-scored probe of D29 as frozen; fork: "
+                                 "the fork-consistency probe of amendment R1 (PREREG §17.1)")
+            sp.add_argument("--max-attempts", type=int, default=None,
+                            help="--design fork: attempts per arm per model, scorable or not "
+                                 "(default and at most 40)")
         sp.set_defaults(fn=lambda a, k=kind: _probe_run(a, k))
 
     a = p.parse_args(argv)

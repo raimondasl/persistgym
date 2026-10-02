@@ -1,0 +1,254 @@
+{
+  "rule": "PREREG D15 (seed), D17 (pilot game), D18 (run orders), D32 (3-game drop)",
+  "freeze": {
+    "sha": "ed340a1cda91153dafe78772861c40343b53dafa",
+    "subject": "Merge pull request #4 from raimondasl/m0/prereg-draft",
+    "committer_time_s": 1790911228,
+    "committer_time_iso": "2026-10-01T23:20:28-04:00",
+    "parents": [
+      "8b1a58b560b05540ff52d3cc165e58f547dfb740",
+      "cd46eedee91e496e4728cb858eb5546cc3130a84"
+    ],
+    "is_merge_commit": true,
+    "origin_main": "ed340a1cda91153dafe78772861c40343b53dafa",
+    "prereg_version": "1.0",
+    "prereg_status": "Frozen on 2026-10-01 by Raimondas Lencevicius (sign-off in PR #4).",
+    "checkout_head_contains_it": true
+  },
+  "target_ms": 1790911828000,
+  "target_utc": "2026-10-02T03:30:28.000Z",
+  "fallback_deadline_utc": "2026-10-03T03:30:28.000Z",
+  "drawn_utc": "2026-10-02T03:31:45.183Z",
+  "python_version": "3.12.13",
+  "seed": {
+    "source": "nist",
+    "seed": 4086943125952605534,
+    "seed_hex": "38B7BD1E97A12D5E",
+    "url": "https://beacon.nist.gov/beacon/2.0/pulse/time/1790911828000",
+    "fallback_reason": null,
+    "details": {
+      "uri": "https://beacon.nist.gov/beacon/2.0/chain/2/pulse/1966405",
+      "chain_index": 2,
+      "pulse_index": 1966405,
+      "time_stamp": "2026-10-02T03:31:00.000Z",
+      "status_code": 0,
+      "output_value": "38B7BD1E97A12D5E6D2016E1E53E8245EB6A2CF1A7BC2D861645CBA0E609AB26785BB244A08CF7A36B9A070F37E87C14E073A04803F97C42DEC23019FA52696E"
+    }
+  },
+  "games": [
+    "FT09",
+    "SB26",
+    "R11L",
+    "CD82"
+  ],
+  "configs": [
+    "S0",
+    "S1",
+    "S2",
+    "S4"
+  ],
+  "replicates": [
+    1,
+    2
+  ],
+  "derived": {
+    "perm": [
+      "R11L",
+      "SB26",
+      "FT09",
+      "CD82"
+    ],
+    "pilot_game_d17": "R11L",
+    "fallback_drop_game_d32": "CD82",
+    "block2_seed": 4086943125952605536,
+    "block2_order": [
+      [
+        "CD82",
+        "S4",
+        1
+      ],
+      [
+        "FT09",
+        "S0",
+        1
+      ],
+      [
+        "SB26",
+        "S4",
+        1
+      ],
+      [
+        "SB26",
+        "S0",
+        1
+      ],
+      [
+        "CD82",
+        "S0",
+        1
+      ],
+      [
+        "R11L",
+        "S0",
+        1
+      ],
+      [
+        "R11L",
+        "S4",
+        1
+      ],
+      [
+        "FT09",
+        "S4",
+        1
+      ]
+    ],
+    "block3_seed": 4086943125952605537,
+    "block3_order": [
+      [
+        "SB26",
+        "S1",
+        1
+      ],
+      [
+        "R11L",
+        "S2",
+        2
+      ],
+      [
+        "FT09",
+        "S2",
+        1
+      ],
+      [
+        "FT09",
+        "S1",
+        1
+      ],
+      [
+        "SB26",
+        "S1",
+        2
+      ],
+      [
+        "R11L",
+        "S2",
+        1
+      ],
+      [
+        "SB26",
+        "S2",
+        1
+      ],
+      [
+        "FT09",
+        "S1",
+        2
+      ],
+      [
+        "SB26",
+        "S0",
+        2
+      ],
+      [
+        "CD82",
+        "S2",
+        2
+      ],
+      [
+        "CD82",
+        "S1",
+        2
+      ],
+      [
+        "CD82",
+        "S4",
+        2
+      ],
+      [
+        "FT09",
+        "S4",
+        2
+      ],
+      [
+        "SB26",
+        "S4",
+        2
+      ],
+      [
+        "R11L",
+        "S4",
+        2
+      ],
+      [
+        "FT09",
+        "S0",
+        2
+      ],
+      [
+        "CD82",
+        "S1",
+        1
+      ],
+      [
+        "FT09",
+        "S2",
+        2
+      ],
+      [
+        "CD82",
+        "S2",
+        1
+      ],
+      [
+        "CD82",
+        "S0",
+        2
+      ],
+      [
+        "R11L",
+        "S1",
+        1
+      ],
+      [
+        "SB26",
+        "S2",
+        2
+      ],
+      [
+        "R11L",
+        "S0",
+        2
+      ],
+      [
+        "R11L",
+        "S1",
+        2
+      ]
+    ]
+  },
+  "raw_files": [
+    "nist_prev_pulse.json",
+    "nist_pulse.json"
+  ],
+  "raw_sha256": {
+    "nist_prev_pulse.json": "6df896e25428252734d586e36d47abe532163b9597c5a41a11e9767ff9abd404",
+    "nist_pulse.json": "4ea127b673913e316f988dc3596c380fe26f651aa50ccd6295f2fb97d28abbf5"
+  },
+  "http_log": [
+    {
+      "url": "https://beacon.nist.gov/beacon/2.0/pulse/time/1790911828000",
+      "status": 200,
+      "attempts": 1,
+      "fetched_utc": "2026-10-02T03:31:46+00:00"
+    },
+    {
+      "url": "https://beacon.nist.gov/beacon/2.0/chain/2/pulse/1966404",
+      "status": 200,
+      "attempts": 1,
+      "fetched_utc": "2026-10-02T03:31:48+00:00"
+    }
+  ],
+  "run_dir": "results/draw/20261002T033145Z",
+  "code_commit": "ed340a1cda91153dafe78772861c40343b53dafa"
+}

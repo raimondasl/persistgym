@@ -5,6 +5,7 @@ guard is checked to run before the factory is ever called."""
 from __future__ import annotations
 
 import csv
+import json
 import os
 from pathlib import Path
 
@@ -12,8 +13,10 @@ import httpx
 import openai
 import pytest
 
-from common import approval, costs
+from common import approval, costs, paidlock
 from common.tests.gitrepo import (
+    DRAFT_PREREG,
+    FROZEN_PREREG,
     add_origin,
     approval_line,
     commit_on_origin_only,
@@ -81,11 +84,25 @@ def repo(tmp_path):
     return tmp_path
 
 
+def _held(repo) -> paidlock.HeldLock:
+    """The paid-run lock the CLI holds while a transport for `repo` runs (harnesses/cli.py
+    takes it): one lock file per test, in its own folder, since the last-run record goes
+    next to it. Written on first use and held for the rest of the test."""
+    path = repo.parent / f"{repo.name}-lock" / paidlock.LOCK_NAME
+    if not path.exists():
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps({"run_id": "test-run", "token": "test-token"}),
+                        encoding="utf-8")
+    return paidlock.HeldLock(path, json.loads(path.read_text(encoding="utf-8")))
+
+
 def _make(repo, factory, **kw):
     args = {"model": "gpt-6-luna", "approved_block": "1-pilots", "experiment": "toggle_pilot",
             "planned_usd": 1.0, "costs_path": repo / "costs.csv", "repo": repo,
             "client_factory": factory, "sleep": lambda s: None}
     args.update(kw)
+    if "paid_lock" not in kw:
+        args["paid_lock"] = _held(repo)
     return OpenAIResponsesTransport(**args)
 
 
@@ -140,7 +157,7 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
     (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
     factory, built = _factory()
     # not a git repo at all
-    (tmp_path / "PREREG.md").write_text("Version: 0.1\n", encoding="utf-8")
+    (tmp_path / "PREREG.md").write_text(FROZEN_PREREG, encoding="utf-8")
     with pytest.raises(PaidCallsNotAllowed, match="not tracked"):
         _make(tmp_path, factory)
     # untracked draft in a repo (whose HEAD and origin/main approve the block)
@@ -162,9 +179,9 @@ def test_guard_requires_prereg_committed(tmp_path, monkeypatch):
         _make(tmp_path, factory)
     # merged: accepted
     push_main(tmp_path)
-    assert _make(tmp_path, factory).approval.prereg_version == "0.1"
+    assert _make(tmp_path, factory).approval.prereg_version == "1.0"
     # committed, then edited locally
-    (tmp_path / "PREREG.md").write_text("Version: 0.2\n", encoding="utf-8")
+    (tmp_path / "PREREG.md").write_text(FROZEN_PREREG + "\nA local edit.\n", encoding="utf-8")
     with pytest.raises(PaidCallsNotAllowed, match="uncommitted changes"):
         _make(tmp_path, factory)
     assert len(built) == 1  # only the accepted transport built a client
@@ -175,14 +192,14 @@ def test_guard_requires_prereg_identical_to_origin_main(repo, monkeypatch):
     merged refuses before any client is built, even with a valid approval."""
     monkeypatch.setenv(ALLOW_ENV, "1")
     factory, built = _factory()
-    (repo / "PREREG.md").write_text("Version: 0.2\n", encoding="utf-8")
+    (repo / "PREREG.md").write_text(FROZEN_PREREG.replace("1.0", "1.1"), encoding="utf-8")
     git_in(repo, "commit", "-q", "-am", "amend prereg, not merged")
     with pytest.raises(PaidCallsNotAllowed, match="PREREG.md in HEAD differs from PREREG.md "
                                                   "on origin/main"):
         _make(repo, factory)
     assert built == []
     push_main(repo)
-    assert _make(repo, factory).approval.prereg_version == "0.2"
+    assert _make(repo, factory).approval.prereg_version == "1.1"
     assert len(built) == 1
 
 
@@ -573,6 +590,153 @@ def test_unpriced_returned_model_is_still_logged(repo, monkeypatch):
     assert costs.read_rows(repo / "costs.csv")[0]["n_calls"] == "2"
 
 
+# --- the paid-run lock, the last run's ledger row and a frozen PREREG (PREREG §12) ---------
+
+def _call(t, n=1):
+    for _ in range(n):
+        t.send({"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}})
+
+
+def test_guard_requires_the_paid_run_lock(repo, monkeypatch):
+    """The transport spends only under the lock the CLI takes before the spend checks: none,
+    another run's, a deleted one or one kept after an unaccounted run refuses before any
+    client is built."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="need the paid-run lock"):
+        _make(repo, factory, paid_lock=None)
+    held = _held(repo)
+    other = paidlock.HeldLock(held.path, {"run_id": "test-run", "token": "another-token"})
+    with pytest.raises(PaidCallsNotAllowed, match="does not hold the paid-run lock"):
+        _make(repo, factory, paid_lock=other)
+    with pytest.raises(PaidCallsNotAllowed, match="does not hold"):
+        _make(repo, factory, paid_lock=paidlock.HeldLock(held.path, {}))  # no token
+    assert built == []
+    assert _make(repo, factory).approval.approved_block == "1-pilots"
+    paidlock.keep(held.path, held.info, "an earlier run's spend is not in costs.csv")
+    with pytest.raises(PaidCallsNotAllowed, match="does not hold"):
+        _make(repo, factory, paid_lock=held)
+    held.path.unlink()
+    with pytest.raises(PaidCallsNotAllowed, match="does not hold"):
+        _make(repo, factory, paid_lock=held)
+    assert len(built) == 1
+
+
+def test_guard_requires_a_frozen_prereg(tmp_path, monkeypatch):
+    """PREREG §0.4: no paid call under a draft. A draft merged to main is the same blob in
+    HEAD and on origin/main, which the guard used to accept; it refuses before any client
+    is built, and so does a "Frozen" status on a version below 0.2."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    prereg_repo(tmp_path, text=DRAFT_PREREG)
+    (tmp_path / "costs.csv").write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match=r"frozen, merged PREREG.md .*not a release "
+                                                  r"version"):
+        _make(tmp_path, factory)
+    (tmp_path / "PREREG.md").write_text(FROZEN_PREREG.replace("1.0", "0.1"),
+                                        encoding="utf-8")
+    git_in(tmp_path, "commit", "-q", "-am", "frozen too early")
+    push_main(tmp_path)
+    with pytest.raises(PaidCallsNotAllowed, match="below 0.2"):
+        _make(tmp_path, factory)
+    (tmp_path / "PREREG.md").write_text(FROZEN_PREREG, encoding="utf-8")
+    git_in(tmp_path, "commit", "-q", "-am", "freeze")
+    with pytest.raises(PaidCallsNotAllowed, match="differs"):  # frozen, not merged yet
+        _make(tmp_path, factory)
+    assert built == []
+    push_main(tmp_path)
+    assert _make(tmp_path, factory).approval.prereg_version == "1.0"
+
+
+def test_finalize_records_the_last_paid_run(repo, monkeypatch):
+    """Each checkout has its own costs.csv; the lock is shared. After its row is appended,
+    the run is recorded next to the lock, and a run whose ledger lacks that row refuses."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory([_response()])
+    t = _make(repo, factory)
+    _call(t)
+    row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    assert t.costs_row is row and not t.unaccounted
+    last = json.loads(paidlock.last_run_path(t.paid_lock.path).read_text(encoding="utf-8"))
+    assert last["run_id"] == "r1"
+    assert Path(last["costs_csv"]) == (repo / "costs.csv").resolve()
+    assert t.keep_lock_if_unaccounted("r1") is None and t.paid_lock.holds()
+
+    elsewhere = repo / "other-costs.csv"   # another checkout's ledger, without r1's row
+    elsewhere.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    with pytest.raises(PaidCallsNotAllowed, match="r1, appended its costs row.*not in this "
+                                                  "checkout"):
+        _make(repo, factory, costs_path=elsewhere)
+    costs.append_row(costs.read_rows(repo / "costs.csv")[0], elsewhere)  # brought over
+    assert _make(repo, factory, costs_path=elsewhere).approval.costs_path == elsewhere
+    assert len(built) == 2
+
+
+def test_guard_refuses_an_unreadable_ledger_before_the_approval(repo, monkeypatch):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    (repo / "costs.csv").write_text("timestamp_utc,run_id\n", encoding="utf-8")
+    factory, built = _factory()
+    with pytest.raises(PaidCallsNotAllowed, match="cannot read .*costs.csv"):
+        _make(repo, factory)
+    assert built == []
+
+
+@pytest.mark.parametrize("experiment", ["toggle_pilot", "persistgym_pilot"])
+def test_a_row_that_cannot_be_written_keeps_the_lock(repo, monkeypatch, experiment):
+    """Spend the ledger does not show must stop the next paid run until the row is added by
+    hand: the lock stays held with the reason and the run's totals (reasoning tokens
+    withheld for a blinded pilot, PREREG §11)."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, _ = _factory([_response()] * 2)
+    t = _make(repo, factory, experiment=experiment)
+    _call(t, 2)
+
+    def locked_file(row, path):
+        raise PermissionError("costs.csv is open in another program")
+    monkeypatch.setattr(costs, "append_row", locked_file)
+    with pytest.raises(PermissionError):
+        t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    assert t.unaccounted and t.costs_row is None
+    assert costs.read_rows(repo / "costs.csv") == []
+    held = json.loads(t.paid_lock.path.read_text(encoding="utf-8"))
+    reason = held["kept_because"]
+    assert reason == t.kept_because and not t.paid_lock.holds()
+    assert "run r1" in reason and "made 2 paid calls" in reason
+    assert "costs.csv is open in another program" in reason
+    assert "add its row by hand, with approved_block=1-pilots; at the start" in reason
+    totals = json.loads(reason[reason.index("totals: ") + 8:reason.index("; the run's")])
+    assert totals["n_calls"] == 2 and totals["cost_usd_billed_est"] == pytest.approx(0.15)
+    if experiment == "persistgym_pilot":
+        assert totals["reasoning_tokens"] is None
+    else:
+        assert totals["reasoning_tokens"] == 100_000
+    assert not paidlock.last_run_path(t.paid_lock.path).exists()  # no row, no last run
+    # the CLI's check after the run returns the same reason and leaves the file alone
+    assert t.keep_lock_if_unaccounted("r1") == reason
+    assert json.loads(t.paid_lock.path.read_text(encoding="utf-8")) == held
+    # the next paid run refuses while the lock is kept, printing the reason
+    with (pytest.raises(paidlock.LockHeld, match="add its row by hand"),
+          paidlock.paid_run_lock(t.paid_lock.path, run_id="r2", what="next")):
+        pass
+
+
+def test_calls_without_finalize_keep_the_lock(repo, monkeypatch):
+    """A run whose finalize never ran (it crashed first) is caught by the CLI's check after
+    the run; a run that made no call is not."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, _ = _factory([_response()])
+    idle = _make(repo, factory)
+    assert not idle.unaccounted and idle.keep_lock_if_unaccounted("r0") is None
+    assert idle.finalize(run_id="r0", milestone="M0", cell_or_config="c") is None
+    assert idle.paid_lock.holds()
+    t = _make(repo, factory)
+    _call(t)
+    reason = t.keep_lock_if_unaccounted("r1")
+    assert "run r1 (toggle_pilot, gpt-6-luna) made 1 paid calls" in reason
+    assert not t.paid_lock.holds()
+    assert json.loads(t.paid_lock.path.read_text(encoding="utf-8"))["kept_because"] == reason
+
+
 def test_harness_tests_cannot_reach_the_network():
     """conftest.no_network blocks outbound connections and DNS for every harness test."""
     import socket
@@ -586,6 +750,17 @@ def test_harness_tests_cannot_reach_the_network():
         s.connect(("203.0.113.1", 443))
     # the guard's `git fetch` runs in a subprocess: git itself may use only local paths
     assert os.environ["GIT_ALLOW_PROTOCOL"] == "file"
+
+
+def test_harness_tests_cannot_take_the_shared_paid_lock():
+    """conftest.no_shared_paid_lock: in every harness test the CLI's lock points into a
+    folder that does not exist, never into the git common directory all checkouts share, so
+    a test cannot block (or, through the last-run record, refuse) a real paid run."""
+    assert cli.LOCK_PATH is not None and not cli.LOCK_PATH.parent.exists()
+    assert cli.LOCK_PATH != paidlock.lock_path(Path(__file__).resolve().parent)
+    with (pytest.raises(FileNotFoundError),
+          paidlock.paid_run_lock(cli.LOCK_PATH, run_id="x", what="x")):
+        pass
 
 
 def test_no_key_handling_in_harness_code():

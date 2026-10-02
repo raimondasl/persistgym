@@ -103,6 +103,26 @@ def test_keep_leaves_a_lock_that_is_not_ours_alone(tmp_path):
                                                             "token": "someone-else"}
 
 
+def test_a_held_lock_holds_only_its_own_token(tmp_path):
+    """What the code that spends checks (`common.approval.require_paid_run`): the lock file
+    still holds this run's token."""
+    path = tmp_path / paidlock.LOCK_NAME
+    with paidlock.paid_run_lock(path, run_id="run-1", what="x") as info:
+        held = paidlock.HeldLock(path, info)
+        assert held.holds()
+        assert not paidlock.HeldLock(path, {**info, "token": "someone-else"}).holds()
+        assert not paidlock.HeldLock(path, {"run_id": "run-1"}).holds()   # no token
+        paidlock.keep(path, info, "spend not in costs.csv")
+        assert not held.holds()                    # keep gave the file a new token
+    path.write_text(json.dumps({"run_id": "run-2"}), encoding="utf-8")
+    assert not paidlock.HeldLock(path, {"run_id": "run-2"}).holds()      # neither has one
+    for text in ("[]", "garbage", ""):
+        path.write_text(text, encoding="utf-8")
+        assert not held.holds()
+    path.unlink()
+    assert not held.holds()
+
+
 def test_the_last_runs_row_must_be_in_the_ledger(tmp_path):
     lock = tmp_path / paidlock.LOCK_NAME
     assert paidlock.last_run_missing(lock, []) is None        # no paid run recorded yet

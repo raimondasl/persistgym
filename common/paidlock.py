@@ -18,6 +18,11 @@ purpose (`keep`), with the reason, so no paid run starts on an incomplete ledger
 Next to the lock, `persistgym-paid-last-run.json` names the last paid run that appended a
 costs.csv row and the ledger it went to; a paid run refuses unless that row is in its own
 ledger (`last_run_missing`), since each checkout has its own results/costs.csv.
+
+Both paid launchers take this lock before their spend checks: the ARC launcher
+(arc/run_path.py) and the PersistGym launcher (harnesses/cli.py), whose transport refuses
+to spend unless it is handed a lock this run holds (`HeldLock`). The checks themselves are
+`common.approval.require_paid_run`.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ import subprocess
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -37,6 +43,26 @@ LOCK_NAME = "persistgym-paid-run.lock"
 
 class LockHeld(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class HeldLock:
+    """A paid-run lock this run holds: the lock file and what `paid_run_lock` wrote into it
+    (with the token). Code that spends takes one and refuses unless `holds()`."""
+    path: Path
+    info: dict
+
+    def holds(self) -> bool:
+        """Whether the lock file still holds this run's token. False once the file is gone,
+        replaced, or `keep` has given it a new token."""
+        token = self.info.get("token") if isinstance(self.info, dict) else None
+        if not token:
+            return False
+        try:
+            held = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return isinstance(held, dict) and held.get("token") == token
 
 
 def lock_path(repo: Path) -> Path:

@@ -86,7 +86,8 @@ class DistractorSpec:
 @dataclass
 class SubstituteSpec:
     """The stand-in of the fact-withheld control (PREREG §4.3, D39): another entity of the
-    skin whose name has the target's token length, with a value in place of the observed fact
+    skin whose name has the target's token length and neither contains nor is contained in
+    the target's name (`names_overlap`), with a value in place of the observed fact
     and clue values in place of the target's clues (same count and digit formats). `value` is
     the sum of `clue_values`, as for the target. None of these values is an option, a clue
     value of the target or a distractor value."""
@@ -100,6 +101,13 @@ class SubstituteSpec:
 def entity_token_length(name: str, enc: str = "o200k_base") -> int:
     """Tokens of an entity name as it appears in a binding (" NAME", after a word)."""
     return tokens.count(f" {name}", enc)
+
+
+def names_overlap(a: str, b: str) -> bool:
+    """True if one entity name contains the other, ignoring case (TERN and BITTERN), or they
+    are the same name. The withheld control's stand-in never overlaps the target (D39)."""
+    a, b = a.lower(), b.lower()
+    return a in b or b in a
 
 
 @dataclass
@@ -226,7 +234,9 @@ def _substitute(r: random.Random, skin: Skin, entity: str, dist_entities: list[s
     """The stand-in of the fact-withheld control (PREREG D39).
 
     The entity is another entity of the skin with the target's token length that is not a
-    distractor, so a binding about it has the target binding's token length. The value is
+    distractor, so a binding about it has the target binding's token length, and whose name
+    neither contains nor is contained in the target's (`names_overlap`: the depot skin has
+    TERN and BITTERN), so no stand-in binding spells the target's name. The value is
     drawn from `value_range` like a distractor value, and the clues are drawn as the target's
     are (each addend is core + shift with an independent rank shift; the base is what is
     left), so they keep the target's formats: a 3-digit value and base, 2-digit addends. No
@@ -234,8 +244,8 @@ def _substitute(r: random.Random, skin: Skin, entity: str, dist_entities: list[s
     which is also what the stand-in's clues and the rule derive, is therefore never an
     option."""
     n_tok = entity_token_length(entity, cfg.tokenizer)
-    cands = [e for e in skin.entities if e != entity and e not in dist_entities
-             and entity_token_length(e, cfg.tokenizer) == n_tok]
+    cands = [e for e in skin.entities if not names_overlap(e, entity)
+             and e not in dist_entities and entity_token_length(e, cfg.tokenizer) == n_tok]
     if not cands:
         raise RuntimeError(f"skin {skin.name!r}: no stand-in entity with the token length of "
                            f"{entity!r} outside the distractors (see skins.MIN_TOKEN_CLASS)")

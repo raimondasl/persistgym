@@ -1,5 +1,6 @@
 import dataclasses
 import itertools
+import random
 import re
 from collections import Counter
 from pathlib import Path
@@ -12,10 +13,12 @@ from persistgym.config import (
     SEED_RANGES,
     GeneratorConfig,
 )
-from persistgym.skins import MIN_TOKEN_CLASS, SKINS
+from persistgym.skins import MIN_TOKEN_CLASS, SKINS, get_skin
 from persistgym.template import (
+    _substitute,
     entity_token_length,
     evidence_steps_any_cell,
+    names_overlap,
     sample_template,
     seed_for,
     split_of_seed,
@@ -155,6 +158,12 @@ def test_every_entity_token_length_class_is_large_enough():
         assert len(set(sk.entities)) == len(sk.entities) == 28, sk.name
         classes = Counter(entity_token_length(e) for e in sk.entities)
         assert min(classes.values()) >= MIN_TOKEN_CLASS, (sk.name, classes)
+        # the stand-in must also not overlap the target's name (TERN / BITTERN): every name
+        # still has 4 distractors' worth of same-length names plus one stand-in left
+        for e in sk.entities:
+            free = [x for x in sk.entities if not names_overlap(x, e)
+                    and entity_token_length(x) == entity_token_length(e)]
+            assert len(free) >= MIN_TOKEN_CLASS - 1, (sk.name, e, free)
 
 
 def test_withheld_stand_in_is_sampled_as_specified():
@@ -168,6 +177,7 @@ def test_withheld_stand_in_is_sampled_as_specified():
         s = t.substitute
         assert s.entity in t.skin_obj.entities
         assert s.entity != t.entity and s.entity not in {d.entity for d in t.distractors}
+        assert not names_overlap(s.entity, t.entity)  # main 98: TERN, 175: BITTERN
         assert entity_token_length(s.entity) == entity_token_length(t.entity)
         assert len(s.clue_values) == t.n_clues and sum(s.clue_values) == s.value
         assert cfg.value_range[0] <= s.value <= cfg.value_range[1]
@@ -179,6 +189,18 @@ def test_withheld_stand_in_is_sampled_as_specified():
         assert not ({s.value, *s.clue_values} & taken)
         assert not t.reserved.clean(f"x {s.entity} x")
         assert all(not t.reserved.clean(f"x {v} x") for v in (s.value, *s.clue_values))
+
+
+def test_withheld_stand_in_never_spells_the_target_name():
+    """D39: TERN and BITTERN (depot) have the same token length, but neither is ever the
+    other's stand-in, so no withheld binding contains the target's name as a substring."""
+    depot = get_skin("depot")
+    assert names_overlap("TERN", "BITTERN") and names_overlap("tern", "TERN")
+    assert entity_token_length("TERN") == entity_token_length("BITTERN")
+    for target, other in (("TERN", "BITTERN"), ("BITTERN", "TERN")):
+        picks = {_substitute(random.Random(k), depot, target, [], 2, set(),
+                             DEFAULT_CONFIG).entity for k in range(300)}
+        assert other not in picks and target not in picks and len(picks) > 5
 
 
 def test_no_proper_clue_subset_narrows_the_options():

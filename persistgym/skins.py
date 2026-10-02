@@ -8,7 +8,10 @@ Entity names come in token-length classes (tokens of " NAME" in the project toke
 fact-withheld control replaces the target's bindings with bindings of equal token length about
 another entity of the same class (PREREG D39), so every class holds at least
 `MIN_TOKEN_CLASS` names: the target, up to 4 distractors and the stand-in. Generator 0.3.0
-replaced 16 names that sat in smaller classes (a test checks the minimum).
+replaced 16 names that sat in smaller classes (a test checks the minimum). The stand-in also
+never contains the target's name or is contained in it (TERN and BITTERN share a class), and
+the test checks that every name still has `MIN_TOKEN_CLASS` - 1 other names of its length
+that do not overlap it.
 """
 
 from __future__ import annotations

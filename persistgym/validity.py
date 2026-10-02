@@ -37,6 +37,7 @@ from persistgym.template import (
     BASE_CLUE_RANGE,
     component_schedule,
     entity_token_length,
+    names_overlap,
     split_of_seed,
 )
 
@@ -284,13 +285,15 @@ def _names_target_before_need(ep: Episode) -> list:
 def _withheld_problems(ep: Episode, base: Episode | None, clue_values: set[int]) -> list[tuple]:
     """PREREG §4.3, D39: at each step that shows evidence in the base episode of its cell,
     the withheld episode shows instead a binding in the same frame about one stand-in entity
-    (another entity of the skin, not a distractor, with the target's token length) whose
-    value has the replaced value's format and is no option, clue value or distractor value;
-    the rule sentence, which binds no entity, is kept. The stand-in's own value (observed) or
-    the sum its clues give under the rule (derived) is never an option. Each stand-in is shown
-    once, at its step. When the base episode of the cell is among the audited episodes, the
-    two must be identical except for these bindings, which keep the token count of the
-    sentences they replace, and the evidence steps keep the base log filler."""
+    (another entity of the skin, not a distractor, with the target's token length, whose name
+    neither contains nor is contained in the target's) whose value has the replaced value's
+    format and is no option, clue value or distractor value; the rule sentence, which binds
+    no entity, is kept. The stand-in's own value (observed) or the sum its clues give under
+    the rule (derived) is never an option. Each stand-in is shown once, at its step. When the
+    base episode of the cell is among the audited episodes, the two must be identical except
+    for these bindings, which keep the token count of the sentences they replace: swapping
+    them back gives the base observation, and the evidence steps keep the base log filler,
+    token count and expected action."""
     out: list[tuple] = []
     eid, subs, n = ep.episode_id, ep.substitutes, ep.need_step
     enc = ep.config["tokenizer"]
@@ -304,10 +307,14 @@ def _withheld_problems(ep: Episode, base: Episode | None, clue_values: set[int])
     ents = {s.entity for s in subs}
     if len(ents) != 1:
         out.append((eid, "not exactly one stand-in entity", sorted(ents)))
-    elif (e := next(iter(ents))) in {ep.entity, *(d.entity for d in ep.distractors)} or (
-            e not in skin.entities
-            or entity_token_length(e, enc) != entity_token_length(ep.entity, enc)):
-        out.append((eid, "stand-in entity", e))
+    else:
+        e = next(iter(ents))
+        if e in {ep.entity, *(d.entity for d in ep.distractors)} or (
+                e not in skin.entities
+                or entity_token_length(e, enc) != entity_token_length(ep.entity, enc)):
+            out.append((eid, "stand-in entity", e))
+        if names_overlap(e, ep.entity):  # e.g. stand-in BITTERN for target TERN spells it
+            out.append((eid, "stand-in name overlaps the target name", e, ep.entity))
     options = {o.value for o in ep.options}
     taken = options | clue_values | {ep.target_value} | {d.value for d in ep.distractors}
     names = {"sub_fact": ep.quantity, **{f"sub_clue{i}": nm
@@ -345,11 +352,13 @@ def _withheld_problems(ep: Episode, base: Episode | None, clue_values: set[int])
             if a.observation != b.observation:
                 out.append((eid, a.index, "differs from the base episode"))
             continue
-        restored = a.event
+        restored, restored_obs = a.event, a.observation
         for x, y in swap.items():
-            restored = restored.replace(x, y)
+            restored, restored_obs = restored.replace(x, y), restored_obs.replace(x, y)
         if (a.observation[: a.filler_end] != b.observation[: b.filler_end]
-                or restored != b.event or tokens.count(a.event, enc) != tokens.count(b.event, enc)):
+                or restored != b.event or restored_obs != b.observation
+                or tokens.count(a.event, enc) != tokens.count(b.event, enc)
+                or a.obs_tokens != b.obs_tokens or a.expected_action != b.expected_action):
             out.append((eid, a.index, "evidence step differs beyond equal-length bindings"))
     return out
 

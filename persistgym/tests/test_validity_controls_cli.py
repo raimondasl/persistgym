@@ -108,6 +108,26 @@ def test_audit_catches_withheld_problems(small_eps):
     assert stand_ins in _failed(shortcut_audit([dbase, wh]))
     assert stand_ins not in _failed(shortcut_audit([wh]))  # needs the base episode
 
+    # text after the filler but outside the event field (the log footer) must match too
+    wh = copy.deepcopy(pick(small_eps, "derived-nonrec-far", "withheld"))
+    st = wh.steps[wh.substitutes[0].step]
+    assert st.observation.count("--- end of log ---") == 1
+    st.observation = st.observation.replace("--- end of log ---", "--- end of LOG ---")
+    assert stand_ins in _failed(shortcut_audit([dbase, wh]))
+
+    # a stand-in whose name contains the target's (as BITTERN contains TERN) spells the
+    # target at the evidence steps without naming it as a word
+    wh = copy.deepcopy(pick(small_eps, "observed-nonrec-far", "withheld"))
+    old, new_name = wh.substitutes[0].entity, f"{wh.entity}X"
+    for st in wh.steps:
+        st.observation, st.event = (st.observation.replace(old, new_name),
+                                    st.event.replace(old, new_name))
+    for x in wh.substitutes:
+        x.entity, x.sentence = new_name, x.sentence.replace(old, new_name)
+    report = shortcut_audit([base, wh])
+    assert named not in _failed(report) and stand_ins in _failed(report)
+    assert any("overlaps the target name" in str(d) for d in _detail(report, stand_ins))
+
 
 def test_audit_catches_distractor_problems(small_eps):
     """D1: a distractor value equal to an option, or a distractor binding shown twice."""

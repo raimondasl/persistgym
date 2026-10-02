@@ -78,7 +78,8 @@ def test_pilot_run_commits_no_per_episode_outcomes(tmp_path):
     assert summary["latency"]["n_calls"] == sum(e.n_steps for e in eps)
     assert summary["cost_usd"]["cost_usd_list"] > 0
     assert summary["echo_match"] == {"F-r": {"requests": summary["latency"]["n_calls"],
-                                             "matched": summary["latency"]["n_calls"]}}
+                                             "matched": summary["latency"]["n_calls"],
+                                             "effort_matched": summary["latency"]["n_calls"]}}
     # the per-episode outcomes are in the gitignored raw folder
     rows = [json.loads(x) for x in (raw / "episodes.jsonl").read_text(encoding="utf-8")
             .splitlines()]
@@ -237,6 +238,24 @@ def test_validity_levels_count_finished_unexcluded_episodes_only():
     assert m["latency"] == {"n_calls": 16, "median_s": 2.0, "p90_s": 3.0, "max_s": 3.0}
     assert m["cost_usd"] == {"cost_usd_list": 4.0, "cost_usd_billed_est": 2.0}
     assert m["tokens_pooled"]["reasoning_tokens"] == 24
+
+
+def test_echo_match_reports_the_effort_echo_next_to_the_context_echo():
+    """PREREG §17.2: the effort echo-match count sits next to the context one, per harness
+    cell (an exempt toggle check, PREREG §11). Episodes from before the runner counted
+    effort echoes give None, not a count."""
+    def ep(cell, efforts):
+        e = _ep(cell, "base", False)
+        if efforts is not None:
+            e["echo"] = {**e["echo"], "effort_requested": "high", "effort_echoed": efforts}
+        return e
+    runs = {"a": [ep("F-0", {"high": 2}), ep("F-0", {"high": 1, "medium": 1})],
+            "b": [ep("F-r", {"high": 2}), ep("F-r", None)]}
+    m = blinding.pooled_report(runs, experiment=PILOT)["models"]["m"]
+    assert m["echo_match"] == {"F-0": {"requests": 4, "matched": 4, "effort_matched": 3},
+                               "F-r": {"requests": 4, "matched": 4, "effort_matched": None}}
+    assert blinding.run_summary(runs["a"], blinded=True)["echo_match"] == {
+        "F-0": {"requests": 4, "matched": 4, "effort_matched": 3}}
 
 
 def test_pilot_report_cli_writes_the_pooled_report(tmp_path, monkeypatch, capsys):

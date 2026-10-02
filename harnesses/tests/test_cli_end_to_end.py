@@ -276,7 +276,7 @@ def test_run_cli(paid_env):
     (row,) = costs.read_rows(costs_csv)
     assert row["cell_or_config"] == "W-n-0" and row["experiment"] == "persistgym_pilot"
     assert int(row["n_calls"]) == len(fakes[0].calls) > 0
-    assert "context_mismatches=0" in row["notes"]
+    assert "context_mismatches=0; effort_mismatches=0;" in row["notes"]
     # pilot blinding (PREREG §11): no per-arm reasoning tokens in committed files
     assert row["reasoning_tokens"] == "" and blinding.WITHHELD_NOTE in row["notes"]
     assert int(row["output_tokens"]) > 0 and float(row["cost_usd_billed_est"]) > 0
@@ -316,6 +316,10 @@ def test_run_cli_d11_matrix(paid_env):
     assert sum("observed" in i for i in ids) == 2
     (row,) = costs.read_rows(costs_csv)
     assert row["model_requested"] == "gpt-6.1-sol" and "matrix=d11" in row["notes"]
+    # sol's registered effort (PREREG §17.2) is the default, on every request it sent
+    n = int(row["n_calls"])
+    assert meta["reasoning_effort"] == "high" and meta["reasoning_effort_echoed"] == {"high": n}
+    assert "effort_mismatches=0;" in row["notes"]
 
 
 def test_run_cli_refuses_bad_matrix_options(paid_env, capsys):

@@ -708,3 +708,8 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - §16.4, "One service tier for all ARC configs, chosen by a pre-registered latency rule": the standard tier (D21).
 - §16.4, the eligibility caveat: decided by D14 option A.
 - §16.5: the draw seed and permutation, the third held-out game, the tier latency rule, `TIME_BUDGET` re-runs and the cost basis are decided (D14, D15, D20, D21, D23).
+
+## 18. Amendment A3 (2026-10-02): sol's reasoning effort and template count
+**Why.** On 2026-10-02 the researcher decided two changes to sol's H2 runs after block 1's pilots (`results/decisions.md`). `PREREG.md` §17.2 (amendment R2) registers them, with the rule and the code that enforce them; this section only points there.
+- **Effort.** sol runs H2, its validity run and its exploratory replay pairs at `reasoning.effort: high`, but only if a blinded engagement check of pooled reasoning tokens at evidence steps passes a rule fixed in advance: at medium, block 1's sol pilot reported 115 reasoning tokens over 360 calls, too little reasoning for replay to carry, so H2 would be a weak test. luna stays at medium (§7, §16.5).
+- **Template count.** sol's T_d is fixed at its ceiling of 210 (T_o = 70; 1,232 episodes with repeats), because block 1 measured costs far below the forecasts and T_d = 210 gives more power than the central 120 (§5, §17.1 D11). The sol main sweep still needs its own approval in block 3.

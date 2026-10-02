@@ -4,7 +4,20 @@ $0 commands (fake model or local files, no network):
     uv run python -m harnesses cells
     uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far
     uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
-    uv run python -m harnesses probe-summary <run_id> ...   # replay-probe counts per arm
+    uv run python -m harnesses probe-summary <run_id>       # replay-probe counts per arm
+    uv run python -m harnesses echo-count        # context and effort echoes of raw runs
+    # PREREG §17.2 (amendment R2): score sol's engagement check from its two pilot runs,
+    # with block 1's medium-effort sol pilot as the descriptive reference
+    uv run python -m harnesses reasoning-check <F-r run_id> <F-0 run_id> \
+        --reference 20261002T083238Z-F-r-gpt-6.1-sol 20261002T083706Z-F-0-gpt-6.1-sol
+
+Request settings. `run` and `dry-run` send the model's registered reasoning effort unless
+--effort says otherwise (harnesses/registered.py; PREREG §6 as amended by R2, §17.2): medium
+on gpt-6-luna, high on gpt-6.1-sol. `run` refuses, before the paid-run lock, any other effort
+outside persistgym_pilot, and a gpt-6.1-sol run outside persistgym_pilot unless
+results/persistgym_pilot/ holds an ENGAGED reasoning_check.json for it at high effort and
+none that says NOT_ENGAGED. The probes keep their registered settings (medium on both
+models; PREREG §17.1).
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the
 PersistGym stream's paid-run lock (an ARC run, with its own lock, may go beside it; PREREG
@@ -27,12 +40,20 @@ with the reason. The OpenAI SDK reads the key from the environment:
         --design fork --approved-block "1-pilots" --planned-usd 1
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
         --model gpt-6-luna --n 1 --approved-block "1-pilots" --planned-usd 1
-    # D11: sol on derived-far x T_d templates plus observed-far x T_d/3 of them
-    ... python -m harnesses run --cell F-r --model gpt-6.1-sol --split main --matrix d11 \
-        --n 120 --experiment persistgym --approved-block "<block>" --planned-usd <usd>
+    # PREREG §17.2: the engagement check's two runs, this one and the same with --cell F-0:
+    # sol at high effort on the 4 D11 far task cells of pilot templates 0 and 1, the 16
+    # episodes of block 1's sol pilot at medium
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
+        --model gpt-6.1-sol --effort high --split pilot --start 0 --n 2 \
+        --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far \
+        --experiment persistgym_pilot --approved-block "1-pilots" --planned-usd 3
+    # D11 as amended by R2: sol on derived-far x T_d = 210 templates plus observed-far x
+    # T_o = 70 of them, at sol's registered effort (high), only after an ENGAGED check;
     # PREREG §4.6: up to 16 episodes at once, with the same payloads and outputs and spend
     # reserved for the episodes in flight (harnesses/parallel.py)
-    ... python -m harnesses run ... --parallel 16
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
+        --model gpt-6.1-sol --split main --matrix d11 --n 210 --experiment persistgym \
+        --approved-block "<block>" --planned-usd <usd> --parallel 16
 """
 
 from __future__ import annotations
@@ -50,7 +71,7 @@ from pathlib import Path
 import openai
 
 from common import paidlock, runmeta
-from harnesses import blinding, diagnostics, probes
+from harnesses import blinding, diagnostics, probes, reasoning_check, registered
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -144,6 +165,7 @@ def cmd_dry_run(a) -> int:
     for e in events:
         print(f"  #{e['request_index']:02d} {e['kind']:<7} step={e['pending_step']:>2} "
               f"reasoning.context={e['payload']['reasoning']['context']} "
+              f"reasoning.effort={e['payload']['reasoning']['effort']} "
               f"{' '.join(e['trace'])}")
     print(f"payload S at need: {run.need_payload and run.need_payload['S']}; designed S "
           f"(obs only): {run.designed['S_window_obs_only']}")
@@ -211,6 +233,12 @@ def cmd_run(a) -> int:
         print(f"refused: --split {PILOT_SPLIT} templates are pilot data and run only with "
               f"--experiment {PILOT_EXPERIMENT} (blinded, PREREG §11), got "
               f"{a.experiment!r}; a main-sweep run needs --split main", file=sys.stderr)
+        return 2
+    # PREREG §6 as amended by R2 (§17.2): outside pilots, the model's registered effort only,
+    # and sol only after an ENGAGED engagement check
+    why = registered.check_run_settings(a.experiment, a.model, a.effort, RESULTS)
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
         return 2
     gen = _gen_config(a.gen_set)
     try:
@@ -476,6 +504,51 @@ def cmd_probe_summary(a) -> int:
     return 0
 
 
+def cmd_reasoning_check(a) -> int:
+    """$0: the engagement check of PREREG §17.2 (amendment R2) on two sol pilot runs at high
+    effort, F-r and F-0 (`harnesses.reasoning_check`). Writes
+    results/persistgym_pilot/reasoning-check-<time>/reasoning_check.json and prints it: the
+    verdict and quantities pooled over both arms, nothing per arm."""
+    results_root = Path(a.results_root) if a.results_root else RESULTS
+    raw_root = Path(a.raw_root) if a.raw_root else RAW
+    try:
+        for run_id in [*a.run_id, *a.reference]:
+            require_plain_name("run id", run_id)
+        report = reasoning_check.check(a.run_id, a.reference, results_root=results_root,
+                                       raw_root=raw_root)
+    except ValueError as e:  # reasoning_check.CheckError included
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    name = "reasoning-check-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    out, k = results_root / PILOT_EXPERIMENT / name, 1
+    while out.exists():  # a second check within the same second gets its own folder
+        k += 1
+        out = results_root / PILOT_EXPERIMENT / f"{name}-{k}"
+    out.mkdir(parents=True)
+    path = out / registered.CHECK_FILE
+    path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    print(f"verdict: {report['verdict']} ({report['verdict_reason']})", file=sys.stderr)
+    print(f"written: {_rel(path)}", file=sys.stderr)
+    return 0
+
+
+def cmd_echo_count(a) -> int:
+    """$0: per raw run of the PersistGym stream (or of --experiment), the responses and how
+    many echoed the requested reasoning.context and reasoning.effort, from the transcripts'
+    echo fields only. Prints JSON; writes nothing."""
+    raw_root = Path(a.raw_root) if a.raw_root else RAW
+    try:
+        for exp in a.experiment or []:
+            require_plain_name("--experiment", exp)
+    except ValueError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    print(json.dumps(reasoning_check.echo_counts(
+        raw_root, a.experiment or reasoning_check.PERSISTGYM_EXPERIMENTS), indent=2))
+    return 0
+
+
 def cmd_summary_timing(a) -> int:
     print(json.dumps(diagnostics.summary_timing(
         a.n, split=a.split, summary_tokens=a.summary_tokens,
@@ -483,19 +556,20 @@ def cmd_summary_timing(a) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m harnesses")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    def request_args(sp, model_default="gpt-6-luna", multi_model=False):
+    def request_args(sp, model_default="gpt-6-luna", multi_model=False,
+                     effort_default: str | None = None):
         if multi_model:
             sp.add_argument("--model", action="append", default=None)
         else:
             sp.add_argument("--model", default=model_default)
-        sp.add_argument("--effort", default="medium")
+        sp.add_argument("--effort", default=effort_default,
+                        help=("default: the model's registered effort (harnesses/registered.py"
+                              "; PREREG §6 as amended by R2, §17.2)" if effort_default is None
+                              else f"default: {effort_default}"))
         sp.add_argument("--mode", default="standard")
         sp.add_argument("--service-tier", default="flex")
         sp.add_argument("--milestone", default="M0")
@@ -569,9 +643,31 @@ def main(argv: list[str] | None = None) -> int:
     ps.add_argument("--raw-root", default=None, help="default: this checkout's results/raw/")
     ps.set_defaults(fn=cmd_probe_summary)
 
+    rc = sub.add_parser("reasoning-check",
+                        help="the engagement check of PREREG §17.2 on two sol pilot runs at "
+                             "high effort, F-r and F-0 ($0)")
+    rc.add_argument("run_id", nargs=2, metavar="RUN_ID",
+                    help="the check runs: one F-r and one F-0 persistgym_pilot run")
+    rc.add_argument("--reference", nargs="+", action="extend", default=[], metavar="RUN_ID",
+                    help="runs reported alongside, descriptive only: one F-r and one F-0 sol "
+                         "pilot run (e.g. block 1's at medium effort)")
+    rc.add_argument("--results-root", default=None, help="default: this checkout's results/")
+    rc.add_argument("--raw-root", default=None, help="default: this checkout's results/raw/")
+    rc.set_defaults(fn=cmd_reasoning_check)
+
+    ec = sub.add_parser("echo-count",
+                        help="responses and reasoning.context / reasoning.effort echo matches "
+                             "per raw run ($0)")
+    ec.add_argument("--experiment", action="append", default=None,
+                    help="default: every PersistGym-stream experiment")
+    ec.add_argument("--raw-root", default=None, help="default: this checkout's results/raw/")
+    ec.set_defaults(fn=cmd_echo_count)
+
     for kind in ("echo", "replay"):
         sp = sub.add_parser(f"probe-{kind}", help=f"paid {kind} probe (guarded)")
-        request_args(sp, multi_model=True)
+        # the probes' registered effort (PREREG §17.1: medium on both models), whatever the
+        # model's registered effort for harness runs
+        request_args(sp, multi_model=True, effort_default=probes.REPLAY_CONFIG.reasoning_effort)
         paid_args(sp)
         sp.add_argument("--contexts", nargs="+", default=list(probes.CONTEXTS))
         sp.add_argument("--n", type=int, default=1 if kind == "echo" else None,
@@ -586,8 +682,23 @@ def main(argv: list[str] | None = None) -> int:
                             help="--design fork: attempts per arm per model, scorable or not "
                                  "(default and at most 40)")
         sp.set_defaults(fn=lambda a, k=kind: _probe_run(a, k))
+    return p
 
-    a = p.parse_args(argv)
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """The parsed command line, with the defaults that depend on other arguments filled in:
+    the probes' models, and the registered effort of `run` and `dry-run`'s --model."""
+    a = build_parser().parse_args(argv)
     if a.cmd in ("probe-echo", "probe-replay") and not a.model:
         a.model = list(probes.ECHO_CHECK_MODELS)
+    if a.cmd in ("run", "dry-run") and a.effort is None:
+        a.effort = registered.registered_effort(a.model)
+    return a
+
+
+def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    a = parse_args(argv)
     return a.fn(a)

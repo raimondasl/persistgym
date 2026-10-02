@@ -10,6 +10,7 @@ import openai
 import pytest
 
 from common import runmeta
+from harnesses import runner
 from harnesses.cells import CELLS
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel, padded_text
@@ -162,6 +163,71 @@ def test_context_echo_mismatch_excludes_and_stops(small_eps):
     assert run.excluded and run.exit_reason == "DONE" and run.n_turns == ep.n_steps
     # the 0 arm asks for current_turn, so the same echo is a match there
     assert not run_episode(ep, CELLS["F-0"], CFG, FakeModel(echo_context="current_turn")).excluded
+
+
+def test_effort_echo_mismatch_excludes_and_stops(small_eps):
+    """PREREG §17.2 (R2): an echoed reasoning.effort that differs from the request excludes
+    the episode, as a reasoning.context mismatch does, and by default stops it there."""
+    ep = small_eps[0]
+    run = run_episode(ep, CELLS["F-r"], CFG, FakeModel(echo_effort="low"))
+    assert run.excluded and run.exit_reason == "REASONING_EFFORT_MISMATCH"
+    assert run.n_requests == 1 and run.echo_mismatches == ["effort"]
+    assert run.exclusion_reason == "reasoning.effort requested 'medium', echoed 'low'"
+    assert run.echo["effort_requested"] == "medium" and run.echo["effort_echoed"] == {"low": 1}
+    no_stop = CFG.replace(stop_on_effort_mismatch=False)
+    run = run_episode(ep, CELLS["F-r"], no_stop, FakeModel(echo_effort="low"))
+    assert run.excluded and run.exit_reason == "DONE" and run.n_turns == ep.n_steps
+    assert run.echo["effort_echoed"] == {"low": run.n_requests}
+    # the context check still stops an episode that the effort check lets go on
+    run = run_episode(ep, CELLS["F-r"], no_stop,
+                      FakeModel(echo_effort="low", echo_context="current_turn"))
+    assert run.exit_reason == "REASONING_CONTEXT_MISMATCH" and run.echo_mismatches == ["context"]
+    run = run_episode(ep, CELLS["F-r"], no_stop.replace(stop_on_context_mismatch=False),
+                      FakeModel(echo_effort="low", echo_context="current_turn"))
+    assert run.exit_reason == "DONE" and run.echo_mismatches == ["context", "effort"]
+    # sol's registered effort, echoed as requested
+    run = run_episode(ep, CELLS["F-r"], CFG.replace(model="gpt-6.1-sol", reasoning_effort="high"),
+                      FakeModel())
+    assert not run.excluded and run.echo["effort_echoed"] == {"high": run.n_requests}
+    assert run.echo_mismatches == []
+
+
+def test_an_effort_mismatch_on_a_summary_response_excludes_the_episode(small_eps):
+    ep = small_eps[0]
+    fake = FakeModel()
+    fake.echo_effort = lambda p, k: "low" if fake.is_summary(p) else p["reasoning"]["effort"]
+    run = run_episode(ep, CELLS["Σ-n-0"], CFG, fake)
+    assert run.excluded and run.exit_reason == "REASONING_EFFORT_MISMATCH"
+    assert run.n_summary_requests == 1 and fake.is_summary(fake.calls[-1])
+
+
+@pytest.mark.parametrize(("context_at", "effort_at", "reason"), [
+    ((), (0, 1), "ABORTED_EFFORT_MISMATCH"),
+    ((0,), (1,), "ABORTED_ECHO_MISMATCH"),
+    ((0, 1), (), "ABORTED_CONTEXT_MISMATCH")])
+def test_run_batch_aborts_after_two_echo_mismatched_episodes(small_eps, tmp_path, context_at,
+                                                             effort_at, reason):
+    """Effort mismatches count toward the same abort as context mismatches (PREREG §17.2);
+    the run's exit reason names the kinds. Call k is the first call of episode k here,
+    since each mismatched episode stops at its first call."""
+    def context(p, k):
+        return "current_turn" if k in context_at else p["reasoning"]["context"]
+
+    def effort(p, k):
+        return "low" if k in effort_at else p["reasoning"]["effort"]
+    meta = run_batch(small_eps[:5], CELLS["F-r"], CFG,
+                     FakeModel(echo_context=context, echo_effort=effort),
+                     experiment="persistgym_pilot", run_id="mm", results_root=tmp_path / "r",
+                     raw_root=tmp_path / "raw")
+    assert meta["exit_reason"] == reason and reason in runner.ECHO_ABORTS
+    assert meta["n_episodes_run"] == 2 and meta["n_excluded"] == 2
+    assert meta["reasoning_effort"] == "medium"
+    echoed = {"medium": 2 - len(effort_at), "low": len(effort_at)}
+    assert meta["reasoning_effort_echoed"] == {k: n for k, n in echoed.items() if n}
+    summary = json.loads((tmp_path / "r" / "persistgym_pilot" / "mm" / "summary.json")
+                         .read_text(encoding="utf-8"))
+    assert summary["echo_match"] == {"F-r": {"requests": 2, "matched": 2 - len(context_at),
+                                             "effort_matched": 2 - len(effort_at)}}
 
 
 def test_empty_summaries_are_retried_then_fail(small_eps):
@@ -331,6 +397,7 @@ def test_run_batch_writes_meta_and_transcript(small_eps, tmp_path, monkeypatch):
     assert meta["exit_reason"] == "COMPLETED" and meta["paid"] is False
     assert meta["reasoning_context_requested"] == "current_turn"
     assert meta["reasoning_context_echoed"] == {"current_turn": sum(e.n_steps for e in eps)}
+    assert meta["reasoning_effort_echoed"] == {"medium": sum(e.n_steps for e in eps)}
     assert meta["model_returned"] == ["gpt-6-luna-fake-2026-10-01"]
     assert meta["config"]["harness_cell"] == "W-n-0" and len(meta["config_hash"]) == 64
     assert meta["cost_usd"]["costs_csv_row_appended"] is False
@@ -343,7 +410,7 @@ def test_run_batch_writes_meta_and_transcript(small_eps, tmp_path, monkeypatch):
                    "rt", encoding="utf-8") as f:
         events = [json.loads(x) for x in f]
     assert len(events) == sum(e.n_steps for e in eps)
-    assert all(e["echo"]["context_ok"] for e in events)
+    assert all(e["echo"]["context_ok"] and e["echo"]["effort_ok"] for e in events)
 
 
 def test_run_batch_aborts_after_mismatched_episodes(small_eps, tmp_path):

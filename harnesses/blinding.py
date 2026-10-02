@@ -9,12 +9,15 @@ For an experiment in `BLINDED_EXPERIMENTS`:
   `results/raw/<experiment>/<run_id>/`;
 * the committed `results/<experiment>/<run_id>/` gets `meta.json`, whose `tokens` leave out
   `reasoning_tokens`, and `summary.json` (`run_summary`): errors, latency, cost and the
-  echo-match rate, nothing else;
+  echo-match rates of `reasoning.context` and `reasoning.effort`, nothing else;
 * the transport's `results/costs.csv` row leaves `reasoning_tokens` empty;
 * `pooled_report` (CLI `pilot-report`) is the committed script that reads the raw episodes
   of every run and reports, per model, pooled tokens (summed over the harness cells run),
   validity levels of the restated and withheld variants, errors, latency, cost and the
-  per-cell echo-match rate (exempt: a toggle check, not an outcome; PREREG §11, D29).
+  per-cell echo-match rates (exempt: a toggle check, not an outcome; PREREG §11, D29; the
+  effort echo since PREREG §17.2).
+* `harnesses.reasoning_check` (CLI `reasoning-check`) scores the engagement check of PREREG
+  §17.2 from two pilot runs, with quantities pooled over both arms only.
 
 Both summaries are built from an allowlist of fields, so a field added to `EpisodeRun` later
 never reaches a committed pilot file by accident.
@@ -87,15 +90,23 @@ def _cost(eps: list[dict]) -> dict:
 
 
 def _echo_match(eps: list[dict]) -> dict:
-    """Per harness cell: requests and how many echoed the requested reasoning.context."""
-    out: dict[str, dict[str, int]] = {}
+    """Per harness cell: requests, how many echoed the requested reasoning.context
+    (`matched`) and how many echoed the requested reasoning.effort (`effort_matched`, PREREG
+    §17.2; None when an episode was run before the runner counted effort echoes)."""
+    out: dict[str, dict[str, int | None]] = {}
     for e in eps:
         echo = e.get("echo") or {}
         want = str(echo.get("context_requested"))
         got = echo.get("context_echoed") or {}
-        d = out.setdefault(e["harness_cell"], {"requests": 0, "matched": 0})
+        d = out.setdefault(e["harness_cell"], {"requests": 0, "matched": 0,
+                                               "effort_matched": 0})
         d["requests"] += sum(got.values())
         d["matched"] += int(got.get(want, 0))
+        efforts = echo.get("effort_echoed")
+        if efforts is None or d["effort_matched"] is None:
+            d["effort_matched"] = None
+        else:
+            d["effort_matched"] += int(efforts.get(str(echo.get("effort_requested")), 0))
     return dict(sorted(out.items()))
 
 

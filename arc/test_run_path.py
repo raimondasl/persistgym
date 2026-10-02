@@ -25,22 +25,40 @@ from arc import pricing
 from arc import run_path as rp
 from arc import run_path_inner as inner
 from arc import run_path_offline as rpo
+from arc.test_prereg_freeze import HEADER as FROZEN_HEADER
+from arc.test_prereg_freeze import prereg_text
 from common import approval, costs, runmeta
 from common.tests.gitrepo import decisions_text, git_in, guarded_repo, push_main
 
-FROZEN = "Version: 1.0\n\n**Status: Frozen on 2026-10-03 by the researcher.**\n"
+RECORD = freeze.load_record()
+RECORD_BYTES = freeze.FREEZE_PATH.read_bytes()
+# A frozen PREREG.md whose §7.1 config freeze table gives the committed record's values.
+FROZEN = prereg_text(RECORD)
 DRAFT = "Version: 0.2-draft\n\n**Status: DRAFT. Not yet frozen.**\n"
 BLOCK = "1-pilots"
 EXPERIMENTS = ("arc_pilot", "gemini_probe", "arc_path")
-RECORD = freeze.load_record()
 STEP_USAGE = {"prompt_tokens": 1_000, "completion_tokens": 300, "total_tokens": 1_300,
               "reasoning_tokens": 250, "cached_tokens": 400, "cache_write_tokens": 0,
               "cost": 0.0, "cost_details": {}}
 
 
-def _repo(tmp_path: Path, **kwargs) -> Path:
+def _commit_file(repo: Path, rel: str, data: bytes, message: str) -> None:
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    git_in(repo, "add", rel)
+    git_in(repo, "commit", "-q", "-m", message)
+
+
+def _repo(tmp_path: Path, *, record: bytes | None = RECORD_BYTES, **kwargs) -> Path:
+    """A guarded repo (common.tests.gitrepo) whose HEAD and origin/main also hold
+    arc/config_freeze.json (`record`; None leaves it out)."""
     (tmp_path / "repo").mkdir()
-    return guarded_repo(tmp_path / "repo", **kwargs)
+    repo = guarded_repo(tmp_path / "repo", push=False, **kwargs)
+    if record is not None:
+        _commit_file(repo, rp.FREEZE_GIT_PATH, record, "freeze record")
+    push_main(repo)
+    return repo
 
 
 @pytest.fixture(autouse=True)
@@ -486,6 +504,123 @@ def test_refused_when_head_prereg_is_not_the_merged_one(world):
                                           encoding="utf-8")
     git_in(paths.repo, "commit", "-q", "-am", "local amendment, not merged")
     _refused(paths, h)
+
+
+def _refusal(paths, h, capsys, argv=GAME_ARGS) -> str:
+    capsys.readouterr()
+    _refused(paths, h, argv)
+    assert not paths.lock.exists()
+    return capsys.readouterr().err
+
+
+def test_freeze_git_path_is_the_record_the_launcher_loads():
+    assert freeze.FREEZE_PATH.relative_to(runmeta.REPO_ROOT).as_posix() == rp.FREEZE_GIT_PATH
+
+
+def test_refused_when_the_freeze_record_in_head_is_not_the_merged_one(world, capsys):
+    paths, h = world
+    _commit_file(paths.repo, rp.FREEZE_GIT_PATH, RECORD_BYTES + b"\n", "unmerged record")
+
+    err = _refusal(paths, h, capsys)
+
+    assert ("arc/config_freeze.json in HEAD differs from arc/config_freeze.json on "
+            "origin/main") in err
+
+
+def test_refused_when_the_freeze_record_is_not_committed_or_not_merged(tmp_path, monkeypatch,
+                                                                       capsys):
+    repo = _repo(tmp_path, prereg=FROZEN, record=None,
+                 decisions=decisions_text(BLOCK, experiments=EXPERIMENTS, max_usd="500"))
+    costs_csv = tmp_path / "costs.csv"
+    costs_csv.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    paths = rp.Paths(repo=repo, costs=costs_csv, results=tmp_path / "results",
+                     raw=tmp_path / "raw", lock=tmp_path / "paid.lock")
+    h = FakeHarness(monkeypatch, tmp_path)
+
+    assert "arc/config_freeze.json is not in the HEAD commit" in _refusal(paths, h, capsys)
+
+    _commit_file(repo, rp.FREEZE_GIT_PATH, RECORD_BYTES, "record, not merged")
+    assert "arc/config_freeze.json is not on origin/main" in _refusal(paths, h, capsys)
+
+    push_main(repo)
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+
+
+def test_refused_when_the_loaded_record_is_not_the_committed_one(world, tmp_path, capsys):
+    """make_plan reads only the profiles, so a record that differs elsewhere would plan the
+    run; the launcher still uses only the merged file."""
+    paths, h = world
+    record = json.loads(json.dumps(RECORD))
+    record["patched_tree"] = "f" * 40
+    edited = tmp_path / "edited.json"
+    edited.write_text(freeze.render(record), encoding="utf-8")
+    paths = rp.Paths(**{**vars(paths), "freeze": edited})
+
+    err = _refusal(paths, h, capsys)
+
+    assert "differs from arc/config_freeze.json in HEAD and on origin/main" in err
+
+
+S2_MISMATCH = (f"S2 config hash is {RECORD['profiles']['S2']['sha256']} in the freeze record "
+               f"but {'0' * 64} in §7.1")
+
+
+@pytest.mark.parametrize("argv, values, message", [
+    (GAME_ARGS, {"S2": "0" * 64}, S2_MISMATCH),
+    (PILOT_ARGS, {"S2": "0" * 64}, S2_MISMATCH),
+    (ACCEPT_ARGS, {"S2": "0" * 64}, S2_MISMATCH),
+    (GAME_ARGS, {"series": "1" * 64}, "patch-series SHA-256 is"),
+    (GAME_ARGS, {"pin": "2" * 40}, "upstream pin is"),
+    (GAME_ARGS, {"commit": "3" * 40}, "patched commit is"),
+    (GAME_ARGS, {"S0": "TBD"}, "§7.1 gives no S0 config hash"),
+])
+def test_refused_when_the_prereg_table_differs_from_the_record(world, capsys, argv, values,
+                                                               message):
+    paths, h = world
+    _commit_file(paths.repo, "PREREG.md", prereg_text(RECORD, **values).encode(), "table")
+    push_main(paths.repo)
+
+    err = _refusal(paths, h, capsys, argv)
+
+    assert "does not match the config freeze table in the frozen PREREG.md §7.1" in err
+    assert message in err
+
+
+@pytest.mark.parametrize("prereg, message", [
+    (FROZEN_HEADER, "PREREG.md has no section 7.1"),
+    (prereg_text(RECORD, **dict.fromkeys(("S0", "S1", "S2", "S4", "series", "pin", "pin7",
+                                          "commit", "tree"), "TBD")),
+     "PREREG.md §7.1 has no filled config freeze table"),
+])
+def test_refused_when_the_frozen_prereg_has_no_filled_table(world, capsys, prereg, message):
+    paths, h = world
+    _commit_file(paths.repo, "PREREG.md", prereg.encode(), "frozen without a table")
+    push_main(paths.repo)
+
+    assert message in _refusal(paths, h, capsys)
+
+
+def test_the_table_is_read_from_the_merged_prereg_not_the_working_tree(world):
+    paths, _ = world
+    git_in(paths.repo, "fetch", "-q", "origin")
+    assert rp.freeze_record_not_preregistered(paths.repo, RECORD) is None
+    (paths.repo / "PREREG.md").write_text(prereg_text(RECORD, S1="0" * 64), encoding="utf-8")
+    assert rp.freeze_record_not_preregistered(paths.repo, RECORD) is None    # uncommitted
+
+    _commit_file(paths.repo, "PREREG.md", prereg_text(RECORD, S1="0" * 64).encode(), "local")
+    assert rp.freeze_record_not_preregistered(paths.repo, RECORD) == (
+        "PREREG.md in HEAD differs from PREREG.md on origin/main")
+
+
+def test_refused_when_the_patch_files_changed_since_the_freeze(world, monkeypatch, capsys):
+    paths, h = world
+    patches = ap.patch_files()
+    monkeypatch.setattr(ap, "patch_files", lambda *a: patches[:-1])
+
+    err = _refusal(paths, h, capsys)
+
+    assert "does not match arc/patches" in err and h.calls == ["pin"]
 
 
 def test_refused_while_another_paid_run_holds_the_lock(world):

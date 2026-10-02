@@ -23,7 +23,11 @@ It spends money only after every check below passes, in this order:
    + planned spend <= max_usd, and phase headroom.
 4. PREREG.md frozen (`arc.draw_games.prereg_state`) and the same blob in HEAD and on
    origin/main (read after the guard's fetch).
-5. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
+5. arc/config_freeze.json the same blob in HEAD and on origin/main, the record this run
+   loaded equal to it, and its four profile hashes, patch-series SHA-256 and pin (and the
+   patched commit and tree, where listed) equal to the config freeze table in that frozen
+   PREREG.md's §7.1 (`arc.prereg_freeze`). A §7.1 without a filled table is a refusal.
+6. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
    commit and tree, and each resolved profile's config hash.
 
 Then it runs arc/run_path_inner.py in the patched harness with a sanitized environment
@@ -68,7 +72,7 @@ if __package__ in (None, ""):
 
 from arc import apply_patches as ap
 from arc import config_hash as freeze
-from arc import draw_games, pricing
+from arc import draw_games, prereg_freeze, pricing
 from arc import run_path_inner as inner
 from common import approval, costs, paidlock, runmeta
 from common.approval import MAIN, PaidCallsNotAllowed, RemoteRef
@@ -87,6 +91,8 @@ INTERRUPT_GRACE_S = 120.0
 ARC_KEY = "ARC_API_KEY"
 GAME_RE = re.compile(r"(?P<base>[a-z0-9]{4})(?:-(?P<version>[0-9a-f]{4,64}))?")
 RESULTS = runmeta.REPO_ROOT / "results"
+PREREG_GIT_PATH = "PREREG.md"
+FREEZE_GIT_PATH = "arc/config_freeze.json"       # freeze.FREEZE_PATH, as git names it
 
 
 class Refused(RuntimeError):
@@ -298,28 +304,70 @@ def plain_name(name: str) -> str:
 # ── Checks that need git ───────────────────────────────────────────────
 
 
+def _blob(repo: Path, rev: str, path: str) -> str | None:
+    try:
+        r = approval._git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:{path}")
+    except OSError:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def merged_text(repo: Path, path: str, remote: RemoteRef = MAIN) -> tuple[str | None, str]:
+    """(text, "") if `path` is the same blob in HEAD as on `remote`, else (None, why not).
+    Reads the remote-tracking ref, so call it after the guard's fetch."""
+    head, merged = _blob(repo, "HEAD", path), _blob(repo, remote.tracking, path)
+    if head is None:
+        return None, f"{path} is not in the HEAD commit"
+    if merged is None:
+        return None, f"{path} is not on {remote.label}"
+    if head != merged:
+        return None, f"{path} in HEAD differs from {path} on {remote.label}"
+    r = approval._git(repo, "cat-file", "blob", head)
+    if r.returncode != 0:
+        return None, f"cannot read {path} from HEAD: {r.stderr.strip()}"
+    return r.stdout, ""
+
+
 def prereg_not_frozen(repo: Path, remote: RemoteRef = MAIN) -> str | None:
     """None if PREREG.md in HEAD is the same blob as on `remote` and is frozen; otherwise
     why not. Reads the remote-tracking ref, so call it after the guard's fetch."""
-    def blob(rev: str) -> str | None:
-        try:
-            r = approval._git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:PREREG.md")
-        except OSError:
-            return None
-        return r.stdout.strip() if r.returncode == 0 else None
-    head, merged = blob("HEAD"), blob(remote.tracking)
-    if head is None:
-        return "PREREG.md is not in the HEAD commit"
-    if merged is None:
-        return f"PREREG.md is not on {remote.label}"
-    if head != merged:
-        return f"PREREG.md in HEAD differs from PREREG.md on {remote.label}"
-    text = approval._git(repo, "cat-file", "blob", head).stdout
+    text, why = merged_text(repo, PREREG_GIT_PATH, remote)
+    if text is None:
+        return why
     state = draw_games.prereg_state(text)
     return None if state.frozen else f"PREREG.md is not frozen: {state.why_not}"
 
 
-def check_paid(plan: Plan, paths: Paths, lock: Path) -> approval.PaidApproval:
+def freeze_record_not_merged(repo: Path, record: Mapping[str, Any],
+                             remote: RemoteRef = MAIN) -> str | None:
+    """None if arc/config_freeze.json in HEAD is the same blob as on `remote` and `record`
+    (what this run loaded and planned with) is its content; otherwise why not."""
+    text, why = merged_text(repo, FREEZE_GIT_PATH, remote)
+    if text is None:
+        return why
+    try:
+        merged = json.loads(text)
+    except ValueError as e:
+        return f"{FREEZE_GIT_PATH} in HEAD is not valid JSON: {e}"
+    if merged != record:
+        return (f"the freeze record this run loaded differs from {FREEZE_GIT_PATH} in HEAD and "
+                f"on {remote.label} (an uncommitted change?)")
+    return None
+
+
+def freeze_record_not_preregistered(repo: Path, record: Mapping[str, Any],
+                                    remote: RemoteRef = MAIN) -> str | None:
+    """None if `record` gives the values of the config freeze table in PREREG.md §7.1 (the
+    blob in HEAD and on `remote`); otherwise why not."""
+    text, why = merged_text(repo, PREREG_GIT_PATH, remote)
+    if text is None:
+        return why
+    problems = prereg_freeze.problems(text, record)
+    return "; ".join(problems) if problems else None
+
+
+def check_paid(plan: Plan, paths: Paths, lock: Path,
+               record: Mapping[str, Any]) -> approval.PaidApproval:
     try:
         rows = costs.read_rows(paths.costs)
     except (OSError, ValueError) as e:
@@ -335,6 +383,17 @@ def check_paid(plan: Plan, paths: Paths, lock: Path) -> approval.PaidApproval:
     if reason is not None:
         raise PaidCallsNotAllowed(f"paid ARC runs need the frozen, merged PREREG.md "
                                   f"(PLAN §16.3): {reason}")
+    reason = freeze_record_not_merged(paths.repo, record, paths.remote)
+    if reason is not None:
+        raise PaidCallsNotAllowed(f"paid ARC runs need the merged config freeze record: "
+                                  f"{reason}")
+    reason = freeze_record_not_preregistered(paths.repo, record, paths.remote)
+    if reason is not None:
+        raise PaidCallsNotAllowed(
+            f"{FREEZE_GIT_PATH} does not match the config freeze table in the frozen "
+            f"PREREG.md §{prereg_freeze.SECTION} (a config change after the freeze needs "
+            f"amendment A-cfg to put the new values in that table; `uv run python -m "
+            f"arc.prereg_freeze` compares the two files): {reason}")
     return granted
 
 
@@ -793,7 +852,7 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
     harness: Harness | None = None
     try:
         with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe()) as held:
-            granted = check_paid(plan, paths, lock)
+            granted = check_paid(plan, paths, lock, record)
             print(f"approved: block {plan.approved_block!r} ({granted.phase}), planned "
                   f"${plan.planned_usd:.2f}, block headroom after this run "
                   f"${granted.block_headroom_usd:.2f}; harness cost guard "

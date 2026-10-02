@@ -85,7 +85,8 @@ EXPECTED = {
 FIXED_KEYS = {"store": False, "include": ["reasoning.encrypted_content"],
               "service_tier": "flex", "truncation": "disabled", "model": "gpt-6-luna"}
 STEP_MAX_OUTPUT_TOKENS = 32_000  # PREREG D13
-SUMMARY_MAX_OUTPUT_TOKENS = 8_192  # ARC's summary cap, frozen with these tests (PREREG §5)
+# PREREG §6 (D13): every luna and sol request carries 32,000; §5 freezes the summary cap here
+SUMMARY_MAX_OUTPUT_TOKENS = 32_000
 
 
 def test_every_cell_has_a_snapshot():
@@ -172,7 +173,7 @@ def test_full_payload_literal_summary_trigger():
         history += [_user(obs_text(t)), _reasoning(t), _assistant(t)]
     assert model.calls[4] == {**common, "instructions": ARC_SUMMARY_SYSTEM_PROMPT,
                               "input": [*history, _user(ARC_SUMMARY_REQUEST_PROMPT)],
-                              "max_output_tokens": 8192}
+                              "max_output_tokens": 32000}
     bridge = ARC_SUMMARY_BRIDGE_TEMPLATE.format(summary=summary_text(1))
     assert model.calls[5] == {**common, "instructions": SYSTEM + "\n" + NOTES_INSTRUCTION,
                               "input": [_user(bridge), _user(obs_text(4))],
@@ -188,17 +189,27 @@ def test_default_step_output_cap_is_the_registered_one():
 
 @pytest.mark.parametrize("cell_id", list(CELLS))
 def test_every_request_sends_its_output_cap_explicitly(cell_id):
-    """D13: every step request of every cell carries `max_output_tokens` 32,000, and every
-    summary request ARC's 8,192; a configured cap reaches step requests only."""
-    for cfg, step_cap in ((HarnessConfig(), 32_000),
-                          (HarnessConfig(max_output_tokens=4_000), 4_000)):
+    """D13: every request of every cell, step and summary, carries `max_output_tokens`
+    32,000 by default; each configured cap reaches its own kind of request only."""
+    for cfg, step_cap, summary_cap in (
+            (HarnessConfig(), 32_000, 32_000),
+            (HarnessConfig(max_output_tokens=4_000), 4_000, 32_000),
+            (HarnessConfig(summary_max_output_tokens=2_000), 32_000, 2_000)):
         _, model, requests = run_synthetic(CELLS[cell_id], cfg=cfg)
         caps = {(r.kind, p["max_output_tokens"]) for r, p in zip(requests, model.calls,
                                                                   strict=True)}
         expected = {("step", step_cap)}
         if CELLS[cell_id].history == "summary":
-            expected.add(("summary", 8_192))
+            expected.add(("summary", summary_cap))
         assert caps == expected
+
+
+@pytest.mark.parametrize("cell_id", list(CELLS))
+def test_default_config_sends_exactly_32000_on_every_request(cell_id):
+    """PREREG §6 (D13): luna and sol requests carry `max_output_tokens: 32000`, with no
+    exception for summary calls."""
+    _, model, _ = run_synthetic(CELLS[cell_id])
+    assert model.calls and {p["max_output_tokens"] for p in model.calls} == {32_000}
 
 
 def _stops_at_cap_while_reasoning(turn: int) -> FakeModel:

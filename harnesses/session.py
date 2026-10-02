@@ -174,8 +174,8 @@ class HarnessSession:
     # ------------------------------------------------------------------
     def _base_payload(self, instructions: str, input_items: list[dict],
                       max_output_tokens: int) -> dict:
-        """The request body. `max_output_tokens` is always sent: the cell's step cap (PREREG
-        D13: 32,000) or the summary cap."""
+        """The request body. `max_output_tokens` is always sent: the step cap or the summary
+        cap, both 32,000 under PREREG D13."""
         cfg = self.cfg
         reasoning = {"effort": cfg.reasoning_effort, "mode": cfg.reasoning_mode,
                      "context": self.cell.reasoning_context}

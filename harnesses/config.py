@@ -32,8 +32,9 @@ REASONING_MODES = ("standard", "pro")
 SERVICE_TIERS = ("auto", "default", "flex", "scale", "priority", "fast", "ultrafast")
 ENCRYPTED_REASONING = "reasoning.encrypted_content"
 DEFAULT_MAX_OUTPUT_TOKENS = 32_000
-"""PREREG D13 (decided 2026-10-01): `max_output_tokens` of every step request of every harness
-cell and of every probe request, sent explicitly. It includes reasoning tokens."""
+"""PREREG D13 (decided 2026-10-01; §6: luna and sol requests carry `max_output_tokens: 32000`):
+the cap of every request, sent explicitly: every step and summary request of every harness
+cell, and every probe request. It includes reasoning tokens."""
 
 
 def require_output_cap(name: str, value) -> None:
@@ -56,8 +57,8 @@ class HarnessConfig:
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
     """`max_output_tokens` of every step request, always sent (PREREG D13: 32,000). On OpenAI
     the cap includes reasoning tokens. A step response that stops at it (status `incomplete`)
-    is logged and scored as an invalid action (PREREG §6, §13). Summary requests use
-    `summary_max_output_tokens` instead."""
+    is logged and scored as an invalid action (PREREG §6, §13). Summary requests send
+    `summary_max_output_tokens`, also 32,000 under D13."""
     prompt_cache_key: str | None = None
     """None = omitted (automatic prefix caching only)."""
 
@@ -84,8 +85,11 @@ class HarnessConfig:
     it) instead."""
     summary_request_prompt: str = ARC_SUMMARY_REQUEST_PROMPT
     summary_bridge_template: str = ARC_SUMMARY_BRIDGE_TEMPLATE
-    summary_max_output_tokens: int = 8_192
-    """`max_output_tokens` of the summary call (ARC default 8,192; includes reasoning)."""
+    summary_max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    """`max_output_tokens` of the summary call, always sent (PREREG D13: 32,000, as every
+    luna and sol request; PREREG §5 freezes it with the payload snapshot tests). It includes
+    reasoning. ARC's own summary cap, 8,192, belongs to the ARC leg's Gemini configs only. An
+    incomplete summary is retried (`summary_max_attempts`), never scored."""
     summary_keep_recent_tokens: int = 0
     """0 = compact the whole history at the trigger, as ARC does. > 0 = keep the most recent
     whole turns that fit in this many tokens (with the current observation) verbatim and
@@ -156,7 +160,9 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "summary_system_prompt": ("§6", "ARC's summary system prompt replaces the task prompt"),
     "summary_request_reasoning": ("§6, §7", ("summary call keeps the arm's reasoning.context "
                                              "and the compacted turns' reasoning items")),
-    "summary_max_output_tokens": ("§8.2", "8,192 as ARC"),
+    "summary_max_output_tokens": ("§6, PREREG D13", ("32,000 on every summary request, as "
+                                                      "every OpenAI request (not ARC's "
+                                                      "8,192)")),
     "notes_placement": ("§6", "last line of the instructions"),
     "stop_on_context_mismatch": ("§7, CLAUDE.md", "stop and exclude the episode"),
     "output_items_replay": ("§7", "output items sent back verbatim, null fields dropped"),

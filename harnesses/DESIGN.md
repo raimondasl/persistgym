@@ -43,7 +43,7 @@ Every request of every cell has exactly these fields:
 | `include` | `["reasoning.encrypted_content"]` |
 | `service_tier` | `HarnessConfig.service_tier` (default `flex`) |
 | `truncation` | `"disabled"`, so the API never drops items on its own |
-| `max_output_tokens` | step requests: `HarnessConfig.max_output_tokens`, 32,000 (PREREG D13); summary requests: `summary_max_output_tokens`, 8,192 (§4.3). Always sent; a config cannot omit it |
+| `max_output_tokens` | 32,000 (PREREG D13) on every request: step requests send `HarnessConfig.max_output_tokens`, summary requests `summary_max_output_tokens` (§4.3). Always sent; a config cannot omit it |
 
 Added only when configured: `prompt_cache_key`, `reasoning.summary`. No tools and no server-side `context_management` are sent.
 
@@ -73,7 +73,7 @@ Before sending observation m, compute the visible context that the step request 
 - `instructions`: ARC's summary system prompt, verbatim;
 - `input`: the current bridge (if any), the turns to compact with their reasoning items, then ARC's `SUMMARY_REQUEST_PROMPT` as a user message;
 - the same `reasoning` settings as the cell, including its `reasoning.context`;
-- `max_output_tokens` 8,192, as ARC.
+- `max_output_tokens` 32,000, as every luna and sol request (PREREG §6, D13). ARC's summary cap of 8,192 applies to the ARC leg's Gemini configs only.
 
 The summary text then replaces the compacted turns with **one user-role bridge message** in ARC's bridge template. The summary call's own reasoning and message items are discarded. The step request follows: bridge, any turns kept, observation m.
 
@@ -247,7 +247,7 @@ What this does not blind (§11): the per-run `costs.csv` row (one per run, requi
 ### 7.5 Incomplete responses (D13)
 > A response with status `incomplete` at the need step (for example, hitting `max_output_tokens`) counts as a content failure and scores 0. (PREREG §6; §13: content failures score 0 and are not re-run)
 
-Every step request carries `max_output_tokens` 32,000 (§3). When a **step** response comes back with status `incomplete`, for whatever reason:
+Every request, step or summary, carries `max_output_tokens` 32,000 (§3). When a **step** response comes back with status `incomplete`, for whatever reason:
 - **It is scored as an invalid action.** The runner calls `EpisodeEnv.step(reply, invalid="incomplete")`: the pending step's outcome is `incomplete`, with no action and no option label, even if the partial text holds the correct answer. Nothing in the partial text is parsed, so a `lookup(...)` in it is not served and adds no turn.
   - At the need step this is the scored action and scores 0 (`need_outcome` = `incomplete`). That includes an incomplete answer to a lookup result at the need step. The need phase (§7.1) ends with that call, and `need_phase.complete` is true.
   - At a routine step it counts against `routine_accuracy`, like any wrong action, and the episode goes on.
@@ -370,7 +370,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - [RESEARCHER DECISION] `summary_keep_recent_tokens` = 0: compact everything, as ARC. Near-cell S in Σ cells is then measured, not designed (§4.3).
 - [RESEARCHER DECISION] `summary_system_prompt` = ARC's summary system prompt, which replaces the task instructions in the summary call, as ARC does. The summarizer then does not see "Some requests depend on records shown in earlier updates." Set it to `None` to keep the task instructions.
 - [RESEARCHER DECISION] `summary_request_reasoning`: the summary call uses the arm's `reasoning.context` and includes the compacted turns' reasoning items, as ARC's Adapter state does. In r arms the summarizer may therefore draw on earlier reasoning.
-- [RESEARCHER DECISION] `summary_max_output_tokens` = 8,192, as ARC. On OpenAI this cap includes reasoning tokens.
+- [RESEARCHER DECISION] `summary_max_output_tokens` = 32,000 (decided: PREREG D13, 2026-10-01; PREREG §6 sets `max_output_tokens: 32000` on luna and sol requests and makes no exception for summary calls). On OpenAI this cap includes reasoning tokens. Before D13 this was 8,192, as ARC.
 - [RESEARCHER DECISION] `notes_placement`: the last line of the instructions.
 - [RESEARCHER DECISION] `stop_on_context_mismatch` = true: stop and exclude the episode; abort the run after 2 such episodes.
 - [RESEARCHER DECISION] `output_items_replay`: output items are sent back verbatim with null fields dropped. The pilot confirms that the API accepts this with `store: false`.
@@ -381,7 +381,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - D12, `compacted_between` logged in Σ cells (§7.2);
 - pilot outcomes only under `results/raw/` (§7.4);
 - the paid guard requires the researcher's approval line in `results/decisions.md` (§8);
-- D13, `max_output_tokens` 32,000 on every step request and every probe request, with an `incomplete` response at the need step scored 0 (PREREG §6, §13; §3, §7.5).
+- D13, `max_output_tokens` 32,000 on every step, summary and probe request, with an `incomplete` response at the need step scored 0 (PREREG §6, §13; §3, §7.5).
 
 **Changed after the #13 review** (2026-10-01; its four open items):
 - An approval is specific, so the researcher decides at every spending point. The line names the block, the experiments it may run and a dollar limit (`approved_block: <name> | experiments: ... | max_usd: ...`). It must be on `origin/main` as well as in `HEAD` and the working tree (§8). The guard moved to `common/approval.py`.
@@ -408,7 +408,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
   - an `incomplete` step response is invalid at **every** step, not only at the need step. PREREG §6 names the need step; at a routine step it is scored wrong in `routine_accuracy` and the episode goes on, as PREREG §2.5 treats an invalid lookup there;
   - any `incomplete` status counts, whatever `incomplete_details.reason` says (the cap, or for example a content filter), and the reason is logged;
   - the incomplete turn stays in the history as returned (reasoning item, partial message if any), rather than being dropped or stripped;
-  - summary requests keep ARC's 8,192 cap (`summary_max_output_tokens`, frozen with the snapshot tests, PREREG §5), not 32,000; an incomplete summary is retried as before;
+  - an incomplete summary is retried as before (§4.3), never scored. Summary requests carry 32,000 too: the first version of this change kept ARC's 8,192 there, but PREREG §6 sets 32,000 on every luna and sol request, and §5 only freezes the summary cap with the snapshot tests, which now assert 32,000;
   - committed run summaries count incomplete responses at routine steps only (`n_incomplete_routine`), since one at the need step is an outcome;
   - in the replay probe an incomplete turn-3 response is a miss, and an incomplete turn 1 or 2 makes the trial unscorable (§9.2).
 

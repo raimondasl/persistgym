@@ -10,11 +10,23 @@ retried) gets `rs_t<i>` / `msg_t<i>`; summary call j gets `rs_s<j>` / `msg_s<j>`
 that stopped at `max_output_tokens` (`incomplete_details.reason`, the whole cap in
 `output_tokens`); if its text is empty it has no message item, as when the cap is hit while
 reasoning.
+
+`ids="payload"` makes every response a function of its payload alone, as an API's response
+does not depend on the other episodes' calls: the tag is `t` (step) or `s` (summary) plus the
+first 16 hex digits of the payload's SHA-256, and the index passed to `reply_fn` and
+`summary_fn` is the number of user messages in the payload minus one. Episodes played in
+parallel (harnesses/parallel.py) then get the responses they get when played one at a time,
+whatever the order of the calls. The default, `ids="call_order"`, numbers calls in the order
+they arrive, which the payload snapshot tests label. `send` may be called from several
+threads at once.
 """
 
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import threading
 from collections.abc import Callable
 
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT
@@ -54,7 +66,12 @@ class FakeModel:
                  model_suffix: str = "-fake-2026-10-01",
                  reasoning_tokens: int = 37,
                  summary_request_prompt: str = ARC_SUMMARY_REQUEST_PROMPT,
-                 status_fn: Callable[[dict, str], str] | None = None):
+                 status_fn: Callable[[dict, str], str] | None = None,
+                 ids: str = "call_order"):
+        if ids not in ("call_order", "payload"):
+            raise ValueError(f"ids must be 'call_order' or 'payload', got {ids!r}")
+        self.ids = ids
+        self._lock = threading.Lock()
         self.reply_fn = reply_fn or _default_reply
         self.summary_fn = summary_fn or _default_summary
         self.reasoning_summary_fn = reasoning_summary_fn
@@ -72,16 +89,26 @@ class FakeModel:
         return last.get("role") == "user" and item_text(last) == self.summary_request_prompt
 
     def send(self, payload: dict) -> dict:
-        k = len(self.calls)
-        self.calls.append(copy.deepcopy(payload))
-        if self.is_summary(payload):
-            self.n_summary += 1
-            tag = f"s{self.n_summary}"
-            text = self.summary_fn(payload, self.n_summary)
+        summary = self.is_summary(payload)
+        snapshot = copy.deepcopy(payload)
+        with self._lock:
+            k = len(self.calls)
+            self.calls.append(snapshot)
+            if summary:
+                self.n_summary += 1
+                n = self.n_summary
+            else:
+                n = self.n_step
+                self.n_step += 1
+        kind = "s" if summary else "t"
+        if self.ids == "payload":
+            digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False)
+                                    .encode("utf-8")).hexdigest()[:16]
+            tag = f"{kind}{digest}"
+            n = sum(1 for i in payload.get("input") or [] if i.get("role") == "user") - 1
         else:
-            tag = f"t{self.n_step}"
-            text = self.reply_fn(payload, self.n_step)
-            self.n_step += 1
+            tag = f"{kind}{n}"
+        text = self.summary_fn(payload, n) if summary else self.reply_fn(payload, n)
         req = payload.get("reasoning") or {}
         echo = (self.echo_context(payload, k) if callable(self.echo_context)
                 else req.get("context") if self.echo_context == "request" else self.echo_context)

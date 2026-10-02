@@ -7,6 +7,8 @@ from __future__ import annotations
 import csv
 import json
 import os
+import threading
+import time
 from pathlib import Path
 
 import httpx
@@ -775,6 +777,148 @@ def test_calls_without_finalize_keep_the_lock(repo, monkeypatch):
     assert "run r1 (toggle_pilot, gpt-6-luna) made 1 paid calls" in reason
     assert not t.paid_lock.holds()
     assert json.loads(t.paid_lock.path.read_text(encoding="utf-8"))["kept_because"] == reason
+
+
+# --- sends from several threads (parallel episodes, PREREG §4.6; harnesses/parallel.py) -------
+
+class _SlowStub:
+    """A stub client whose calls take a moment, so that calls from several threads overlap.
+    `hold`, if given, keeps every call waiting until it is set; `entered` counts the calls
+    that have started."""
+
+    def __init__(self, hold=None, entered=None):
+        self.responses = self
+        self.hold, self.entered = hold, entered
+
+    def create(self, **payload):
+        if self.entered is not None:
+            self.entered.release()
+        if self.hold is not None:
+            assert self.hold.wait(60)
+        time.sleep(0.005)
+        return _Resp(_response())
+
+
+def _threaded_factory(**kw):
+    built, lock = [], threading.Lock()
+
+    def factory(timeout):
+        with lock:
+            built.append(threading.get_ident())
+        return _SlowStub(**kw)
+    return factory, built
+
+
+def _send_from_threads(t, n_threads, per_thread):
+    """`per_thread` sends from each of `n_threads` threads started together; returns the
+    exceptions they raised."""
+    start, errors, lock = threading.Barrier(n_threads), [], threading.Lock()
+    p = {"model": "gpt-6-luna", "input": [], "reasoning": {"context": "all_turns"}}
+
+    def work():
+        start.wait()
+        for _ in range(per_thread):
+            try:
+                t.send(p)
+            except Exception as e:  # noqa: BLE001 - collected for the test
+                with lock:
+                    errors.append(e)
+    threads = [threading.Thread(target=work) for _ in range(n_threads)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join(60)
+    return errors
+
+
+def test_sends_from_many_threads_are_all_recorded_each_with_its_own_client(repo,
+                                                                           monkeypatch):
+    """16 threads sending at once: every call is in the ledger and the echo log once, the
+    spend is exact, and each thread got its own client from the factory."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _threaded_factory()
+    t = _make(repo, factory, planned_usd=50.0)
+    assert _send_from_threads(t, 16, 10) == []
+    assert t.ledger.n_calls == len(t.echo_log) == 160 and t._in_flight == 0
+    # $0.075 billed per call (1M input at $0.05, 100k output at $0.25, Flex)
+    assert t.spent_usd == pytest.approx(160 * 0.075)
+    assert len(built) == len(set(built)) == 17  # the constructing thread's, and one each
+    row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    assert row["n_calls"] == 160 and not t.unaccounted and t.paid_lock.holds()
+
+
+def test_the_stop_at_the_planned_spend_holds_across_threads(repo, monkeypatch):
+    """The stop is checked on the spend recorded so far, under the transport's lock: no call
+    starts once it is reached, and the calls in flight then (at most one per other thread)
+    are all that can pass it."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, _ = _threaded_factory()
+    t = _make(repo, factory, planned_usd=1.0)  # 14 calls at $0.075 reach it
+    errors = _send_from_threads(t, 8, 10)
+    assert errors and all(isinstance(e, BudgetExceeded) for e in errors)
+    assert 14 <= t.ledger.n_calls <= 14 + 7
+    assert t.spent_usd >= 1.0 and t.spent_usd - 1.0 < 8 * 0.075
+    assert t.ledger.n_calls + len(errors) == 80 and t._in_flight == 0
+
+
+def test_finalize_with_calls_in_flight_keeps_the_lock(repo, monkeypatch):
+    """A parallel run stopped without waiting for its calls in flight (a second Ctrl+C):
+    `finalize` writes the row of the calls recorded, counts the others as abandoned, and
+    keeps the lock and the spend reservation with the reason; a call that returns after
+    that is not recorded."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    hold, entered = threading.Event(), threading.Semaphore(0)
+    factory, _ = _threaded_factory()
+    t = _make(repo, factory, experiment="persistgym_pilot")
+    _call(t)  # one call recorded
+    late_factory, _ = _threaded_factory(hold=hold, entered=entered)
+    t.client_factory = late_factory  # the next threads' clients hold their calls
+    errors = []
+
+    def late():
+        try:
+            _call(t)
+        except RuntimeError as e:
+            errors.append(e)
+    threads = [threading.Thread(target=late) for _ in range(2)]
+    for th in threads:
+        th.start()
+    for _ in threads:
+        assert entered.acquire(timeout=60)  # both calls are in flight
+    row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    assert row["n_calls"] == 1 and t.abandoned_calls == 2 and t.unaccounted
+    assert [r["run_id"] for r in costs.read_rows(repo / "costs.csv")] == ["r1"]
+    held = json.loads(t.paid_lock.path.read_text(encoding="utf-8"))
+    reason = held["kept_because"]
+    assert not t.paid_lock.holds() and reason == t.kept_because
+    assert "run r1 (persistgym_pilot, gpt-6-luna) still had 2 paid calls in flight" in reason
+    assert "append a row by hand for those calls" in reason and "made 1 paid" not in reason
+    reservation = paidlock.reservation_path(t.paid_lock.path, paidlock.PERSISTGYM)
+    assert reservation.exists() and f"spend reservation {reservation}" in reason
+    assert t.keep_lock_if_unaccounted("r1") == reason  # the CLI's check: the same
+    hold.set()
+    for th in threads:
+        th.join(60)
+    assert len(errors) == 2 and all("not recorded" in str(e) for e in errors)
+    assert t.ledger.n_calls == 1 and len(t.echo_log) == 1
+
+
+def test_finalize_with_only_calls_in_flight_keeps_the_lock(repo, monkeypatch):
+    """No call recorded yet, one in flight: no row, and the lock stays held."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    hold, entered = threading.Event(), threading.Semaphore(0)
+    factory, _ = _threaded_factory(hold=hold, entered=entered)
+    t = _make(repo, factory)
+    th = threading.Thread(target=lambda: pytest.raises(RuntimeError, _call, t))
+    th.start()
+    assert entered.acquire(timeout=60)
+    assert t.finalize(run_id="r1", milestone="M0", cell_or_config="c") is None
+    assert costs.read_rows(repo / "costs.csv") == [] and not t.paid_lock.holds()
+    assert "still had 1 paid calls in flight" in t.kept_because
+    assert "made" not in t.kept_because
+    hold.set()
+    th.join(60)
+    assert t.ledger.n_calls == 0
 
 
 def test_harness_tests_cannot_reach_the_network():

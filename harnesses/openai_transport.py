@@ -27,7 +27,13 @@ The costs.csv row's notes start with `common.approval.spend_tag(<name>)`
 
 While running it stops before a call once the run's spend reaches the planned spend. Spend is
 measured as block spend and the phase caps measure it (`common.approval.spend_usd`: the
-billed estimate, so the Flex price on Flex; PLAN's caps are in billed dollars, D23). The
+billed estimate, so the Flex price on Flex; PLAN's caps are in billed dollars, D23). `send`
+may be called from several threads at once, by a run playing episodes in parallel
+(harnesses/parallel.py, PREREG §4.6): the check, the ledger and the echo log change under one
+lock, so the stop stays exact on the spend recorded so far, and each thread gets its own
+client from the factory. The calls already sent when the stop fires still complete, so such
+a run can end above its planned spend by up to one call per episode in flight; the runner's
+episode reservations keep it from getting there. The
 runner records that stop as `COST_CAP`, but it is the planned spend, not a per-run cost guard
 (PREREG §7.7's hold is about the ARC run guard), so it places no hold; a per-run guard, if
 one is ever added here, must place one (`common.hold.place_hold`). It logs
@@ -45,7 +51,8 @@ in costs.csv (the row could not be built or written, or `finalize` never ran) ke
 held with the reason and its usage totals (`keep_lock_if_unaccounted`; the CLI calls it after
 every run), so no PersistGym paid run starts on an incomplete ledger until the row is added
 by hand, and keeps its reservation, which goes on counting against ARC runs until it is
-deleted by hand.
+deleted by hand. So does a run finalized while calls were still in flight (a parallel run
+whose episodes were abandoned by a second Ctrl+C): those calls are never recorded.
 
 The OpenAI SDK reads its API key from the environment itself; this module never reads, prints
 or stores a key. Load keys with `uv run --env-file .env ...`.
@@ -55,6 +62,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -129,54 +137,97 @@ class OpenAIResponsesTransport:
         self._finalized = False
         self.costs_row: dict | None = None  # the row `finalize` appended
         self.kept_because: str | None = None  # why the lock was kept held, if it was
+        # Parallel play (harnesses/parallel.py) sends from several threads at once: the
+        # budget check, the ledger and the echo log change under this lock, and each thread
+        # gets its own client from the factory. `_in_flight` counts calls sent and not yet
+        # recorded; `abandoned_calls` those still in flight when `finalize` ran.
+        self._lock = threading.RLock()
+        self._in_flight = 0
+        self.abandoned_calls = 0
         self._client = (self.client_factory or _default_client)(self.timeout_s)
+        self._clients = threading.local()
+        self._clients.client = self._client
 
     @property
     def spent_usd(self) -> float:
         """This run's spend so far, measured as block spend and the phase caps measure it
         (`common.approval.spend_usd`: the billed estimate, the Flex price on Flex). The run
         stops before a call once it reaches the planned spend, so the guard's check `block
-        spend + planned <= max_usd` holds after the run too, up to the last call's cost."""
-        return spend_usd(self.ledger.cost_usd_list, self.ledger.cost_usd_billed_est)
+        spend + planned <= max_usd` holds after the run too, up to the last call's cost (with
+        episodes played in parallel, up to the last call of each episode in flight)."""
+        with self._lock:
+            return spend_usd(self.ledger.cost_usd_list, self.ledger.cost_usd_billed_est)
+
+    def _thread_client(self) -> Any:
+        client = getattr(self._clients, "client", None)
+        if client is None:
+            client = self._clients.client = (self.client_factory
+                                             or _default_client)(self.timeout_s)
+        return client
 
     # ------------------------------------------------------------------
     def send(self, payload: dict) -> dict:
-        if self._finalized:
-            raise RuntimeError("transport already finalized")
-        if payload.get("model") != self.model:
-            raise ValueError(f"payload model {payload.get('model')!r} != {self.model!r}")
-        if self.spent_usd >= self.approval.planned_usd:
-            raise BudgetExceeded(
-                f"run spend ${self.spent_usd:.4f} (billed estimate) "
-                f"reached the planned ${self.approval.planned_usd:.2f}")
-        started = time.monotonic()
-        for attempt in range(1, self.max_attempts + 1):
-            try:
-                # to_dict: the keys the API returned (exclude_unset), JSON types only.
-                data = self._client.responses.create(**payload).to_dict(mode="json")
-                break
-            except RETRYABLE as e:
-                if getattr(e, "code", None) == "insufficient_quota" or attempt == self.max_attempts:
-                    raise
-                wait = self.backoff_s * 2 ** (attempt - 1)
-                log.warning("attempt %d failed (%s); retrying in %.0fs", attempt,
-                            type(e).__name__, wait)
-                self.sleep(wait)
-        latency = time.monotonic() - started
-        listed, billed = self.ledger.add(data, requested_tier=payload.get("service_tier"),
-                                         latency_s=latency)
-        echo = {
-            "requested_context": (payload.get("reasoning") or {}).get("context"),
-            "echoed_context": (data.get("reasoning") or {}).get("context"),
-            "model_returned": data.get("model"),
-            "service_tier_requested": payload.get("service_tier"),
-            "service_tier_returned": data.get("service_tier"),
-            "status": data.get("status"),
-            "incomplete_reason": (data.get("incomplete_details") or {}).get("reason"),
-            "latency_s": latency,
-            "cost_usd_list": listed, "cost_usd_billed_est": billed,
-        }
-        self.echo_log.append(echo)
+        """One call, with retries. Safe to call from several threads at once: the stop at the
+        planned spend is checked, under the lock, on the spend of every call recorded so
+        far, so it stays exact; calls already sent when it fires still complete and are
+        recorded."""
+        counted = False
+        try:
+            with self._lock:
+                if self._finalized:
+                    raise RuntimeError("transport already finalized")
+                if payload.get("model") != self.model:
+                    raise ValueError(f"payload model {payload.get('model')!r} != "
+                                     f"{self.model!r}")
+                if self.spent_usd >= self.approval.planned_usd:
+                    raise BudgetExceeded(
+                        f"run spend ${self.spent_usd:.4f} (billed estimate) "
+                        f"reached the planned ${self.approval.planned_usd:.2f}")
+                self._in_flight += 1
+                counted = True
+            client = self._thread_client()
+            started = time.monotonic()
+            for attempt in range(1, self.max_attempts + 1):
+                try:
+                    # to_dict: the keys the API returned (exclude_unset), JSON types only.
+                    data = client.responses.create(**payload).to_dict(mode="json")
+                    break
+                except RETRYABLE as e:
+                    if (getattr(e, "code", None) == "insufficient_quota"
+                            or attempt == self.max_attempts):
+                        raise
+                    wait = self.backoff_s * 2 ** (attempt - 1)
+                    log.warning("attempt %d failed (%s); retrying in %.0fs", attempt,
+                                type(e).__name__, wait)
+                    self.sleep(wait)
+            latency = time.monotonic() - started
+        except BaseException:
+            if counted:
+                with self._lock:
+                    self._in_flight -= 1
+            raise
+        with self._lock:
+            self._in_flight -= 1
+            if self._finalized:
+                # `finalize` ran while this call was in flight (a parallel run stopped
+                # without waiting for it): it counted the call in `abandoned_calls`, kept the
+                # lock, and the call's usage goes nowhere.
+                raise RuntimeError("transport finalized while this call was in flight; its "
+                                   "usage is not recorded")
+            listed, billed = self.ledger.add(data, requested_tier=payload.get("service_tier"),
+                                             latency_s=latency)
+            echo = {
+                "requested_context": (payload.get("reasoning") or {}).get("context"),
+                "echoed_context": (data.get("reasoning") or {}).get("context"),
+                "model_returned": data.get("model"),
+                "service_tier_requested": payload.get("service_tier"),
+                "service_tier_returned": data.get("service_tier"),
+                "status": data.get("status"),
+                "incomplete_reason": (data.get("incomplete_details") or {}).get("reason"),
+                "latency_s": latency,
+                "cost_usd_list": listed, "cost_usd_billed_est": billed,
+            }
+            self.echo_log.append(echo)
         log.info("model=%s reasoning.context requested=%s echoed=%s tier=%s status=%s",
                  echo["model_returned"], echo["requested_context"], echo["echoed_context"],
                  echo["service_tier_returned"], echo["status"])
@@ -191,12 +242,25 @@ class OpenAIResponsesTransport:
         """Append this run's costs.csv row (once) and record the run next to the paid-run
         lock as the last paid run. Returns the row, or None if no call was made. If the row
         cannot be built or written, keeps the lock held with the reason
-        (`keep_lock_if_unaccounted`) and raises."""
-        if self._finalized:
-            return None
-        self._finalized = True
+        (`keep_lock_if_unaccounted`) and raises.
+
+        Calls still in flight (episodes played in parallel, abandoned by a second Ctrl+C;
+        harnesses/parallel.py) are counted in `abandoned_calls` and never recorded: the row,
+        if any, is written without them, and the lock and the spend reservation stay held,
+        with the reason, as for a row that could not be written."""
+        with self._lock:
+            if self._finalized:
+                return None
+            self._finalized = True
+            self.abandoned_calls = self._in_flight
+        if self.abandoned_calls:
+            log.warning("%d calls were still in flight when the run was finalized; their "
+                        "usage is not recorded", self.abandoned_calls)
         if self.ledger.n_calls == 0:
-            self._release_reservation()      # spent nothing
+            if self.abandoned_calls:
+                self.keep_lock_if_unaccounted(run_id)
+            else:
+                self._release_reservation()      # spent nothing
             return None
         try:
             mismatches = sum(1 for e in self.echo_log
@@ -226,6 +290,10 @@ class OpenAIResponsesTransport:
         except OSError as e:
             log.warning("could not record the last paid run next to %s: %s",
                         self.paid_lock.path, e)
+        if self.abandoned_calls:
+            # Some of the spend is not in the row: the lock and the reservation stay.
+            self.keep_lock_if_unaccounted(run_id)
+            return row
         # The spend is in costs.csv now: the reservation stops counting against the ARC
         # stream (PREREG §12). After the record, so a run starting in between counts this
         # spend twice, not never.
@@ -250,30 +318,44 @@ class OpenAIResponsesTransport:
 
     @property
     def unaccounted(self) -> bool:
-        """Whether this run made calls whose costs.csv row has not been appended."""
-        return self.ledger.n_calls > 0 and self.costs_row is None
+        """Whether this run made calls whose costs.csv row has not been appended, or calls
+        that were still in flight when it was finalized (`abandoned_calls`)."""
+        return (self.ledger.n_calls > 0 and self.costs_row is None) or self.abandoned_calls > 0
 
     def keep_lock_if_unaccounted(self, run_id: str, cause: str = "") -> str | None:
         """If this run made calls that results/costs.csv does not show, keep the paid-run
         lock held with the reason (`common.paidlock.keep`), so that no paid run starts on an
         incomplete ledger, and return the reason; otherwise None. `finalize` calls it when
-        the row cannot be written, and the CLI after every run, which also catches a run
-        whose `finalize` never ran. The reason holds the run's usage totals (reasoning tokens
-        withheld for a pilot-blinded experiment, PREREG §11), for the row to add by hand."""
+        the row cannot be written or calls were still in flight, and the CLI after every
+        run, which also catches a run whose `finalize` never ran. The reason holds the run's
+        usage totals (reasoning tokens withheld for a pilot-blinded experiment, PREREG §11),
+        for the row to add by hand."""
         if not self.unaccounted:
             return None
         if self.kept_because is None:
             totals = self.ledger.totals()
             if blinding.is_blinded(self.approval.experiment):
                 totals = blinding.blinded_tokens(totals)
+            tag = spend_tag(self.approval.approved_block)
+            what, todo = [], []
+            if self.ledger.n_calls > 0 and self.costs_row is None:
+                what.append(f"made {self.ledger.n_calls} paid calls that "
+                            f"{self.approval.costs_path} does not show"
+                            + (f" ({cause})" if cause else ""))
+                todo.append(f"add its row by hand, with {tag} at the start of its notes and "
+                            f"these totals: {json.dumps(totals)}")
+            if self.abandoned_calls:
+                what.append(f"still had {self.abandoned_calls} paid calls in flight when it "
+                            "ended (episodes played in parallel, stopped without waiting "
+                            "for them), whose usage is in neither costs.csv nor the raw "
+                            "transcript")
+                todo.append("append a row by hand for those calls, from the provider's "
+                            f"usage page, with {tag} at the start of its notes")
             self.kept_because = (
-                f"run {run_id} ({self.approval.experiment}, {self.model}) made "
-                f"{self.ledger.n_calls} paid calls that {self.approval.costs_path} does not "
-                f"show" + (f" ({cause})" if cause else "")
-                + f": add its row by hand, with {spend_tag(self.approval.approved_block)} at "
-                f"the start of its notes and these totals: {json.dumps(totals)}; the run's "
-                f"files are under results/ and results/raw/. Then delete this lock file and "
-                f"the run's spend reservation "
+                f"run {run_id} ({self.approval.experiment}, {self.model}) "
+                + " and ".join(what) + ": " + "; ".join(todo)
+                + "; the run's files are under results/ and results/raw/. Then delete this "
+                f"lock file and the run's spend reservation "
                 f"{paidlock.reservation_path(self.paid_lock.path, self.paid_lock.stream)}")
             paidlock.keep(self.paid_lock.path, self.paid_lock.info, self.kept_because)
         return self.kept_because

@@ -30,6 +30,9 @@ with the reason. The OpenAI SDK reads the key from the environment:
     # D11: sol on derived-far x T_d templates plus observed-far x T_d/3 of them
     ... python -m harnesses run --cell F-r --model gpt-6.1-sol --split main --matrix d11 \
         --n 120 --experiment persistgym --approved-block "<block>" --planned-usd <usd>
+    # PREREG §4.6: up to 16 episodes at once, with the same payloads and outputs and spend
+    # reserved for the episodes in flight (harnesses/parallel.py)
+    ... python -m harnesses run ... --parallel 16
 """
 
 from __future__ import annotations
@@ -58,6 +61,7 @@ from harnesses.openai_transport import (
     OpenAIResponsesTransport,
     PaidCallsNotAllowed,
 )
+from harnesses.parallel import MAX_PARALLEL
 from harnesses.runner import RAW, RESULTS, require_plain_name, run_batch, run_episode
 from persistgym.config import GeneratorConfig
 from persistgym.episode import TaskCell
@@ -190,6 +194,10 @@ def _check_accounted(transport: OpenAIResponsesTransport, run_id: str) -> None:
 
 def cmd_run(a) -> int:
     cell = get_cell(a.cell)
+    if not 1 <= a.parallel <= MAX_PARALLEL:
+        print(f"refused: --parallel is 1 to {MAX_PARALLEL} episodes at once (PREREG §4.6), "
+              f"got {a.parallel}", file=sys.stderr)
+        return 2
     if a.experiment == PILOT_EXPERIMENT and a.split != PILOT_SPLIT:
         # PLAN §16.5: pilot templates use a disjoint seed range, so a pilot never sees (or
         # reports outcomes on) the templates of the main sweep.
@@ -234,7 +242,9 @@ def cmd_run(a) -> int:
                              experiment=a.experiment, run_id=run_id, milestone=a.milestone,
                              results_root=RESULTS, raw_root=RAW, run_matrix=matrix.to_dict(),
                              notes=(f"{a.split} {a.start}-{a.start + matrix.n_templates - 1}"
-                                    f" matrix={matrix.name}"))
+                                    f" matrix={matrix.name}"
+                                    + (f" parallel={a.parallel}" if a.parallel > 1 else "")),
+                             parallel=a.parallel)
         finally:
             _check_accounted(transport, run_id)
         print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason",
@@ -243,7 +253,9 @@ def cmd_run(a) -> int:
         return 0
 
     return _with_paid_lock(run_id, f"{a.experiment}: {cell.cell_id} on {a.model}, "
-                                   f"{len(episodes)} episodes", paid)
+                                   f"{len(episodes)} episodes"
+                                   + (f", {a.parallel} at once" if a.parallel > 1 else ""),
+                           paid)
 
 
 def _fork_design(a, kind: str) -> bool:
@@ -537,6 +549,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--cell-templates", nargs="+", default=None, metavar="TASK_CELL=N",
                    help="custom matrix: each task cell on its first N templates from --start")
     r.add_argument("--experiment", default="persistgym_pilot")
+    r.add_argument("--parallel", type=int, default=1, metavar="N",
+                   help=f"episodes played at once, 1 to {MAX_PARALLEL} (PREREG §4.6): the same "
+                        "payloads, cell assignment, seeds and per-episode outputs as one at a "
+                        "time, written in the same order; the run reserves spend for the "
+                        "episodes in flight, so that it stays within --planned-usd")
     r.set_defaults(fn=cmd_run)
 
     pr = sub.add_parser("pilot-report",

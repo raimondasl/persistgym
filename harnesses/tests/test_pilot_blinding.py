@@ -87,6 +87,26 @@ def test_pilot_run_commits_no_per_episode_outcomes(tmp_path):
     assert (raw / "transcript.jsonl.gz").exists()
 
 
+def test_a_parallel_pilot_stays_blinded(tmp_path):
+    """PREREG §4.6 with §11: a pilot played 4 episodes at a time commits the same two files,
+    blinded; each episode's transcript, while it plays, is under the gitignored raw folder
+    only, and is gone from there once it is in the run's transcript."""
+    eps = _pilot_eps(variants=("base", "restated"))
+    meta = run_batch(eps, CELLS["F-r"], CFG, FakeModel(ids="payload"), experiment=PILOT,
+                     run_id="par", results_root=tmp_path / "results",
+                     raw_root=tmp_path / "raw", parallel=4)
+    assert [p.name for p in _committed_files(tmp_path / "results")] == ["meta.json",
+                                                                        "summary.json"]
+    for p in _committed_files(tmp_path / "results"):
+        _assert_blinded(json.loads(p.read_text(encoding="utf-8")))
+    assert meta["parallel"]["max_episodes_in_flight"] == 4
+    raw = tmp_path / "raw" / PILOT / "par"
+    assert sorted(p.name for p in raw.iterdir()) == ["episodes.jsonl", "transcript.jsonl.gz"]
+    rows = [json.loads(x) for x in (raw / "episodes.jsonl").read_text(encoding="utf-8")
+            .splitlines()]
+    assert [r["episode_id"] for r in rows] == [e.episode_id for e in eps]
+
+
 def test_pilot_commits_only_routine_incomplete_counts(tmp_path):
     """D13: an incomplete response at the need step scores 0, so it is an outcome. A pilot's
     committed summary counts incomplete responses at routine steps only; the per-step

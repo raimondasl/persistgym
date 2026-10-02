@@ -28,12 +28,19 @@ Per episode it also logs (harnesses/DESIGN.md §7):
 
 Pilot-blinded experiments (`harnesses.blinding`, PREREG §11) keep `episodes.jsonl` under the
 gitignored results/raw/ only.
+
+`run_batch(..., parallel=N)` plays up to N <= 16 episodes at once (PREREG §4.6; §0.3 line 15;
+`harnesses.parallel`): the same payloads, cell assignment, seeds and per-episode outputs,
+written in the same order, with spend reserved for the episodes in flight. N = 1, the
+default, is the sequential loop.
 """
 
 from __future__ import annotations
 
 import gzip
 import json
+import shutil
+import sys
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -48,6 +55,7 @@ from harnesses.cells import CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.items import item_text
 from harnesses.openai_transport import BudgetExceeded
+from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
 from harnesses.pricing import cost_usd, usage_numbers
 from harnesses.session import EmptySummaryError, HarnessSession
 from persistgym.env import EpisodeEnv
@@ -56,6 +64,14 @@ from persistgym.survival import carried_in_text, survival_from_payload
 
 RESULTS = runmeta.REPO_ROOT / "results"
 RAW = RESULTS / "raw"
+INFLIGHT_DIR = "inflight"
+"""Under results/raw/<experiment>/<run_id>/: the transcript of each episode playing in
+parallel, until it is appended to the run's transcript in the run's order."""
+RESERVATIONS_LOG = "spend_reservations.jsonl"
+"""Under results/raw/<experiment>/<run_id>/: a parallel paid run's reservation at each
+episode start (`harnesses.parallel.SpendPlan.log`)."""
+CLOCK = time.monotonic
+"""Times each call (`call_latency_s`). Tests fix it to compare outputs byte for byte."""
 
 
 class Transport(Protocol):
@@ -84,9 +100,10 @@ def check_echo(payload: dict, response: dict) -> dict:
 class JsonlRecorder:
     """Raw transcript writer (one JSON object per request/response pair)."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, flush_each: bool = False):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
+        self.flush_each = flush_each  # a parallel episode's file: on disk after every call
         # kept open across requests and closed by close(), so no context manager here
         if path.suffix == ".gz":
             self._f = gzip.open(path, "at", encoding="utf-8")  # noqa: SIM115
@@ -95,6 +112,14 @@ class JsonlRecorder:
 
     def __call__(self, event: dict) -> None:
         self._f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        if self.flush_each:
+            self._f.flush()
+
+    def append_file(self, path: Path) -> None:
+        """Append, unchanged, the lines another recorder wrote to `path` (the transcript of
+        one episode played in parallel)."""
+        with path.open("r", encoding="utf-8") as src:
+            shutil.copyfileobj(src, self._f)
 
     def close(self) -> None:
         self._f.close()
@@ -242,9 +267,9 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                     if bridge is not None:
                         run.need_bridge_carried = carried_in_text(
                             item_text(req.payload["input"][bridge]), episode)
-                started = time.monotonic()
+                started = CLOCK()
                 response = transport.send(req.payload)
-                run.call_latency_s.append(round(time.monotonic() - started, 3))
+                run.call_latency_s.append(round(CLOCK() - started, 3))
                 run.n_requests += 1
                 run.n_summary_requests += req.kind == "summary"
                 echo = check_echo(req.payload, response)
@@ -296,6 +321,8 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
         run.exit_reason, run.error = "COST_CAP", str(e)
     except openai.OpenAIError as e:  # API errors after retries, rejected payloads
         run.exit_reason, run.error = "API_ERROR", f"{type(e).__name__}: {e}"
+    except RunStopped as e:  # parallel play: the run stopped while this episode was in flight
+        run.exit_reason, run.error = RUN_STOPPED, str(e)
     finally:
         res = env.result()
         run.need_correct = res.need_correct
@@ -335,46 +362,105 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
     return run
 
 
+def _stop_reason(runs: list[EpisodeRun], last: EpisodeRun, cfg: HarnessConfig,
+                 abort_after_api_errors: int) -> str | None:
+    """The run's stop rule, checked after each episode finishes (`runs`: those finished so
+    far, `last` the one that just did): the run's exit reason if it must stop, else None.
+    COST_CAP when the transport stopped `last` at the planned spend; an abort after
+    `cfg.abort_after_mismatched_episodes` excluded (echo-mismatched) episodes (CLAUDE.md) or
+    `abort_after_api_errors` episodes that ended API_ERROR."""
+    if last.exit_reason == "COST_CAP":
+        return "COST_CAP"
+    if sum(x.excluded for x in runs) >= cfg.abort_after_mismatched_episodes:
+        return "ABORTED_CONTEXT_MISMATCH"
+    if sum(x.exit_reason == "API_ERROR" for x in runs) >= abort_after_api_errors:
+        return "ABORTED_API_ERRORS"
+    return None
+
+
 def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
               transport: Transport, *, experiment: str, run_id: str, milestone: str = "M0",
               results_root: Path = RESULTS, raw_root: Path = RAW, repeat_index: int = 0,
               notes: str = "", abort_after_api_errors: int = 2,
-              run_matrix: dict | None = None) -> dict[str, Any]:
+              run_matrix: dict | None = None, parallel: int = 1) -> dict[str, Any]:
     """Run episodes in order; write results/<experiment>/<run_id>/{meta.json,summary.json,
     episodes.jsonl} and the raw transcript under results/raw/. For a pilot-blinded
     experiment (`blinding.BLINDED_EXPERIMENTS`) episodes.jsonl goes to
     results/raw/<experiment>/<run_id>/ instead, and meta.json leaves out reasoning tokens.
     Paid transports get their costs.csv row appended in `finally`, whatever happens.
-    `run_matrix` (harnesses.matrix.RunMatrix.to_dict) is recorded in meta.json's config."""
+    `run_matrix` (harnesses.matrix.RunMatrix.to_dict) is recorded in meta.json's config.
+
+    `parallel` (1 to 16, PREREG §4.6): episodes played at once (`harnesses.parallel`). With
+    more than 1, episodes.jsonl and the transcript are still written in the order of
+    `episodes`, the stop rule (`_stop_reason`) stops the episodes in flight too, and a paid
+    transport's planned spend is reserved episode by episode; meta.json's `parallel` says
+    how it went (outside `config`, so the config hash is that of sequential play)."""
     for what, name in (("experiment", experiment), ("run_id", run_id)):
         require_plain_name(what, name)
+    parallel = check_parallel(parallel)
     blinded = blinding.is_blinded(experiment)
     out_dir = results_root / experiment / run_id
     raw_dir = raw_root / experiment / run_id
     raw_path = raw_dir / "transcript.jsonl.gz"
+    inflight_dir = raw_dir / INFLIGHT_DIR
     episodes_path = (raw_dir if blinded else out_dir) / "episodes.jsonl"
+    if parallel > 1 and inflight_dir.exists() and any(inflight_dir.iterdir()):
+        raise ValueError(f"{inflight_dir} holds episode transcripts left by an earlier "
+                         "parallel run with this run id; move them before reusing the id")
     out_dir.mkdir(parents=True, exist_ok=True)
     episodes_path.parent.mkdir(parents=True, exist_ok=True)
     recorder = JsonlRecorder(raw_path)
     started = runmeta.utc_now()
     runs: list[EpisodeRun] = []
+    play: ParallelPlay | None = None
     exit_reason = "COMPLETED"
     try:
         with episodes_path.open("a", encoding="utf-8") as f:
-            for ep in episodes:
-                r = run_episode(ep, cell, cfg, transport, recorder)
-                runs.append(r)
+            def write(r: EpisodeRun) -> None:
                 f.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")
                 f.flush()
-                if r.exit_reason == "COST_CAP":
-                    exit_reason = "COST_CAP"
-                    break
-                if sum(x.excluded for x in runs) >= cfg.abort_after_mismatched_episodes:
-                    exit_reason = "ABORTED_CONTEXT_MISMATCH"
-                    break
-                if sum(x.exit_reason == "API_ERROR" for x in runs) >= abort_after_api_errors:
-                    exit_reason = "ABORTED_API_ERRORS"
-                    break
+
+            if parallel == 1:
+                for ep in episodes:
+                    r = run_episode(ep, cell, cfg, transport, recorder)
+                    runs.append(r)
+                    write(r)
+                    reason = _stop_reason(runs, r, cfg, abort_after_api_errors)
+                    if reason:
+                        exit_reason = reason
+                        break
+            else:
+                def spool(i: int) -> Path:
+                    return inflight_dir / f"{i:06d}.jsonl"
+
+                def play_one(i: int, ep: Episode, channel) -> EpisodeRun:
+                    rec = JsonlRecorder(spool(i), flush_each=True)
+                    try:
+                        return run_episode(ep, cell, cfg, channel, rec)
+                    finally:
+                        rec.close()
+
+                def emit(i: int, r: EpisodeRun | None) -> None:
+                    if r is not None:
+                        write(r)
+                    if spool(i).exists():
+                        recorder.append_file(spool(i))
+                        spool(i).unlink()
+
+                play = ParallelPlay(
+                    episodes, parallel=parallel, transport=transport, model=cfg.model,
+                    play_one=play_one, emit=emit,
+                    stop_rule=lambda done, last: _stop_reason(done, last, cfg,
+                                                              abort_after_api_errors))
+                runs = play.runs  # filled in the run's order as episodes are written
+                try:
+                    play.run()
+                finally:
+                    try:
+                        inflight_dir.rmdir()  # kept if an abandoned episode's file is there
+                    except OSError:
+                        pass
+                exit_reason = play.exit_reason
     except BaseException as e:
         exit_reason = f"ERROR:{type(e).__name__}"
         raise
@@ -384,15 +470,31 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
         if hasattr(transport, "finalize"):
             cost_row = transport.finalize(run_id=run_id, milestone=milestone,
                                           cell_or_config=cell.ascii_id, notes=notes)
+        if play is not None and play.plan is not None:
+            _write_reservations(raw_dir / RESERVATIONS_LOG, play.plan.log)
         summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded)
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
                                               encoding="utf-8")
+        parallel_info = (play.info() if play is not None
+                         else {"max_episodes_in_flight": parallel})
+        if play is not None and play.abandoned:
+            parallel_info["abandoned_transcripts"] = _rel(inflight_dir)
         meta = _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport,
                            experiment=experiment, run_id=run_id, started=started,
                            exit_reason=exit_reason, repeat_index=repeat_index,
                            cost_row=cost_row, blinded=blinded, episodes_path=episodes_path,
-                           run_matrix=run_matrix)
+                           run_matrix=run_matrix, parallel=parallel_info)
     return meta
+
+
+def _write_reservations(path: Path, log: list[dict]) -> None:
+    """The reservation log of a parallel paid run (raw, gitignored). A failure to write it
+    is reported, not raised: it must not stop the run's accounting."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(x) + "\n" for x in log), encoding="utf-8")
+    except OSError as e:
+        print(f"warning: could not write {path}: {e}", file=sys.stderr)
 
 
 def require_plain_name(what: str, name: str) -> None:
@@ -413,7 +515,7 @@ def _rel(path: Path) -> str:
 
 def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, experiment, run_id,
                 started, exit_reason, repeat_index, cost_row, blinded=False,
-                episodes_path=None, run_matrix=None) -> dict:
+                episodes_path=None, run_matrix=None, parallel=None) -> dict:
     echoed: Counter = Counter()
     models: Counter = Counter()
     usage: Counter = Counter()
@@ -451,5 +553,6 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
                   "billed_est": sum(billed) if None not in billed else None,
                   "costs_csv_row_appended": cost_row is not None},
         raw_transcript_path=_rel(raw_path), paid=bool(getattr(transport, "paid", False)),
-        n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs), **extra)
+        n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs),
+        parallel=parallel or {"max_episodes_in_flight": 1}, **extra)
     return json.loads(path.read_text(encoding="utf-8"))

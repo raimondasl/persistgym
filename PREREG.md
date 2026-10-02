@@ -70,6 +70,7 @@ The D items left these operational details open, and this draft had to fill them
     - **PersistGym runs** go one at a time, but a run may play up to 16 episodes in parallel. This changes no payload and no cost. The run reserves spend for the episodes in flight, so it never exceeds its planned spend.
     - **Two streams.** The ARC stream (Gemini) and the PersistGym stream (OpenAI) may run at the same time, each with its own paid-run lock and its own approval blocks. Block 3 is approved as two blocks: `3-arc` (the 24 ARC path runs) and `3-persistgym` (the PersistGym main sweep).
     - The code for the per-stream locks and the parallel episodes lands as $0 pull requests before block 3, and the hold's code (line 12) before block 2. Until the per-stream locks land, one paid run at a time overall.
+16. **Where an error re-run goes in the back-to-back order** (§7.5, D19; line 15): the re-run starts right after the run it replaces, before the next run in the block's order (SEED + 2 in block 2, SEED + 3 in block 3); the rest of the order is unchanged. Rec.: yes. **Added by Claude after the researcher's answers, to settle a point the reviews found open; confirmed by the researcher's merge of PR #4.**
 
 ### 0.4 Freeze procedure
 1. **Before the freeze** (PLAN §16.3):
@@ -88,7 +89,7 @@ The D items left these operational details open, and this draft had to fill them
 | Date | 2026-10-01 (the researcher's local date, UTC−4; the freeze commit's UTC time is recorded with its SHA in `results/decisions.md`) |
 | Freeze commit | The merge of PR #4 into `main`; its SHA is recorded in `results/decisions.md` after the merge (step 4) |
 | D-items resolved (D1-D39) | All 39, decided 2026-10-01 (§16) |
-| §0.3 lines confirmed | All 15 answered on 2026-10-01: lines 1-11, 13 and 14 confirmed as recommended; lines 12 and 15 changed by the researcher and written in (§0.3) |
+| §0.3 lines confirmed | All 15 answered on 2026-10-01: lines 1-11, 13 and 14 confirmed as recommended; lines 12 and 15 changed by the researcher and written in (§0.3). Line 16 (error re-run position) added by Claude and confirmed by the merge of PR #4 |
 | Operational-slice commit used for D14, D16, D21, D22, D27, D28 | `ef251ba` (run `results/arc_public_ops/20261001T035436Z/`); SP80 and TN36 recordings added in run `results/arc_public_ops/20261001T185155Z/` (PR #17) |
 | Merge commits of #18 (A2), #21 (ARC freeze), #19 (spend basis), #20 | `9090bca` (#18), `7955f11` (#21), `2b0a958` (#19), `46c61a1` (#20), all on `main` on 2026-10-01 |
 | Spend to date at freeze | $0 (`results/costs.csv` has no rows at this commit) |
@@ -702,6 +703,7 @@ In the pinned harness, `API_ERROR` means the ARC environment step failed, and a 
 - **Final as is:** `GAME_WIN`, `ACTION_BUDGET`, `COST_CAP` (§7.7), and `TIME_BUDGET` outside a latency incident (flagged).
 - **Counted run:** the re-run replaces the errored run in every primary analysis. If the re-run also ends in a re-run-eligible exit, it is counted as is, with levels cleared before the end scoring normally, and it is flagged. There is no second re-run.
 - **Both runs are reported** (as written). A sensitivity analysis scores the original runs as is.
+- **When:** the re-run starts right after the run it replaces, ahead of the next run in the block's order (§7.4); the rest of the order is unchanged (§0.3, line 16).
 
 (decided 2026-10-01, D19)
 

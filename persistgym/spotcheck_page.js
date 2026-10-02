@@ -2,9 +2,10 @@
 
    Findings live in this browser's localStorage, one key per episode, under one namespace that
    every page of the package shares, so each page can export all of them. Every storage access
-   is wrapped in try/catch: when storage is blocked the page still works, keeps the findings
-   in memory until it is closed and says so. Nothing is ever pre-filled: an episode has a
-   verdict only after the reviewer picks one. */
+   is wrapped in try/catch: a finding this page cannot write is kept in memory until the page
+   is closed (the page says so and asks before closing), and findings already in storage
+   are still read and exported. Nothing is ever pre-filled: an episode has a verdict only
+   after the reviewer picks one. */
 "use strict";
 
 var SpotCSV = (function () {
@@ -60,8 +61,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = SpotCSV;
   var data = JSON.parse(document.getElementById("spotcheck-data").textContent);
   var NS = data.ns;
   var VERDICTS = data.verdicts;
-  var memory = {};
-  var storageOk = probe();
+  var unsaved = {};  // findings this page could not write to storage, by episode id
   var timers = {};
 
   // ---- storage ------------------------------------------------------------------------
@@ -80,35 +80,34 @@ if (typeof module !== "undefined" && module.exports) module.exports = SpotCSV;
     return typeof v === "string" && Object.prototype.hasOwnProperty.call(VERDICTS, v);
   }
 
+  function has(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+  }
+
+  // The finding of one episode: this page's unsaved one if any, else the stored one.
   function load(id) {
-    if (storageOk) {
-      var raw = null;
-      try {
-        raw = window.localStorage.getItem(NS + id);
-      } catch (e) {
-        storageOk = false;
-        showStorageWarning();
-      }
-      if (storageOk) {
-        try {
-          var rec = raw ? JSON.parse(raw) : null;
-          return rec && typeof rec === "object" ? rec : null;
-        } catch (e) {
-          return null;  // an unreadable entry counts as not reviewed
-        }
-      }
+    if (has(unsaved, id)) return unsaved[id];
+    var raw = null;
+    try {
+      raw = window.localStorage.getItem(NS + id);
+    } catch (e) {
+      return null;  // storage cannot be read at all
     }
-    return Object.prototype.hasOwnProperty.call(memory, id) ? memory[id] : null;
+    try {
+      var rec = raw ? JSON.parse(raw) : null;
+      return rec && typeof rec === "object" ? rec : null;
+    } catch (e) {
+      return null;  // an unreadable entry counts as not reviewed
+    }
   }
 
   function save(id, rec) {
-    memory[id] = rec;
-    if (!storageOk) return false;
     try {
       window.localStorage.setItem(NS + id, JSON.stringify(rec));
+      delete unsaved[id];
       return true;
     } catch (e) {
-      storageOk = false;
+      unsaved[id] = rec;
       showStorageWarning();
       return false;
     }
@@ -248,7 +247,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = SpotCSV;
       var updates = [], unknown = 0, bad = 0, conflicts = 0;
       rows.forEach(function (r) {
         if (r.length === 1 && r[0] === "") return;
-        if (r.length !== SpotCSV.COLUMNS.length || !known[r[0]]) { unknown++; return; }
+        var e = r.length === SpotCSV.COLUMNS.length && has(known, r[0]) ? known[r[0]] : null;
+        if (!e || r[1] !== e[1] || r[2] !== String(e[2])) { unknown++; return; }
         var v = r[3], notes = r[4];
         if (v && !isVerdict(v)) { bad++; return; }
         if (!v && !notes) return;
@@ -265,7 +265,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = SpotCSV;
       updates.forEach(function (u) { save(u[0], { verdict: u[1], notes: u[2], updated_utc: now }); });
       refreshAll();
       message("Imported " + updates.length + " row(s) with a verdict or notes" +
-              (unknown ? "; skipped " + unknown + " row(s) with an unknown episode id" : "") +
+              (unknown ? "; skipped " + unknown + " row(s) whose episode id, task cell or " +
+                         "seed is not in this package" : "") +
               (bad ? "; skipped " + bad + " row(s) with an unknown verdict" : "") + ".");
     };
     reader.onerror = function () { message("Could not read the file."); };
@@ -337,6 +338,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = SpotCSV;
     });
   });
 
-  if (!storageOk) showStorageWarning();
+  // Findings that only this page holds are lost when it closes: the browser asks first.
+  window.addEventListener("beforeunload", function (ev) {
+    if (Object.keys(unsaved).length) {
+      ev.preventDefault();
+      ev.returnValue = "";
+    }
+  });
+
+  if (!probe()) showStorageWarning();
   refreshAll();
 })();

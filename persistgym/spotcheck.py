@@ -190,17 +190,19 @@ def _context(text: str, a: int, b: int, width: int = 32) -> str:
 def scan_episode(ep: Episode, m: Marks | None = None) -> dict:
     """Where an option string or the target key occurs in the episode text (system prompt and
     every observation) outside the places it belongs. Option strings belong in the need
-    step's option list and, for an observed fact, in its binding; the key belongs in the
-    evidence bindings and the need question. Both lists should be empty."""
+    step's option list and, for an observed fact, in its binding at the step that reveals
+    it; the key belongs in the evidence bindings at the steps that reveal them (a rule in the
+    system prompt binds no entity) and in the need question. So a binding repeated at
+    another step is reported too. Both lists should be empty."""
     m = m or Marks.of(ep)
-    fact_sentences = [c.sentence for c in ep.components if c.role == "fact"]
-    evidence_sentences = [c.sentence for c in ep.components]
     out: dict[str, list[dict]] = {"options_outside": [], "key_outside": []}
     texts = [("system prompt", ep.system_prompt, None)] + [
         (f"step {s.index}", s.observation, s) for s in ep.steps]
     for where, text, st in texts:
-        allowed_opt = [(a, b) for sent in fact_sentences for a, b in _find_all(text, sent)]
-        allowed_key = [(a, b) for sent in evidence_sentences for a, b in _find_all(text, sent)]
+        here = [c for c in ep.components if c.step == (None if st is None else st.index)]
+        allowed_opt = [(a, b) for c in here if c.role == "fact"
+                       for a, b in _find_all(text, c.sentence)]
+        allowed_key = [(a, b) for c in here for a, b in _find_all(text, c.sentence)]
         if st is not None and st.kind == "need":
             allowed_opt += [(x.start(), x.end()) for x in OPTION_LINE.finditer(text)
                             if x.start() >= st.event_start]
@@ -320,11 +322,12 @@ def _summary(ep: Episode, m: Marks) -> str:
 def _scan_html(ep: Episode, scan: dict) -> str:
     opt, key = scan["options_outside"], scan["key_outside"]
     if not opt and not key:
-        where = ("the option list and the fact's binding" if ep.cell.fact == "observed"
-                 else "the option list")
+        where = ("the option list and the fact's binding at its evidence step"
+                 if ep.cell.fact == "observed" else "the option list")
         return ('<p class="scan ok">Automated scan of the whole episode text (system prompt and '
                 f"every observation, log filler included): no option string outside {where}; "
-                "the target key only in the evidence bindings and the need question.</p>")
+                "the target key only in the evidence bindings at their evidence steps and in "
+                "the need question.</p>")
     items = "".join(
         f"<li>{what} <code>{_esc(h['match'])}</code> at {_esc(h['where'])}: "
         f"<code>{_esc(h['context'])}</code></li>"
@@ -335,14 +338,15 @@ def _scan_html(ep: Episode, scan: dict) -> str:
 
 
 def _step_html(s, m: Marks) -> tuple[str, bool]:
-    """One step of the full episode, and whether Skim shows it (evidence, the target key or
-    an option string anywhere in its observation). The log tail (console header, filler and
-    end-of-log line) is collapsed and opens by itself when it holds a marked string; the
-    EVENT line is always shown."""
+    """One step of the full episode, and whether Skim shows it (evidence, a distractor
+    binding, the target key or an option string anywhere in its observation). The log tail
+    (console header, filler and end-of-log line) is collapsed and opens by itself when it
+    holds a marked string; the EVENT line is always shown."""
     ev_at = s.event_start - len(EVENT_PREFIX)
     log, f_log = highlight(s.observation[:ev_at], m)
     event, f_event = highlight(s.observation[ev_at:], m)
-    flag = s.kind in ("reveal", "need") or bool((f_log | f_event) & {"ev", "key", "opt"})
+    flag = (s.kind in ("reveal", "distractor", "need")
+            or bool((f_log | f_event) & {"ev", "dist", "key", "opt"}))
     kind = {"routine": f"routine ({s.routine_type})", "reveal": "evidence",
             "distractor": "distractor binding", "need": "need step"}[s.kind]
     labels = ", ".join(s.reveals)
@@ -388,7 +392,7 @@ def render_card(ep: Episode) -> str:
         f'<pre class="need-filler">{filler}</pre><pre>{foot.lstrip()}</pre>\n'
         f"<h3>Full episode, step by step</h3>\n"
         f'<div class="step-tools"><label><input type="checkbox" class="skim-toggle"> Skim: only '
-        f"steps with evidence, the target key or an option string</label>"
+        f"steps with evidence, a distractor binding, the target key or an option string</label>"
         f'<button type="button" data-action="expand-logs">Expand all logs</button>'
         f'<button type="button" data-action="collapse-logs">Collapse all logs</button>'
         f"</div>\n"
@@ -451,7 +455,10 @@ def render_cell_page(cell_id: str, eps: list[Episode], pkg: dict) -> str:
 def _audit_rows(audits: dict) -> str:
     rows = []
     for c in audits["checks"]:
-        res = '<span class="pass">pass</span>' if c["pass"] else '<span class="fail">FAIL</span>'
+        res = ('<span class="fail">FAIL</span>' if not c["pass"] else
+               '<span class="pass">pass</span>' if c.get("ran", True) else
+               '<span class="muted">not run: the chi-square test needs at least 5 templates '
+               "per category</span>")
         rows.append(f"<tr><td><code>{_esc(c['check'])}</code></td><td>{_esc(c['what'])}</td>"
                     f"<td>{res}</td></tr>")
     return "".join(rows)
@@ -465,10 +472,16 @@ def render_index(pkg: dict) -> str:
         + "".join(f'<td class="num" data-cell-count="{cell}|{v}"></td>' for v in VERDICTS)
         + "</tr>" for cell in pkg["task_cells"])
     a = pkg["audits"]
-    audit_note = ('<p class="pass">Every check passed on these templates.</p>' if a["pass"] else
-                  '<p class="fail">At least one check FAILED: tell Claude before reviewing.</p>'
-                  if a["pass"] is False else
-                  '<p class="fail">The audits were not run for this build.</p>')
+    not_run = [c["check"] for c in a["checks"] if c["pass"] and not c.get("ran", True)]
+    audit_note = (
+        '<p class="fail">At least one check FAILED: tell Claude before reviewing.</p>'
+        if a["pass"] is False else
+        '<p class="fail">The audits were not run for this build.</p>' if a["pass"] is None else
+        f'<p class="pass">Every check that ran passed on these templates.</p><p class="small '
+        f'muted">Not run here: {", ".join(not_run)}. Their chi-square test needs more '
+        "templates than this package has. The exact check that each block of 10 templates "
+        "uses every letter and rank once did run.</p>"
+        if not_run else '<p class="pass">Every check passed on these templates.</p>')
     seeds = pkg["template_seeds"]
     n_shortcut = sum(c["audit"] == "shortcut_audit" for c in a["checks"])
     body = f"""<h1>G1 spot-check: PersistGym-lite validity episodes</h1>
@@ -484,8 +497,11 @@ the base variant of validity templates {_esc(pkg["template_ids"][0])} to
 cells, {pkg["n_episodes"]} episodes, rendered with the default generator config (generator
 {_esc(pkg["generator_version"])}, config hash <code>{pkg["config_hash"][:12]}</code>), the
 same templates and config as the luna validity runs. Those runs sent the restated and withheld
-renderings of these templates; the base rendering shown here differs from them only in the need
-event (restated) or in the evidence bindings (withheld).</p>
+renderings of these templates. The base rendering shown here differs from the restated one only
+at the need step, where the restated one puts the evidence records before the question and keeps
+a shorter log filler to stay at v tokens, and from the withheld one only in the fact and clue
+bindings, which the withheld one replaces with stand-in bindings of equal length (the rule is
+kept).</p>
 <p><strong>The pages show the answer.</strong> Every card marks the correct option and the evidence,
 so you can judge whether anything else gives the answer away. <strong>There is no model output
 here</strong>: no replies, transcripts or scores.</p>
@@ -516,19 +532,20 @@ miss</strong>: meaning, salience, wording, and patterns a person would notice.</
 <details><summary>The {len(a["checks"])} checks and their results</summary>
 <div class="table-wrap"><table><thead><tr><th>Check</th><th>What it verifies</th><th>Result</th>
 </tr></thead><tbody>{_audit_rows(a)}</tbody></table></div></details>
-<h2>How to review (about 1-2 minutes per episode)</h2>
+<h2>How to review</h2>
 <ol>
 <li>Read the summary box: target key, true or derived value, options with the correct one marked,
 evidence steps.</li>
 <li>Check the automated scan line under it (it should find nothing).</li>
 <li>Read the need-step observation in full.</li>
-<li>Go through the episode: <em>Skim</em> shows only the steps with evidence, the target key or an
-option string; every step's log filler is collapsed and opens with a click (a filler that holds a
-marked string opens by itself and its label turns red).</li>
+<li>Go through the episode: <em>Skim</em> shows only the steps with evidence, a distractor
+binding, the target key or an option string; every step's log filler is collapsed and opens with
+a click (a filler that holds a marked string opens by itself and its label turns red).</li>
 <li>Pick a verdict and write a note: what you saw and where (step and text).</li>
 </ol>
-<p>Verdicts: <strong>No shortcut</strong>: nothing on the page lets an agent beat chance (10%)
-without the evidence. <strong>Possible shortcut</strong>: something might help; describe it.
+<p>Verdicts: <strong>No shortcut</strong>: nothing in the episode text other than the evidence
+bindings lets an agent beat chance (10%). <strong>Possible shortcut</strong>: something might
+help; describe it.
 <strong>Shortcut</strong>: the evidence is not needed, or the episode is broken; describe it. No
 verdict is pre-filled or suggested.</p>
 <h2>Highlights</h2>
@@ -594,8 +611,9 @@ AUDIT_WHAT = {
     "full_history_context_within_max": "full history at the need step stays within 64k",
     "cells_share_need_step_options_routine_and_distractors":
         "the 8 cells of a template share need step, options, routine text and distractors",
-    "correct_letter_balanced": "the correct letter is balanced",
-    "correct_rank_balanced": "the correct value's rank among the options is balanced",
+    "correct_letter_balanced": "the correct letter is balanced (chi-square test)",
+    "correct_rank_balanced":
+        "the correct value's rank among the options is balanced (chi-square test)",
     "letter_rank_and_n_clues_exact_within_complete_blocks":
         "each block of 10 templates uses every letter and rank once and 5/5 clue counts",
     "lookup_serves_keys_and_refuses_after_cap":
@@ -604,21 +622,27 @@ AUDIT_WHAT = {
                            "option, prior letter) score ≤ chance + 10pp on every view",
     "partial_memory": "derived cells: no proper subset of the clues narrows the options; "
                       "partial-memory heuristics ≤ chance + 10pp",
-    "oracles": "the key and text oracles score 100%, the lookup oracle 100% where lookup "
-               "is offered",
+    "oracles": "the key and text oracles answer every routine step, and every need step of "
+               "the base and restated episodes, correctly; the no-memory lookup oracle answers "
+               "every need step where lookup is offered (base) or the records are restated",
 }
 
 
 def run_audits(eps: list[Episode], cfg: GeneratorConfig, n: int) -> dict:
     """The $0 audits of `persistgym render` (validity.py) on these templates."""
-    checks = [{"audit": name, "check": c["check"], "pass": c["pass"]}
+    # The chi-square balance checks pass without a test below 5 templates per category
+    # (chi2_p is None); they are marked as not run, so the index does not count them as
+    # passed. The exact per-block check covers these templates.
+    checks = [{"audit": name, "check": c["check"], "pass": c["pass"],
+               "ran": not (isinstance(c["detail"], dict) and "chi2_p" in c["detail"]
+                           and c["detail"]["chi2_p"] is None)}
               for name, report in (("shortcut_audit", shortcut_audit(eps)),
                                    ("lookup_audit", lookup_audit(eps))) for c in report]
     cal = [sample_template("main", i, cfg).correct_label for i in range(min(n, 100))]
     hb = heuristic_baselines(eps, calibration_labels=cal)
     pm = partial_memory_from_episodes(eps) or {}
     orc = oracle_scores(eps)
-    checks += [{"audit": name, "check": name, "pass": ok}
+    checks += [{"audit": name, "check": name, "pass": ok, "ran": True}
                for name, ok in (("heuristic_baselines", bool(hb.get("pass", True))),
                                 ("partial_memory", bool(pm.get("pass", True))),
                                 ("oracles", bool(orc["pass"])))]
@@ -691,7 +715,8 @@ address do not show under another; move them with Export and Import.
 2. Click **Export findings CSV** (on any page). It downloads `findings.csv` with all
    {pkg["n_episodes"]} rows and the columns `{",".join(FINDINGS_COLUMNS)}` (RFC 4180);
    unreviewed episodes have an empty verdict.
-3. Save it as `{pkg["findings_path"]}`.
+3. Save it as `{pkg["findings_path"]}`. Move the downloaded file as it is: a spreadsheet
+   program may change its encoding or separators when it saves.
 4. Tell Claude. Claude commits the file, checks it and counts the verdicts per task cell with
    the command below, and reports the outcome at G1 in `results/decisions.md`. The go/no-go
    call is yours.
@@ -804,8 +829,11 @@ def run(args: argparse.Namespace) -> int:
         print(f"refused: --n must be a positive multiple of the balance block K={K} "
               f"(PREREG D7), got {args.n}", file=sys.stderr)
         return 2
+    # the command as typed from the repository root, without this machine's paths
+    command = (f"uv run python -m persistgym spotcheck --n {args.n}"
+               + (f" --out-id {args.out_id}" if args.out_id else ""))
     try:
-        manifest = build(args.out_id, args.n, command=" ".join(sys.argv))
+        manifest = build(args.out_id, args.n, command=command)
     except SpotcheckError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
@@ -821,6 +849,8 @@ def run(args: argparse.Namespace) -> int:
     for c in a["checks"]:
         if not c["pass"]:
             print(f"  [FAIL] {c['check']}")
+        elif not c.get("ran", True):
+            print(f"  [not run: too few templates for chi-square] {c['check']}")
     print(f"  audits on {a['n_episodes']} episodes ({','.join(a['variants'])}): "
           f"{'pass' if a['pass'] else 'FAIL'}")
     return 0 if a["pass"] else 1

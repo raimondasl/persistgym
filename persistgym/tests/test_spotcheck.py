@@ -19,7 +19,7 @@ from common.runmeta import REPO_ROOT, config_hash, prereg_version
 from persistgym import spotcheck, tokens
 from persistgym.cli import main
 from persistgym.config import GENERATOR_VERSION, GeneratorConfig
-from persistgym.episode import ALL_CELLS, TaskCell
+from persistgym.episode import ALL_CELLS, VARIANTS, TaskCell
 from persistgym.render import generate
 from persistgym.template import template_id
 
@@ -104,6 +104,31 @@ def test_episode_ids_are_those_of_the_validity_runs(built):
     assert manifest["template_seeds"] == list(range(50_000, 50_020))
     assert manifest["indices"] == list(range(20))
     assert manifest["template_ids"] == [template_id("validity", i) for i in range(20)]
+
+
+def test_base_differs_from_the_runs_renderings_as_the_index_says(built):
+    """The index page says the base rendering differs from the restated one only at the need
+    step (records before the question, a shorter log filler) and from the withheld one only
+    in the evidence bindings (the same log filler)."""
+    _, html_dir, _ = built
+    index = " ".join((html_dir / "index.html").read_text(encoding="utf-8").split())
+    assert "keeps a shorter log filler" in index and "stand-in bindings of equal length" in index
+    for _, eps in generate("validity", range(2), GeneratorConfig(), ALL_CELLS, VARIANTS):
+        by = {(e.cell.id, e.variant): e for e in eps}
+        for c in ALL_CELLS:
+            b, r, w = (by[(c.id, v)] for v in ("base", "restated", "withheld"))
+            assert b.system_prompt == r.system_prompt == w.system_prompt
+            pairs_r = list(zip(b.steps, r.steps, strict=True))
+            pairs_w = list(zip(b.steps, w.steps, strict=True))
+            assert [s.index for s, x in pairs_r if s.observation != x.observation] == [
+                b.need_step]
+            assert r.need.event.endswith(b.need.event) and len(r.need.event) > len(b.need.event)
+            assert (r.need.filler_end - r.need.filler_start
+                    < b.need.filler_end - b.need.filler_start)
+            assert [s.index for s, x in pairs_w if s.observation != x.observation] == (
+                b.reveal_steps)
+            assert all(s.observation[: s.filler_end] == x.observation[: x.filler_end]
+                       for s, x in pairs_w)
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +217,29 @@ def test_pages_hold_every_episode_and_nothing_external(built):
     index = " ".join(pages["index.html"].split())
     assert "<strong>The pages show the answer.</strong>" in index
     assert "<strong>There is no model output here</strong>" in index
-    assert "Every check passed" in index
+    # 20 templates are too few for the chi-square balance checks: shown as not run, not as
+    # passed; every other check ran and passed
+    assert "Every check that ran passed" in index and "Every check passed" not in index
+    not_run = {c["check"] for c in manifest["audits"]["checks"] if not c["ran"]}
+    assert not_run == {"correct_letter_balanced", "correct_rank_balanced"}
+    assert index.count("not run: the chi-square test") == 2
+    assert all(c["pass"] for c in manifest["audits"]["checks"])
+    for name in {c["check"] for c in manifest["audits"]["checks"]}:
+        assert f"<code>{name}</code>" in index
+
+
+def test_skim_shows_evidence_distractor_and_need_steps(built):
+    """Skim keeps the system prompt, the evidence steps, the distractor bindings and the
+    need step, and hides plain routine steps (none of which holds a marked string here)."""
+    _, html_dir, _ = built
+    for cid in ("observed-nonrec-far", "derived-rec-near"):
+        ep = _one(cid)
+        text = (html_dir / f"{cid}.html").read_text(encoding="utf-8")
+        card = text.split(f'data-episode="{ep.episode_id}"')[1].split("</article>")[0]
+        flagged = [int(i) for i in re.findall(r'<div class="step flag" data-step="(\d+)"', card)]
+        want = sorted({*ep.reveal_steps, *(d.step for d in ep.distractors), ep.need_step})
+        assert flagged == want
+        assert f"Skim is on: showing {len(want)} of {ep.n_steps} steps." in card
 
 
 def test_summary_box_shows_the_answer(built):
@@ -247,6 +294,48 @@ def test_scan_and_page_flag_a_leak():
     assert '<details class="filler leak" open>' in step
     assert f'<mark class="opt">{wrong}</mark>' in step
     assert re.search(rf'<div class="step flag" data-step="{st.index}"', card)
+
+
+def _insert(st, at: int, s: str) -> None:
+    """Insert `s` into a step's observation at `at`, keeping the char spans right (a span
+    that ends at `at` takes the inserted text)."""
+    st.observation = st.observation[:at] + s + st.observation[at:]
+    for name in ("filler_start", "filler_end", "event_start", "event_end"):
+        if getattr(st, name) >= at:
+            setattr(st, name, getattr(st, name) + len(s))
+
+
+def test_scan_flags_a_repeated_binding_and_leaks_anywhere():
+    """The binding repeated at a routine step, an option string in the system prompt, the
+    correct value in the need step's own log filler and a clue's binding repeated in a
+    derived episode are each reported, with where they are. Digits glued to an option
+    string and the key inside a longer word are not."""
+    ep = copy.deepcopy(_one("observed-rec-near"))
+    fact = ep.components[0]
+    routine = next(s for s in ep.steps if s.kind == "routine" and s.index > fact.step)
+    _insert(routine, routine.event_end, " " + fact.sentence)
+    ep.system_prompt += f"\nQueue {ep.options[0].value} is closed."
+    need = ep.need
+    _insert(need, need.filler_start + 10, f" retry={ep.target_value} ")
+    _insert(need, need.filler_start + 5, f" id={ep.target_value}7 {ep.entity}S ")
+    scan = spotcheck.scan_episode(ep)
+    opt = [(h["where"], h["match"]) for h in scan["options_outside"]]
+    assert sorted(opt) == sorted([("system prompt", str(ep.options[0].value)),
+                                  (f"step {routine.index} (event)", str(ep.target_value)),
+                                  (f"step {need.index} (log filler)", str(ep.target_value))])
+    assert [(h["where"], h["match"]) for h in scan["key_outside"]] == [
+        (f"step {routine.index} (event)", ep.entity)]
+    card = spotcheck.render_card(ep)
+    assert 'class="scan bad"' in card and "3 option string(s) and 1 target key" in card
+
+    ep = copy.deepcopy(_one("derived-nonrec-far"))
+    clue = next(c for c in ep.components if c.role == "clue")
+    other = next(s for s in ep.steps if s.kind == "routine" and s.index > clue.step)
+    _insert(other, other.event_end, " " + clue.sentence)
+    scan = spotcheck.scan_episode(ep)
+    assert scan["options_outside"] == []  # a clue value is never an option
+    assert [(h["where"], h["match"]) for h in scan["key_outside"]] == [
+        (f"step {other.index} (event)", ep.entity)]
 
 
 def test_highlight_nests_key_and_option_inside_the_binding():
@@ -324,6 +413,7 @@ def test_cli_spotcheck_and_findings(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "complete=False" in out and 'shortcut: validity-000000/observed-nonrec-near' in out
     manifest = json.loads((pkg / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["command"] == "uv run python -m persistgym spotcheck --n 10 --out-id cli"
     summary = spotcheck.summarize_findings(spotcheck.read_findings(findings, manifest), manifest)
     assert summary["totals"] == {"no_shortcut": 1, "possible_shortcut": 0, "shortcut": 1,
                                  "unreviewed": 78}

@@ -2,9 +2,11 @@
 
 `OpenAIResponsesTransport` refuses to exist, before it builds any client, unless every check
 of the shared guard passes (`common.approval.require_paid_run`, which the ARC launcher runs
-too, and `require_paid_approval`, which document them): it holds the paid-run lock
-(`common.paidlock`, taken by harnesses/cli.py before these checks: one paid run at a time);
-this checkout's results/costs.csv holds the last paid run's row; no hold stands (a paid run,
+too, and `require_paid_approval`, which document them): it holds the PersistGym stream's
+paid-run lock (`common.paidlock`, taken by harnesses/cli.py before these checks: one
+PersistGym paid run at a time, beside at most one ARC run; PREREG §0.3 line 15) and its
+experiment is a PersistGym one; this checkout's results/costs.csv holds the row of each
+stream's last paid run; no hold stands (a paid run,
 ARC or PersistGym, that ended COST_CAP or passed its run guard and that the researcher has
 not cleared with a merged line `cleared_hold: <run_id>`, common/hold.py);
 PERSISTGYM_ALLOW_PAID=1;
@@ -16,7 +18,9 @@ common/prereg.py); a positive, finite planned spend; and the researcher's approv
 
 in results/decisions.md on origin/main (fetched now), in HEAD and in the working tree,
 listing this run's experiment, with block spend + planned spend <= max_usd and room under
-the phase cap (PLAN §12, §16.2).
+the phase cap (PLAN §12, §16.2), counting the planned spend a running ARC run has reserved in
+the same block or phase. Its own planned spend is then reserved, so an ARC run that starts
+while it runs counts it too (`common.approval.reserve_spend`, PREREG §12).
 
 The costs.csv row's notes start with `common.approval.spend_tag(<name>)`
 ("approved_block=<name>;"), which is how the guard sums a block's spend.
@@ -34,11 +38,14 @@ price is still logged, priced as the requested model and flagged in the row's no
 pilot-blinded experiment (`harnesses.blinding`, PREREG §11) the row's `reasoning_tokens` is
 left empty; the per-call values stay in the raw transcript under results/raw/.
 
-After appending the row, `finalize` records the run next to the lock as the last paid run
-(`common.paidlock.record_last_run`). A run that made calls whose row is not in costs.csv
-(the row could not be built or written, or `finalize` never ran) keeps the lock held with the
-reason and its usage totals (`keep_lock_if_unaccounted`; the CLI calls it after every run),
-so no paid run starts on an incomplete ledger until the row is added by hand.
+After appending the row, `finalize` records the run next to the lock as the PersistGym
+stream's last paid run (`common.paidlock.record_last_run`), then removes its spend
+reservation (as it does for a run that made no call). A run that made calls whose row is not
+in costs.csv (the row could not be built or written, or `finalize` never ran) keeps the lock
+held with the reason and its usage totals (`keep_lock_if_unaccounted`; the CLI calls it after
+every run), so no PersistGym paid run starts on an incomplete ledger until the row is added
+by hand, and keeps its reservation, which goes on counting against ARC runs until it is
+deleted by hand.
 
 The OpenAI SDK reads its API key from the environment itself; this module never reads, prints
 or stores a key. Load keys with `uv run --env-file .env ...`.
@@ -189,6 +196,7 @@ class OpenAIResponsesTransport:
             return None
         self._finalized = True
         if self.ledger.n_calls == 0:
+            self._release_reservation()      # spent nothing
             return None
         try:
             mismatches = sum(1 for e in self.echo_log
@@ -212,13 +220,33 @@ class OpenAIResponsesTransport:
             raise
         self.costs_row = row
         try:
-            paidlock.record_last_run(self.paid_lock.path, run_id=run_id,
-                                     costs_csv=self.approval.costs_path,
+            paidlock.record_last_run(self.paid_lock.path, stream=self.paid_lock.stream,
+                                     run_id=run_id, costs_csv=self.approval.costs_path,
                                      timestamp_utc=row["timestamp_utc"])
         except OSError as e:
             log.warning("could not record the last paid run next to %s: %s",
                         self.paid_lock.path, e)
+        # The spend is in costs.csv now: the reservation stops counting against the ARC
+        # stream (PREREG §12). After the record, so a run starting in between counts this
+        # spend twice, not never.
+        self._release_reservation()
         return row
+
+    def _release_reservation(self) -> None:
+        """Remove this transport's spend reservation (`common.approval.reserve_spend`). If
+        that fails it stays, counting against the ARC stream until the operator deletes it,
+        and the next PersistGym run refuses and says so."""
+        rid = getattr(self.approval, "reservation_id", "")
+        if not rid:
+            return
+        try:
+            paidlock.release_reservation(self.paid_lock.path, stream=self.paid_lock.stream,
+                                         reservation_id=rid)
+        except OSError as e:
+            log.warning("could not remove the spend reservation %s: %s; delete it by hand, "
+                        "its spend is in costs.csv",
+                        paidlock.reservation_path(self.paid_lock.path, self.paid_lock.stream),
+                        e)
 
     @property
     def unaccounted(self) -> bool:
@@ -244,6 +272,8 @@ class OpenAIResponsesTransport:
                 f"show" + (f" ({cause})" if cause else "")
                 + f": add its row by hand, with {spend_tag(self.approval.approved_block)} at "
                 f"the start of its notes and these totals: {json.dumps(totals)}; the run's "
-                f"files are under results/ and results/raw/. Then delete this lock file")
+                f"files are under results/ and results/raw/. Then delete this lock file and "
+                f"the run's spend reservation "
+                f"{paidlock.reservation_path(self.paid_lock.path, self.paid_lock.stream)}")
             paidlock.keep(self.paid_lock.path, self.paid_lock.info, self.kept_because)
         return self.kept_because

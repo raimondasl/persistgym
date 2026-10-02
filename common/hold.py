@@ -13,9 +13,11 @@ module only writes and reads the record.
 hold placed by a run in one worktree stops paid runs in all of them. It is keyed by that
 folder, not by the lock's file name, so per-stream locks in the same folder share it. Each
 line is one hold, a JSON object naming the run (`run_id`), its `experiment`, the `reason`
-and the time it was placed (`placed_utc`), plus details. Lines are only ever appended: code
-never removes or edits a hold. A hold is cleared by the researcher's merged line, not by
-deleting the record, and removing that line again puts the hold back.
+and the time it was placed (`placed_utc`), plus details. Lines are only ever appended, under
+an operating-system lock on the file that reading takes too (common/oslock.py), since runs of
+both streams may place a hold at the same moment: code never removes or edits a hold. A hold
+is cleared by the researcher's merged line, not by deleting the record, and removing that
+line again puts the hold back.
 
 **Who writes it.** The ARC launcher (arc/run_path.py), whenever a run's `exit_reason` or
 `agent_exit_reason` is `COST_CAP`, or a game run's no-cache list spend passed its harness
@@ -50,6 +52,8 @@ import socket
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+
+from common import oslock
 
 HOLDS_NAME = "persistgym-paid-holds.jsonl"
 COST_CAP = "COST_CAP"
@@ -93,15 +97,17 @@ def place_hold(lock: Path, *, run_id: str, experiment: str, reason: str,
               "host": socket.gethostname(), **details}
     data = (json.dumps(record, ensure_ascii=True) + "\n").encode("ascii")
     path = holds_path(lock)
-    with path.open("a+b") as f:
-        f.seek(0, os.SEEK_END)
-        if f.tell() > 0:
-            f.seek(-1, os.SEEK_END)
-            if f.read(1) != b"\n":   # a torn last line must not swallow this hold
+    # Under the record's operating-system lock (common/oslock.py), which `read_holds` takes
+    # too: runs of both streams may place a hold at the same moment.
+    with oslock.locked(path, os.O_RDWR | os.O_CREAT | os.O_APPEND) as fd:
+        size = os.lseek(fd, 0, os.SEEK_END)
+        if size > 0:
+            os.lseek(fd, size - 1, os.SEEK_SET)
+            if os.read(fd, 1) != b"\n":   # a torn last line must not swallow this hold
                 data = b"\n" + data
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
+            os.lseek(fd, 0, os.SEEK_END)
+        oslock.write_all(fd, data)
+        os.fsync(fd)
     return record
 
 
@@ -110,7 +116,8 @@ def read_holds(lock: Path) -> list[Hold]:
     there is no record. Raises HoldRecordError if a line cannot be read as a hold."""
     path = holds_path(lock)
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        with oslock.locked(path) as fd:
+            text = oslock.read_all(fd).decode("utf-8", errors="replace")
     except FileNotFoundError:
         return []
     except OSError as e:

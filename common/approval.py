@@ -41,15 +41,29 @@ merged to main, refuses: only the merged (frozen) PREREG unlocks paid calls (PLA
 also requires that merged text to be frozen (`prereg_not_frozen`: the rule of
 common/prereg.py), so a draft merged to main does not unlock paid calls either.
 
-**One paid run at a time.** `require_paid_run` also refuses unless the run holds the
-paid-run lock (common/paidlock.py), taken before these checks so that two runs cannot both
-pass them, and unless this checkout's costs.csv holds the last paid run's row.
+**One paid run at a time per stream** (PREREG §0.3 line 15, §12). `require_paid_run` also
+refuses unless the run holds its stream's paid-run lock (common/paidlock.py: ARC or
+PersistGym), taken before these checks so that two runs of a stream cannot both pass them,
+unless the run's experiment belongs to that stream, and unless this checkout's costs.csv
+holds the row of each stream's last paid run.
+
+**Runs of both streams at once: spend reservations** (PREREG §12, "Operational"). One ARC
+run and one PersistGym run may go at the same time, and they may share a block (block 1
+lists experiments of both streams) and a phase (phases 0 and 2). So the last check, under
+an operating-system lock that both streams take (`paidlock.budget_mutex`), counts the
+planned spend of every other running run as already spent: a run is refused if block spend
++ the planned spend reserved by other running runs of the block + its own planned spend >
+max_usd, and likewise for the phase cap. If it passes, it writes its own reservation, which
+counts against the others until its costs.csv row is written. Two runs that overlap cannot
+both use the same room.
 
 **No paid run while a hold stands** (PREREG §0.3 line 12, §7.7, §12). A paid run that ends
 `COST_CAP`, or whose spend passed its run guard before the guard could stop it, places a
 hold (common/hold.py, a record next to the lock). `require_paid_run` refuses while any hold
-in that record is not cleared, naming each run and the line that clears it. The researcher clears the hold of run <run_id> with one line in
-results/decisions.md:
+in that record is not cleared, naming each run and the line that clears it, and while a
+paid-run lock of either stream is kept by a run that may have placed a hold the record does
+not show (`paidlock.unrecorded_hold`). The researcher clears the hold of run <run_id> with
+one line in results/decisions.md:
 
     cleared_hold: <run_id>
 
@@ -66,20 +80,22 @@ cost where a row has no billed estimate. Every cap and estimate for PersistGym i
 §16 and §17 is in Flex-billed dollars, and D23 makes the billed estimate the primary cost
 basis; counting Flex at list would trip the caps at about half the real spend. Block spend
 is the sum of `spend_usd` over results/costs.csv rows whose `notes` contain
-"approved_block=<name>;". The run is refused if block spend + planned spend > max_usd, and
-the transport stops a run before a call once the run's own spend, measured the same way,
-reaches the planned spend. The phase-cap check (`common.costs.headroom`) uses the same
-measure. The list cost is still logged in every row and reported. Every costs.csv row must
-be readable for either check: a cost that is not empty or a finite, non-negative number, a
-row with neither cost, or an experiment with no budget phase, refuses. The billed estimate
+"approved_block=<name>;". The run is refused if block spend + planned spend (+ the planned
+spend other running runs of the block have reserved) > max_usd, and a run stops before a
+call (or, for ARC, before an action) once its own spend reaches its planned spend. The
+phase-cap check (`common.costs.headroom`) uses the same measure. The list cost is still
+logged in every row and reported. Every costs.csv row must be readable for either check: a
+cost that is not empty or a finite, non-negative number, a row with neither cost, or an
+experiment with no budget phase, refuses. The billed estimate
 comes from our price table; the provider-side hard spend limits, which the researcher sets
 in real billed dollars, remain the backstop against under-estimation.
 
 The guard protects against mistakes (an example line, a stale or unmerged approval, a
 corrupt ledger), not against someone who edits this code or the repository's git config.
 
-The guard never writes an approval. The only thing it changes is the remote-tracking ref
-(refs/remotes/origin/main), by fetching.
+The guard never writes an approval. The only things it changes are the remote-tracking ref
+(refs/remotes/origin/main), by fetching, and the run's own spend reservation next to its
+lock.
 """
 
 from __future__ import annotations
@@ -88,7 +104,7 @@ import math
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -154,7 +170,12 @@ class PaidApproval:
     experiments: tuple[str, ...] = ()
     max_usd: float = 0.0
     block_spent_usd: float = 0.0
-    block_headroom_usd: float = 0.0  # max_usd - block spend - planned
+    block_headroom_usd: float = 0.0  # max_usd - block spend - planned (- reserved by others)
+    # Set by `require_paid_run` once the run's spend is reserved (`reserve_spend`):
+    stream: str = ""
+    reservation_id: str = ""         # the run's reservation, released after its costs row
+    reserved_block_usd: float = 0.0  # planned spend other running runs hold in the block
+    reserved_phase_usd: float = 0.0  # ... and in the phase
 
 
 def known_experiment(name: str) -> bool:
@@ -662,40 +683,76 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
 def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | None,
                      experiment: str, planned_usd: float, costs_path: Path = costs.COSTS_CSV,
                      repo: Path = runmeta.REPO_ROOT, remote: RemoteRef = MAIN) -> PaidApproval:
-    """Every check a paid launcher runs before it may spend, in this order. Both launchers
-    call it: the ARC launcher (arc/run_path.py) and the PersistGym transport
-    (harnesses/openai_transport.py, built by harnesses/cli.py). Raises PaidCallsNotAllowed
-    with the first reason it may not:
-    1. the run holds the paid-run lock `lock` (common/paidlock.py): one paid run at a time.
-       The launcher takes it before these checks, so two runs cannot both pass them;
-    2. this checkout's costs.csv can be read and holds the last paid run's row
-       (`paidlock.last_run_missing`): the lock is shared by every checkout, the ledger is
-       not, so a run elsewhere would undercount the block and phase spend;
-    3. no hold stands (`holds_not_cleared`): every run in the hold record next to the lock
-       has its line `cleared_hold: <run_id>` on `remote` (fetched now if a hold is
-       recorded), HEAD and the working tree, and this run does not reuse the run ID (the
-       lock's `run_id`) of a run that placed a hold;
-    4. `require_paid_approval`: the paid switch, the block's approval line on `remote`
+    """Every check a paid launcher runs before it may spend, in this order, and the run's
+    spend reservation. Both launchers call it: the ARC launcher (arc/run_path.py) and the
+    PersistGym transport (harnesses/openai_transport.py, built by harnesses/cli.py). Raises
+    PaidCallsNotAllowed with the first reason it may not:
+    1. the run holds its stream's paid-run lock `lock` (common/paidlock.py): one paid run at
+       a time per stream. The launcher takes it before these checks, so two runs of a stream
+       cannot both pass them;
+    2. the run's experiment belongs to that stream (`paidlock.stream_of`): an ARC experiment
+       under the ARC lock, a PersistGym one under the PersistGym lock;
+    3. this checkout's costs.csv can be read and holds the row of each stream's last paid
+       run (`paidlock.last_run_missing`): the locks are shared by every checkout, the
+       ledger is not, so a run elsewhere would undercount the block and phase spend;
+    4. no hold stands: no paid-run lock of either stream is kept by a run that may have
+       placed a hold the record does not show (`paidlock.unrecorded_hold`), and every run
+       in the hold record next to the lock has its line `cleared_hold: <run_id>` on
+       `remote` (fetched now if a hold is recorded), HEAD and the working tree
+       (`holds_not_cleared`), and this run does not reuse the run ID (the lock's `run_id`)
+       of a run that placed a hold;
+    5. `require_paid_approval`: the paid switch, the block's approval line on `remote`
        (fetched now), HEAD and the working tree, PREREG.md committed and the same blob as on
        `remote`, the experiment listed, block and phase room;
-    5. that PREREG.md is frozen (`prereg_not_frozen`), read after 4's fetch."""
+    6. that PREREG.md is frozen (`prereg_not_frozen`), read after 5's fetch;
+    7. `reserve_spend`: under the budget mutex both streams take, block and phase room
+       counting the planned spend that the other stream's running run has reserved, then
+       this run's own reservation. The returned approval names it (`reservation_id`); the
+       launcher releases it once the run's costs.csv row is written
+       (`paidlock.release_reservation`), and releasing the lock releases it too."""
     if lock is None:
         raise PaidCallsNotAllowed(
             "paid calls need the paid-run lock (common/paidlock.py), taken by the launcher "
-            "before the spend checks: one paid run at a time. Start PersistGym runs with "
-            "`python -m harnesses` and ARC runs with `python -m arc.run_path`")
+            "before the spend checks: one paid run at a time per stream. Start PersistGym "
+            "runs with `python -m harnesses` and ARC runs with `python -m arc.run_path`")
     if not lock.holds():
         raise PaidCallsNotAllowed(
             f"this run does not hold the paid-run lock {lock.path}: it is gone or another "
-            f"run's (one paid run at a time)")
+            f"run's (one paid run at a time per stream)")
+    stream = lock.stream
+    if stream is None:
+        raise PaidCallsNotAllowed(
+            f"the paid-run lock {lock.path} names no stream ({', '.join(paidlock.STREAMS)}); "
+            f"take it with common.paidlock.paid_run_lock")
+    wanted = paidlock.stream_of(experiment)
+    if wanted is None:   # the budget experiments and the streams' have the same keys
+        raise PaidCallsNotAllowed(f"experiment {experiment!r} has no budget phase in "
+                                  f"common/costs.py, so no paid-run stream either")
+    if wanted != stream:
+        raise PaidCallsNotAllowed(
+            f"experiment {experiment!r} runs in the {wanted} stream, but this run holds the "
+            f"{stream} stream's lock: start ARC runs with `python -m arc.run_path` and "
+            f"PersistGym runs with `python -m harnesses`")
     try:
         rows = costs.read_rows(costs_path)
     except (OSError, ValueError) as e:
         raise PaidCallsNotAllowed(f"cannot read {costs_path}: {e}") from None
-    reason = paidlock.last_run_missing(lock.path, rows)
+    try:
+        with paidlock.budget_mutex(lock.path):
+            reason = paidlock.last_run_missing(lock.path, rows)
+    except OSError as e:
+        raise PaidCallsNotAllowed(f"cannot read the last paid runs next to {lock.path}: "
+                                  f"{e}") from None
     if reason is not None:
         raise PaidCallsNotAllowed(reason)
     run_id = lock.info.get("run_id") if isinstance(lock.info, dict) else None
+    reason = paidlock.unrecorded_hold(lock.path)   # a hold that could not be recorded
+    if reason is not None:
+        raise PaidCallsNotAllowed(reason)
+    try:  # the holds this check sees; one placed after it refuses in reserve_spend
+        holds_seen = {h.run_id for h in hold.read_holds(lock.path)}
+    except hold.HoldRecordError:
+        holds_seen = set()                  # holds_not_cleared refuses it
     reason = holds_not_cleared(repo, lock.path, run_id=run_id if isinstance(run_id, str)
                                else None, remote=remote)
     if reason is not None:
@@ -707,4 +764,128 @@ def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | No
     if reason is not None:
         raise PaidCallsNotAllowed(f"paid runs need the frozen, merged PREREG.md "
                                   f"(PLAN §16.3): {reason}")
-    return granted
+    return reserve_spend(lock, granted, holds_seen=holds_seen)
+
+
+def _listed(reservations: list[paidlock.Reservation]) -> str:
+    return "; ".join(r.describe() for r in reservations)
+
+
+_WAIT = ("wait for that run to end, or stop and ask the researcher. If no run of the other "
+         "stream is going, its reservation is left over from a run that did not end "
+         "cleanly: check that results/costs.csv has its row, then delete the reservation "
+         "file by hand")
+
+
+def reserve_spend(lock: paidlock.HeldLock, granted: PaidApproval, *,
+                  holds_seen: set[str] | frozenset[str] = frozenset()) -> PaidApproval:
+    """The last step of `require_paid_run` (PREREG §12, "Operational"): count the planned
+    spend of the other stream's running run against the block and phase this run would
+    spend in, and reserve this run's own. All of it under `paidlock.budget_mutex`, which both
+    streams take, so two runs going at once cannot both pass on the same room. Under the
+    mutex it reads, in this order:
+    1. the spend reservations next to the lock (`paidlock.read_reservations`). One of this
+       run's stream that this run did not write is left over from a run that did not end
+       cleanly, and refuses until the operator has deleted it by hand;
+    2. the hold record: a hold placed since `require_paid_run` checked it (`holds_seen`; by
+       a run of the other stream that ended meanwhile) refuses, and so does a lock kept
+       meanwhile by a run whose hold could not be recorded (`paidlock.unrecorded_hold`);
+    3. costs.csv and the last-run records, after the reservations, because a run that ends
+       writes its row and its record before it removes its reservation: what this reads
+       counts that run's spend once or twice, never not at all;
+    then it checks block spend + the planned spend reserved by other runs of the block +
+    this run's planned spend <= max_usd, and the same for the phase cap. If both hold it
+    writes this run's reservation (replacing an earlier one of this same run, as when a
+    probe moves to its next model) and returns `granted` with the room left after it."""
+    block, phase = granted.approved_block, granted.phase
+    try:
+        with paidlock.budget_mutex(lock.path):
+            try:
+                reservations = paidlock.read_reservations(lock.path)
+            except paidlock.ReservationError as e:
+                raise PaidCallsNotAllowed(
+                    f"{e}. While it cannot be read, its run's planned spend cannot be "
+                    f"counted, so no paid run starts: check that no paid run is going and "
+                    f"that results/costs.csv has its row, then fix or delete it by hand "
+                    f"(PREREG §12)") from None
+            for r in reservations:
+                if r.stream == lock.stream and r.token != lock.token:
+                    raise PaidCallsNotAllowed(
+                        f"a spend reservation of the {r.stream} stream is left over: "
+                        f"{r.describe()}. This run holds the {r.stream} stream's lock, so "
+                        f"the run that wrote it is not going: it did not end cleanly (it "
+                        f"crashed, or it kept its lock, which was then deleted by hand). It "
+                        f"would keep counting ${float(r.planned_usd):.2f} against block "
+                        f"{r.approved_block} and phase {r.phase}. Check that "
+                        f"results/costs.csv has that run's row (tagged "
+                        f"{spend_tag(r.approved_block)}) and, if it ended COST_CAP or passed "
+                        f"its run guard, that its hold is in {hold.holds_path(lock.path)}, "
+                        f"then delete {r.path} by hand")
+            others = [r for r in reservations if r.stream != lock.stream]
+            try:
+                new_holds = sorted({h.run_id for h in hold.read_holds(lock.path)}
+                                   - set(holds_seen))
+            except hold.HoldRecordError as e:
+                raise PaidCallsNotAllowed(f"{e}. While it cannot be read, every hold in it "
+                                          f"stands: no paid run starts (PREREG §7.7)") from None
+            if new_holds:
+                raise PaidCallsNotAllowed(
+                    f"a hold was placed while this run was being checked, by "
+                    f"{', '.join(new_holds)} (in {hold.holds_path(lock.path)}): no further "
+                    f"paid run starts in either stream until the researcher clears it "
+                    f"(PREREG §0.3 line 12, §7.7). Run again to see the line that clears it")
+            reason = paidlock.unrecorded_hold(lock.path)   # a lock kept meanwhile
+            if reason is not None:
+                raise PaidCallsNotAllowed(reason)
+            try:
+                rows = costs.read_rows(granted.costs_path)
+            except (OSError, ValueError) as e:
+                raise PaidCallsNotAllowed(f"cannot read {granted.costs_path}: {e}") from None
+            reason = paidlock.last_run_missing(lock.path, rows)
+            if reason is not None:
+                raise PaidCallsNotAllowed(reason)
+            try:
+                check_ledger(rows)
+                spent = block_spend(block, rows)
+                phase_spent = costs.spend_by_phase(rows).get(phase, 0.0)
+            except ValueError as e:
+                raise PaidCallsNotAllowed(f"cannot read the spend of block {block!r} and of "
+                                          f"phase {phase}: {e}") from None
+            in_block = [r for r in others if r.approved_block == block]
+            in_phase = [r for r in others if r.phase == phase]
+            block_reserved = sum((r.planned_usd for r in in_block), Decimal(0))
+            phase_reserved = sum((r.planned_usd for r in in_phase), Decimal(0))
+            planned = Decimal(repr(float(granted.planned_usd)))
+            max_usd = Decimal(repr(float(granted.max_usd)))
+            block_room = max_usd - spent - block_reserved - planned
+            if block_room < 0:
+                raise PaidCallsNotAllowed(
+                    f"block {block!r} has spent ${float(spent):.2f} of its max_usd "
+                    f"${float(max_usd):g}"
+                    + (f", and the other stream's running run has reserved "
+                       f"${float(block_reserved):.2f} of it until its costs row is written "
+                       f"({_listed(in_block)})" if in_block else "")
+                    + f"; planned ${float(planned):.2f} would exceed it by "
+                    f"${float(-block_room):.2f}: "
+                    + (_WAIT if in_block else "stop and ask the researcher"))
+            cap = costs.PHASE_CAPS[phase]
+            room = cap - phase_spent - float(phase_reserved) - float(planned)
+            if room < 0:
+                raise PaidCallsNotAllowed(
+                    f"planned ${float(planned):.2f} would exceed the phase {phase} cap of "
+                    f"${cap:.0f} by ${-room:.2f}, counting phase spend ${phase_spent:.2f}"
+                    + (f" and ${float(phase_reserved):.2f} reserved by the other stream's "
+                       f"running run until its costs row is written ({_listed(in_phase)})"
+                       if in_phase else "")
+                    + ": " + (_WAIT if in_phase else "stop and ask the researcher"))
+            mine = paidlock.write_reservation(lock, approved_block=block,
+                                              experiment=granted.experiment, phase=phase,
+                                              planned_usd=planned)
+    except OSError as e:
+        raise PaidCallsNotAllowed(f"cannot reserve this run's planned spend next to "
+                                  f"{lock.path}: {e}") from None
+    return replace(granted, headroom_usd=room, block_spent_usd=float(spent),
+                   block_headroom_usd=float(block_room), stream=mine.stream,
+                   reservation_id=mine.reservation_id,
+                   reserved_block_usd=float(block_reserved),
+                   reserved_phase_usd=float(phase_reserved))

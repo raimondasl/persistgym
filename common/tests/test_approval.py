@@ -711,7 +711,7 @@ def test_require_paid_run_checks_the_lock_the_ledger_the_guard_and_a_frozen_prer
     repo.mkdir()
     guarded_repo(repo, prereg=DRAFT_PREREG)
     c = _costs(tmp_path)
-    lock = tmp_path / "lock" / paidlock.LOCK_NAME
+    lock = tmp_path / "lock" / paidlock.lock_name(paidlock.PERSISTGYM)
     lock.parent.mkdir()
 
     def run(held, block="1-pilots"):
@@ -720,7 +720,8 @@ def test_require_paid_run_checks_the_lock_the_ledger_the_guard_and_a_frozen_prer
                                          costs_path=c, repo=repo)
     with pytest.raises(PaidCallsNotAllowed, match="need the paid-run lock"):
         run(None)
-    with paidlock.paid_run_lock(lock, run_id="r", what="test") as info:
+    with paidlock.paid_run_lock(lock, run_id="r", what="test",
+                                stream=paidlock.PERSISTGYM) as info:
         held = paidlock.HeldLock(lock, info)
         with pytest.raises(PaidCallsNotAllowed, match="does not hold the paid-run lock"):
             run(paidlock.HeldLock(lock, {"token": "another run's"}))
@@ -733,7 +734,8 @@ def test_require_paid_run_checks_the_lock_the_ledger_the_guard_and_a_frozen_prer
         push_main(repo)
         assert run(held).prereg_version == "1.0"
 
-        paidlock.record_last_run(lock, run_id="elsewhere-1", costs_csv=tmp_path / "x.csv")
+        paidlock.record_last_run(lock, stream=paidlock.ARC, run_id="elsewhere-1",
+                                 costs_csv=tmp_path / "x.csv")
         with pytest.raises(PaidCallsNotAllowed, match="elsewhere-1.*not in this checkout"):
             run(held, block="2-seed1")      # before the approval is even looked up
         c.write_text("timestamp_utc,run_id\n", encoding="utf-8")

@@ -88,10 +88,11 @@ def _held(repo) -> paidlock.HeldLock:
     """The paid-run lock the CLI holds while a transport for `repo` runs (harnesses/cli.py
     takes it): one lock file per test, in its own folder, since the last-run record goes
     next to it. Written on first use and held for the rest of the test."""
-    path = repo.parent / f"{repo.name}-lock" / paidlock.LOCK_NAME
+    path = repo.parent / f"{repo.name}-lock" / paidlock.lock_name(paidlock.PERSISTGYM)
     if not path.exists():
         path.parent.mkdir(exist_ok=True)
-        path.write_text(json.dumps({"run_id": "test-run", "token": "test-token"}),
+        path.write_text(json.dumps({"run_id": "test-run", "stream": paidlock.PERSISTGYM,
+                                    "token": "test-token"}),
                         encoding="utf-8")
     return paidlock.HeldLock(path, json.loads(path.read_text(encoding="utf-8")))
 
@@ -657,8 +658,11 @@ def test_finalize_records_the_last_paid_run(repo, monkeypatch):
     _call(t)
     row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
     assert t.costs_row is row and not t.unaccounted
-    last = json.loads(paidlock.last_run_path(t.paid_lock.path).read_text(encoding="utf-8"))
-    assert last["run_id"] == "r1"
+    last = json.loads(paidlock.last_run_path(t.paid_lock.path, paidlock.PERSISTGYM)
+                      .read_text(encoding="utf-8"))
+    assert last["run_id"] == "r1" and last["stream"] == "persistgym"
+    # the row is written: the reservation is gone, the lock still held
+    assert not paidlock.reservation_path(t.paid_lock.path, paidlock.PERSISTGYM).exists()
     assert Path(last["costs_csv"]) == (repo / "costs.csv").resolve()
     assert t.keep_lock_if_unaccounted("r1") is None and t.paid_lock.holds()
 
@@ -691,7 +695,8 @@ def test_a_reused_run_id_does_not_hide_the_newest_row(repo, monkeypatch):
     second = _make(repo, factory)
     _call(second)
     row = second.finalize(run_id="probe", milestone="M0", cell_or_config="c")
-    last = json.loads(paidlock.last_run_path(second.paid_lock.path).read_text(encoding="utf-8"))
+    last = json.loads(paidlock.last_run_path(second.paid_lock.path,
+                                             paidlock.PERSISTGYM).read_text(encoding="utf-8"))
     assert last["run_id"] == "probe" and last["row_timestamp_utc"] == row["timestamp_utc"]
     rows = costs.read_rows(repo / "costs.csv")
     assert [r["run_id"] for r in rows] == ["probe", "probe"]
@@ -741,13 +746,17 @@ def test_a_row_that_cannot_be_written_keeps_the_lock(repo, monkeypatch, experime
         assert totals["reasoning_tokens"] is None
     else:
         assert totals["reasoning_tokens"] == 100_000
-    assert not paidlock.last_run_path(t.paid_lock.path).exists()  # no row, no last run
+    # no row, no last run; the reservation stays, and the reason says to delete it
+    assert not paidlock.last_run_path(t.paid_lock.path, paidlock.PERSISTGYM).exists()
+    reservation = paidlock.reservation_path(t.paid_lock.path, paidlock.PERSISTGYM)
+    assert reservation.exists() and f"spend reservation {reservation}" in reason
     # the CLI's check after the run returns the same reason and leaves the file alone
     assert t.keep_lock_if_unaccounted("r1") == reason
     assert json.loads(t.paid_lock.path.read_text(encoding="utf-8")) == held
     # the next paid run refuses while the lock is kept, printing the reason
     with (pytest.raises(paidlock.LockHeld, match="add its row by hand"),
-          paidlock.paid_run_lock(t.paid_lock.path, run_id="r2", what="next")):
+          paidlock.paid_run_lock(t.paid_lock.path, run_id="r2", what="next",
+                                 stream=paidlock.PERSISTGYM)):
         pass
 
 
@@ -788,9 +797,10 @@ def test_harness_tests_cannot_take_the_shared_paid_lock():
     folder that does not exist, never into the git common directory all checkouts share, so
     a test cannot block (or, through the last-run record, refuse) a real paid run."""
     assert cli.LOCK_PATH is not None and not cli.LOCK_PATH.parent.exists()
-    assert cli.LOCK_PATH != paidlock.lock_path(Path(__file__).resolve().parent)
+    for stream in paidlock.STREAMS:
+        assert cli.LOCK_PATH != paidlock.lock_path(Path(__file__).resolve().parent, stream)
     with (pytest.raises(FileNotFoundError),
-          paidlock.paid_run_lock(cli.LOCK_PATH, run_id="x", what="x")):
+          paidlock.paid_run_lock(cli.LOCK_PATH, run_id="x", what="x", stream=cli.STREAM)):
         pass
 
 

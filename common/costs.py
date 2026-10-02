@@ -7,14 +7,23 @@ Exceeding a cap requires the researcher's explicit approval first.
 
 Spend against a cap is measured by `spend_usd`: the billed estimate, or the list cost where
 a row has no billed estimate. Both columns stay in every row and both sums are printed.
+
+An ARC run and a PersistGym run may go at the same time (PREREG §0.3 line 15, §12) and append
+their rows at the same moment. `append_row` and `read_rows` therefore hold an operating-system
+lock on the file (common/oslock.py): rows never interleave, and a reader sees each row whole
+or not at all. Code that writes this file by other means does not take that lock.
 """
 
 from __future__ import annotations
 
 import csv
+import io
 import math
+import os
 import sys
 from pathlib import Path
+
+from common import oslock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COSTS_CSV = REPO_ROOT / "results" / "costs.csv"
@@ -53,7 +62,15 @@ EXPERIMENT_PHASE = {
 
 
 def append_row(row: dict, path: Path = COSTS_CSV) -> None:
-    """Append one validated row. Never rewrites existing rows."""
+    """Append one validated row. Never rewrites existing rows.
+
+    Safe when two processes append at once (an ARC run and a PersistGym run, PREREG §0.3
+    line 15, §12): the append holds the ledger's operating-system lock (common/oslock.py),
+    which `read_rows` takes too, so rows never interleave and a reader never sees half a row.
+    Under the lock it writes the whole row in one go at the end of the file, after a line
+    break if the last line lacks one (a row torn by a crash is then a separate, unreadable
+    row that the paid guard refuses, not glued to this one), and flushes it to disk. A file
+    that is missing or empty gets the header first."""
     row = {**{c: "" for c in OPTIONAL_COLUMNS}, **row}
     missing = [c for c in COLUMNS if c not in row]
     extra = [k for k in row if k not in COLUMNS]
@@ -61,16 +78,34 @@ def append_row(row: dict, path: Path = COSTS_CSV) -> None:
         raise ValueError(f"costs.csv row mismatch: missing={missing} extra={extra}")
     if row["experiment"] not in EXPERIMENT_PHASE and not str(row["experiment"]).startswith("ext_"):
         raise ValueError(f"unknown experiment {row['experiment']!r}; add it to EXPERIMENT_PHASE")
-    with path.open("a", newline="", encoding="utf-8") as f:
-        csv.DictWriter(f, fieldnames=COLUMNS).writerow(row)
+    buf = io.StringIO(newline="")
+    csv.DictWriter(buf, fieldnames=COLUMNS).writerow(row)   # "\r\n"-terminated, as before
+    data = buf.getvalue().encode("utf-8")
+    with oslock.locked(path, os.O_RDWR | os.O_CREAT | os.O_APPEND) as fd:
+        size = os.lseek(fd, 0, os.SEEK_END)
+        if size == 0:
+            data = (",".join(COLUMNS) + "\n").encode("utf-8") + data
+        else:
+            os.lseek(fd, size - 1, os.SEEK_SET)
+            last = os.read(fd, 1)
+            if last == b"\r":
+                data = b"\n" + data
+            elif last != b"\n":
+                data = b"\r\n" + data
+            os.lseek(fd, 0, os.SEEK_END)
+        oslock.write_all(fd, data)
+        os.fsync(fd)
 
 
 def read_rows(path: Path = COSTS_CSV) -> list[dict]:
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames != COLUMNS:
-            raise ValueError(f"unexpected costs.csv header: {reader.fieldnames}")
-        return list(reader)
+    """Every row, read under the ledger's lock (see `append_row`), so a row another process
+    is appending is read whole or not at all."""
+    with oslock.locked(path) as fd:
+        data = oslock.read_all(fd)
+    reader = csv.DictReader(io.StringIO(data.decode("utf-8"), newline=""))
+    if reader.fieldnames != COLUMNS:
+        raise ValueError(f"unexpected costs.csv header: {reader.fieldnames}")
+    return list(reader)
 
 
 def phase_of(experiment: str) -> str:

@@ -1,6 +1,6 @@
-Version: 0.3-draft
+Version: 1.0
 
-**Status: DRAFT with the researcher's sign-off answers written in. Not yet frozen.** The researcher decided all 39 decision items on 2026-10-01 (§16), the two follow-ups to PLAN amendment A2 the same day (phase 2 cap $1,250, T_d ceiling 210), and the 15 sign-off lines the same day (§0.3: 13 confirmed, lines 12 and 15 changed). Nothing in this file binds any run, and no paid call may be made under it, until the researcher has merged the frozen version (§0.4).
+**Status: Frozen on 2026-10-01 by Raimondas Lencevicius (sign-off in PR #4).**
 
 **Change rule.** After freezing, this file changes only by a dated amendment that states its reason, appended to the amendment log (§17) and merged through a pull request. Hypotheses, predictions and thresholds are never edited after any result they concern has been seen. Analyses not registered here are reported as exploratory.
 
@@ -84,14 +84,14 @@ The D items left these operational details open, and this draft had to fill them
 
 | Sign-off field | Value |
 |---|---|
-| Frozen by | |
-| Date (UTC) | |
-| Freeze commit | Recorded in `results/decisions.md` after the merge (step 4) |
+| Frozen by | Raimondas Lencevicius |
+| Date | 2026-10-01 (the researcher's local date, UTC−4; the freeze commit's UTC time is recorded with its SHA in `results/decisions.md`) |
+| Freeze commit | The merge of PR #4 into `main`; its SHA is recorded in `results/decisions.md` after the merge (step 4) |
 | D-items resolved (D1-D39) | All 39, decided 2026-10-01 (§16) |
-| §0.3 lines confirmed | |
+| §0.3 lines confirmed | All 15 answered on 2026-10-01: lines 1-11, 13 and 14 confirmed as recommended; lines 12 and 15 changed by the researcher and written in (§0.3) |
 | Operational-slice commit used for D14, D16, D21, D22, D27, D28 | `ef251ba` (run `results/arc_public_ops/20261001T035436Z/`); SP80 and TN36 recordings added in run `results/arc_public_ops/20261001T185155Z/` (PR #17) |
 | Merge commits of #18 (A2), #21 (ARC freeze), #19 (spend basis), #20 | `9090bca` (#18), `7955f11` (#21), `2b0a958` (#19), `46c61a1` (#20), all on `main` on 2026-10-01 |
-| Spend to date at freeze | $0 when this version was written (`results/costs.csv` has no rows) |
+| Spend to date at freeze | $0 (`results/costs.csv` has no rows at this commit) |
 
 ## 1. Research question and order of operations
 > With the model fixed, when does the harness change task **success** rather than only **cost**?

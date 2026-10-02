@@ -338,7 +338,7 @@ PILOT_RUN = ["run", "--cell", "F-r", "--model", "gpt-6-luna", "--n", "1",
              "--approved-block", "1-pilots", "--planned-usd", "1"]
 
 
-def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypatch):
+def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypatch, capsys):
     """Through the real guarded transport: `--parallel 4` writes the episodes, transcript and
     summary that `--parallel 1` writes, byte for byte (the fake answers by payload, the call
     clock is fixed), one costs row with the same calls, tokens and cost, reserves spend
@@ -361,6 +361,7 @@ def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypat
     monkeypatch.setattr(cli, "run_batch", spy)
     assert cli.main([*PILOT_RUN, "--run-id", "seq"]) == 0
     assert cli.main([*PILOT_RUN, "--run-id", "par", "--parallel", "4"]) == 0
+    printed = capsys.readouterr()
 
     raw, out = tmp / "raw" / "persistgym_pilot", tmp / "results" / "persistgym_pilot"
     assert (raw / "par" / "episodes.jsonl").read_bytes() == (
@@ -406,6 +407,15 @@ def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypat
         "transcript.jsonl.gz"]
     assert sorted(p.name for p in out.rglob("*") if p.is_file()) == [
         "meta.json", "meta.json", "summary.json", "summary.json"]
+    # sequential play writes its block to raw too, and names it the same way
+    assert json.loads((raw / "seq" / runner.PARALLEL_INFO).read_text(encoding="utf-8")) == (
+        seq_meta["parallel"])
+    assert sorted(seq_meta["blinding"]) == sorted(meta["blinding"])
+    # nor does either run print the estimate, the gate's waits or the peaks in flight
+    assert '"run_id": "par"' in printed.out
+    for word in ("estimate", "reserv", "peak", "waited", "in flight"):
+        assert word not in printed.out + printed.err, word
+    assert repr(full["spend_reservation"]["last_estimate_usd"]) not in printed.out
 
 
 @pytest.mark.parametrize("n", ["0", "17", "-2"])

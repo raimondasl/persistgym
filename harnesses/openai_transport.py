@@ -44,7 +44,8 @@ and `finalize` appends exactly one results/costs.csv row via `common.costs.appen
 both the list cost and the billed estimate. A response whose returned model string has no
 price is still logged, priced as the requested model and flagged in the row's notes. For a
 pilot-blinded experiment (`harnesses.blinding`, PREREG §11) the row's `reasoning_tokens` is
-left empty; the per-call values stay in the raw transcript under results/raw/.
+left empty, and no call's status is logged (no warning per incomplete response); the per-call
+values stay in the raw transcript under results/raw/.
 
 After appending the row, `finalize` records the run next to the lock as the PersistGym
 stream's last paid run (`common.paidlock.record_last_run`), then removes its spend
@@ -231,10 +232,14 @@ class OpenAIResponsesTransport:
                 "cost_usd_list": listed, "cost_usd_billed_est": billed,
             }
             self.echo_log.append(echo)
+        # PREREG §11: a blinded pilot logs no call's status. A warning per incomplete
+        # response, less the routine ones its summary.json counts, would count those at the
+        # need step, which score 0 (D13); the raw transcript holds every call's status.
+        blinded = blinding.is_blinded(self.approval.experiment)
         log.info("model=%s reasoning.context requested=%s echoed=%s tier=%s status=%s",
                  echo["model_returned"], echo["requested_context"], echo["echoed_context"],
-                 echo["service_tier_returned"], echo["status"])
-        if echo["status"] == "incomplete":
+                 echo["service_tier_returned"], "withheld" if blinded else echo["status"])
+        if echo["status"] == "incomplete" and not blinded:
             # D13: the caller scores it (an invalid action at a step; a retry for a summary)
             log.warning("incomplete response (reason=%s, max_output_tokens=%s)",
                         echo["incomplete_reason"], payload.get("max_output_tokens"))

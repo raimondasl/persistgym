@@ -36,7 +36,8 @@ What `parallel` leaves out for a pilot, and why. One run is one arm, and pilots 
   replayed).
 It keeps the planned spend, the estimate rule and factor, the counts of episodes started,
 not started and measured, the calls the gate let through (the run's calls, which
-`summary.json` and the costs row count too, plus any the transport's stop then refused),
+`summary.json` and the costs row count too, plus any that the transport's stop then refused
+or that failed, each of which ended its episode: COST_CAP, API_ERROR or the run's error),
 the stop reason and the abandoned episodes. Whether the plan held is in what is kept: the
 stop reason (`SPEND_RESERVATION` when the next episode's estimate did not fit, `COST_CAP`
 when the transport's stop fired), `episodes_not_started`, and `cost_usd` against
@@ -46,7 +47,10 @@ What this does not blind: the per-run `results/costs.csv` row (CLAUDE.md require
 run) and the run's `meta.json` token totals still carry that run's input and output tokens,
 calls and cost, and one run is one harness cell. Output tokens are mostly reasoning tokens,
 so they approximate the withheld column; n_calls approximates lookups. Only the explicit
-`reasoning_tokens` fields are left empty.
+`reasoning_tokens` fields are left empty. For a parallel run, `summary.json`'s count of
+RUN_STOPPED episodes (and the message a Ctrl+C or an error prints) says roughly how many
+episodes were in flight when the run stopped; under a spend plan that bounds the per-episode
+estimate, as the withheld peak does, though more loosely.
 
 The CLI also refuses pilot-split templates under any other experiment, and `run_batch`
 refuses a run id that is not a plain folder name, so pilot episodes cannot be written

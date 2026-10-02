@@ -72,8 +72,10 @@ RESERVATIONS_LOG = "spend_reservations.jsonl"
 """Under results/raw/<experiment>/<run_id>/: a parallel paid run's reservation at each
 episode start (`harnesses.parallel.SpendPlan.log`)."""
 PARALLEL_INFO = "parallel.json"
-"""Under results/raw/<experiment>/<run_id>/: a pilot-blinded run's whole `parallel` block;
-its meta.json holds the allowlisted part (`blinding.blinded_parallel`, PREREG §11)."""
+"""Under results/raw/<experiment>/<run_id>/: a pilot-blinded run's whole `parallel` block,
+sequential runs included; its meta.json holds the allowlisted part
+(`blinding.blinded_parallel`, PREREG §11) and names this file in `blinding.parallel_path`,
+or null if it could not be written."""
 CLOCK = time.monotonic
 """Times each call (`call_latency_s`). Tests fix it to compare outputs byte for byte."""
 
@@ -487,9 +489,12 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                          else {"max_episodes_in_flight": parallel})
         if play is not None and play.abandoned:
             parallel_info["abandoned_transcripts"] = _rel(inflight_dir)
+        # PREREG §11: a blinded run's meta.json gets the allowlisted part of `parallel` and
+        # the whole block goes to raw; if it cannot be written, meta.json names no raw copy.
         parallel_path = raw_dir / PARALLEL_INFO if blinded else None
-        if parallel_path is not None:  # PREREG §11: meta.json gets the allowlisted part
-            _write_raw(parallel_path, json.dumps(parallel_info, indent=2) + "\n")
+        if parallel_path is not None and not _write_raw(
+                parallel_path, json.dumps(parallel_info, indent=2) + "\n"):
+            parallel_path = None
         meta = _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport,
                            experiment=experiment, run_id=run_id, started=started,
                            exit_reason=exit_reason, repeat_index=repeat_index,
@@ -499,15 +504,18 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     return meta
 
 
-def _write_raw(path: Path, text: str) -> None:
+def _write_raw(path: Path, text: str) -> bool:
     """A raw (gitignored) file written once the run has ended: a parallel paid run's
     reservation log, or a blinded run's whole `parallel` block. A failure to write it is
-    reported, not raised: it must not stop the run's accounting."""
+    reported (the path, never the content), not raised: it must not stop the run's
+    accounting. Returns whether it was written."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     except OSError as e:
         print(f"warning: could not write {path}: {e}", file=sys.stderr)
+        return False
+    return True
 
 
 def require_plain_name(what: str, name: str) -> None:

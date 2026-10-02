@@ -89,6 +89,31 @@ def test_pilot_run_commits_no_per_episode_outcomes(tmp_path):
     assert [r["episode_id"] for r in rows] == [e.episode_id for e in eps]
     assert all("need_correct" in r and r["need_phase"]["tokens"] > 0 for r in rows)
     assert (raw / "transcript.jsonl.gz").exists()
+    # sequential play writes its `parallel` block to raw too, as parallel play does
+    assert sorted(p.name for p in raw.iterdir()) == ["episodes.jsonl", runner.PARALLEL_INFO,
+                                                     "transcript.jsonl.gz"]
+    assert json.loads((raw / runner.PARALLEL_INFO).read_text(encoding="utf-8")) == (
+        meta["parallel"]) == {"max_episodes_in_flight": 1}
+    assert meta["blinding"]["parallel_path"].endswith(
+        f"raw/persistgym_pilot/p1/{runner.PARALLEL_INFO}")
+
+
+def test_a_pilot_whose_raw_parallel_block_cannot_be_written(tmp_path, capsys):
+    """The raw copy of `parallel` is written like the reservation log: a failure is reported,
+    by path and never by content, and does not stop the run's accounting; meta.json then
+    names no raw copy."""
+    eps = _pilot_eps()
+    raw = tmp_path / "raw" / PILOT / "p1"
+    (raw / runner.PARALLEL_INFO).mkdir(parents=True)  # a folder where the file would go
+    meta = run_batch(eps, CELLS["F-r"], CFG, FakeModel(ids="payload"), experiment=PILOT,
+                     run_id="p1", results_root=tmp_path / "results",
+                     raw_root=tmp_path / "raw", parallel=2)
+    assert meta["exit_reason"] == "COMPLETED" and meta["blinding"]["parallel_path"] is None
+    assert meta["parallel"]["max_episodes_in_flight"] == 2
+    err = capsys.readouterr().err
+    assert f"warning: could not write {raw / runner.PARALLEL_INFO}" in err
+    assert "peak_episodes_in_flight" not in err
+    _assert_blinded(meta)
 
 
 def test_a_parallel_pilot_stays_blinded(tmp_path):

@@ -4,6 +4,7 @@
     uv run python -m persistgym render --split validity --n 10 --single-turn --gzip
     uv run python -m persistgym render --n 50 --W 24000 --v 1500 --out results/raw/persistgym/x
     uv run python -m persistgym partial-memory --n 2000
+    uv run python -m persistgym spotcheck            # G1 spot-check pages (persistgym/spotcheck.py)
 
 Template counts and start indices come in whole balance blocks of K templates (PREREG D7);
 `--partial-blocks` allows other counts for quick $0 checks. Splits: main [0, 50000),
@@ -27,6 +28,7 @@ from importlib import metadata
 from pathlib import Path
 
 from common.runmeta import REPO_ROOT, config_hash, git_state
+from persistgym import spotcheck
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, SEED_RANGES, GeneratorConfig
 from persistgym.controls import single_turn_control
 from persistgym.episode import ALL_CELLS, VARIANTS, Episode
@@ -280,8 +282,10 @@ def main(argv: list[str] | None = None) -> int:
     pm.add_argument("--set", action="append", metavar="KEY=VALUE",
                     help="override any GeneratorConfig field (value parsed as JSON)")
     pm.add_argument("--out", default=None, help="optional JSON output file")
+    spotcheck.add_parsers(sub)
     args = p.parse_args(argv)
-    return run_partial_memory(args) if args.cmd == "partial-memory" else run(args)
+    return {"partial-memory": run_partial_memory, "spotcheck": spotcheck.run,
+            "spotcheck-findings": spotcheck.run_findings}.get(args.cmd, run)(args)
 
 
 if __name__ == "__main__":

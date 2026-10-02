@@ -936,7 +936,7 @@ The text elided from PLAN §11 above gives G0's cost and toggle fallbacks; they 
 
 *Why:* every path game's published Standard run ended `ACTION_BUDGET`; the 11-of-25 early-ending rate comes mostly from long or errored games outside the path set, and the backoff patch targets transport errors.
 
-**Decision.** Toggle rule. The OpenAI toggle on a model is verified iff:
+**Decision.** [Amended 2026-10-02, see §17.1] Toggle rule. The OpenAI toggle on a model is verified iff:
 1. the echoed `reasoning.context` equals the request on 100% of that model's pilot responses, in both arms; **and**
 2. the replay-use probe passes, with 20 trials per arm: the `all_turns` arm recalls the exact number in ≥ 10 of 20 trials, and the `current_turn` arm in ≤ 1 of 20.
 
@@ -1190,7 +1190,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D26 | §9.4 | Holm family | Accepted: 4 one-sided tests; model estimate must agree; worst-step power quoted from the committed simulation |
 | D27 | §10.1 | Cost forecast | Rule 1: G0 prices S1/S2 at the S0/S4 midpoint; a conservative check at Checkpoint C; a 1b cap raise of up to about $170 may be requested there |
 | D28 | §10.1 | Re-run reserve | Accepted: 20% |
-| D29 | §10.1 | Replay toggle rule | Accepted as drafted |
+| D29 | §10.1 | Replay toggle rule | Accepted as drafted [Amended 2026-10-02, see §17.1] |
 | D30 | §10.4 | "Dominated" | Accepted: replay share ≥ 2/3 |
 | D31 | §10.5 | Scoop trigger | Accepted: a public one-component ARC ablation; scoop search at every gate |
 | D32 | §10.6 | 3-game fallback | Accepted: drop the last game of the beacon-seeded order (what happens to the block-3 run order was confirmed at sign-off, §0.3 line 4) |
@@ -1203,7 +1203,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim |
 
 ## 17. Amendment log
-No amendments yet. Pre-declared amendments, each merged by PR before the event it guards:
+Amendments made: R1 (2026-10-02, §17.1, at the end of this file). Pre-declared amendments, each merged by PR before the event it guards:
 - **A-cfg:** only if the block-1 pilot forces an ARC config change after the freeze record (§7.1) is filled; merged before the first block-2 run. It writes the new values into the §7.1 tables themselves and is merged together with the regenerated `arc/config_freeze.json`: the ARC launcher reads §7.1, so a table added only to this log would make every paid ARC run refuse (PR #23).
 - **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8).
 - **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7).
@@ -1219,3 +1219,58 @@ Values set by a pre-registered rule (W, v, template counts including T_d and T_o
 - 0.3-draft, sign-off answers (2026-10-01): the researcher's answers to §0.3 written in. Lines 1-11, 13 and 14 confirmed as recommended. Line 12 changed: the guard and the $120-of-room rule stay, approvals stay per block, and a run that reaches its $120 guard places a hold: no further paid run starts until the researcher clears it (§7.7, §12). Line 15 changed: block 3's ARC runs go back to back, one at a time, in the SEED + 3 order, replacing D18's 72 h window; PersistGym runs go one at a time, with up to 16 episodes in parallel; the ARC and PersistGym streams may run side by side, each with its own lock and approval blocks, and block 3 is approved as `3-arc` and `3-persistgym` (§4.6, §7.4, §12). Notes on PRs #18-#21 updated now that they are merged (§0.1, §0.4, §7.1, §12). No hypothesis, prediction, threshold or blockquote changed. The freeze commit that follows changes only the version line, the status line and the sign-off table (§0.4, step 3).
 - 1.0, text update before the merge of PR #4 (2026-10-01): the text follows PRs #22, #25, #24 and #23, which the researcher merges before this PR (§0.1; §0.4, step 1 and the sign-off table). D13 as implemented: the 32,000 output cap on every OpenAI step, summary and probe request, and an `incomplete` step response as an invalid action at any step (§2.6, §5, §6, §13, §16). D39 as implemented: stand-in bindings in place of each fact and clue binding, with the rule sentence kept, generator 0.3.0 (§2.4, §4.3, §4.4, §16). The PersistGym launcher's lock, ledger and frozen-PREREG checks (§0.3 line 14, §0.4, §12). The ARC launcher's checks of the freeze record and patches against `origin/main` and the §7.1 tables, so that A-cfg updates §7.1 itself (§7.1, §12, §17). Their merge commits go to `results/decisions.md` after the merges. The version and status lines are unchanged. No hypothesis, prediction, threshold, decision or blockquote changed.
 - 1.0, review fixes (2026-10-01): the signed-off sentences of §4.3 (the withheld control "replaces every evidence binding with a distractor binding of equal token length") and §6 (an `incomplete` response at the need step is a content failure) are back verbatim, with the implementation after each in text marked "As implemented"; `persistgym/DESIGN.md` §12 and `harnesses/DESIGN.md` §7.5 quote them. §6: an incomplete turn's empty reply adds nothing to W, but its observation still counts. §4.3: "no scripted observation" names the target. No hypothesis, prediction, threshold, decision or blockquote changed.
+
+### 17.1 Amendment R1 (2026-10-02): D29 replay-use probe redesign
+**Status.** Proposed by Claude on 2026-10-02 after the researcher chose option A: pre-register a redesigned probe, then run it. It takes effect when the researcher merges the pull request that adds it, and that merge adopts the pass rule below. The version line and the "Frozen" status line are unchanged.
+
+**What it changes.** D29's condition 2 (§10.1): the replay-use probe and its pass rule. The D29 text in §10.1 stays as frozen, with a pointer here. Nothing else changes: no hypothesis, prediction, other threshold, other decision or blockquote.
+
+**Reason.**
+- D29's probe learns the privately picked number from the turn-1 reasoning summary. In block 1 (2026-10-02; 20 trials per arm on each model; runs `results/replay_probe/20261002T034558Z-replay-gpt-6.1-sol` and `results/replay_probe/20261002T034914Z-replay-gpt-6-luna`), the summaries almost never named a number. sol's turn-1 summaries were empty in 40 of 40 trials, and luna's in 32 of 40; only 2 of luna's 40 named exactly one number. Both models reasoned briefly in turn 1 (medians of 15.5 to 16.5 reasoning tokens on sol and 24 to 26.5 on luna). So 0 sol trials and 2 luna trials were scorable, against the 20 per arm that D29 needs. More trials would not fix this.
+- The new probe does not need a summary. It asks the same question twice from the same state and checks whether the two answers agree.
+- **Timing.** This amendment is written **after** seeing the original probe's results, which are reported below as descriptive numbers only, and **before** any run of the new probe. No data from the new probe exists as it is written.
+
+**Descriptive results of the original probe** (block 1; not a test of anything; from `uv run python -m harnesses probe-summary` on the two runs above, which reads each run's `trials.jsonl` and raw transcript; 20 trials and 60 responses per arm):
+
+| | sol, `all_turns` | sol, `current_turn` | luna, `all_turns` | luna, `current_turn` |
+|---|---|---|---|---|
+| Turn-1 summary empty | 20 | 20 | 17 | 15 |
+| Turn-1 summary names exactly one number | 0 | 0 | 1 | 1 |
+| Scorable under D29 | 0 | 0 | 1 | 1 |
+| Exact recalls among scorable trials | none scorable | none scorable | 0 of 1 | 1 of 1 |
+| Turn-3 reply is a three-digit number | 20 | 0 | 18 | 17 |
+| Numbers given in turn 3 | 583 ×16, 683 ×2, 628, 684 | none | 583 ×17, 617 | 583 ×15, 417, 482 |
+| Echoed `reasoning.context` equals the request | 60 of 60 | 60 of 60 | 60 of 60 | 60 of 60 |
+| Visible leaks; incomplete responses | 0; 0 | 0; 0 | 0; 0 | 0; 0 |
+| Turn-1 reasoning tokens (min / median / max) | 12 / 15.5 / 21 | 12 / 16.5 / 27 | 20 / 24 / 33 | 20 / 26.5 / 37 |
+
+- All 20 of sol's `current_turn` turn-3 replies said it had no number to give (for example "I didn't actually pick a number."). Of luna's 8 non-empty turn-1 summaries, 2 named exactly one number (583 both times), one named three (100, 583 and 999, `current_turn`) and 5 named none. luna's turn-3 replies without a number were short statements such as "I can't provide it." or "I didn't retain a number."
+- All 240 responses were requested with `reasoning.summary: "auto"` and echoed `"detailed"`.
+- **What these numbers do not show.** sol's contrast (a number in 20 of 20 `all_turns` trials, in 0 of 20 `current_turn` trials) fits replay use, but with no known pick it cannot tell recall of a pick from a favourite number: luna, whose `current_turn` arm cannot see the turn-1 reasoning, still answered 583 in 15 of 20 `current_turn` trials. These numbers neither verify nor reject either model's toggle.
+
+**The new probe: fork consistency.** It runs as `uv run python -m harnesses probe-replay --design fork` (`harnesses/probes.py`; `harnesses/DESIGN.md` §9.3). The experiment name stays `replay_probe`, and the original design stays available, unchanged. Each trial:
+1. **The list.** A fresh list of L = 20 distinct three-digit numbers (100-999) from a per-trial seeded generator: `random.Random(seed).sample(range(100, 1000), 20)`, then shuffled by the same generator. The seed is 290,000 + the attempt index (0-39). This seed stream is reserved for the probe and lies outside every template range of §2.9. Attempt *i* shows the same list in both arms and to both models.
+2. **Turn 1** (user) shows the list and asks the model to privately pick one number from it at random, not to write the number or any hint about it, and to reply only "ready". Exact text: "Here is a list of three-digit numbers:" and a line break, the 20 numbers separated by ", ", a blank line, then "Privately pick one number from this list at random. Do not write the number or any hint about it. Reply with only the word: ready".
+3. **Turn 2** is the original probe's filler turn: "Unrelated question: what is the capital of France? Reply with only the city name."
+4. **Turn 3** is asked in K = 2 independent forks: two separate API calls with byte-identical inputs. Both carry the same history, including the same encrypted reasoning items the original probe sends (with their summary text stripped), and the same request settings. Text: "Which number from the list did you privately pick at the start of this conversation? Reply with only the number."
+5. **Settings.** Both arms send identical payloads except `reasoning.context` (`all_turns` or `current_turn`), as in the original probe: `max_output_tokens` 32,000 (D13), effort medium, mode standard, Flex, and `reasoning.summary: "auto"` as in the original probe. Each response's echoed summary setting is recorded.
+
+**Scoring.**
+- A trial is **scorable** iff the turn-1 and turn-2 responses completed, the visible turn-1 and turn-2 replies contain no three-digit number, and every echoed `reasoning.context` (turns 1 and 2 and both forks) equals the request.
+- A **fork answer** is the first three-digit number in that fork's turn-3 reply, if it is in the trial's list; otherwise there is none. A refusal, a number outside the list and an incomplete turn-3 response (D13, §6) all count as none.
+- The forks **agree** iff both fork answers exist and are equal.
+- Unscorable trials are replaced, with at most 40 attempts per arm per model. An arm stops once it has 20 scorable trials.
+
+**Reported per model and arm** (`fork_report.json` next to the run's `meta.json`): scorable trials and attempts; agreements; for each fork, how many answers were in the list; the distribution of answers and of the list positions answered, to expose value or position preferences; and the chance-agreement baseline, which is the `current_turn` arm's agreement rate. (For reference, two independent, uniform answers from the list would agree with probability 1/20.)
+
+**New pass rule** (replaces D29's condition 2). A model's toggle is verified iff:
+- **(a)** D29's echo condition holds, unchanged: the echoed `reasoning.context` equals the request on 100% of that model's pilot responses, in both arms. The block-1 echo check met it on both models (4 of 4 responses each), as did all 120 responses of each model's original probe. It covers the new probe's responses too; **and**
+- **(b)** with 20 scorable trials per arm, the `all_turns` arm's forks agree in **≥ 15 of 20** trials and the `current_turn` arm's forks agree in **≤ 5 of 20**.
+
+If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not verified for that model.
+
+**Unchanged from D29.** If the echo passes but the probe fails, that model's toggle is not verified and the model runs no replay arm. If no API model is verified, kill criterion 1 applies. If luna is verified but sol is not, making luna H2's primary model needs an amendment. The probe is excluded from all analyses. Its per-arm results, now the per-arm agreement counts, are needed for G0 and are exempt from §11's blinding as a toggle check. §6's D13 rule carries over: an incomplete turn-3 response is an invalid answer, and an incomplete turn 1 or 2 makes the trial unscorable.
+
+*Why:* when the turn-1 reasoning holds the pick and the model reads it, both `all_turns` forks read the same pick, so they agree unless recall fails. Without it, the two forks agree only through shared preferences for a value or a list position, and a fresh shuffled list in every trial weakens both. The `current_turn` bound of 5 of 20 leaves room for such preferences far above the 1/20 uniform rate.
+
+**What the new probe does not show.** Agreement under `all_turns` well above the `current_turn` baseline shows that the two forks share information from the turn-1 reasoning. It does not show which number the model picked, how much of a long replayed history the model uses, or that replay carries the derived state of the PersistGym tasks. H2 tests that last point.

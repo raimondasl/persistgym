@@ -393,7 +393,8 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     `parallel` (1 to 16, PREREG §4.6): episodes played at once (`harnesses.parallel`). With
     more than 1, episodes.jsonl and the transcript are still written in the order of
     `episodes`, the stop rule (`_stop_reason`) stops the episodes in flight too, and a paid
-    transport's planned spend is reserved episode by episode; meta.json's `parallel` says
+    transport's planned spend is reserved episode by episode and guarded call by call
+    (`harnesses.parallel.CallGate`); meta.json's `parallel` says
     how it went (outside `config`, so the config hash is that of sequential play)."""
     for what, name in (("experiment", experiment), ("run_id", run_id)):
         require_plain_name(what, name)

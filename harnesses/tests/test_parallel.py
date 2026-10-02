@@ -10,6 +10,7 @@ import copy
 import gzip
 import json
 import threading
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -271,8 +272,8 @@ def test_a_run_whose_first_episode_does_not_finish_keeps_reserving_all_it_has(sm
 def test_the_transports_stop_is_the_backstop_when_estimates_run_short(small_eps, tmp_path):
     """Episodes after the first cost far more than it did: the reservation under-estimates,
     the transport's stop fires (COST_CAP) and stops the run, every other episode in flight
-    makes no further call (RUN_STOPPED), and the spend passes the planned spend by at most
-    one call per episode in flight."""
+    makes no further call (RUN_STOPPED), and, with the per-call gate, the spend passes the
+    planned spend by at most one call, as in sequential play."""
     eps = small_eps
     first = _episode_spend(eps[:1], "F-r")[0]
     planned = 8 * first
@@ -285,8 +286,99 @@ def test_the_transports_stop_is_the_backstop_when_estimates_run_short(small_eps,
     assert reasons["COST_CAP"] >= 1 and set(reasons) <= {"COST_CAP", "RUN_STOPPED", "DONE"}
     stopped = [x for x in lines if x["exit_reason"] == "RUN_STOPPED"]
     assert all("the run stopped (COST_CAP)" in x["error"] for x in stopped)
-    assert t.spent_usd > planned and t.spent_usd - planned <= 4 * t.max_call_usd
+    assert t.spent_usd > planned and t.spent_usd - planned <= t.max_call_usd
     assert [x["episode_id"] for x in lines] == [e.episode_id for e in eps[:len(lines)]]
+
+
+class _SlowFake(FakeModel):
+    """Each call takes a moment, so that the calls of the episodes in flight overlap."""
+
+    def send(self, payload):
+        time.sleep(0.01)
+        return super().send(payload)
+
+
+@pytest.mark.parametrize("n", [4, 16])
+def test_overlapping_calls_never_take_the_run_past_its_planned_spend(small_eps, tmp_path,
+                                                                     n):
+    """PREREG §4.6 ("it never exceeds its planned spend"): with up to 16 episodes in flight
+    whose calls overlap, and episodes far dearer than their reservations, the per-call gate
+    keeps the run within one call of its planned spend, as in sequential play. Without it
+    the calls in flight when the transport's stop fires all complete, and this run ends
+    several calls over (about 3 at 4 in flight and 12 at 16 in one trial). The gate lets
+    calls overlap while there is room."""
+    eps = small_eps
+    first = _episode_spend(eps[:1], "F-r")[0]
+    planned = 30 * first
+    t = _Budgeted(_SlowFake(ids="payload"), planned, dearer_after=eps[0].n_steps, factor=200)
+    meta = _run(eps, "F-r", t, tmp_path, n)
+    assert meta["exit_reason"] == "COST_CAP" and t.refused >= 1
+    assert planned < t.spent_usd <= planned + t.max_call_usd
+    gate = meta["parallel"]["spend_reservation"]["call_gate"]
+    assert gate["peak_calls_in_flight"] > 1 and gate["calls_waited"] >= 1
+    assert gate["calls"] == t.ledger.n_calls + t.refused
+    lines = _lines(tmp_path)
+    assert [x["episode_id"] for x in lines] == [e.episode_id for e in eps[:len(lines)]]
+
+
+def _gate(planned: float, spent: list[float]) -> parallel.CallGate:
+    return parallel.CallGate(planned, lambda: spent[0], "gpt-6-luna", parallel.RunStop())
+
+
+def _capped(cap=32_000, text="x") -> dict:
+    return {"model": "gpt-6-luna", "max_output_tokens": cap,
+            "input": [{"role": "user", "content": [{"type": "input_text", "text": text}]}]}
+
+
+def test_call_gate_bound_is_the_output_cap_plus_a_token_per_input_byte():
+    g = _gate(1.0, [0.0])
+    p = _capped(text="é" * 10)
+    n_bytes = len(json.dumps(p, ensure_ascii=False).encode("utf-8"))
+    assert g.bound_usd(p) == pytest.approx((32_000 * 0.50 + n_bytes * 0.10 * 1.25) / 1e6)
+    for cap in (None, 0, -1, True, 1.5):
+        assert g.bound_usd({**p, "max_output_tokens": cap}) == float("inf")
+
+
+def test_call_gate_lets_a_call_overlap_only_within_the_planned_spend():
+    spent = [0.0]
+    one = _gate(1.0, spent).bound_usd(_capped())  # about $0.016
+    g = _gate(2.7 * one, spent)
+    a = g.enter(_capped())  # alone: always (the transport's stop decides)
+    b = g.enter(_capped())  # 2 bounds fit in 2.7
+    spent[0] = 0.6 * one  # a call recorded since: 0.6 + 2 + 1 > 2.7, the next one waits
+    entered = threading.Event()
+
+    def third():
+        g.leave(g.enter(_capped()))
+        entered.set()
+    th = threading.Thread(target=third)
+    th.start()
+    assert not entered.wait(0.3)
+    g.leave(a)  # 0.6 + 1 + 1 <= 2.7
+    assert entered.wait(WAIT_S)
+    th.join(WAIT_S)
+    g.leave(b)
+    assert g.enter({**_capped(), "max_output_tokens": None}) is not None  # alone, unbounded
+    assert g.info()["calls"] == 4 and g.info()["calls_waited"] == 1
+    assert g.info()["peak_calls_in_flight"] == 2
+
+
+def test_a_call_waiting_at_the_gate_stops_with_the_run():
+    g = _gate(0.0, [0.0])
+    g.enter(_capped())
+    raised = []
+
+    def waiter():
+        try:
+            g.enter(_capped())
+        except parallel.RunStopped as e:
+            raised.append(str(e))
+    th = threading.Thread(target=waiter)
+    th.start()
+    g.stop.set("COST_CAP")
+    th.join(WAIT_S)
+    assert not th.is_alive() and raised and "the run stopped (COST_CAP)" in raised[0]
+    assert g.info()["calls"] == 1
 
 
 # --- the stop rules with episodes in flight ----------------------------------------------------

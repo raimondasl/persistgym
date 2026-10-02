@@ -31,9 +31,11 @@ billed estimate, so the Flex price on Flex; PLAN's caps are in billed dollars, D
 may be called from several threads at once, by a run playing episodes in parallel
 (harnesses/parallel.py, PREREG §4.6): the check, the ledger and the echo log change under one
 lock, so the stop stays exact on the spend recorded so far, and each thread gets its own
-client from the factory. The calls already sent when the stop fires still complete, so such
-a run can end above its planned spend by up to one call per episode in flight; the runner's
-episode reservations keep it from getting there. The
+client from the factory. The calls already sent when the stop fires still complete, so on its
+own the stop would let such a run end above its planned spend by up to one call per episode
+in flight; the parallel run's per-call gate (`harnesses.parallel.CallGate`) lets calls
+overlap only while the most they can all cost fits, so it ends at most one call above, as a
+sequential run can. The
 runner records that stop as `COST_CAP`, but it is the planned spend, not a per-run cost guard
 (PREREG §7.7's hold is about the ARC run guard), so it places no hold; a per-run guard, if
 one is ever added here, must place one (`common.hold.place_hold`). It logs
@@ -154,7 +156,8 @@ class OpenAIResponsesTransport:
         (`common.approval.spend_usd`: the billed estimate, the Flex price on Flex). The run
         stops before a call once it reaches the planned spend, so the guard's check `block
         spend + planned <= max_usd` holds after the run too, up to the last call's cost (with
-        episodes played in parallel, up to the last call of each episode in flight)."""
+        episodes played in parallel too, through their per-call gate,
+        `harnesses.parallel.CallGate`)."""
         with self._lock:
             return spend_usd(self.ledger.cost_usd_list, self.ledger.cost_usd_billed_est)
 

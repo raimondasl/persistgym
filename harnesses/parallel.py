@@ -25,10 +25,10 @@ What parallel play keeps from sequential play:
 * **The stop rules** (`runner._stop_reason`): COST_CAP, and the aborts after 2 excluded
   (echo-mismatched) episodes or 2 API errors, checked as each episode finishes, in the order
   they finish. When the run stops, for one of these or for an error or a Ctrl+C, no episode
-  starts any more and every episode in flight makes no further call: its next call raises
-  `RunStopped` and it ends `RUN_STOPPED`, and its record and transcript are written like any
-  other. Only the call each one had in flight is made, so the run stops within one call per
-  episode in flight.
+  starts any more and every episode in flight makes no further call: its next call, or a
+  call still waiting at the per-call gate (below), raises `RunStopped` and it ends
+  `RUN_STOPPED`, and its record and transcript are written like any other. Only the call
+  each one had in flight is made, so the run stops within one call per episode in flight.
 
 **Spend reservations** (`SpendPlan`; only for a transport with a planned spend, i.e. the paid
 one). Before an episode starts, the run reserves a conservative estimate of its spend, and
@@ -45,12 +45,29 @@ episode does not fit, the run waits for an episode in flight to finish and check
 with none in flight, it starts no more episodes and ends `SPEND_RESERVATION`. Every start is logged (`SpendPlan.log`, written by the
 runner to `spend_reservations.jsonl` next to the transcript).
 
-The transport's own stop is unchanged and exact: before every call it refuses once the run's
-spend, as recorded so far, has reached the planned spend (`BudgetExceeded`, the episode's
-`COST_CAP`). It is the backstop for an estimate that turns out too low. With episodes in
-flight the calls already sent when it fires still complete, so a run can then end above its
-planned spend by up to one call per episode in flight (at most N calls), where sequential
-play can end above it by one call.
+**Per-call gate** (`CallGate`; with the spend plan). A reservation is an estimate, and an
+episode can spend more than it reserved. The transport's own stop, unchanged, refuses a call
+once the run's spend as recorded so far has reached the planned spend (`BudgetExceeded`, the
+episode's `COST_CAP`), but the calls already sent when it fires still complete: on its own it
+would let a parallel run end above its planned spend by up to one call per episode in flight.
+So each call of a parallel paid run first passes the gate. With no other call in flight it
+goes ahead (the transport then applies the rule of sequential play); with others in flight
+it goes only if
+
+    spent + the most the calls in flight can cost + the most this call can cost
+        <= planned spend
+
+and otherwise waits for a call in flight to return (or for the run to stop). The most a call
+can cost is its `max_output_tokens` (D13: 32,000 on every request) at the output price plus
+one input token per byte of its JSON body at the cache-write price, at the standard tier's
+list prices (`CallGate.bound_usd`); a request without a cap counts as unbounded, so it goes
+only alone. So the calls that overlap can never take the run past its planned spend, and a
+parallel run ends above it by at most the one call that went alone, as a sequential run can.
+This rests on one assumption: that a request's input tokens are no more than the bytes of its
+JSON body, which holds for text (an o200k_base token is at least one byte) and is assumed for
+replayed reasoning items, whose `encrypted_content` carries those tokens. The gate waits only
+when the planned spend has less room left than the bounds of the calls that would overlap, so
+it changes the timing of calls near the end of a run, never a payload.
 
 **Ctrl+C** (in the main thread; the episodes play in daemon worker threads). The first stops
 the run and waits for the calls in flight to return, so that they are recorded; the episodes
@@ -63,6 +80,9 @@ is not in costs.csv.
 
 from __future__ import annotations
 
+import itertools
+import json
+import math
 import queue
 import sys
 import threading
@@ -71,7 +91,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from common.costs import spend_usd
-from harnesses.pricing import UsageLedger
+from harnesses.pricing import CACHE_WRITE_MULTIPLIER, UsageLedger, price_for
 
 MAX_PARALLEL = 16
 """PREREG §4.6, §0.3 line 15: a run plays at most 16 episodes at once."""
@@ -122,25 +142,111 @@ class RunStop:
         return self._event.is_set()
 
 
+def _stopped(stop: RunStop) -> RunStopped:
+    return RunStopped(f"the run stopped ({stop.reason}) while this episode was in flight; it "
+                      "made no further call")
+
+
+class CallGate:
+    """The per-call backstop of a parallel paid run (module docstring): a call goes ahead
+    alone, or with other calls in flight only if the spend recorded so far plus the most
+    every call in flight and this one can cost stays within the planned spend; otherwise it
+    waits for a call to return. So the calls that overlap never take the run past its
+    planned spend. Shared by the episodes' channels, safe across threads."""
+
+    RULE = ("a call goes alone, or with others in flight only if spent + the most the calls "
+            "in flight and this one can cost <= planned spend; the most a call can cost is "
+            "its max_output_tokens at the output price plus one input token per byte of its "
+            "JSON body at the cache-write price, at list prices")
+
+    def __init__(self, planned_usd: float, spent: Callable[[], float], model: str,
+                 stop: RunStop):
+        self.planned_usd = float(planned_usd)
+        self._spent = spent
+        self.price = price_for(model)
+        self.stop = stop
+        self._cond = threading.Condition()
+        self._in_flight: dict[int, float] = {}  # ticket -> the most that call can cost
+        self._tickets = itertools.count()
+        self.calls = 0  # calls let through
+        self.calls_waited = 0  # of those, the ones that had to wait
+        self.peak_calls_in_flight = 0
+
+    def bound_usd(self, payload: dict) -> float:
+        """The most one call with this payload can cost, at list prices (no Flex discount):
+        its `max_output_tokens` at the output price, plus one input token per byte of its
+        JSON body at the cache-write price (more than the uncached and cached prices).
+        Unbounded (inf) without a positive integer `max_output_tokens`."""
+        cap = payload.get("max_output_tokens")
+        if isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0:
+            return math.inf
+        n_bytes = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        return (n_bytes * self.price.input * CACHE_WRITE_MULTIPLIER
+                + cap * self.price.output) / 1e6
+
+    def enter(self, payload: dict) -> int:
+        """Wait until this call may go (or raise `RunStopped` once the run stops); returns
+        the ticket to pass to `leave` once the call has returned or failed."""
+        bound = self.bound_usd(payload)
+        waited = False
+        with self._cond:
+            while True:
+                if self.stop.is_set():
+                    raise _stopped(self.stop)
+                if not self._in_flight:
+                    break  # alone: the transport's own stop decides, as in sequential play
+                # A call leaves only after the transport recorded its spend, and none leaves
+                # while this lock is held: a call is counted twice here, never not at all.
+                if (float(self._spent()) + sum(self._in_flight.values()) + bound
+                        <= self.planned_usd):
+                    break
+                waited = True
+                self._cond.wait(POLL_S)  # woken when a call returns; polls the run's stop
+            ticket = next(self._tickets)
+            self._in_flight[ticket] = bound
+            self.calls += 1
+            self.calls_waited += waited
+            self.peak_calls_in_flight = max(self.peak_calls_in_flight, len(self._in_flight))
+            return ticket
+
+    def leave(self, ticket: int) -> None:
+        with self._cond:
+            self._in_flight.pop(ticket, None)
+            self._cond.notify_all()
+
+    def info(self) -> dict:
+        with self._cond:
+            return {"rule": self.RULE, "calls": self.calls, "calls_waited": self.calls_waited,
+                    "peak_calls_in_flight": self.peak_calls_in_flight}
+
+
 class EpisodeChannel:
     """What one episode of a parallel run sends through: the run's transport, behind the
-    run's stop signal. With a spend plan it also meters the episode's spend, priced as the
-    paid transport prices it (`UsageLedger`) and measured like block spend (`spend_usd`)."""
+    run's stop signal and, for a paid run, the run's `CallGate`. With a spend plan it also
+    meters the episode's spend, priced as the paid transport prices it (`UsageLedger`) and
+    measured like block spend (`spend_usd`)."""
 
     def __init__(self, transport: Any, stop: RunStop, ledger: UsageLedger | None = None, *,
-                 episode_id: str = ""):
+                 episode_id: str = "", gate: CallGate | None = None):
         self.transport = transport
         self.episode_id = episode_id
         self.paid = bool(getattr(transport, "paid", False))
         self.stop = stop
         self.ledger = ledger
+        self.gate = gate
         self._lock = threading.Lock()
 
     def send(self, payload: dict) -> dict:
         if self.stop.is_set():
-            raise RunStopped(f"the run stopped ({self.stop.reason}) while this episode was "
-                             "in flight; it made no further call")
-        response = self.transport.send(payload)
+            raise _stopped(self.stop)
+        if self.gate is None:
+            response = self.transport.send(payload)
+        else:
+            ticket = self.gate.enter(payload)
+            try:
+                response = self.transport.send(payload)
+            finally:
+                self.gate.leave(ticket)  # after the transport recorded the call's spend
         if self.ledger is not None:
             with self._lock:
                 self.ledger.add(response)
@@ -304,6 +410,8 @@ class ParallelPlay:
         self.emit = emit
         self.stop = RunStop()
         self.plan = SpendPlan.for_transport(transport)
+        self.gate = (CallGate(self.plan.planned_usd, lambda: transport.spent_usd, model,
+                              self.stop) if self.plan is not None else None)
         self.flights: dict[int, _Flight] = {}
         self.finished_runs: list = []  # in the order they finished (the stop rule)
         self.runs: list = []  # emitted, in the run's order
@@ -344,7 +452,8 @@ class ParallelPlay:
                     return
             ledger = UsageLedger(self.model) if self.plan is not None else None
             channel = EpisodeChannel(self.transport, self.stop, ledger,
-                                     episode_id=getattr(episode, "episode_id", str(index)))
+                                     episode_id=getattr(episode, "episode_id", str(index)),
+                                     gate=self.gate)
             flight = _Flight(index, episode, channel, estimate)
             self.flights[index] = flight
             pool.submit(self._task(flight))
@@ -444,4 +553,5 @@ class ParallelPlay:
                 "stop_reason": self.stop.reason,
                 "abandoned_episode_ids": [getattr(self.flights[i].episode, "episode_id", i)
                                           for i in self.abandoned],
-                "spend_reservation": self.plan.info() if self.plan is not None else None}
+                "spend_reservation": ({**self.plan.info(), "call_gate": self.gate.info()}
+                                      if self.plan is not None else None)}

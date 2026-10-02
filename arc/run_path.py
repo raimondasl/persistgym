@@ -91,6 +91,7 @@ BLINDED_EXPERIMENTS = frozenset({"arc_pilot"})     # PREREG §11 pilot blinding
 COUNTED_RUN_COST_GUARD_USD = 120.0                 # D22: harness cost guard, list accounting
 NORMAL_ENDINGS = frozenset({"GAME_WIN", "ACTION_BUDGET"})
 BLINDED_ENDING = "NORMAL_ENDING_BLINDED"
+BLINDED_LOG = "inner_output.log"   # a blinded run's harness output, under results/raw/ only
 WITHHELD_NOTE = "pilot blinding (PREREG §11): reasoning tokens and game outcome withheld"
 WORK_NAME = "paid"
 INTERRUPT_GRACE_S = 120.0
@@ -527,11 +528,20 @@ def inner_command(plan: Plan, harness: Harness, out: Path) -> list[str]:
 
 
 def run_inner(command: list[str], cwd: Path, env: Mapping[str, str], *,
-              grace_s: float = INTERRUPT_GRACE_S) -> int:
-    """Run the inner process with live output. On Ctrl+C (which reaches the child too) give
-    it `grace_s` to close the ARC scorecard before killing it."""
+              grace_s: float = INTERRUPT_GRACE_S, log_path: Path | None = None) -> int:
+    """Run the inner process. Its output is shown live, or, with `log_path` (blinded pilots,
+    PREREG §11), written only to that file: the harness logs the final scorecard, which shows
+    level progress, so a blinded run must not print it. On Ctrl+C (which reaches the child
+    too) give it `grace_s` to close the ARC scorecard before killing it."""
     print(f"$ {' '.join(command)}  (in {cwd})", flush=True)
-    proc = subprocess.Popen(command, cwd=cwd, env=dict(env))
+    if log_path is None:
+        proc = subprocess.Popen(command, cwd=cwd, env=dict(env))
+    else:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"blinded run: harness output goes only to {log_path}", flush=True)
+        with log_path.open("ab") as log:
+            proc = subprocess.Popen(command, cwd=cwd, env=dict(env), stdout=log,
+                                    stderr=subprocess.STDOUT)
     try:
         return proc.wait()
     except KeyboardInterrupt:
@@ -820,7 +830,8 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
     code = 1
     try:
         command = inner_command(plan, harness, scratch / "out")
-        code = run_inner(command, scratch, inner_env(plan, harness, scratch))
+        code = run_inner(command, scratch, inner_env(plan, harness, scratch),
+                         log_path=raw_dir / BLINDED_LOG if plan.blinded else None)
     finally:
         row = None
         try:

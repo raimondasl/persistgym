@@ -49,7 +49,7 @@ import re
 import statistics
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from harnesses.config import DEFAULT_MAX_OUTPUT_TOKENS, ENCRYPTED_REASONING, require_output_cap
 from harnesses.items import output_text, reasoning_summary_text, replay_items, user_message
@@ -397,6 +397,18 @@ def check_fork_limits(target: int, max_attempts: int) -> None:
                          f"the scorable target), got {max_attempts}")
 
 
+def check_fork_config(cfg: ProbeConfig) -> None:
+    """The request settings PREREG §17.1 registers: REPLAY_CONFIG exactly (effort medium, mode
+    standard, Flex, `max_output_tokens` 32,000, `reasoning.summary` "auto", no instructions,
+    summaries stripped on replay). A fork run at any other setting would get a report whose
+    condition (b) reads as met, so it is refused."""
+    if cfg != REPLAY_CONFIG:
+        diff = {k: v for k, v in asdict(cfg).items()
+                if v != getattr(REPLAY_CONFIG, k)}
+        raise ValueError(f"the fork probe runs only at the registered settings (PREREG §17.1: "
+                         f"effort medium, mode standard, service tier flex); got {diff}")
+
+
 def run_fork_arms(model: str, transport, cfg: ProbeConfig = REPLAY_CONFIG, *,
                   contexts: tuple[str, ...] | list[str] = CONTEXTS,
                   target: int = FORK_TARGET_SCORABLE, max_attempts: int = FORK_MAX_ATTEMPTS,
@@ -404,8 +416,10 @@ def run_fork_arms(model: str, transport, cfg: ProbeConfig = REPLAY_CONFIG, *,
     """The fork probe on one model. Attempt i runs one trial, with seed FORK_SEED_START + i,
     in each arm that still has fewer than `target` scorable trials, until every arm has
     `target` or has used `max_attempts` attempts. So an unscorable trial is replaced, both
-    arms see the same list at the same attempt, and an arm stops at exactly `target`."""
+    arms see the same list at the same attempt, and an arm stops at exactly `target`. Any
+    request setting other than the registered ones (`check_fork_config`) is refused."""
     check_fork_limits(target, max_attempts)
+    check_fork_config(cfg)
     scorable = dict.fromkeys(contexts, 0)
     trials = []
     for attempt in range(max_attempts):

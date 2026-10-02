@@ -242,11 +242,21 @@ def _fork_design(a, kind: str) -> bool:
     return kind == "replay" and a.design == "fork"
 
 
+def _probe_cfg(a, kind: str) -> probes.ProbeConfig:
+    """The probe's request settings: the echo or replay config with --effort, --mode and
+    --service-tier."""
+    cfg = probes.ECHO_CONFIG if kind == "echo" else probes.REPLAY_CONFIG
+    return dataclasses.replace(cfg, reasoning_effort=a.effort, reasoning_mode=a.mode,
+                               service_tier=a.service_tier)
+
+
 def _probe_args(a, kind: str) -> str | None:
     """Fill the design-dependent defaults of a probe command; why it refuses, or None.
     `probe-replay --design fork` (PREREG §17.1): --n is the scorable trials per arm (default
-    and at most 20) and --max-attempts the attempts per arm (default and at most 40). The
-    other probes keep --n as trials per context (echo 1, original replay design 10)."""
+    and at most 20) and --max-attempts the attempts per arm (default and at most 40), and the
+    request settings must be the registered ones (the --effort, --mode and --service-tier
+    defaults). The other probes keep --n as trials per context (echo 1, original replay
+    design 10)."""
     if not _fork_design(a, kind):
         if getattr(a, "max_attempts", None) is not None:
             return "--max-attempts applies to probe-replay --design fork only"
@@ -257,6 +267,7 @@ def _probe_args(a, kind: str) -> str | None:
     a.max_attempts = probes.FORK_MAX_ATTEMPTS if a.max_attempts is None else a.max_attempts
     try:
         probes.check_fork_limits(a.n, a.max_attempts)
+        probes.check_fork_config(_probe_cfg(a, kind))
     except ValueError as e:
         return str(e)
     return None
@@ -308,9 +319,7 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
         out_dir.mkdir(parents=True, exist_ok=True)
         raw_dir.mkdir(parents=True, exist_ok=True)
         started, trials = runmeta.utc_now(), []
-        cfg = probes.ECHO_CONFIG if kind == "echo" else probes.REPLAY_CONFIG
-        cfg = dataclasses.replace(cfg, reasoning_effort=a.effort, reasoning_mode=a.mode,
-                                  service_tier=a.service_tier)
+        cfg = _probe_cfg(a, kind)
         exit_reason = "INCOMPLETE"
         try:
             with gzip.open(raw_dir / "transcript.jsonl.gz", "at", encoding="utf-8") as raw:

@@ -93,6 +93,7 @@ class FakeHarness:
         self.calls: list[str] = []
         self.commands: list[list[str]] = []
         self.envs: list[dict] = []
+        self.inner_kwargs: list[dict] = []
         self.tree = RECORD["patched_tree"]
         self.resolved = {e["config_id"]: e["config"] for e in RECORD["profiles"].values()}
         self.inner: Callable[[list[str], Path], int] = lambda command, cwd: 0
@@ -118,6 +119,7 @@ class FakeHarness:
     def _run_inner(self, command, cwd, env, **kwargs):
         self.calls.append("inner")
         self.commands.append(command)
+        self.inner_kwargs.append(kwargs)
         self.envs.append(dict(env))
         return self.inner(command, Path(cwd))
 
@@ -282,6 +284,32 @@ def test_counted_run_is_accounted_and_recorded(world):
         text = committed.read_text(encoding="utf-8")
         assert "test-arc-key" not in text and "test-google-key" not in text
     assert not paths.lock.exists()
+
+
+def test_a_pilots_harness_output_goes_only_to_its_raw_log(world):
+    """PREREG §11: the harness logs the final scorecard (level progress), so a blinded pilot
+    must not print it; an unblinded counted run still shows its output live."""
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd, exit_reason="GAME_WIN")
+    assert rp.main(PILOT_ARGS, paths=paths) == 0
+    log = h.inner_kwargs[-1]["log_path"]
+    assert log.name == rp.BLINDED_LOG
+    assert log.parent.parent == paths.raw / "arc_pilot"
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    assert h.inner_kwargs[-1]["log_path"] is None
+
+
+def test_run_inner_writes_a_blinded_runs_output_only_to_its_log(tmp_path, capfd):
+    # The marker is computed by the child, so it never appears in the echoed command line.
+    child = [sys.executable, "-c", "print('levels_completed=' + str(1 + 2))"]
+    log = tmp_path / "raw" / "inner_output.log"
+    assert rp.run_inner(child, tmp_path, dict(os.environ), log_path=log) == 0
+    shown = capfd.readouterr()
+    assert "levels_completed=3" not in shown.out + shown.err
+    assert "levels_completed=3" in log.read_text(encoding="utf-8")
+    assert rp.run_inner(child, tmp_path, dict(os.environ)) == 0
+    assert "levels_completed=3" in capfd.readouterr().out
 
 
 def test_pilot_outcome_stays_in_raw(world):

@@ -30,7 +30,8 @@ Per episode it also logs (harnesses/DESIGN.md §7):
   step a content failure that scores 0) and the episode goes on.
 
 Pilot-blinded experiments (`harnesses.blinding`, PREREG §11) keep `episodes.jsonl` under the
-gitignored results/raw/ only.
+gitignored results/raw/ only, and commit an allowlisted part of meta.json's `parallel` block,
+with the whole block under results/raw/.
 
 `run_batch(..., parallel=N)` plays up to N <= 16 episodes at once (PREREG §4.6; §0.3 line 15;
 `harnesses.parallel`): the same payloads, cell assignment, seeds and per-episode outputs,
@@ -73,6 +74,11 @@ parallel, until it is appended to the run's transcript in the run's order."""
 RESERVATIONS_LOG = "spend_reservations.jsonl"
 """Under results/raw/<experiment>/<run_id>/: a parallel paid run's reservation at each
 episode start (`harnesses.parallel.SpendPlan.log`)."""
+PARALLEL_INFO = "parallel.json"
+"""Under results/raw/<experiment>/<run_id>/: a pilot-blinded run's whole `parallel` block,
+sequential runs included; its meta.json holds the allowlisted part
+(`blinding.blinded_parallel`, PREREG §11) and names this file in `blinding.parallel_path`,
+or null if it could not be written."""
 CLOCK = time.monotonic
 """Times each call (`call_latency_s`). Tests fix it to compare outputs byte for byte."""
 
@@ -419,7 +425,9 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     """Run episodes in order; write results/<experiment>/<run_id>/{meta.json,summary.json,
     episodes.jsonl} and the raw transcript under results/raw/. For a pilot-blinded
     experiment (`blinding.BLINDED_EXPERIMENTS`) episodes.jsonl goes to
-    results/raw/<experiment>/<run_id>/ instead, and meta.json leaves out reasoning tokens.
+    results/raw/<experiment>/<run_id>/ instead, meta.json leaves out reasoning tokens, and
+    its `parallel` keeps the allowlisted fields only (`blinding.blinded_parallel`), with the
+    whole block in results/raw/<experiment>/<run_id>/parallel.json (`PARALLEL_INFO`).
     Paid transports get their costs.csv row appended in `finally`, whatever happens.
     `run_matrix` (harnesses.matrix.RunMatrix.to_dict) is recorded in meta.json's config.
 
@@ -505,7 +513,8 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
             cost_row = transport.finalize(run_id=run_id, milestone=milestone,
                                           cell_or_config=cell.ascii_id, notes=notes)
         if play is not None and play.plan is not None:
-            _write_reservations(raw_dir / RESERVATIONS_LOG, play.plan.log)
+            _write_raw(raw_dir / RESERVATIONS_LOG,
+                       "".join(json.dumps(x) + "\n" for x in play.plan.log))
         summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded)
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
                                               encoding="utf-8")
@@ -513,22 +522,33 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                          else {"max_episodes_in_flight": parallel})
         if play is not None and play.abandoned:
             parallel_info["abandoned_transcripts"] = _rel(inflight_dir)
+        # PREREG §11: a blinded run's meta.json gets the allowlisted part of `parallel` and
+        # the whole block goes to raw; if it cannot be written, meta.json names no raw copy.
+        parallel_path = raw_dir / PARALLEL_INFO if blinded else None
+        if parallel_path is not None and not _write_raw(
+                parallel_path, json.dumps(parallel_info, indent=2) + "\n"):
+            parallel_path = None
         meta = _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport,
                            experiment=experiment, run_id=run_id, started=started,
                            exit_reason=exit_reason, repeat_index=repeat_index,
                            cost_row=cost_row, blinded=blinded, episodes_path=episodes_path,
-                           run_matrix=run_matrix, parallel=parallel_info)
+                           run_matrix=run_matrix, parallel=parallel_info,
+                           parallel_path=parallel_path)
     return meta
 
 
-def _write_reservations(path: Path, log: list[dict]) -> None:
-    """The reservation log of a parallel paid run (raw, gitignored). A failure to write it
-    is reported, not raised: it must not stop the run's accounting."""
+def _write_raw(path: Path, text: str) -> bool:
+    """A raw (gitignored) file written once the run has ended: a parallel paid run's
+    reservation log, or a blinded run's whole `parallel` block. A failure to write it is
+    reported (the path, never the content), not raised: it must not stop the run's
+    accounting. Returns whether it was written."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("".join(json.dumps(x) + "\n" for x in log), encoding="utf-8")
+        path.write_text(text, encoding="utf-8")
     except OSError as e:
         print(f"warning: could not write {path}: {e}", file=sys.stderr)
+        return False
+    return True
 
 
 def require_plain_name(what: str, name: str) -> None:
@@ -549,7 +569,8 @@ def _rel(path: Path) -> str:
 
 def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, experiment, run_id,
                 started, exit_reason, repeat_index, cost_row, blinded=False,
-                episodes_path=None, run_matrix=None, parallel=None) -> dict:
+                episodes_path=None, run_matrix=None, parallel=None,
+                parallel_path=None) -> dict:
     echoed: Counter = Counter()
     efforts: Counter = Counter()
     models: Counter = Counter()
@@ -569,12 +590,17 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
     if run_matrix is not None:
         config["run_matrix"] = run_matrix
     tokens = dict(usage)
+    parallel = parallel or {"max_episodes_in_flight": 1}
     extra = {}
     if blinded:
-        # PREREG §11: one run is one arm, so its reasoning-token total is a per-arm number.
+        # PREREG §11: one run is one arm, so its reasoning-token total is a per-arm number,
+        # and pilots report cost no finer than the run's total (blinding.blinded_parallel).
         tokens = blinding.blinded_tokens(tokens)
+        parallel = blinding.blinded_parallel(parallel)
         extra["blinding"] = {"rule": blinding.WITHHELD_NOTE,
-                             "episodes_path": _rel(episodes_path) if episodes_path else None}
+                             "episodes_path": _rel(episodes_path) if episodes_path else None,
+                             "parallel_rule": blinding.PARALLEL_WITHHELD_NOTE,
+                             "parallel_path": _rel(parallel_path) if parallel_path else None}
     path = runmeta.write_meta(
         out_dir, experiment=experiment, run_id=run_id, cell_or_config=cell.cell_id,
         config=config, model_requested=cfg.model, model_returned=sorted(models),
@@ -591,5 +617,5 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
                   "costs_csv_row_appended": cost_row is not None},
         raw_transcript_path=_rel(raw_path), paid=bool(getattr(transport, "paid", False)),
         n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs),
-        parallel=parallel or {"max_episodes_in_flight": 1}, **extra)
+        parallel=parallel, **extra)
     return json.loads(path.read_text(encoding="utf-8"))

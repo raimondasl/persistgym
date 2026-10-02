@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from harnesses import blinding, cli
+from harnesses import blinding, cli, runner
 from harnesses.cells import CELLS
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -28,6 +28,10 @@ OUTCOMES = {"need_correct", "need_label", "routine_accuracy", "need_phase", "nee
             # D13: the need step's outcome and the per-step incomplete records (one at the
             # need step is a 0) are per-episode outcomes too
             "need_outcome", "incomplete"}
+# Spend finer than the run's total, from meta.json's `parallel` (blinding.blinded_parallel):
+# a per-episode estimate, and what the reservations and the per-call gate let overlap.
+SPEND_DETAIL = {"last_estimate_usd", "estimate_usd", "reserved_usd", "spent_usd",
+                "peak_episodes_in_flight", "calls_waited", "peak_calls_in_flight"}
 
 
 def _pilot_eps(variants=("base",), cells=("derived-nonrec-far", "observed-rec-far")):
@@ -53,7 +57,7 @@ def _committed_files(results: Path) -> list[Path]:
 
 def _assert_blinded(doc: dict) -> None:
     for path, value in _keys(doc):
-        assert path[-1] not in OUTCOMES, path
+        assert path[-1] not in OUTCOMES and path[-1] not in SPEND_DETAIL, path
         if path[-1] == "reasoning_tokens":
             assert value is None, path
 
@@ -86,6 +90,31 @@ def test_pilot_run_commits_no_per_episode_outcomes(tmp_path):
     assert [r["episode_id"] for r in rows] == [e.episode_id for e in eps]
     assert all("need_correct" in r and r["need_phase"]["tokens"] > 0 for r in rows)
     assert (raw / "transcript.jsonl.gz").exists()
+    # sequential play writes its `parallel` block to raw too, as parallel play does
+    assert sorted(p.name for p in raw.iterdir()) == ["episodes.jsonl", runner.PARALLEL_INFO,
+                                                     "transcript.jsonl.gz"]
+    assert json.loads((raw / runner.PARALLEL_INFO).read_text(encoding="utf-8")) == (
+        meta["parallel"]) == {"max_episodes_in_flight": 1}
+    assert meta["blinding"]["parallel_path"].endswith(
+        f"raw/persistgym_pilot/p1/{runner.PARALLEL_INFO}")
+
+
+def test_a_pilot_whose_raw_parallel_block_cannot_be_written(tmp_path, capsys):
+    """The raw copy of `parallel` is written like the reservation log: a failure is reported,
+    by path and never by content, and does not stop the run's accounting; meta.json then
+    names no raw copy."""
+    eps = _pilot_eps()
+    raw = tmp_path / "raw" / PILOT / "p1"
+    (raw / runner.PARALLEL_INFO).mkdir(parents=True)  # a folder where the file would go
+    meta = run_batch(eps, CELLS["F-r"], CFG, FakeModel(ids="payload"), experiment=PILOT,
+                     run_id="p1", results_root=tmp_path / "results",
+                     raw_root=tmp_path / "raw", parallel=2)
+    assert meta["exit_reason"] == "COMPLETED" and meta["blinding"]["parallel_path"] is None
+    assert meta["parallel"]["max_episodes_in_flight"] == 2
+    err = capsys.readouterr().err
+    assert f"warning: could not write {raw / runner.PARALLEL_INFO}" in err
+    assert "peak_episodes_in_flight" not in err
+    _assert_blinded(meta)
 
 
 def test_a_parallel_pilot_stays_blinded(tmp_path):
@@ -102,10 +131,47 @@ def test_a_parallel_pilot_stays_blinded(tmp_path):
         _assert_blinded(json.loads(p.read_text(encoding="utf-8")))
     assert meta["parallel"]["max_episodes_in_flight"] == 4
     raw = tmp_path / "raw" / PILOT / "par"
-    assert sorted(p.name for p in raw.iterdir()) == ["episodes.jsonl", "transcript.jsonl.gz"]
+    assert sorted(p.name for p in raw.iterdir()) == ["episodes.jsonl", runner.PARALLEL_INFO,
+                                                     "transcript.jsonl.gz"]
     rows = [json.loads(x) for x in (raw / "episodes.jsonl").read_text(encoding="utf-8")
             .splitlines()]
     assert [r["episode_id"] for r in rows] == [e.episode_id for e in eps]
+    # the fake model has no planned spend, so no reservations; the peak in flight, which a
+    # spend plan would bound, is in the raw copy only
+    full = json.loads((raw / runner.PARALLEL_INFO).read_text(encoding="utf-8"))
+    assert full["peak_episodes_in_flight"] == 4 and full["spend_reservation"] is None
+    assert meta["parallel"] == {k: v for k, v in full.items()
+                                if k != "peak_episodes_in_flight"}
+
+
+def test_parallel_block_is_allowlisted():
+    """A pilot's meta.json commits only the fields of `parallel` in
+    blinding.PARALLEL_FIELDS, so a field added to ParallelPlay.info, SpendPlan.info or
+    CallGate.info later stays in the raw copy until it is added there."""
+    gate = {"rule": "g", "calls": 40, "calls_waited": 3, "peak_calls_in_flight": 4,
+            "later_gate_field": {"x": 1}}
+    plan = {"planned_usd": 1.0, "estimate_rule": "r", "estimate_factor": 2.0,
+            "episodes_started": 8, "episodes_measured": 7, "whole_episode_measured": True,
+            "last_estimate_usd": 0.1, "later_estimate_usd": 0.2, "call_gate": gate}
+    full = {"max_episodes_in_flight": 4, "peak_episodes_in_flight": 4,
+            "episodes_started": 8, "episodes_not_started": 0, "stop_reason": None,
+            "abandoned_episode_ids": [], "abandoned_transcripts": "raw/x/inflight",
+            "later_field": 1, "spend_reservation": plan}
+    assert blinding.blinded_parallel(full) == {
+        "max_episodes_in_flight": 4, "episodes_started": 8, "episodes_not_started": 0,
+        "stop_reason": None, "abandoned_episode_ids": [],
+        "abandoned_transcripts": "raw/x/inflight",
+        "spend_reservation": {"planned_usd": 1.0, "estimate_rule": "r",
+                              "estimate_factor": 2.0, "episodes_started": 8,
+                              "episodes_measured": 7, "whole_episode_measured": True,
+                              "call_gate": {"rule": "g", "calls": 40}}}
+    assert full["spend_reservation"]["last_estimate_usd"] == 0.1  # the input is unchanged
+    assert blinding.blinded_parallel({**full, "spend_reservation": None})[
+        "spend_reservation"] is None
+    assert blinding.blinded_parallel({"max_episodes_in_flight": 1}) == {
+        "max_episodes_in_flight": 1}
+    # a dict where a plain field is named keeps none of its fields
+    assert blinding.blinded_parallel({"stop_reason": {"x": 1}}) == {"stop_reason": {}}
 
 
 def test_pilot_commits_only_routine_incomplete_counts(tmp_path):

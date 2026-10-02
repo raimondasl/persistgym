@@ -13,7 +13,7 @@ import pytest
 
 from common import costs, paidlock, runmeta
 from common.tests.gitrepo import DRAFT_PREREG, git_in, push_main
-from harnesses import blinding, cli, runner
+from harnesses import blinding, cli, probes, runner
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
 from harnesses.tests.conftest import prereg_repo
@@ -120,6 +120,141 @@ def test_probe_replay_cli(paid_env):
                    encoding="utf-8") as f:
         assert len(f.readlines()) == 4
     assert costs.read_rows(costs_csv)[0]["n_calls"] == "12"
+
+
+def test_probe_replay_original_design_is_the_default(paid_env):
+    """`probe-replay` without --design runs the original D29 probe, 10 trials per context."""
+    tmp, costs_csv, _ = paid_env
+    assert cli.main(["probe-replay", "--model", "gpt-6-luna", "--approved-block", "1-pilots",
+                     "--planned-usd", "2", "--run-id", "orig"]) == 0
+    out = tmp / "results" / "replay_probe" / "orig"
+    trials = [json.loads(x) for x in (out / "trials.jsonl").read_text(encoding="utf-8")
+              .splitlines()]
+    assert len(trials) == 20 and {t["repeat"] for t in trials} == set(range(10))
+    assert all("picked" in t["score"] and "numbers" not in t for t in trials)
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["cell_or_config"] == "replay-probe" and meta["seeds"] is None
+    assert "fork" not in meta["config"] and meta["config"]["n_per_context"] == 10
+    assert not (out / "fork_report.json").exists()
+    (row,) = costs.read_rows(costs_csv)
+    assert row["cell_or_config"] == "replay-probe" and row["n_calls"] == "60"
+
+
+def test_probe_summary_of_an_original_design_run(paid_env, capsys):
+    """$0 `probe-summary`: the per-arm counts behind PREREG §17.1's block-1 table, from the
+    committed trials.jsonl and, when present, the raw transcript."""
+    tmp, _, _ = paid_env
+    assert cli.main(["probe-replay", "--model", "gpt-6-luna", "--n", "3", "--approved-block",
+                     "1-pilots", "--planned-usd", "2", "--run-id", "orig"]) == 0
+    capsys.readouterr()
+    args = ["probe-summary", "orig", "--results-root", str(tmp / "results")]
+    assert cli.main([*args, "--raw-root", str(tmp / "raw")]) == 0
+    (arms,) = [r["arms"] for r in json.loads(capsys.readouterr().out).values()]
+    assert arms["all_turns"] == arms["current_turn"] == {
+        "trials": 3, "turn1_summary_names_no_number": 0, "turn1_summary_names_one_number": 3,
+        "turn1_summary_names_several_numbers": 0, "scorable": 3, "matches": 3,
+        "turn3_answered_a_number": 3, "turn3_answer_counts": {"427": 3}, "leaks": 0,
+        "incomplete_trials": 0, "responses": 9, "echo_mismatched_responses": 0,
+        "turn1_summary_empty": 0,
+        "turn1_reasoning_tokens": {"min": 37, "median": 37, "max": 37},
+        "reasoning_summary_echoed": {"auto": 9}}
+    # without the raw transcript: the committed counts only
+    assert cli.main([*args, "--raw-root", str(tmp / "elsewhere")]) == 0
+    (run,) = json.loads(capsys.readouterr().out).values()
+    assert not run["raw_transcript_read"] and "turn1_summary_empty" not in run["arms"]["all_turns"]
+    assert cli.main([*args[:1], "../orig", *args[2:]]) == 2
+    assert cli.main([*args[:1], "missing", *args[2:]]) == 1
+
+
+def _fork_fake(p, i):
+    """turn 1 "ready", turn 2 "Paris"; turn 3: all_turns names the list's 5th number,
+    current_turn says it has no record."""
+    turn = sum(1 for x in p["input"] if x.get("role") == "user") - 1
+    if turn < 2:
+        return ["ready", "Paris"][turn]
+    if p["reasoning"]["context"] == "current_turn":
+        return "I don't have a record of that number."
+    return str(probes.three_digit_numbers(p["input"][0]["content"][0]["text"])[4])
+
+
+def test_probe_replay_fork_cli(paid_env, monkeypatch, capsys):
+    """PREREG §17.1: 20 scorable trials per arm, two byte-identical forks per trial, one
+    costs.csv row per model under replay_probe, and fork_report.json next to meta.json."""
+    tmp, costs_csv, _ = paid_env
+    fakes = []
+
+    def transport(**kw):
+        fakes.append(FakeModel(_fork_fake))
+        return OpenAIResponsesTransport(
+            **kw, costs_path=costs_csv, repo=tmp,
+            client_factory=lambda timeout, fake=fakes[-1]: _FakeBackedClient(fake))
+    monkeypatch.setattr(cli, "OpenAIResponsesTransport", transport)
+    assert cli.main(["probe-replay", "--design", "fork", "--approved-block", "1-pilots",
+                     "--planned-usd", "2", "--run-id", "fk"]) == 0
+    assert "condition (b) met: True" in capsys.readouterr().out
+    rows = costs.read_rows(costs_csv)
+    assert [r["run_id"] for r in rows] == ["fk-gpt-6.1-sol", "fk-gpt-6-luna"]
+    assert all(r["experiment"] == "replay_probe" and r["cell_or_config"] == "replay-fork-probe"
+               and r["n_calls"] == "160" for r in rows)
+    out = tmp / "results" / "replay_probe" / "fk-gpt-6.1-sol"
+    trials = [json.loads(x) for x in (out / "trials.jsonl").read_text(encoding="utf-8")
+              .splitlines()]
+    assert len(trials) == 40 and all(t["score"]["scorable"] for t in trials)
+    assert sorted({t["seed"] for t in trials}) == list(
+        range(probes.FORK_SEED_START, probes.FORK_SEED_START + 20))
+    assert all(t["fork_request_sha256"][0] == t["fork_request_sha256"][1] for t in trials)
+    assert "payloads" not in trials[0] and "reasoning_summaries" not in trials[0]
+    calls = fakes[0].calls
+    assert len(calls) == 160 and all(calls[i + 2] == calls[i + 3] for i in range(0, 160, 4))
+    report = json.loads((out / "fork_report.json").read_text(encoding="utf-8"))
+    assert report["run_id"] == "fk-gpt-6.1-sol" and report["exit_reason"] == "COMPLETED"
+    assert report["condition_b"] == {
+        "registered_settings": True, "enough_scorable": True,
+        "all_turns_agreements": 20, "all_turns_needs": ">= 15 of 20",
+        "current_turn_agreements": 0, "current_turn_needs": "<= 5 of 20", "met": True}
+    assert report["arms"]["all_turns"]["position_counts"] == {"5": 40}
+    assert report["all_probe_echoes_match"]
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert set(runmeta.REQUIRED) <= set(meta) and meta["exit_reason"] == "COMPLETED"
+    assert meta["cell_or_config"] == "replay-fork-probe"
+    assert meta["config"]["fork"]["design"] == "fork"
+    assert meta["config"]["fork"]["target_scorable_per_arm"] == 20
+    assert meta["config"]["fork"]["max_attempts_per_arm"] == 40
+    assert meta["config"]["probe_config"]["reasoning_summary"] == "auto"
+    assert meta["seeds"]["seed_start"] == probes.FORK_SEED_START
+    assert meta["reasoning_context_echoed"] == {"all_turns": 80, "current_turn": 80}
+    with gzip.open(tmp / "raw" / "replay_probe" / "fk-gpt-6.1-sol" / "transcript.jsonl.gz",
+                   "rt", encoding="utf-8") as f:
+        raw = [json.loads(x) for x in f]
+    assert len(raw) == 40 and all(len(r["payloads"]) == 4 for r in raw)
+    # probe-summary re-derives the report from the committed files
+    capsys.readouterr()
+    assert cli.main(["probe-summary", "fk-gpt-6.1-sol", "fk-gpt-6-luna",
+                     "--results-root", str(tmp / "results")]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    for run_id, run in summary.items():
+        written = json.loads((tmp / "results" / "replay_probe" / run_id / "fork_report.json")
+                             .read_text(encoding="utf-8"))
+        assert run["raw_transcript_read"] and written.pop("run_id") == run_id
+        assert {k: v for k, v in run.items() if k != "raw_transcript_read"} == written
+
+
+@pytest.mark.parametrize("args", [["--design", "fork", "--n", "21"],
+                                  ["--design", "fork", "--max-attempts", "41"],
+                                  ["--design", "fork", "--n", "10", "--max-attempts", "9"],
+                                  ["--design", "fork", "--n", "0"],
+                                  ["--max-attempts", "40"]])
+def test_probe_replay_fork_refuses_bad_limits_before_the_lock(paid_env, monkeypatch, capsys,
+                                                              args):
+    _, costs_csv, fakes = paid_env
+
+    def no_lock(*a, **k):
+        raise AssertionError("must not take the paid-run lock")
+    monkeypatch.setattr(paidlock, "paid_run_lock", no_lock)
+    assert cli.main(["probe-replay", *args, "--approved-block", "1-pilots",
+                     "--planned-usd", "1"]) == 2
+    assert "refused" in capsys.readouterr().err
+    assert fakes == [] and costs.read_rows(costs_csv) == []
 
 
 def test_run_cli(paid_env):

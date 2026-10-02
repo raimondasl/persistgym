@@ -48,7 +48,10 @@ def test_step_kinds_and_reveal_positions(small_eps):
         n = ep.need_step
         if ep.variant == "withheld":
             assert ep.components == [] and not ep.fact_available
+            assert ep.substitutes and all(ep.steps[x.step].kind == "reveal"
+                                          for x in ep.substitutes)
             continue
+        assert ep.substitutes == [] and all(s.substitutes == [] for s in ep.steps)
         steps = {c.comp_id: c.step for c in ep.components}
         if ep.cell.fact == "observed":
             assert list(steps) == ["fact"]
@@ -130,6 +133,51 @@ def test_withheld_keeps_structure(small_eps):
     assert wh.need.observation == base.need.observation
 
 
+def test_withheld_replaces_bindings_with_equal_length_stand_ins(small_rendered):
+    """D39: in every cell, the withheld episode never names the target before need; at each
+    evidence step it shows, in place of each fact or clue binding, the same frame about one
+    stand-in entity (target's token length, not a distractor) with a value of the same format
+    that is no option, clue or distractor value, and keeps the rule sentence; every sentence
+    keeps its token count, the evidence steps keep the base log filler, and every other
+    observation is byte-identical to the base episode."""
+    for t, eps in small_rendered:
+        s = t.substitute
+        for wh in (e for e in eps if e.variant == "withheld"):
+            base = next(e for e in eps if e.variant == "base" and e.cell == wh.cell)
+            name = re.compile(rf"(?<![A-Za-z]){t.entity}(?![A-Za-z])", re.IGNORECASE)
+            assert not any(name.search(x.observation) for x in wh.steps[: wh.need_step])
+            assert wh.components == [] and wh.reveal_steps == []
+            assert [x.comp_id for x in wh.substitutes] == [
+                f"sub_{c.comp_id}" for c in base.components if c.step is not None]
+            orig = {c.comp_id: c for c in base.components}
+            for x in wh.substitutes:
+                c = orig[x.comp_id.removeprefix("sub_")]
+                assert (x.role, x.step, x.name, x.entity) == ("substitute", c.step, c.name,
+                                                              s.entity)
+                assert tokens.count(x.sentence) == tokens.count(c.sentence)
+                assert x.record.count(x.sentence) == 1 and wh.steps[x.step].substitutes
+                if c.role == "rule":
+                    assert x.sentence == c.sentence and x.value is None
+                    continue
+                assert x.sentence == f"For {wh.kind} {s.entity}, the {c.name} is {x.value}."
+                assert len(str(x.value)) == len(str(c.value))
+                assert x.value not in {o.value for o in wh.options} | set(t.clue_values)
+            evidence = {x.step for x in wh.substitutes}
+            for a, b in zip(wh.steps, base.steps, strict=True):
+                assert a.obs_tokens == b.obs_tokens == SMALL.v_tokens
+                if a.index in evidence:
+                    assert a.observation[: a.filler_end] == b.observation[: b.filler_end]
+                    assert a.observation != b.observation
+                    assert tokens.count(a.event) == tokens.count(b.event)
+                    assert a.expected_action == b.expected_action  # same record id
+                else:
+                    assert a.observation == b.observation
+            # lookup serves the stand-in's records by its name; the target has none
+            assert set(wh.lookup.records) == ({x.comp_id for x in wh.substitutes}
+                                              | {d.comp_id for d in wh.distractors})
+            assert {wh.lookup.key_of(x.comp_id) for x in wh.substitutes} == {s.entity}
+
+
 def test_recoverable_only_changes_system_prompt(small_eps):
     a = pick(small_eps, "observed-nonrec-far")
     b = pick(small_eps, "observed-rec-far")
@@ -169,6 +217,16 @@ def test_rule_placements(placement):
     else:
         assert rule.step == steps["clue0"]
     assert ep.design["far_by_obs_tokens"] and not ep.design["S_window_obs_only"]
+    # D39: the withheld control keeps the rule where the base shows it, verbatim
+    wh = TemplateRenderer(t, cfg).render(TaskCell("derived", False, "far"), "withheld")
+    subs = {x.comp_id: x for x in wh.substitutes}
+    assert wh.system_prompt == ep.system_prompt
+    if placement == "system_prompt":
+        assert "sub_rule" not in subs and len(subs) == t.n_clues
+    else:
+        assert subs["sub_rule"].sentence == rule.sentence
+        assert subs["sub_rule"].step == rule.step
+    assert {x.step for x in subs.values()} == {c.step for c in ep.components} - {None}
 
 
 def test_restate_final_value_mode():

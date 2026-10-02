@@ -6,7 +6,8 @@ Lookup (recoverable cells only; PREREG D3). If the reply's action is `lookup(<ke
 episode still has lookups left, the pending step is NOT scored and does not advance. The next
 observation is a lookup result (padded to v tokens like every observation) that re-shows
 every record displayed at or before the pending step about an entity named in the key (the
-target or a distractor; whole word, ignoring case: `render.lookup_key_matches`), then repeats
+target, a distractor or the withheld control's stand-in; whole word, ignoring case:
+`render.lookup_key_matches`), then repeats
 the pending EVENT. So a lookup costs exactly one extra turn. A key with no such record shown
 yet returns "no such record" and also costs the turn.
 

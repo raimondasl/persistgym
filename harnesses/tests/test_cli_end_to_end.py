@@ -388,12 +388,22 @@ def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypat
     assert meta["config_hash"] == seq_meta["config_hash"] and meta["paid"] is True
     info = meta["parallel"]
     assert info["max_episodes_in_flight"] == 4 and info["episodes_started"] == 8
-    assert info["peak_episodes_in_flight"] == 4 and info["stop_reason"] is None
-    assert info["spend_reservation"]["planned_usd"] == 1.0
+    assert info["stop_reason"] is None and info["spend_reservation"]["planned_usd"] == 1.0
     assert seq_meta["parallel"] == {"max_episodes_in_flight": 1}
-    # pilot blinding: the reservation log and the transcripts stay under raw/
+    # pilot blinding (PREREG §11): the committed `parallel` is the allowlisted part, with no
+    # per-episode spend estimate, call-gate waits or peaks in flight; the whole block, the
+    # reservation log and the transcripts stay under raw/
+    full = json.loads((raw / "par" / runner.PARALLEL_INFO).read_text(encoding="utf-8"))
+    assert info == blinding.blinded_parallel(full) != full
+    assert full["peak_episodes_in_flight"] == 4 and "peak_episodes_in_flight" not in info
+    assert full["spend_reservation"]["last_estimate_usd"] > 0
+    assert "last_estimate_usd" not in info["spend_reservation"]
+    assert sorted(info["spend_reservation"]["call_gate"]) == ["calls", "rule"]
+    assert meta["blinding"]["parallel_path"].endswith(
+        f"raw/persistgym_pilot/par/{runner.PARALLEL_INFO}")
     assert sorted(p.name for p in (raw / "par").iterdir()) == [
-        "episodes.jsonl", runner.RESERVATIONS_LOG, "transcript.jsonl.gz"]
+        "episodes.jsonl", runner.PARALLEL_INFO, runner.RESERVATIONS_LOG,
+        "transcript.jsonl.gz"]
     assert sorted(p.name for p in out.rglob("*") if p.is_file()) == [
         "meta.json", "meta.json", "summary.json", "summary.json"]
 

@@ -9,6 +9,9 @@ Everything serializes to plain JSON (`to_dict` / `from_dict`), one episode per J
 
 Schema 2 (generator 0.2.0) adds the distractor bindings (`Episode.distractors`, step kind
 "distractor", `Step.distractors`), `Component.entity` and `LookupSpec.record_keys`.
+
+Schema 3 (generator 0.3.0, PREREG D39) adds the withheld control's stand-in bindings
+(`Episode.substitutes`, `Step.substitutes`, role "substitute"), which replace its null records.
 """
 
 from __future__ import annotations
@@ -61,10 +64,12 @@ ALL_CELLS: tuple[TaskCell, ...] = tuple(
 class Component:
     """One piece of revealed information. Observed cells have one ('fact'); derived cells
     have 2-3 clues plus a 'rule'. Distractor bindings (`Episode.distractors`) use the same
-    shape with role 'distractor': a binding about another entity, never needed."""
+    shape with role 'distractor': a binding about another entity, never needed. The withheld
+    control's stand-in bindings (`Episode.substitutes`) have role 'substitute' and the id of
+    the evidence component they replace with a 'sub_' prefix."""
 
-    comp_id: str  # "fact" | "clue0" | "clue1" | "clue2" | "rule" | "dist0" | "dist1" ...
-    role: str  # "fact" | "clue" | "rule" | "distractor"
+    comp_id: str  # "fact" | "clue0".."clue2" | "rule" | "dist0", "dist1" | "sub_<comp_id>"
+    role: str  # "fact" | "clue" | "rule" | "distractor" | "substitute"
     name: str  # quantity name (fact, rule) or clue name, e.g. "priority offset"
     value: int | None  # None for the rule
     sentence: str  # the information-bearing sentence, verbatim as displayed
@@ -96,6 +101,7 @@ class Step:
     restates: list[str] = field(default_factory=list)  # component ids repeated here (control)
     sim_time: str = ""  # simulated clock time of the observation
     distractors: list[str] = field(default_factory=list)  # distractor ids shown here
+    substitutes: list[str] = field(default_factory=list)  # stand-in ids shown here (withheld)
 
 
 @dataclass
@@ -106,7 +112,7 @@ class LookupSpec:
     key: str  # the target entity name; lookup(<key>) is case-insensitive
     syntax: str  # e.g. "lookup(<shipment name>)"
     max_per_episode: int
-    records: dict[str, str]  # record id (comp_id, null<k>, dist<k>) -> line re-shown
+    records: dict[str, str]  # record id (comp_id, sub_<comp_id>, dist<k>) -> line re-shown
     reveal_steps: dict[str, int]  # record id -> step at which the record is first shown
     record_keys: dict[str, str] = field(default_factory=dict)
     """record id -> the entity it is about (the target or a distractor); a lookup key
@@ -148,6 +154,12 @@ class Episode:
     distractors: list[Component] = field(default_factory=list)
     """Distractor bindings (role 'distractor'): same steps and text in every cell and
     variant of a template; never needed (PREREG D1)."""
+    substitutes: list[Component] = field(default_factory=list)
+    """Withheld variant only (PREREG §4.3, D39): what the evidence steps show instead of the
+    target's records, one per evidence component shown at a step: a binding of equal token
+    length about a stand-in entity for the fact and for each clue (`sub_fact`, `sub_clue<i>`),
+    and the rule sentence verbatim (`sub_rule`; it binds no entity). Never needed. Empty in
+    base and restated episodes."""
 
     # ------------------------------------------------------------------
     @property
@@ -204,6 +216,7 @@ class Episode:
         d["steps"] = [Step(**s) for s in d["steps"]]
         d["components"] = [Component(**c) for c in d["components"]]
         d["distractors"] = [Component(**c) for c in d.get("distractors", [])]
+        d["substitutes"] = [Component(**c) for c in d.get("substitutes", [])]
         d["options"] = [Option(**o) for o in d["options"]]
         d["lookup"] = LookupSpec(**d["lookup"])
         d["graph"] = DependencyGraph.from_dict(d["graph"])

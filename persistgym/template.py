@@ -16,6 +16,12 @@ Options are one cluster of evenly spaced values around the target (PREREG D2). E
 clue is drawn far enough from the edges of its range that every option stays consistent with
 any proper subset of the clues: an agent that kept only some clues (with the rule) cannot
 rule out any option.
+
+The fact-withheld control (PREREG §4.3, D39) shows bindings about a stand-in entity in place
+of the target's bindings (`SubstituteSpec`). The stand-in has the target's token length, and
+its values have the formats of the values they replace and are never options, clue values or
+distractor values, so the withheld episode keeps every observation's text and token count
+except the bindings themselves.
 """
 
 from __future__ import annotations
@@ -23,7 +29,9 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import lru_cache
 
+from persistgym import tokens
 from persistgym.config import SEED_RANGES, GeneratorConfig
 from persistgym.filler import Reserved
 from persistgym.skins import Skin, get_skin
@@ -76,6 +84,25 @@ class DistractorSpec:
 
 
 @dataclass
+class SubstituteSpec:
+    """The stand-in of the fact-withheld control (PREREG §4.3, D39): another entity of the
+    skin whose name has the target's token length, with a value in place of the observed fact
+    and clue values in place of the target's clues (same count and digit formats). `value` is
+    the sum of `clue_values`, as for the target. None of these values is an option, a clue
+    value of the target or a distractor value."""
+
+    entity: str
+    value: int
+    clue_values: list[int]  # [base, addend(, addend)], len == the template's n_clues
+
+
+@lru_cache(maxsize=4096)
+def entity_token_length(name: str, enc: str = "o200k_base") -> int:
+    """Tokens of an entity name as it appears in a binding (" NAME", after a word)."""
+    return tokens.count(f" {name}", enc)
+
+
+@dataclass
 class Template:
     template_id: str
     split: str
@@ -90,7 +117,7 @@ class Template:
     n_clues: int
     clue_values: list[int]  # [base, offset(, shift)]; sum == target_value; addends may repeat
     record_ids: dict[str, str]  # "fact"/"clue0".."clue2"/"rule" -> record id "M-####"
-    null_choice: list[int]  # which null sentence each withheld record uses
+    substitute: SubstituteSpec  # stand-in of the fact-withheld control (D39)
     need_index: int
     tail_steps: int
     routine: list[RoutineSpec]  # one per step index (used where the step is routine)
@@ -194,6 +221,38 @@ def _clues(r: random.Random, target: int, rank: int, n_clues: int,
     return [base, *addends]
 
 
+def _substitute(r: random.Random, skin: Skin, entity: str, dist_entities: list[str],
+                n_clues: int, taken: set[int], cfg: GeneratorConfig) -> SubstituteSpec:
+    """The stand-in of the fact-withheld control (PREREG D39).
+
+    The entity is another entity of the skin with the target's token length that is not a
+    distractor, so a binding about it has the target binding's token length. The value is
+    drawn from `value_range` like a distractor value, and the clues are drawn as the target's
+    are (each addend is core + shift with an independent rank shift; the base is what is
+    left), so they keep the target's formats: a 3-digit value and base, 2-digit addends. No
+    value is in `taken` (options, the target's clue values, distractor values); the value,
+    which is also what the stand-in's clues and the rule derive, is therefore never an
+    option."""
+    n_tok = entity_token_length(entity, cfg.tokenizer)
+    cands = [e for e in skin.entities if e != entity and e not in dist_entities
+             and entity_token_length(e, cfg.tokenizer) == n_tok]
+    if not cands:
+        raise RuntimeError(f"skin {skin.name!r}: no stand-in entity with the token length of "
+                           f"{entity!r} outside the distractors (see skins.MIN_TOKEN_CLASS)")
+    sub_entity = r.choice(cands)
+    lo, hi = cfg.value_range
+    clo, chi = cfg.addend_core_range
+    for _ in range(1000):
+        value = r.randint(lo, hi)
+        shift = r.randrange(cfg.K_options) * cfg.option_spacing
+        addends = [r.randint(clo, chi) + shift for _ in range(n_clues - 1)]
+        clues = [value - sum(addends), *addends]
+        if (value not in taken and not set(clues) & taken
+                and BASE_CLUE_RANGE[0] <= clues[0] <= BASE_CLUE_RANGE[1]):
+            return SubstituteSpec(sub_entity, value, clues)
+    raise RuntimeError("cannot sample withheld-control values outside the taken values")
+
+
 def _routine(r: random.Random, skin: Skin, reserved: Reserved, used_ids: set[str]) -> RoutineSpec:
     for _ in range(1000):
         kind = r.choice(("route", "threshold", "broadcast"))
@@ -269,8 +328,13 @@ def sample_template(split: str, index: int, cfg: GeneratorConfig) -> Template:
         raise RuntimeError(f"{template_id(split, index)}: no room for {n_dist} distractors")
     dist_steps = sorted(r_dist.sample(free, n_dist))
 
-    reserved_numbers = sorted(set(values) | set(clue_values) | set(dist_values))
-    reserved_words = [entity, *dist_entities, skin.quantity, *skin.components]
+    # Stand-in of the fact-withheld control (PREREG D39), from its own stream.
+    sub = _substitute(rng(seed, "withheld"), skin, entity, dist_entities, n_clues,
+                      taken | set(dist_values), cfg)
+
+    reserved_numbers = sorted(set(values) | set(clue_values) | set(dist_values)
+                              | {sub.value} | set(sub.clue_values))
+    reserved_words = [entity, *dist_entities, sub.entity, skin.quantity, *skin.components]
     reserved = Reserved(reserved_numbers, reserved_words)
 
     used: set[str] = set()
@@ -284,7 +348,6 @@ def sample_template(split: str, index: int, cfg: GeneratorConfig) -> Template:
 
     r_ids = rng(seed, "ids")
     record_ids = {cid: new_id(r_ids) for cid in ("fact", "clue0", "clue1", "clue2", "rule")}
-    null_choice = [r_ids.randrange(len(skin.null_records)) for _ in range(4)]
     distractors = [DistractorSpec(e, v, new_id(r_dist), st)
                    for e, v, st in zip(dist_entities, dist_values, dist_steps, strict=True)]
 
@@ -300,7 +363,7 @@ def sample_template(split: str, index: int, cfg: GeneratorConfig) -> Template:
         template_id=template_id(split, index), split=split, index=index, seed=seed,
         skin=skin.name, site=site, entity=entity, target_value=target,
         option_values=option_values, correct_index=correct_index, n_clues=n_clues,
-        clue_values=clue_values, record_ids=record_ids, null_choice=null_choice,
+        clue_values=clue_values, record_ids=record_ids, substitute=sub,
         need_index=need_index, tail_steps=tail_steps, routine=routine, t0=t0.isoformat(),
         reserved_numbers=reserved_numbers, reserved_words=reserved_words,
         distractors=distractors)

@@ -5,6 +5,11 @@ the routine events, the distractor bindings and the log filler of every step ind
 differ only in where the target components are revealed (near / far), how (observed /
 derived) and whether lookup is available (recoverable). Observations of identical
 (step, event) pairs are byte-identical across cells.
+
+The withheld variant (PREREG §4.3, D39) shows, at each evidence step, bindings of equal token
+length about a stand-in entity instead of the target's bindings (the rule sentence, which
+binds no entity, is kept). Every other observation, and the log filler of the evidence steps,
+is byte-identical to the base episode of the same cell.
 """
 
 from __future__ import annotations
@@ -213,34 +218,56 @@ class TemplateRenderer:
         return out
 
     def _records(self, comps: list[Component]) -> tuple[dict[int, str], dict[int, str]]:
-        """Record line and record id per reveal step; fills Component.record in place."""
+        """Record line and record id per reveal step; fills Component.record in place.
+        A stand-in (`sub_<id>`) uses the source and record id of the component it replaces."""
         by_step: dict[int, list[Component]] = {}
         for c in comps:
             if c.step is not None:
                 by_step.setdefault(c.step, []).append(c)
         lines, ids = {}, {}
         for st, cs in sorted(by_step.items()):
-            first = cs[0]
-            src_i = int(first.comp_id[-1]) if first.role == "clue" else 0
-            rid = self.t.record_ids[first.comp_id]
+            first = cs[0].comp_id.removeprefix("sub_")
+            src_i = int(first[-1]) if first.startswith("clue") else 0
+            rid = self.t.record_ids[first]
             line = f"{self.skin.sources[src_i]} {rid}. " + " ".join(c.sentence for c in cs)
             for c in cs:
                 c.record = line
             lines[st], ids[st] = line, rid
         return lines, ids
 
-    def _null_records(self, steps: dict[str, int | None]) -> tuple[dict[int, str], dict[int, str]]:
-        lines, ids = {}, {}
-        reveal = sorted({s for s in steps.values() if s is not None})
-        cids = [cid for cid, s in steps.items() if s is not None]
-        for i, st in enumerate(reveal):
-            cid = next(c for c in cids if steps[c] == st)
-            src_i = int(cid[-1]) if cid.startswith("clue") else 0
-            rid = self.t.record_ids[cid]
-            sent = self.skin.null_records[self.t.null_choice[i]].format(
-                Kind=self.skin.kind.capitalize(), E=self.t.entity)
-            lines[st], ids[st] = f"{self.skin.sources[src_i]} {rid}. {sent}", rid
-        return lines, ids
+    def _substitutes(self, comps: list[Component]) -> list[Component]:
+        """The withheld control's stand-ins (PREREG §4.3, D39), one per evidence component
+        shown at a step: a fact or clue binding becomes the same sentence frame about the
+        stand-in entity with the stand-in's value (equal token length, checked in `render`);
+        the rule sentence binds no entity and is kept verbatim. A rule in the system prompt
+        stays there, as in every variant."""
+        s, sk = self.t.substitute, self.skin
+        out = []
+        for c in comps:
+            if c.step is None:
+                continue
+            if c.role == "rule":
+                sent, value = c.sentence, None
+            else:
+                value = s.value if c.role == "fact" else s.clue_values[int(c.comp_id[-1])]
+                sent = fact_sentence(sk.kind, s.entity, c.name, value)
+            out.append(Component(f"sub_{c.comp_id}", "substitute", c.name, value, sent, "",
+                                 c.step, s.entity))
+        return out
+
+    def _check_equal_length(self, comps: list[Component], subs: list[Component],
+                            rec_lines: dict[int, str], sub_lines: dict[int, str]) -> None:
+        """D39: every stand-in sentence and record line has the token count of the one it
+        replaces, so the evidence observations keep their filler and their v tokens."""
+        enc = self.cfg.tokenizer
+        orig = {c.comp_id: c for c in comps}
+        bad = [s.comp_id for s in subs if tokens.count(s.sentence, enc)
+               != tokens.count(orig[s.comp_id.removeprefix("sub_")].sentence, enc)]
+        bad += [f"step {st}" for st in rec_lines
+                if tokens.count(sub_lines[st], enc) != tokens.count(rec_lines[st], enc)]
+        if bad or set(sub_lines) != set(rec_lines):
+            raise GenerationError(f"{self.t.template_id}: withheld stand-ins are not of equal "
+                                  f"token length: {bad}")
 
     def options(self) -> list[Option]:
         return [Option(LABELS[i], v) for i, v in enumerate(self.t.option_values)]
@@ -262,8 +289,11 @@ class TemplateRenderer:
         if set(dist_at) & set(reveal_steps) or len(dist_at) != len(dists):
             raise GenerationError(f"{t.template_id} {cell.id}: distractor step collides")
         rec_lines, rec_ids = self._records(comps)
-        if variant == "withheld":
-            shown_lines, shown_ids = self._null_records(steps_of)
+        subs: list[Component] = []
+        if variant == "withheld":  # PREREG §4.3, D39: equal-length stand-in bindings
+            subs = self._substitutes(comps)
+            shown_lines, shown_ids = self._records(subs)
+            self._check_equal_length(comps, subs, rec_lines, shown_lines)
         else:
             shown_lines, shown_ids = rec_lines, rec_ids
         options = self.options()
@@ -302,6 +332,13 @@ class TemplateRenderer:
                 spec = t.routine[i]
                 kind, rtype, event, expected = "routine", spec.type, spec.event, spec.expected_action
             fitted = self.observation(("step", i), clock, event)
+            if subs and i in shown_lines:
+                # D39: the stand-in leaves the head and the log filler of the base observation
+                # unchanged, so the observations differ only in the bindings
+                base = self.observation(("step", i), clock, memo_event(rec_lines[i], rec_ids[i]))
+                if fitted.text[: fitted.filler_end] != base.text[: base.filler_end]:
+                    raise GenerationError(f"{t.template_id} {cell.id}: withheld step {i} "
+                                          "does not keep the base filler")
             reveals = ([c.comp_id for c in comps if c.step == i] if variant != "withheld" else [])
             steps.append(Step(
                 index=i, kind=kind, routine_type=rtype, event=event, observation=fitted.text,
@@ -309,16 +346,16 @@ class TemplateRenderer:
                 event_end=len(fitted.text), filler_start=fitted.filler_start,
                 filler_end=fitted.filler_end, expected_action=expected, reveals=reveals,
                 restates=restates if i == n else [], sim_time=clock.isoformat(),
-                distractors=[dist_at[i][0].comp_id] if i in dist_at else []))
+                distractors=[dist_at[i][0].comp_id] if i in dist_at else [],
+                substitutes=[s.comp_id for s in subs if s.step == i]))
 
         carried = comps if variant != "withheld" else []
-        lookup_records = ({c.comp_id: c.record for c in carried if c.step is not None}
-                          if variant != "withheld" else
-                          {f"null{k}": shown_lines[s] for k, s in enumerate(sorted(shown_lines))})
-        lookup_steps = ({c.comp_id: c.step for c in carried if c.step is not None}
-                        if variant != "withheld" else
-                        {f"null{k}": s for k, s in enumerate(sorted(shown_lines))})
-        record_keys = {rid: t.entity for rid in lookup_records}
+        # Lookup re-shows records by the entity they are about: the target's records, or in
+        # the withheld control the stand-in's (the target then has none: "no such record").
+        shown = [c for c in (subs if variant == "withheld" else carried) if c.step is not None]
+        lookup_records = {c.comp_id: c.record for c in shown}
+        lookup_steps = {c.comp_id: c.step for c in shown}
+        record_keys = {c.comp_id: c.entity for c in shown}
         for d in dists:  # lookup serves the distractor keys too (PREREG D3)
             lookup_records[d.comp_id] = d.record
             lookup_steps[d.comp_id] = d.step
@@ -332,7 +369,8 @@ class TemplateRenderer:
             t.n_steps, n,
             [{"comp_id": c.comp_id, "role": c.role, "step": c.step} for c in carried],
             cell.fact, cell.recoverable, rule_in_system_prompt=rule_in_prompt,
-            distractors=[{"comp_id": d.comp_id, "step": d.step} for d in dists])
+            distractors=[{"comp_id": d.comp_id, "step": d.step} for d in dists]
+            + [{"comp_id": s.comp_id, "step": s.step, "role": "substitute"} for s in subs])
         system_tokens = tokens.count(system, cfg.tokenizer)
         obs_tokens = [s.obs_tokens for s in steps]
         design = episode_design(
@@ -352,7 +390,7 @@ class TemplateRenderer:
             system_prompt=system, system_tokens=system_tokens, steps=steps, need_step=n,
             n_clues=t.n_clues if cell.fact == "derived" else 0, components=carried,
             target_value=t.target_value, options=options, correct_label=t.correct_label,
-            lookup=lookup, graph=graph, design=design, distractors=dists)
+            lookup=lookup, graph=graph, design=design, distractors=dists, substitutes=subs)
         validate_episode(ep, cfg)
         return ep
 
@@ -363,8 +401,10 @@ class TemplateRenderer:
 
         Re-shows, verbatim and in display order, every record shown at or before the pending
         step about an entity whose name the key contains as a whole word: the target's
-        records (fact, or clues and rule) or a distractor's binding (PREREG D3). Any other
-        key, or a key whose records are not shown yet, gets "no such record".
+        records (fact, or clues and rule), a distractor's binding (PREREG D3) or, in the
+        withheld control, the stand-in's records (D39). Any other key, or a key whose records
+        are not shown yet, gets "no such record"; so does the target in the withheld control,
+        where none of its records is ever shown.
 
         The key is matched as the agent wrote it. `safe_key` (punctuation dropped, at most 40
         characters) is only echoed back: matching it instead would glue words together

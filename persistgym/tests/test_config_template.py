@@ -12,8 +12,9 @@ from persistgym.config import (
     SEED_RANGES,
     GeneratorConfig,
 )
-from persistgym.skins import SKINS
+from persistgym.skins import MIN_TOKEN_CLASS, SKINS
 from persistgym.template import (
+    entity_token_length,
     evidence_steps_any_cell,
     sample_template,
     seed_for,
@@ -144,6 +145,42 @@ def test_distractor_bindings_are_sampled_as_specified():
         assert all(not t.reserved.clean(f"x {d.entity} {d.value} x") for d in ds)
 
 
+def test_every_entity_token_length_class_is_large_enough():
+    """D39: the withheld stand-in needs another entity with the target's token length that is
+    not one of up to 4 distractors, so every class holds at least MIN_TOKEN_CLASS names."""
+    assert MIN_TOKEN_CLASS >= 4 + 2  # n_distractors <= 4 (config validation), target, stand-in
+    with pytest.raises(ValueError):
+        GeneratorConfig(n_distractors=5)
+    for sk in SKINS.values():
+        assert len(set(sk.entities)) == len(sk.entities) == 28, sk.name
+        classes = Counter(entity_token_length(e) for e in sk.entities)
+        assert min(classes.values()) >= MIN_TOKEN_CLASS, (sk.name, classes)
+
+
+def test_withheld_stand_in_is_sampled_as_specified():
+    """D39: the stand-in is another entity of the skin with the target's token length and not
+    a distractor; its value and clue values keep the target's formats (3-digit value and base,
+    2-digit addends, as many clues as the template), the clues sum to the value, and no value
+    is an option, a clue value of the target or a distractor value. All are reserved."""
+    cfg = DEFAULT_CONFIG
+    for i in range(300):
+        t = sample_template("main", i, cfg)
+        s = t.substitute
+        assert s.entity in t.skin_obj.entities
+        assert s.entity != t.entity and s.entity not in {d.entity for d in t.distractors}
+        assert entity_token_length(s.entity) == entity_token_length(t.entity)
+        assert len(s.clue_values) == t.n_clues and sum(s.clue_values) == s.value
+        assert cfg.value_range[0] <= s.value <= cfg.value_range[1]
+        assert 100 <= s.clue_values[0] <= 999
+        assert all(cfg.minor_component_range[0] <= a <= cfg.minor_component_range[1]
+                   for a in s.clue_values[1:])
+        taken = (set(t.option_values) | set(t.clue_values)
+                 | {d.value for d in t.distractors})
+        assert not ({s.value, *s.clue_values} & taken)
+        assert not t.reserved.clean(f"x {s.entity} x")
+        assert all(not t.reserved.clean(f"x {v} x") for v in (s.value, *s.clue_values))
+
+
 def test_no_proper_clue_subset_narrows_the_options():
     """D2 (b): with the rule and any proper subset of the clues, every option has a
     completion of the missing clues within the clue ranges."""
@@ -167,7 +204,7 @@ def test_no_skin_text_contains_one_of_its_entity_names():
         fixed = " ".join([sk.facility, *sk.sites, sk.kind, sk.quantity, *sk.components,
                           *sk.sources, sk.need_verb, sk.route_noun, *sk.route_tags,
                           *(m for m, _ in sk.sensor_metrics), *sk.broadcast_senders,
-                          *sk.services, *sk.null_records])
+                          *sk.services])
         for e in sk.entities:
             assert not re.search(rf"(?<![A-Za-z]){e}(?![A-Za-z])", fixed, re.IGNORECASE), (
                 sk.name, e)

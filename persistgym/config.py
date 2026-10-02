@@ -12,8 +12,8 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-GENERATOR_VERSION = "0.2.0"
-SCHEMA_VERSION = 2
+GENERATOR_VERSION = "0.3.0"
+SCHEMA_VERSION = 3
 
 # Disjoint seed ranges (half-open), PREREG D7. Template index i of a split has seed
 # range start + i, so the balance blocks (K consecutive indices) start at each range start.

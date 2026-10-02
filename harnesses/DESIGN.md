@@ -1,6 +1,6 @@
 # PersistGym harness cells: design
 
-_Track: M0 harness cells (PLAN.md §6, §7; amendment A1 §16.3, §16.5). Built on the generator in `persistgym/` (generator 0.2.0, episode schema 2). Everything here is $0: no API call has been made. The paid transport exists but has never run._
+_Track: M0 harness cells (PLAN.md §6, §7; amendment A1 §16.3, §16.5). Built on the generator in `persistgym/` (generator 0.3.0, episode schema 3). Everything here is $0: no API call has been made. The paid transport exists but has never run._
 
 A harness cell decides what the model sees at every turn of a PersistGym episode. This package turns each new observation into the exact JSON body of an OpenAI Responses API request (`POST /v1/responses`) and asserts, with payload snapshot tests, exactly which turns, reasoning items and instructions every cell sends. PLAN §6 calls these tests the single most important correctness check, and no paid run may happen until they pass.
 
@@ -93,7 +93,7 @@ The snapshot tests cover both settings.
 
 **Near cells.** The generator's DESIGN.md §8 warns that a summary cell which compacts the whole history can compact a near reveal. With the default `summary_keep_recent_tokens` = 0, near-cell S in Σ cells is therefore **measured, not designed**. The runner records payload S at every need step, and `compacted_between` (§7.2) for every Σ episode.
 
-`uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config (0.2.0, with the system prompt counted toward W, PREREG D5), with every reply at the assumed 1,000 tokens and a 300-token summary:
+`uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config (0.3.0, with the system prompt counted toward W, PREREG D5; 0.2.0 gave the same numbers), with every reply at the assumed 1,000 tokens and a 300-token summary:
 
 | `summary_keep_recent_tokens` | Compactions at turn | Near episodes with S = 0 at need | Summary calls per episode (input tokens each) | Input tokens per episode: summary / step requests |
 |---|---|---|---|---|

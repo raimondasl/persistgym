@@ -4,6 +4,7 @@ $0 commands (fake model or local files, no network):
     uv run python -m harnesses cells
     uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far
     uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
+    uv run python -m harnesses probe-summary <run_id> ...   # replay-probe counts per arm
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other paid run (ARC or PersistGym)
 holds the paid-run lock, this checkout's results/costs.csv holds the last paid run's row,
@@ -404,6 +405,48 @@ def cmd_pilot_report(a) -> int:
     return 0
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def cmd_probe_summary(a) -> int:
+    """$0: per-arm counts of finished replay-probe runs, from their trials.jsonl (and the raw
+    transcript under the raw root, when it is there), printed as JSON. The original design
+    gets `probes.replay_report`; the fork design `probes.fork_report`, as in its
+    fork_report.json."""
+    results_root = Path(a.results_root) if a.results_root else RESULTS
+    raw_root = Path(a.raw_root) if a.raw_root else RAW
+    out = {}
+    for run_id in a.run_id:
+        try:
+            require_plain_name("run id", run_id)
+            require_plain_name("--experiment", a.experiment)
+        except ValueError as e:
+            print(f"refused: {e}", file=sys.stderr)
+            return 2
+        run_dir = results_root / a.experiment / run_id
+        if not (run_dir / "trials.jsonl").exists():
+            print(f"no trials.jsonl in {run_dir}", file=sys.stderr)
+            return 1
+        trials = _read_jsonl(run_dir / "trials.jsonl")
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        fork = (meta.get("config") or {}).get("fork")
+        raw_path = raw_root / a.experiment / run_id / "transcript.jsonl.gz"
+        raw = _read_jsonl(raw_path) if raw_path.exists() else None
+        if fork:
+            report = probes.fork_report(trials, target=fork["target_scorable_per_arm"],
+                                        max_attempts=fork["max_attempts_per_arm"])
+        else:
+            report = probes.replay_report(trials, raw)
+        out[run_id] = {"model_requested": meta.get("model_requested"),
+                       "exit_reason": meta.get("exit_reason"),
+                       "raw_transcript_read": raw is not None, **report}
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+    return 0
+
+
 def cmd_summary_timing(a) -> int:
     print(json.dumps(diagnostics.summary_timing(
         a.n, split=a.split, summary_tokens=a.summary_tokens,
@@ -484,6 +527,14 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--experiment", default=PILOT_EXPERIMENT)
     pr.set_defaults(fn=cmd_pilot_report)
 
+    ps = sub.add_parser("probe-summary",
+                        help="per-arm counts of finished replay-probe runs ($0)")
+    ps.add_argument("run_id", nargs="+")
+    ps.add_argument("--experiment", default="replay_probe")
+    ps.add_argument("--results-root", default=None, help="default: this checkout's results/")
+    ps.add_argument("--raw-root", default=None, help="default: this checkout's results/raw/")
+    ps.set_defaults(fn=cmd_probe_summary)
+
     for kind in ("echo", "replay"):
         sp = sub.add_parser(f"probe-{kind}", help=f"paid {kind} probe (guarded)")
         request_args(sp, multi_model=True)
@@ -503,6 +554,6 @@ def main(argv: list[str] | None = None) -> int:
         sp.set_defaults(fn=lambda a, k=kind: _probe_run(a, k))
 
     a = p.parse_args(argv)
-    if a.cmd.startswith("probe-") and not a.model:
+    if a.cmd in ("probe-echo", "probe-replay") and not a.model:
         a.model = list(probes.ECHO_CHECK_MODELS)
     return a.fn(a)

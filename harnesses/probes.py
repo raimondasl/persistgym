@@ -46,6 +46,7 @@ import hashlib
 import json
 import random
 import re
+import statistics
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -197,6 +198,53 @@ def score_replay_probe(trial: dict) -> dict:
         "scorable": scorable, "match": bool(scorable and answer == picked[0]),
         "ready_ok": outs[0].strip().strip(".").lower() == "ready",
     }
+
+
+def _spread(values: list[int]) -> dict | None:
+    if not values:
+        return None
+    return {"min": min(values), "median": statistics.median(values), "max": max(values)}
+
+
+def replay_report(trials: list[dict], raw: list[dict] | None = None) -> dict:
+    """Per-arm descriptive counts of an original-design run (design 2) from its committed
+    trial records (trials.jsonl); with the raw transcript's trials (`raw`, same order), also
+    how many turn-1 summaries were empty, the turn-1 reasoning tokens and the echoed
+    `reasoning.summary`. Used for the block-1 numbers in PREREG §17.1 (`probe-summary`)."""
+    arms = {}
+    for ctx in CONTEXTS:
+        ts = [t for t in trials if t["context_requested"] == ctx]
+        if not ts:
+            continue
+        picked = Counter(min(len(t["score"]["picked"]), 2) for t in ts)
+        answers = [t["score"]["answer"] for t in ts]
+        arm = {
+            "trials": len(ts),
+            "turn1_summary_names_no_number": picked[0],
+            "turn1_summary_names_one_number": picked[1],
+            "turn1_summary_names_several_numbers": picked[2],
+            "scorable": sum(t["score"]["scorable"] for t in ts),
+            "matches": sum(t["score"]["match"] for t in ts),
+            "turn3_answered_a_number": sum(a is not None for a in answers),
+            "turn3_answer_counts": _counts(answers),
+            "leaks": sum(t["score"]["leak"] for t in ts),
+            "incomplete_trials": sum(bool(t["incomplete_turns"]) for t in ts),
+            "responses": sum(len(t["echoes"]) for t in ts),
+            "echo_mismatched_responses": sum(not e["context_ok"] for t in ts
+                                             for e in t["echoes"]),
+        }
+        rs = [r for r in raw or [] if r["context_requested"] == ctx]
+        if rs:
+            arm["turn1_summary_empty"] = sum(not (r["reasoning_summaries"][0] or "").strip()
+                                             for r in rs)
+            arm["turn1_reasoning_tokens"] = _spread([
+                ((r["responses"][0].get("usage") or {}).get("output_tokens_details") or {})
+                .get("reasoning_tokens", 0) for r in rs])
+            arm["reasoning_summary_echoed"] = _counts(
+                str((resp.get("reasoning") or {}).get("summary"))
+                for r in rs for resp in r["responses"])
+        arms[ctx] = arm
+    return {"design": "original", "arms": arms}
 
 
 def chance_agreement(picks: list[int], answers: list[int | None]) -> float:

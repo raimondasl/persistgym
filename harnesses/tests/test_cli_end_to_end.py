@@ -140,6 +140,32 @@ def test_probe_replay_original_design_is_the_default(paid_env):
     assert row["cell_or_config"] == "replay-probe" and row["n_calls"] == "60"
 
 
+def test_probe_summary_of_an_original_design_run(paid_env, capsys):
+    """$0 `probe-summary`: the per-arm counts behind PREREG §17.1's block-1 table, from the
+    committed trials.jsonl and, when present, the raw transcript."""
+    tmp, _, _ = paid_env
+    assert cli.main(["probe-replay", "--model", "gpt-6-luna", "--n", "3", "--approved-block",
+                     "1-pilots", "--planned-usd", "2", "--run-id", "orig"]) == 0
+    capsys.readouterr()
+    args = ["probe-summary", "orig", "--results-root", str(tmp / "results")]
+    assert cli.main([*args, "--raw-root", str(tmp / "raw")]) == 0
+    (arms,) = [r["arms"] for r in json.loads(capsys.readouterr().out).values()]
+    assert arms["all_turns"] == arms["current_turn"] == {
+        "trials": 3, "turn1_summary_names_no_number": 0, "turn1_summary_names_one_number": 3,
+        "turn1_summary_names_several_numbers": 0, "scorable": 3, "matches": 3,
+        "turn3_answered_a_number": 3, "turn3_answer_counts": {"427": 3}, "leaks": 0,
+        "incomplete_trials": 0, "responses": 9, "echo_mismatched_responses": 0,
+        "turn1_summary_empty": 0,
+        "turn1_reasoning_tokens": {"min": 37, "median": 37, "max": 37},
+        "reasoning_summary_echoed": {"auto": 9}}
+    # without the raw transcript: the committed counts only
+    assert cli.main([*args, "--raw-root", str(tmp / "elsewhere")]) == 0
+    (run,) = json.loads(capsys.readouterr().out).values()
+    assert not run["raw_transcript_read"] and "turn1_summary_empty" not in run["arms"]["all_turns"]
+    assert cli.main([*args[:1], "../orig", *args[2:]]) == 2
+    assert cli.main([*args[:1], "missing", *args[2:]]) == 1
+
+
 def _fork_fake(p, i):
     """turn 1 "ready", turn 2 "Paris"; turn 3: all_turns names the list's 5th number,
     current_turn says it has no record."""
@@ -201,6 +227,16 @@ def test_probe_replay_fork_cli(paid_env, monkeypatch, capsys):
                    "rt", encoding="utf-8") as f:
         raw = [json.loads(x) for x in f]
     assert len(raw) == 40 and all(len(r["payloads"]) == 4 for r in raw)
+    # probe-summary re-derives the report from the committed files
+    capsys.readouterr()
+    assert cli.main(["probe-summary", "fk-gpt-6.1-sol", "fk-gpt-6-luna",
+                     "--results-root", str(tmp / "results")]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    for run_id, run in summary.items():
+        written = json.loads((tmp / "results" / "replay_probe" / run_id / "fork_report.json")
+                             .read_text(encoding="utf-8"))
+        assert run["raw_transcript_read"] and written.pop("run_id") == run_id
+        assert {k: v for k, v in run.items() if k != "raw_transcript_read"} == written
 
 
 @pytest.mark.parametrize("args", [["--design", "fork", "--n", "21"],

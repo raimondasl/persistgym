@@ -367,7 +367,7 @@ The summary text is stripped from the reasoning items sent back (`summary: []`),
 
 **Chance.** Chance is 1/900 (100-999; §16.3 says 1/1000) only for uniform guesses. Models pick "random" numbers unevenly, so a no-replay arm can match by sharing number preferences. Report `chance_agreement(picks, answers)` next to the two match rates, and also the share of turn-3 answers that are not a number at all (e.g. "I cannot recall").
 
-**Block 1 (2026-10-02).** This design could not score: sol's turn-1 summaries were empty in 40 of 40 trials and luna's named exactly one number in 2 of 40, so 0 and 2 trials were scorable. It stays available, unchanged, as `probe-replay` (the default `--design original`). PREREG §17.1 (amendment R1) replaces it for D29 with §9.3.
+**Block 1 (2026-10-02).** This design could not score: sol's turn-1 summaries were empty in 40 of 40 trials and luna's named exactly one number in 2 of 40, so 0 and 2 trials were scorable. It stays available, unchanged, as `probe-replay` (the default `--design original`). PREREG §17.1 (amendment R1) replaces it for D29 with §9.3. The per-arm block-1 numbers there come from `probes.replay_report`, which the $0 command `uv run python -m harnesses probe-summary <run_id> ...` prints from a run's `trials.jsonl` (and its raw transcript when present: empty summaries, turn-1 reasoning tokens, the echoed summary setting). For a fork run it prints `fork_report` again.
 
 ### 9.3 Fork-consistency replay-use probe (PREREG §17.1)
 `probe-replay --design fork`. It needs no summary to know the pick: it asks the same question twice from the same state and checks that the answers agree.

@@ -295,6 +295,31 @@ def test_check_runs_must_play_the_same_far_episodes(tmp_path):
         _check(tmp_path, ids=("chk-F-r", "no-such-run"))
 
 
+def test_check_runs_play_the_registered_pilot_templates(tmp_path):
+    """R2: pilot templates 0 and 1, or 2 and 3 for the one re-run; the report names them, and
+    the guard reads them (registered.engagement_refusal)."""
+    for start, templates in ((0, ["pilot-000000", "pilot-000001"]),
+                             (2, ["pilot-000002", "pilot-000003"])):
+        eps = _eps(start)
+        _runs(tmp_path / str(start), eps, lambda cid, eps=eps: _fake(eps, 40))
+        assert _check(tmp_path / str(start))["check_templates"] == templates
+    for start in (1, 4):
+        eps = _eps(start)
+        _runs(tmp_path / str(start), eps, lambda cid, eps=eps: _fake(eps, 40))
+        with pytest.raises(reasoning_check.CheckError, match="pilot templates pilot-000000"):
+            _check(tmp_path / str(start))
+
+
+def test_a_reused_run_id_is_refused(tmp_path):
+    """A second run with the same run id appends to the raw files, so an episode would be
+    counted twice: refused."""
+    eps = _eps()
+    _runs(tmp_path, eps, lambda cid: _fake(eps, 40))
+    _runs(tmp_path, eps, lambda cid: _fake(eps, 0), cells=("F-0",), ids=IDS[1:])
+    with pytest.raises(reasoning_check.CheckError, match="more than once"):
+        _check(tmp_path)
+
+
 def test_reference_runs_must_pool_both_arms(tmp_path):
     """A single reference run would report one arm's figures: refused."""
     eps = _eps()

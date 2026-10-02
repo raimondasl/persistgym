@@ -13,10 +13,11 @@ $0 commands (fake model or local files, no network):
 
 Request settings. `run` and `dry-run` send the model's registered reasoning effort unless
 --effort says otherwise (harnesses/registered.py; PREREG §6 as amended by R2, §17.2): medium
-on gpt-6-luna, high on gpt-6.1-sol. `run` refuses, before the paid-run lock, any other effort
-outside persistgym_pilot, and a gpt-6.1-sol run outside persistgym_pilot unless
-results/persistgym_pilot/ holds an ENGAGED reasoning_check.json for it at high effort and
-none that says NOT_ENGAGED. The probes keep their registered settings (medium on both
+on gpt-6-luna, high on gpt-6.1-sol (and on a dated snapshot or alias of each). `run` refuses,
+before the paid-run lock, any other effort outside persistgym_pilot, and a gpt-6.1-sol run
+outside persistgym_pilot unless the reasoning_check.json files under
+results/persistgym_pilot/ say ENGAGED in R2's order and none says NOT_ENGAGED
+(`registered.engagement_refusal`). The probes keep their registered settings (medium on both
 models; PREREG §17.1).
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the

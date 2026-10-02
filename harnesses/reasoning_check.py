@@ -2,14 +2,17 @@
 effort? $0; CLI `python -m harnesses reasoning-check <run_id> <run_id> [--reference ...]`.
 
 The check runs are two `persistgym_pilot` runs of gpt-6.1-sol at `reasoning.effort: high`,
-one in F-r and one in F-0, on the same generated episodes: 2 pilot templates x the 4 D11 far
+one in F-r and one in F-0, on the same generated episodes: pilot templates 0 and 1 (2 and 3
+for the one re-run after an unscorable check; `registered.CHECK_TEMPLATES`) x the 4 D11 far
 task cells (8 episodes per run). From their raw episodes and transcripts (the gitignored
 results/raw/persistgym_pilot/<run_id>/), this module computes the rule's statistic:
 
 * **evidence-step calls:** in each derived-far episode that is not excluded (an echo
   mismatch, PREREG §13), the first step call at each evidence step (the episode's
   `designed.evidence_steps`, the steps whose observation shows a clue or the rule), not a
-  lookup result and not a summary call;
+  lookup result and not a summary call. An episode that stopped early for another reason
+  (an API error, the planned spend, the turn limit) counts with the calls it made; no
+  episode is re-run;
 * **E** = the share of those calls, pooled over both arms and both derived-far task cells,
   whose provider-reported reasoning tokens (`harnesses.pricing.usage_numbers`, as the runner
   counts them) are at least `REASONING_TOKEN_FLOOR` (32);
@@ -63,7 +66,6 @@ from persistgym.render import generate
 PILOT_EXPERIMENT = registered.PILOT_EXPERIMENT
 CHECK_CELLS = ("F-r", "F-0")
 FAR_CELLS = frozenset((*OBSERVED_FAR, *DERIVED_FAR))
-CHECK_TEMPLATES = 2  # pilot templates per check run
 BLINDING_NOTE = ("PREREG §11 pilot blinding: every quantity pools both arms (F-r and F-0); no "
                  "per-arm value, need-step quantity or success measure")
 
@@ -72,8 +74,8 @@ EPISODE_FIELDS = ("episode_id", "template_id", "task_cell", "variant", "harness_
                   "n_summary_failures", "n_unparsed_routine", "n_incomplete_routine")
 """The fields read from a raw episode record (plus `designed.evidence_steps`)."""
 
-OUTPUT_KEYS = ("rule", "check_run_ids", "reference_run_ids", "model", "effort",
-               "derived_far_episodes", "derived_far_ended_normally",
+OUTPUT_KEYS = ("rule", "check_run_ids", "check_templates", "reference_run_ids", "model",
+               "effort", "derived_far_episodes", "derived_far_ended_normally",
                "runs_stopped_on_echo_mismatch", "evidence_step_calls",
                "evidence_step_calls_at_floor", "E", "verdict", "verdict_reason", "descriptive",
                "blinding", "generated_utc", "prereg_version", "git_commit", "git_dirty")
@@ -187,6 +189,9 @@ def load_run(run_id: str, *, results_root: Path, raw_root: Path) -> Run:
         raise CheckError(f"{run_id}: {e.filename} is missing") from e
     if meta.get("experiment") != PILOT_EXPERIMENT:
         raise CheckError(f"{run_id}: not a {PILOT_EXPERIMENT} run")
+    ids = [e["episode_id"] for e in episodes]
+    if len(ids) != len(set(ids)):  # a run id reused: its raw files were appended to
+        raise CheckError(f"{run_id}: episodes.jsonl holds an episode more than once")
     run = Run(run_id, meta, episodes, calls, _design(meta, run_id))
     for e in episodes:
         ep = run.design.get(e["episode_id"])
@@ -225,13 +230,18 @@ def _check_pair(runs: list[Run]) -> list[Run]:
                          f"{meta.get('reasoning_effort')}")
     eps = list(runs[0].design.values())
     if ({ep.cell.id for ep in eps} != FAR_CELLS
-            or len({ep.template_id for ep in eps}) != CHECK_TEMPLATES
-            or len(eps) != CHECK_TEMPLATES * len(FAR_CELLS)
-            or any(not ep.template_id.startswith("pilot-") or ep.variant != "base"
-                   for ep in eps)):
-        raise CheckError(f"check runs: each must play the base episodes of {CHECK_TEMPLATES} "
-                         f"pilot templates on the 4 far task cells ({sorted(FAR_CELLS)})")
+            or _templates(runs[0]) not in registered.CHECK_TEMPLATES
+            or len(eps) != len(registered.CHECK_TEMPLATES[0]) * len(FAR_CELLS)
+            or any(ep.variant != "base" for ep in eps)):
+        raise CheckError(f"check runs: each must play the base episodes of pilot templates "
+                         f"{' or '.join(' and '.join(t) for t in registered.CHECK_TEMPLATES)} "
+                         f"on the 4 far task cells ({sorted(FAR_CELLS)}; "
+                         f"{registered.PREREG_REF})")
     return runs
+
+
+def _templates(run: Run) -> tuple[str, ...]:
+    return tuple(sorted({ep.template_id for ep in run.design.values()}))
 
 
 # --- the statistic -------------------------------------------------------------------------------
@@ -354,6 +364,7 @@ def check(check_run_ids: list[str], reference_run_ids: Iterable[str] = (), *,
     out = {
         "rule": registered.rule(),
         "check_run_ids": pool["run_ids"],
+        "check_templates": list(_templates(runs[0])),
         "reference_run_ids": [r.run_id for r in reference] if reference else [],
         "model": pool["model"],
         "effort": pool["effort"],

@@ -244,18 +244,52 @@ def test_echo_match_reports_the_effort_echo_next_to_the_context_echo():
     """PREREG §17.2: the effort echo-match count sits next to the context one, per harness
     cell (an exempt toggle check, PREREG §11). Episodes from before the runner counted
     effort echoes give None, not a count."""
-    def ep(cell, efforts):
+    def ep(cell, efforts, requested="high"):
         e = _ep(cell, "base", False)
         if efforts is not None:
-            e["echo"] = {**e["echo"], "effort_requested": "high", "effort_echoed": efforts}
+            e["echo"] = {**e["echo"], "effort_requested": requested, "effort_echoed": efforts}
         return e
     runs = {"a": [ep("F-0", {"high": 2}), ep("F-0", {"high": 1, "medium": 1})],
-            "b": [ep("F-r", {"high": 2}), ep("F-r", None)]}
-    m = blinding.pooled_report(runs, experiment=PILOT)["models"]["m"]
+            "b": [ep("F-r", {"high": 2})],
+            "old": [ep("F-r", None), ep("F-0", None)],
+            "new": [ep("F-r", {"medium": 2}, requested="medium")]}
+    models = blinding.pooled_report(runs, experiment=PILOT)["models"]
+    assert set(models) == {"m", "m (effort high)"}           # pooled by effort (§17.2)
+    m = models["m (effort high)"]
+    assert m["reasoning_effort"] == "high"
     assert m["echo_match"] == {"F-0": {"requests": 4, "matched": 4, "effort_matched": 3},
+                               "F-r": {"requests": 2, "matched": 2, "effort_matched": 2}}
+    m = models["m"]
+    assert m["reasoning_effort"] == "medium"                 # episodes from before §17.2
+    assert m["echo_match"] == {"F-0": {"requests": 2, "matched": 2, "effort_matched": None},
                                "F-r": {"requests": 4, "matched": 4, "effort_matched": None}}
     assert blinding.run_summary(runs["a"], blinded=True)["echo_match"] == {
         "F-0": {"requests": 4, "matched": 4, "effort_matched": 3}}
+
+
+def test_a_run_at_another_effort_never_joins_an_earlier_pool():
+    """PREREG §11, §17.2: block 1's sol pool (F-r and F-0 at medium) has been reported. If one
+    check run at high effort joined it, the difference between the reports before and after
+    would be that one arm's reasoning total. Pools are split by effort, so the medium pool is
+    unchanged and the high one, a single arm so far, withholds its reasoning tokens."""
+    def ep(cell, effort=None):
+        e = _ep(cell, "base", False)
+        if effort:
+            e["echo"] = {**e["echo"], "effort_requested": effort,
+                         "effort_echoed": {effort: 2}}
+        return e
+    before = {"r": [ep("F-r")], "0": [ep("F-0")]}
+    after = {**before, "high-r": [ep("F-r", "high")]}
+    old = blinding.pooled_report(before, experiment=PILOT)["models"]
+    new = blinding.pooled_report(after, experiment=PILOT)["models"]
+    assert new["m"] == old["m"] and old["m"]["tokens_pooled"]["reasoning_tokens"] == 6
+    high = new["m (effort high)"]
+    assert high["harness_cells_pooled"] == ["F-r"]
+    assert high["tokens_pooled"]["reasoning_tokens"] is None
+    both = blinding.pooled_report({**after, "high-0": [ep("F-0", "high")]},
+                                  experiment=PILOT)["models"]
+    assert both["m"] == old["m"] and both["m (effort high)"]["tokens_pooled"][
+        "reasoning_tokens"] == 6
 
 
 def test_pilot_report_cli_writes_the_pooled_report(tmp_path, monkeypatch, capsys):

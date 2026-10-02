@@ -178,10 +178,19 @@ def test_effort_echo_mismatch_excludes_and_stops(small_eps):
     run = run_episode(ep, CELLS["F-r"], no_stop, FakeModel(echo_effort="low"))
     assert run.excluded and run.exit_reason == "DONE" and run.n_turns == ep.n_steps
     assert run.echo["effort_echoed"] == {"low": run.n_requests}
-    # the context check still stops an episode that the effort check lets go on
+    # the context check still stops an episode that the effort check lets go on; a response
+    # that differs in both is recorded as both before the episode stops
     run = run_episode(ep, CELLS["F-r"], no_stop,
                       FakeModel(echo_effort="low", echo_context="current_turn"))
-    assert run.exit_reason == "REASONING_CONTEXT_MISMATCH" and run.echo_mismatches == ["context"]
+    assert run.exit_reason == "REASONING_CONTEXT_MISMATCH" and run.n_requests == 1
+    assert run.echo_mismatches == ["context", "effort"]
+    assert run.exclusion_reason == ("reasoning.context requested 'all_turns', echoed "
+                                    "'current_turn'; reasoning.effort requested 'medium', "
+                                    "echoed 'low'")
+    run = run_episode(ep, CELLS["F-r"], CFG,
+                      FakeModel(echo_effort="low", echo_context="current_turn"))
+    assert run.exit_reason == "REASONING_CONTEXT_MISMATCH"
+    assert run.echo_mismatches == ["context", "effort"]
     run = run_episode(ep, CELLS["F-r"], no_stop.replace(stop_on_context_mismatch=False),
                       FakeModel(echo_effort="low", echo_context="current_turn"))
     assert run.exit_reason == "DONE" and run.echo_mismatches == ["context", "effort"]
@@ -204,6 +213,7 @@ def test_an_effort_mismatch_on_a_summary_response_excludes_the_episode(small_eps
 @pytest.mark.parametrize(("context_at", "effort_at", "reason"), [
     ((), (0, 1), "ABORTED_EFFORT_MISMATCH"),
     ((0,), (1,), "ABORTED_ECHO_MISMATCH"),
+    ((0, 1), (0,), "ABORTED_ECHO_MISMATCH"),   # one response differs in both
     ((0, 1), (), "ABORTED_CONTEXT_MISMATCH")])
 def test_run_batch_aborts_after_two_echo_mismatched_episodes(small_eps, tmp_path, context_at,
                                                              effort_at, reason):

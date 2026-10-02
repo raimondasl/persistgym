@@ -80,13 +80,36 @@ def test_the_probes_keep_their_registered_settings(model):
 
 # --- the guard -------------------------------------------------------------------------------
 
+FIRST, SECOND = (list(t) for t in registered.CHECK_TEMPLATES)
+
+
 def _write_check(results: Path, name: str, **changes) -> Path:
     doc = {"verdict": "ENGAGED", "model": SOL, "effort": "high", "rule": registered.rule(),
+           "check_run_ids": [f"{name}-F-r", f"{name}-F-0"], "check_templates": FIRST,
            **changes}
     path = results / "persistgym_pilot" / name / registered.CHECK_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc), encoding="utf-8")
     return path
+
+
+def test_a_snapshot_or_alias_of_a_model_is_that_model(tmp_path):
+    """A dated snapshot or alias of sol (as harnesses.pricing prices it) is sol: it defaults
+    to high, cannot run outside pilots at medium, and needs the engagement check."""
+    alias = f"{SOL}-2026-10-01"
+    assert registered.model_family(alias) == SOL and registered.model_family(LUNA) == LUNA
+    assert registered.model_family("gpt-6.1-solar") == "gpt-6.1-solar"   # not a hyphen
+    assert registered.registered_effort(alias) == "high"
+    assert cli.parse_args(["run", "--cell", "F-0", "--model", alias]).effort == "high"
+    why = registered.check_run_settings("persistgym", alias, "medium", tmp_path)
+    assert "registered reasoning effort 'high'" in why
+    assert "need an ENGAGED engagement check" in registered.check_run_settings(
+        "persistgym", alias, "high", tmp_path)
+    _write_check(tmp_path, "c", model=alias)
+    assert registered.check_run_settings("persistgym", SOL, "high", tmp_path) is None
+    assert registered.check_run_settings("persistgym", alias, "high", tmp_path) is None
+    assert registered.check_run_settings("persistgym", f"{LUNA}-x", "high", tmp_path) \
+        is not None
 
 
 @pytest.mark.parametrize(("model", "effort"), [(SOL, "medium"), (SOL, "low"), (SOL, "high"),
@@ -116,9 +139,12 @@ def test_sol_outside_pilots_needs_an_engaged_check(tmp_path):
     _write_check(tmp_path, "luna", model=LUNA)                       # another model
     _write_check(tmp_path, "medium", effort="medium")                # another effort
     _write_check(tmp_path, "rule", rule={**registered.rule(), "reasoning_token_floor": 16})
+    _write_check(tmp_path, "other", check_templates=["pilot-000004", "pilot-000005"])
     w = why()
-    assert "need an ENGAGED engagement check" in w
-    assert "under another rule and do not count" in w and "rule" in w
+    assert "need an ENGAGED engagement check" in w and "runs once more on" in w
+    assert "under another rule or on other templates and do not count" in w
+    assert "rule" in w and "other" in w
+    (tmp_path / "persistgym_pilot" / "unscorable" / registered.CHECK_FILE).unlink()
     _write_check(tmp_path, "engaged")
     assert why() is None
     # a NOT_ENGAGED check refuses, whatever else is there (R2: no sol validity or main sweep)
@@ -131,6 +157,38 @@ def test_sol_outside_pilots_needs_an_engaged_check(tmp_path):
     bad.parent.mkdir()
     bad.write_text("{not json", encoding="utf-8")
     assert "cannot read the engagement check" in why()
+
+
+def test_the_check_decides_in_r2s_order(tmp_path):
+    """R2: the check on pilot templates 0 and 1 decides; only if it is UNSCORABLE does a
+    second one on 2 and 3, and if that is UNSCORABLE too nothing runs. A check is run once on
+    its templates (a re-scoring of the same runs is the same check)."""
+    def why():
+        return registered.check_run_settings("persistgym", SOL, "high", tmp_path)
+
+    def clear():
+        for p in (tmp_path / "persistgym_pilot").glob(f"*/{registered.CHECK_FILE}"):
+            p.unlink()
+    _write_check(tmp_path, "b", check_templates=SECOND)                 # 2 and 3 first
+    assert "counts only after an UNSCORABLE one on" in why()
+    _write_check(tmp_path, "a", verdict="UNSCORABLE")
+    assert why() is None                                                 # UNSCORABLE, ENGAGED
+    _write_check(tmp_path, "b", verdict="UNSCORABLE", check_templates=SECOND)
+    assert "UNSCORABLE on pilot-000000, pilot-000001 and again" in why()
+    clear()
+    _write_check(tmp_path, "a")
+    _write_check(tmp_path, "a-again", check_run_ids=["a-F-r", "a-F-0"])  # the same runs
+    assert why() is None
+    _write_check(tmp_path, "a-wrong", verdict="UNSCORABLE", check_run_ids=["a-F-r", "a-F-0"])
+    assert "disagree" in why()
+    clear()
+    _write_check(tmp_path, "a", verdict="UNSCORABLE")
+    _write_check(tmp_path, "c")                                          # 0 and 1 again
+    assert "more than one engagement check on pilot-000000, pilot-000001" in why()
+    clear()
+    _write_check(tmp_path, "a")
+    _write_check(tmp_path, "b", verdict="UNSCORABLE", check_templates=SECOND)
+    assert "so none was due on" in why()
 
 
 @pytest.fixture

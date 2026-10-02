@@ -306,18 +306,19 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                               "trace": req.trace, "info": req.info, "echo": echo,
                               "payload": req.payload, "response": response})
                 # CLAUDE.md (context) and PREREG §17.2 (effort): an echo that differs from the
-                # request excludes the episode, and by default stops it there
-                for kind, exit_reason in ECHO_MISMATCH_EXITS.items():
-                    if echo[f"{kind}_ok"]:
-                        continue
+                # request excludes the episode, and by default stops it there. Both kinds are
+                # recorded before it stops, so a response that differs in both counts as both.
+                mismatched = [k for k in ECHO_MISMATCH_EXITS if not echo[f"{k}_ok"]]
+                if mismatched:
                     run.excluded = True
-                    run.exclusion_reason = (f"reasoning.{kind} requested "
-                                            f"{echo[f'{kind}_requested']!r}, echoed "
-                                            f"{echo[f'{kind}_echoed']!r}")
-                    if kind not in run.echo_mismatches:
-                        run.echo_mismatches.append(kind)
-                    if stop_on[kind]:
-                        run.exit_reason = exit_reason
+                    run.exclusion_reason = "; ".join(
+                        f"reasoning.{k} requested {echo[f'{k}_requested']!r}, echoed "
+                        f"{echo[f'{k}_echoed']!r}" for k in mismatched)
+                    run.echo_mismatches += [k for k in mismatched
+                                            if k not in run.echo_mismatches]
+                    stop = next((k for k in mismatched if stop_on[k]), None)
+                    if stop is not None:
+                        run.exit_reason = ECHO_MISMATCH_EXITS[stop]
                         return run
                 try:
                     reply = session.record(req, response)

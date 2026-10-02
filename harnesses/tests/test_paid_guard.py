@@ -13,7 +13,7 @@ import httpx
 import openai
 import pytest
 
-from common import approval, costs, paidlock
+from common import approval, costs, paidlock, runmeta
 from common.tests.gitrepo import (
     DRAFT_PREREG,
     FROZEN_PREREG,
@@ -670,6 +670,37 @@ def test_finalize_records_the_last_paid_run(repo, monkeypatch):
     costs.append_row(costs.read_rows(repo / "costs.csv")[0], elsewhere)  # brought over
     assert _make(repo, factory, costs_path=elsewhere).approval.costs_path == elsewhere
     assert len(built) == 2
+
+
+def test_a_reused_run_id_does_not_hide_the_newest_row(repo, monkeypatch):
+    """`--run-id` may be given again. A ledger that holds only the older row of that run ID
+    lacks the newest one, and a run there refuses: the last-run record names the row's
+    timestamp as well as its run ID."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    clock = iter(f"2026-10-02T1{i}:00:00+00:00" for i in range(10))
+    monkeypatch.setattr(runmeta, "utc_now", lambda: next(clock))
+    factory, _ = _factory([_response()])
+    first = _make(repo, factory)
+    _call(first)
+    first.finalize(run_id="probe", milestone="M0", cell_or_config="c")
+    elsewhere = repo / "other-costs.csv"   # another checkout's ledger
+    elsewhere.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    costs.append_row(costs.read_rows(repo / "costs.csv")[0], elsewhere)  # brought over
+    assert _make(repo, factory, costs_path=elsewhere).approval.costs_path == elsewhere
+
+    second = _make(repo, factory)
+    _call(second)
+    row = second.finalize(run_id="probe", milestone="M0", cell_or_config="c")
+    last = json.loads(paidlock.last_run_path(second.paid_lock.path).read_text(encoding="utf-8"))
+    assert last["run_id"] == "probe" and last["row_timestamp_utc"] == row["timestamp_utc"]
+    rows = costs.read_rows(repo / "costs.csv")
+    assert [r["run_id"] for r in rows] == ["probe", "probe"]
+    assert rows[0]["timestamp_utc"] != rows[1]["timestamp_utc"]
+    with pytest.raises(PaidCallsNotAllowed, match=r"probe, appended its costs row \(timestamp_"
+                                                  r"utc 2026-10-02T1.*not in this checkout"):
+        _make(repo, factory, costs_path=elsewhere)
+    costs.append_row(rows[1], elsewhere)                               # brought over too
+    assert _make(repo, factory, costs_path=elsewhere).approval.costs_path == elsewhere
 
 
 def test_guard_refuses_an_unreadable_ledger_before_the_approval(repo, monkeypatch):

@@ -16,8 +16,9 @@ A run whose spend could not be written to results/costs.csv leaves the lock held
 purpose (`keep`), with the reason, so no paid run starts on an incomplete ledger.
 
 Next to the lock, `persistgym-paid-last-run.json` names the last paid run that appended a
-costs.csv row and the ledger it went to; a paid run refuses unless that row is in its own
-ledger (`last_run_missing`), since each checkout has its own results/costs.csv.
+costs.csv row (its run ID and the row's timestamp) and the ledger it went to; a paid run
+refuses unless that row is in its own ledger (`last_run_missing`), since each checkout has
+its own results/costs.csv.
 
 Both paid launchers take this lock before their spend checks: the ARC launcher
 (arc/run_path.py) and the PersistGym launcher (harnesses/cli.py), whose transport refuses
@@ -130,8 +131,10 @@ def keep(path: Path, info: dict, reason: str) -> None:
 # The lock is shared by every checkout, but each checkout has its own results/costs.csv.
 # A paid run started in another checkout would not see the spend the last run wrote to
 # this one's ledger, so the block and phase checks would undercount. Each paid run that
-# appends a costs.csv row records its run ID here, and the next one refuses unless that
-# row is in its own ledger.
+# appends a costs.csv row records its run ID and the row's timestamp here, and the next one
+# refuses unless that row is in its own ledger. The timestamp matters because a run ID
+# need not be unique: a PersistGym `--run-id` can be given again, and an older row with the
+# same ID must not stand in for the newest one.
 
 LAST_RUN_NAME = "persistgym-paid-last-run.json"
 
@@ -140,28 +143,34 @@ def last_run_path(lock: Path) -> Path:
     return lock.with_name(LAST_RUN_NAME)
 
 
-def record_last_run(lock: Path, *, run_id: str, costs_csv: Path) -> None:
-    """Note that run `run_id` appended its costs row to `costs_csv`."""
-    last_run_path(lock).write_text(
-        json.dumps({"run_id": run_id, "costs_csv": str(Path(costs_csv).resolve()),
-                    "finished_utc": datetime.now(UTC).isoformat(timespec="seconds")}),
-        encoding="utf-8")
+def record_last_run(lock: Path, *, run_id: str, costs_csv: Path,
+                    timestamp_utc: str | None = None) -> None:
+    """Note that run `run_id` appended its costs row, whose `timestamp_utc` column is
+    `timestamp_utc`, to `costs_csv`. Both launchers pass the timestamp."""
+    record = {"run_id": run_id, "costs_csv": str(Path(costs_csv).resolve()),
+              "finished_utc": datetime.now(UTC).isoformat(timespec="seconds")}
+    if timestamp_utc:
+        record["row_timestamp_utc"] = str(timestamp_utc)
+    last_run_path(lock).write_text(json.dumps(record), encoding="utf-8")
 
 
 def last_run_missing(lock: Path, rows: list[dict]) -> str | None:
-    """None if the last paid run's costs row is among `rows` (or no run is recorded);
-    otherwise why not."""
+    """None if the last paid run's costs row is among `rows` (or no run is recorded):
+    a row with its run ID and, if the record has one, its row timestamp. Otherwise why not."""
     path = last_run_path(lock)
     if not path.exists():
         return None
     try:
         last = json.loads(path.read_text(encoding="utf-8"))
         run_id = last["run_id"]
-    except (OSError, ValueError, KeyError, TypeError):
+        stamp = last.get("row_timestamp_utc")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return f"{path} is unreadable; check results/costs.csv by hand, then delete it"
-    if any(r.get("run_id") == run_id for r in rows):
+    if any(r.get("run_id") == run_id and (not stamp or r.get("timestamp_utc") == stamp)
+           for r in rows):
         return None
-    return (f"the last paid run, {run_id}, appended its costs row to {last.get('costs_csv')}, "
-            f"and that row is not in this checkout's results/costs.csv, so the block and "
-            f"phase spend would be undercounted. Run from that checkout, or bring that row "
-            f"here first (recorded in {path})")
+    return (f"the last paid run, {run_id}, appended its costs row"
+            + (f" (timestamp_utc {stamp})" if stamp else "")
+            + f" to {last.get('costs_csv')}, and that row is not in this checkout's "
+            f"results/costs.csv, so the block and phase spend would be undercounted. Run "
+            f"from that checkout, or bring that row here first (recorded in {path})")

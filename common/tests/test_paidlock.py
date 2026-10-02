@@ -134,3 +134,29 @@ def test_the_last_runs_row_must_be_in_the_ledger(tmp_path):
 
     paidlock.last_run_path(lock).write_text("garbage", encoding="utf-8")
     assert "unreadable" in paidlock.last_run_missing(lock, [{"run_id": "run-1"}])
+    for text in ("[]", '"run-1"', "{}"):
+        paidlock.last_run_path(lock).write_text(text, encoding="utf-8")
+        assert "unreadable" in paidlock.last_run_missing(lock, [{"run_id": "run-1"}])
+
+
+def test_a_reused_run_id_needs_the_newest_row(tmp_path):
+    """A run ID need not be unique (a PersistGym `--run-id` can be given again): an older
+    row with the same ID must not stand in for the last run's row, so the record names the
+    row's timestamp too."""
+    lock = tmp_path / paidlock.LOCK_NAME
+    old = {"run_id": "probe", "timestamp_utc": "2026-10-02T10:00:00+00:00"}
+    new = {"run_id": "probe", "timestamp_utc": "2026-10-02T11:00:00+00:00"}
+    paidlock.record_last_run(lock, run_id="probe", costs_csv=tmp_path / "costs.csv",
+                             timestamp_utc=new["timestamp_utc"])
+    record = json.loads(paidlock.last_run_path(lock).read_text(encoding="utf-8"))
+    assert record["row_timestamp_utc"] == new["timestamp_utc"]
+    reason = paidlock.last_run_missing(lock, [old])          # another checkout's ledger
+    assert "probe" in reason and new["timestamp_utc"] in reason
+    assert "not in this checkout" in reason
+    assert paidlock.last_run_missing(lock, [old, new]) is None
+
+    # a record written without a timestamp matches on the run ID alone
+    paidlock.record_last_run(lock, run_id="probe", costs_csv=tmp_path / "costs.csv")
+    assert "row_timestamp_utc" not in json.loads(
+        paidlock.last_run_path(lock).read_text(encoding="utf-8"))
+    assert paidlock.last_run_missing(lock, [old]) is None

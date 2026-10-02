@@ -201,7 +201,8 @@ class OpenAIResponsesTransport:
         self.costs_row = row
         try:
             paidlock.record_last_run(self.paid_lock.path, run_id=run_id,
-                                     costs_csv=self.approval.costs_path)
+                                     costs_csv=self.approval.costs_path,
+                                     timestamp_utc=row["timestamp_utc"])
         except OSError as e:
             log.warning("could not record the last paid run next to %s: %s",
                         self.paid_lock.path, e)

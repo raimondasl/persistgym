@@ -713,7 +713,8 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
             raise
         if row is not None:
             try:
-                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs)
+                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs,
+                                         timestamp_utc=row["timestamp_utc"])
             except OSError as e:
                 print(f"warning: could not record the last paid run next to {lock}: {e}",
                       file=sys.stderr)

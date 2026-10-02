@@ -29,6 +29,7 @@ uv run python -m persistgym render --split validity --n 10 --single-turn --gzip
 uv run python -m persistgym render --n 50 --W 24000 --v 1500 --set assumed_max_reply_tokens=800
 uv run python -m persistgym render --split pilot --n 2 --partial-blocks   # quick $0 look
 uv run python -m persistgym partial-memory --n 2000          # templates only, no rendering
+uv run python -m persistgym spotcheck                        # G1 spot-check pages (§13)
 uv run pytest -q persistgym && uv run ruff check persistgym
 ```
 `--start` and `--n` must be multiples of the balance block K = 10 (PREREG D7); `--partial-blocks` lifts this for quick checks.
@@ -319,3 +320,22 @@ Also fixed for PREREG, though not config fields:
 - **Fixed sentence frames.** The surface text varies through 5 skins but uses fixed frames; a model may learn the format within one episode.
 - **Survival by verbatim match** treats a paraphrased record in a user-role message as not surviving. Window harnesses send observations verbatim, so this matters only for summary cells, where `carried_in_text` is the intended measure. String match also misses paraphrased carry ("the code ends in 17"), so P(carried) is an undercount.
 - **Token counts are tiktoken's,** not provider-reported. The harness should log both, and payload-S should be checked against what was actually sent.
+
+## 13. G1 spot-check package (`spotcheck.py`; PREREG §4.4)
+PREREG §4.4 asks the researcher to spot-check 20 episodes per task cell for shortcuts, "e.g. the fact being inferable from filler"; operationally, generated episodes from the validity range, reviewed without model output. `spotcheck` builds the pages for that review; `spotcheck-findings` checks what the researcher exports.
+```
+uv run python -m persistgym spotcheck                 # validity templates 0-19 x 8 task cells
+uv run python -m persistgym spotcheck-findings --out-id g1-validity-0-20-3d6bc648
+```
+- **Episodes.** The base variant of validity templates 0 to n − 1 (`--n`, default 20: seeds 50,000-50,019) in all 8 task cells, 160 episodes, rendered with the default `GeneratorConfig`. The command refuses unless the config hash (`common.runmeta.config_hash`, the function the runner uses) equals `spotcheck.EXPECTED_CONFIG_HASH`, the `generator_config_hashes` value `3d6bc648…` of the two luna validity runs of 2026-10-02. So these are the templates and the config those runs used; they sent the restated and withheld variants of the same template-cell pairs (a test checks the ids against both runs' `meta.json`). `--n` is a whole number of balance blocks (D7).
+- **Audits.** The build re-runs the $0 checks of §9 (shortcut audit, lookup audit, heuristic baselines, partial-memory gate, oracles) on these templates in all three variants, 480 episodes at n = 20. The index page and the manifest list the results; the exit code is 1 if one fails.
+- **Pages** (`results/raw/spotcheck/<id>/`, gitignored, 17 MB at n = 20, regenerable): `index.html` (instructions, audit results, progress per task cell, export and import) and one page per task cell. They are static HTML with inline CSS and JS and a Content-Security-Policy that allows nothing else, in light and dark themes. Each episode is a card with:
+  - a summary box with the answer: the target key; the value, or the clues, the rule and the derived value; the options with the correct one marked; the evidence steps, the distractor bindings and whether lookup is offered;
+  - the scan line (below);
+  - the need-step observation in full;
+  - the full episode, system prompt first. Each step's log tail is collapsed and opens by itself if it holds a marked string. A Skim toggle shows only the steps with evidence, the target key or an option string;
+  - highlights, with a legend: evidence bindings, the target key, option strings (the correct one outlined) and distractor bindings.
+- **Scan** (`scan_episode`). Every occurrence of an option string (a whole number) or of the target key (a whole word, any case), in the system prompt and every observation, outside the places it belongs: option strings in the need step's option list and, for an observed fact, in its binding; the key in the evidence bindings and the need question. The audits use the same matching rules. The scan found nothing in any of the 160 episodes.
+- **Findings.** Each card has a three-way verdict and a notes box. Nothing is pre-filled. They are saved in the browser's localStorage under `persistgym-spotcheck/<id>/`, a namespace every page of the package shares, and every storage access is wrapped so the pages work, and say so, when storage is blocked. **Export findings CSV** downloads `findings.csv` with all rows: `episode_id, task_cell, template_seed, verdict, notes`, where verdict is `no_shortcut`, `possible_shortcut`, `shortcut` or empty. It is RFC 4180 with CRLF line ends, byte for byte what Python's csv module writes (tested with node when it is installed). **Import** loads an exported file back.
+- **Package** (`results/spotcheck/<id>/`, committed): `manifest.json`, `findings_template.csv` (every row with an empty verdict and notes) and `README.md` (how to open the pages and where to save the export). Rebuilding with the same id rebuilds the pages and keeps these files if they describe the same episodes; otherwise it refuses. The researcher saves the export as `findings.csv` there. `spotcheck-findings` checks it against the manifest (the header, each episode once with its task cell and seed, known verdicts), prints the counts per task cell and every possible or definite shortcut with its notes, and exits 1 while episodes are unreviewed.
+- **What it does not show.** The scan and the audits match exact strings, so they cannot see a value that is implied rather than written (a pattern in the filler, a story that makes one option likelier); the researcher's review looks for those. Twenty templates per cell, the same twenty in every cell, can reveal a shortcut but cannot show that none exists.

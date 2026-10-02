@@ -31,6 +31,15 @@ REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 REASONING_MODES = ("standard", "pro")
 SERVICE_TIERS = ("auto", "default", "flex", "scale", "priority", "fast", "ultrafast")
 ENCRYPTED_REASONING = "reasoning.encrypted_content"
+DEFAULT_MAX_OUTPUT_TOKENS = 32_000
+"""PREREG D13 (decided 2026-10-01): `max_output_tokens` of every step request of every harness
+cell and of every probe request, sent explicitly. It includes reasoning tokens."""
+
+
+def require_output_cap(name: str, value) -> None:
+    """An output cap must be a positive int (bool is not), so it is always sent explicitly."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive int, got {value!r}")
 
 
 @dataclass(frozen=True)
@@ -44,8 +53,11 @@ class HarnessConfig:
     reasoning_summary: str | None = None
     """`reasoning.summary`; None = not requested (the field is omitted)."""
     service_tier: str = "flex"
-    max_output_tokens: int | None = None
-    """None = omitted (no cap). On OpenAI the cap includes reasoning tokens."""
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    """`max_output_tokens` of every step request, always sent (PREREG D13: 32,000). On OpenAI
+    the cap includes reasoning tokens. A step response that stops at it (status `incomplete`)
+    is logged and scored as an invalid action (PREREG §6, §13). Summary requests use
+    `summary_max_output_tokens` instead."""
     prompt_cache_key: str | None = None
     """None = omitted (automatic prefix caching only)."""
 
@@ -99,6 +111,8 @@ class HarnessConfig:
             raise ValueError(f"reasoning_mode must be one of {REASONING_MODES}")
         if self.service_tier not in SERVICE_TIERS:
             raise ValueError(f"service_tier must be one of {SERVICE_TIERS}")
+        require_output_cap("max_output_tokens", self.max_output_tokens)
+        require_output_cap("summary_max_output_tokens", self.summary_max_output_tokens)
         if self.summary_keep_recent_tokens < 0:
             raise ValueError("summary_keep_recent_tokens must be >= 0")
         if self.W_tokens is not None and self.summary_keep_recent_tokens >= self.W_tokens:
@@ -130,7 +144,8 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "reasoning_mode": ("§16.5", "standard, sent explicitly"),
     "reasoning_summary": ("§7", "whether harness cells request reasoning summaries (off)"),
     "service_tier": ("§12, §16.1", "flex for every cell; never switched per episode"),
-    "max_output_tokens": ("§12", "no cap proposed; a cap truncates long reasoning"),
+    "max_output_tokens": ("§12, PREREG D13", ("32,000 on every step request, sent explicitly; "
+                                               "an incomplete step response is invalid")),
     "W_tokens": ("§5, §6", "taken from the episode so eviction matches the design"),
     "window_counts_system_prompt": ("§6, D5", ("taken from the episode config (true); the "
                                                "notes sentence is never counted")),

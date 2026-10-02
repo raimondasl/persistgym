@@ -5,6 +5,11 @@ one reasoning item with fake `encrypted_content` and an assistant message, plus 
 `reasoning` settings, `service_tier`, a returned model string and usage. Ids name the call:
 step call i (counted over step calls only, so it equals the turn index when nothing is
 retried) gets `rs_t<i>` / `msg_t<i>`; summary call j gets `rs_s<j>` / `msg_s<j>`.
+
+`status_fn(payload, tag)` sets a response's status. An `incomplete` response looks like one
+that stopped at `max_output_tokens` (`incomplete_details.reason`, the whole cap in
+`output_tokens`); if its text is empty it has no message item, as when the cap is hit while
+reasoning.
 """
 
 from __future__ import annotations
@@ -87,19 +92,33 @@ class FakeModel:
             item_text(i) for i in payload.get("input") or []))
         replayed = sum(1 for i in payload.get("input") or [] if i.get("type") == "reasoning")
         rendered = replayed * self.reasoning_tokens if echo == "all_turns" else 0
-        out_tokens = tokens.count(text) + self.reasoning_tokens
+        status = self.status_fn(payload, tag) if self.status_fn else "completed"
+        reasoning_tokens = self.reasoning_tokens
+        output = [{"type": "reasoning", "id": f"rs_{tag}", "summary": summary,
+                   "encrypted_content": f"gAAAAB-fake-encrypted-{tag}"}]
+        if status == "incomplete":
+            # Stopped at the output cap, as the API reports it: the whole cap is used, and an
+            # empty text means it stopped while reasoning (no message item at all).
+            details = {"reason": "max_output_tokens"}
+            cap = payload.get("max_output_tokens")
+            if cap is not None:
+                reasoning_tokens = max(cap - tokens.count(text), 0)
+            message_status = "incomplete"
+        else:
+            details, message_status = None, "completed"
+        if text or status != "incomplete":
+            output.append({"type": "message", "id": f"msg_{tag}", "role": "assistant",
+                           "status": message_status,
+                           "content": [{"type": "output_text", "text": text,
+                                        "annotations": []}]})
+        out_tokens = tokens.count(text) + reasoning_tokens
         return {
             "id": f"resp_{tag}",
             "object": "response",
-            "status": self.status_fn(payload, tag) if self.status_fn else "completed",
+            "status": status,
+            "incomplete_details": details,
             "model": payload.get("model", "") + self.model_suffix,
-            "output": [
-                {"type": "reasoning", "id": f"rs_{tag}", "summary": summary,
-                 "encrypted_content": f"gAAAAB-fake-encrypted-{tag}"},
-                {"type": "message", "id": f"msg_{tag}", "role": "assistant",
-                 "status": "completed",
-                 "content": [{"type": "output_text", "text": text, "annotations": []}]},
-            ],
+            "output": output,
             "reasoning": {"effort": req.get("effort"), "mode": req.get("mode"), "context": echo,
                           "summary": req.get("summary")},
             "service_tier": payload.get("service_tier"),
@@ -108,7 +127,7 @@ class FakeModel:
                 "input_tokens": visible + rendered,
                 "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
                 "output_tokens": out_tokens,
-                "output_tokens_details": {"reasoning_tokens": self.reasoning_tokens},
+                "output_tokens_details": {"reasoning_tokens": reasoning_tokens},
                 "total_tokens": visible + rendered + out_tokens,
             },
         }

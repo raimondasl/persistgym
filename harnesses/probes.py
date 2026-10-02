@@ -30,7 +30,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from harnesses.config import ENCRYPTED_REASONING
+from harnesses.config import DEFAULT_MAX_OUTPUT_TOKENS, ENCRYPTED_REASONING, require_output_cap
 from harnesses.items import output_text, reasoning_summary_text, replay_items, user_message
 from harnesses.runner import check_echo
 
@@ -60,9 +60,13 @@ class ProbeConfig:
     reasoning_mode: str = "standard"
     reasoning_summary: str | None = None
     service_tier: str = "flex"
-    max_output_tokens: int | None = None
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    """Sent on every probe request (PREREG D13: 32,000, as in the harness cells)."""
     instructions: str | None = None
     strip_summaries_on_replay: bool = True
+
+    def __post_init__(self) -> None:
+        require_output_cap("max_output_tokens", self.max_output_tokens)
 
 
 ECHO_CONFIG = ProbeConfig()
@@ -95,9 +99,8 @@ class Conversation:
             "include": [ENCRYPTED_REASONING],
             "service_tier": cfg.service_tier,
             "truncation": "disabled",
+            "max_output_tokens": cfg.max_output_tokens,
         })
-        if cfg.max_output_tokens is not None:
-            payload["max_output_tokens"] = cfg.max_output_tokens
         return payload
 
     def record(self, user_text: str, response: dict) -> None:
@@ -121,7 +124,10 @@ def _converse(model: str, context: str, turns: tuple[str, ...], transport,
     return {"model": model, "context_requested": context, "payloads": payloads,
             "responses": responses, "echoes": echoes,
             "outputs": [output_text(r) for r in responses],
-            "reasoning_summaries": [reasoning_summary_text(r) for r in responses]}
+            "reasoning_summaries": [reasoning_summary_text(r) for r in responses],
+            # D13: the turns (0-based) whose response stopped short (status `incomplete`)
+            "incomplete_turns": [i for i, r in enumerate(responses)
+                                 if r.get("status") == "incomplete"]}
 
 
 def run_echo_check(model: str, context: str, transport, cfg: ProbeConfig = ECHO_CONFIG) -> dict:
@@ -149,21 +155,26 @@ def score_replay_probe(trial: dict) -> dict:
     * picked: the distinct three-digit numbers in the turn-1 reasoning summary;
     * leak: a three-digit number in the visible turn-1 or turn-2 reply;
     * answer: the first three-digit number in the turn-3 reply (None if there is none, e.g.
-      the model says it cannot recall);
-    * scorable: exactly one picked number, no leak, every echo matches the request;
+      the model says it cannot recall, or if the turn-3 response is incomplete: an invalid
+      answer whatever its partial text says, D13);
+    * scorable: exactly one picked number, no leak, every echo matches the request, and the
+      turn-1 and turn-2 responses completed (an incomplete one leaves the set-up unclear,
+      so the trial is replaced like a leak);
     * match: scorable and answer == picked.
     """
     outs = trial["outputs"]
+    incomplete = trial.get("incomplete_turns") or []
     picked = sorted(set(three_digit_numbers(trial["reasoning_summaries"][0])))
     leak = bool(three_digit_numbers(outs[0]) or three_digit_numbers(outs[1]))
-    answers = three_digit_numbers(outs[2])
+    answers = [] if 2 in incomplete else three_digit_numbers(outs[2])
     answer = answers[0] if answers else None
     echo_ok = all(e["context_ok"] for e in trial["echoes"])
-    scorable = len(picked) == 1 and not leak and echo_ok
+    setup_complete = not ({0, 1} & set(incomplete))
+    scorable = len(picked) == 1 and not leak and echo_ok and setup_complete
     return {
         "picked": picked, "answer": answer, "answered_a_number": answer is not None,
-        "leak": leak, "echo_ok": echo_ok, "scorable": scorable,
-        "match": bool(scorable and answer == picked[0]),
+        "leak": leak, "echo_ok": echo_ok, "incomplete_turns": list(incomplete),
+        "scorable": scorable, "match": bool(scorable and answer == picked[0]),
         "ready_ok": outs[0].strip().strip(".").lower() == "ready",
     }
 

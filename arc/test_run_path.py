@@ -21,14 +21,14 @@ import pytest
 
 from arc import apply_patches as ap
 from arc import config_hash as freeze
-from arc import pricing
+from arc import prereg_freeze, pricing
 from arc import run_path as rp
 from arc import run_path_inner as inner
 from arc import run_path_offline as rpo
 from arc.test_prereg_freeze import HEADER as FROZEN_HEADER
 from arc.test_prereg_freeze import prereg_text
 from common import approval, costs, paidlock, runmeta
-from common.tests.gitrepo import decisions_text, git_in, guarded_repo, push_main
+from common.tests.gitrepo import DRAFT_PREREG, decisions_text, git_in, guarded_repo, push_main
 
 RECORD = freeze.load_record()
 RECORD_BYTES = freeze.FREEZE_PATH.read_bytes()
@@ -534,6 +534,28 @@ def _refusal(paths, h, capsys, argv=GAME_ARGS) -> str:
     return capsys.readouterr().err
 
 
+def test_refused_when_a_merged_draft_gives_the_records_table(world, capsys):
+    """A draft PREREG.md merged to main whose §7.1 gives the record's values (as the
+    v0.3-draft's did on 2026-10-01) passes the §7.1 check, so only require_paid_run's
+    frozen-PREREG check stands between it and a paid run. The draft in
+    test_refused_when_prereg_is_not_frozen has no table, which the §7.1 check refuses on
+    its own: that test still passes with the frozen check removed."""
+    paths, h = world
+    draft = prereg_text(RECORD, header=DRAFT_PREREG + "\n")
+    assert prereg_freeze.problems(draft, RECORD) == []
+    _commit_file(paths.repo, "PREREG.md", draft.encode(), "a draft with the record's table")
+    push_main(paths.repo)
+
+    err = _refusal(paths, h, capsys)
+
+    assert "frozen, merged PREREG.md (PLAN §16.3): PREREG.md is not frozen" in err
+
+    _commit_file(paths.repo, "PREREG.md", FROZEN.encode(), "the freeze")
+    push_main(paths.repo)
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS, paths=paths) == 0          # the draft was the only refusal
+
+
 def test_freeze_git_path_is_the_record_the_launcher_loads():
     assert freeze.FREEZE_PATH.relative_to(runmeta.REPO_ROOT).as_posix() == rp.FREEZE_GIT_PATH
 
@@ -696,6 +718,22 @@ def test_refused_when_a_patch_file_is_not_the_committed_one(world, capsys):
 def test_refused_when_the_patch_series_is_not_committed(tmp_path, monkeypatch, capsys):
     paths, h = _world(tmp_path, monkeypatch, patches=None)
     assert "arc/patches is not in the HEAD commit" in _refusal(paths, h, capsys)
+
+
+def test_refused_when_the_patch_series_is_committed_but_not_merged(tmp_path, monkeypatch,
+                                                                   capsys):
+    paths, h = _world(tmp_path, monkeypatch, patches=None)
+    (paths.repo / rp.PATCHES_GIT_PATH).mkdir(parents=True)
+    for patch in PATCHES:
+        (paths.repo / rp.PATCHES_GIT_PATH / patch.name).write_bytes(patch.read_bytes())
+    git_in(paths.repo, "add", rp.PATCHES_GIT_PATH)
+    git_in(paths.repo, "commit", "-q", "-m", "patch series, not merged")
+
+    assert "arc/patches is not on origin/main" in _refusal(paths, h, capsys)
+
+    push_main(paths.repo)
+    h.inner = lambda command, cwd: fake_game(cwd)
+    assert rp.main(GAME_ARGS, paths=paths) == 0
 
 
 def test_refused_while_another_paid_run_holds_the_lock(world):

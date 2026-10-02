@@ -1,0 +1,124 @@
+{
+  "experiment": "persistgym_pilot",
+  "run_ids": [
+    "20261002T081803Z-F-0-gpt-6-luna",
+    "20261002T082140Z-W-n-0-gpt-6-luna",
+    "20261002T082532Z-sigma-n-0-gpt-6-luna",
+    "20261002T082913Z-W-0-gpt-6-luna",
+    "20261002T083238Z-F-r-gpt-6.1-sol",
+    "20261002T083706Z-F-0-gpt-6.1-sol"
+  ],
+  "models": {
+    "gpt-6-luna": {
+      "harness_cells_pooled": [
+        "F-0",
+        "W-0",
+        "W-n-0",
+        "Σ-n-0"
+      ],
+      "n_episodes": 32,
+      "n_episodes_by_variant": {
+        "base": 32
+      },
+      "tokens_pooled": {
+        "input_tokens": 12235245,
+        "cached_input_tokens": 8643792,
+        "cache_write_tokens": 3589110,
+        "output_tokens": 23335,
+        "reasoning_tokens": 12193
+      },
+      "tokens_note": null,
+      "validity_levels": {},
+      "errors": {
+        "exit_reasons": {
+          "DONE": 32
+        },
+        "n_excluded": 0,
+        "n_summary_failures": 0,
+        "n_unparsed_routine": 0,
+        "n_incomplete_routine": 0
+      },
+      "latency": {
+        "n_calls": 781,
+        "median_s": 0.954,
+        "p90_s": 1.375,
+        "max_s": 10.156
+      },
+      "cost_usd": {
+        "cost_usd_list": 0.546978,
+        "cost_usd_billed_est": 0.273489
+      },
+      "echo_match": {
+        "F-0": {
+          "requests": 192,
+          "matched": 192
+        },
+        "W-0": {
+          "requests": 194,
+          "matched": 194
+        },
+        "W-n-0": {
+          "requests": 194,
+          "matched": 194
+        },
+        "Σ-n-0": {
+          "requests": 201,
+          "matched": 201
+        }
+      }
+    },
+    "gpt-6.1-sol": {
+      "harness_cells_pooled": [
+        "F-0",
+        "F-r"
+      ],
+      "n_episodes": 16,
+      "n_episodes_by_variant": {
+        "base": 16
+      },
+      "tokens_pooled": {
+        "input_tokens": 6486160,
+        "cached_input_tokens": 6229724,
+        "cache_write_tokens": 255356,
+        "output_tokens": 4119,
+        "reasoning_tokens": 115
+      },
+      "tokens_note": null,
+      "validity_levels": {},
+      "errors": {
+        "exit_reasons": {
+          "DONE": 16
+        },
+        "n_excluded": 0,
+        "n_summary_failures": 0,
+        "n_unparsed_routine": 0,
+        "n_incomplete_routine": 0
+      },
+      "latency": {
+        "n_calls": 360,
+        "median_s": 1.336,
+        "p90_s": 1.937,
+        "max_s": 3.312
+      },
+      "cost_usd": {
+        "cost_usd_list": 1.304712,
+        "cost_usd_billed_est": 0.652356
+      },
+      "echo_match": {
+        "F-0": {
+          "requests": 180,
+          "matched": 180
+        },
+        "F-r": {
+          "requests": 180,
+          "matched": 180
+        }
+      }
+    }
+  },
+  "rule": "PREREG §11 pilot blinding: validity levels, pooled tokens, errors, latency and cost only; no per-arm success or per-arm reasoning tokens",
+  "generated_utc": "2026-10-02T08:42:00+00:00",
+  "prereg_version": "1.0",
+  "git_commit": "0ed61f088d6f7956557c0de9cd01fb1a48ea7b1c",
+  "git_dirty": true
+}

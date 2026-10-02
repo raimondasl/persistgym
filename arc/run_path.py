@@ -27,7 +27,10 @@ It spends money only after every check below passes, in this order:
    loaded equal to it, and its four profile hashes, patch-series SHA-256 and pin (and the
    patched commit and tree, where listed) equal to the config freeze table in that frozen
    PREREG.md's §7.1 (`arc.prereg_freeze`). A §7.1 without a filled table is a refusal.
-6. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
+6. arc/patches the same tree in HEAD and on origin/main, and the patch files this run
+   applies exactly its committed .patch files, byte for byte: an untracked, uncommitted or
+   unmerged patch cannot run, even under a merged record that names it.
+7. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
    commit and tree, and each resolved profile's config hash.
 
 Then it runs arc/run_path_inner.py in the patched harness with a sanitized environment
@@ -51,6 +54,7 @@ Exit codes: 0 the run (or check) completed; 1 it ran but failed or was interrupt
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -93,6 +97,7 @@ GAME_RE = re.compile(r"(?P<base>[a-z0-9]{4})(?:-(?P<version>[0-9a-f]{4,64}))?")
 RESULTS = runmeta.REPO_ROOT / "results"
 PREREG_GIT_PATH = "PREREG.md"
 FREEZE_GIT_PATH = "arc/config_freeze.json"       # freeze.FREEZE_PATH, as git names it
+PATCHES_GIT_PATH = "arc/patches"                 # ap.PATCH_DIR, as git names it
 
 
 class Refused(RuntimeError):
@@ -366,6 +371,54 @@ def freeze_record_not_preregistered(repo: Path, record: Mapping[str, Any],
     return "; ".join(problems) if problems else None
 
 
+def _git_blob_id(data: bytes, object_id: str) -> str:
+    """The id git gives a blob of `data`, in the hash of `object_id` (SHA-1 or SHA-256)."""
+    algo = hashlib.sha256 if len(object_id) == 64 else hashlib.sha1
+    return algo(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def patches_not_merged(repo: Path, patches: Sequence[Path],
+                       remote: RemoteRef = MAIN) -> str | None:
+    """None if arc/patches is the same tree in HEAD as on `remote` and `patches` (the files
+    this run applies) are exactly its committed .patch files, byte for byte; otherwise why
+    not. The freeze record's series SHA-256 binds the files' bytes, not that they are merged:
+    without this, a patch left out of the merged commit (untracked, so not even `git_dirty`)
+    could run under a merged record and §7.1 that name it."""
+    head = _blob(repo, "HEAD", PATCHES_GIT_PATH)
+    merged = _blob(repo, remote.tracking, PATCHES_GIT_PATH)
+    if head is None:
+        return f"{PATCHES_GIT_PATH} is not in the HEAD commit"
+    if merged is None:
+        return f"{PATCHES_GIT_PATH} is not on {remote.label}"
+    if head != merged:
+        return (f"{PATCHES_GIT_PATH} in HEAD differs from {PATCHES_GIT_PATH} on {remote.label} "
+                f"(an unmerged patch?)")
+    r = approval._git(repo, "ls-tree", "-z", head)
+    if r.returncode != 0:
+        return f"cannot list {PATCHES_GIT_PATH} in HEAD: {r.stderr.strip()}"
+    committed: dict[str, tuple[str, str]] = {}
+    for entry in filter(None, r.stdout.split("\0")):
+        info, _, name = entry.partition("\t")
+        _, kind, oid = info.split()
+        if name.endswith(".patch"):
+            committed[name] = (kind, oid)
+    names = [p.name for p in patches]
+    if sorted(names) != sorted(committed):
+        return (f"the patch files this run would apply ({', '.join(names) or 'none'}) are not "
+                f"the .patch files committed in {PATCHES_GIT_PATH} "
+                f"({', '.join(sorted(committed)) or 'none'})")
+    for patch in patches:
+        kind, oid = committed[patch.name]
+        try:
+            data = patch.read_bytes()
+        except OSError as e:
+            return f"cannot read {patch}: {e}"
+        if kind != "blob" or _git_blob_id(data, oid) != oid:
+            return (f"{PATCHES_GIT_PATH}/{patch.name} differs from the committed file (an "
+                    f"uncommitted change?)")
+    return None
+
+
 def check_paid(plan: Plan, paths: Paths, lock: Path,
                record: Mapping[str, Any]) -> approval.PaidApproval:
     try:
@@ -394,6 +447,9 @@ def check_paid(plan: Plan, paths: Paths, lock: Path,
             f"PREREG.md §{prereg_freeze.SECTION} (a config change after the freeze needs "
             f"amendment A-cfg to put the new values in that table; `uv run python -m "
             f"arc.prereg_freeze` compares the two files): {reason}")
+    reason = patches_not_merged(paths.repo, ap.patch_files(), paths.remote)
+    if reason is not None:
+        raise PaidCallsNotAllowed(f"paid ARC runs need the merged patch series: {reason}")
     return granted
 
 

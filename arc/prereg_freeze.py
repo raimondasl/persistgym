@@ -14,8 +14,15 @@ How the table is read (GitHub Markdown; nothing in the file is executed):
 * Only the section whose heading is numbered 7.1 counts ("### 7.1 Path configs", "## §7.1"),
   up to the next heading of the same or a higher level. Exactly one such heading must exist.
 * Fenced code blocks, HTML comments and blockquotes (PLAN quoted as written) are skipped. A
-  table is a header row, a delimiter row (`|---|`) and its body rows; header rows give no
-  values, and the outer pipes are optional.
+  table is a header row, a delimiter row (`|---|`) with as many cells, and its body rows;
+  header rows give no values, and the outer pipes are optional.
+* What GitHub would not show as a top-level §7.1 table is refused, not guessed at: in §7.1, a
+  line underlined with `=` or `-` (a setext heading, which ends the section on GitHub), a
+  line with `|` indented 4 or more spaces (code or a nested list), raw HTML, a line directly
+  after a blockquote (GitHub may continue the quote), a header row and delimiter row with
+  different cell counts, a body row with more cells than its header (GitHub drops the
+  extra cells) and a table followed directly by a line that is not a row; anywhere, an HTML
+  comment that is never closed.
 * A body row's first cell says what the row gives, read without Markdown, case or
   punctuation: a profile label (`S0`, `**S3** (optional)`), "upstream" or "pin" for the pin,
   "patch series" for the series SHA-256, "patched commit" or "patched tree". The value is the
@@ -56,10 +63,13 @@ ITEMS = {
     "patched_tree": ("patched tree", 40, False),
 }
 
-_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$")
 _NUMBER_RE = re.compile(r"(?:section\s+)?§?\s*(\d+(?:\.\d+)*)\.?(?=\s|$)", re.IGNORECASE)
 _DELIMITER_CELL_RE = re.compile(r":?-+:?")
+_SETEXT_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
+_QUOTE_RE = re.compile(r"^ {0,3}>")
+_HTML_RE = re.compile(r"^ {0,3}</?[A-Za-z][A-Za-z0-9-]*(?:[\s/>]|$)")
 _PROFILE_RE = re.compile(r"s\d+")
 _HEX = {n: re.compile(rf"(?<![0-9a-fA-F])[0-9a-fA-F]{{{n}}}(?![0-9a-fA-F])") for n in (40, 64)}
 
@@ -79,24 +89,59 @@ class FreezeTable:
 # ── Markdown ───────────────────────────────────────────────────────────
 
 
+def _opens_fence(line: str) -> str | None:
+    """The fence if `line` opens a fenced code block. A backtick fence's info string has no
+    backtick (```` ```S0``` ```` is inline code, not a fence)."""
+    m = _FENCE_RE.match(line)
+    if m is None or (m.group(1)[0] == "`" and "`" in m.group(2)):
+        return None
+    return m.group(1)
+
+
+def _closes_fence(line: str, fence: str) -> bool:
+    """The same character, at least as long, and nothing else on the line."""
+    m = _FENCE_RE.match(line)
+    return (m is not None and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence)
+            and not m.group(2).strip())
+
+
 def _markdown_lines(text: str) -> list[str]:
-    """The lines of `text`, with HTML comments and fenced code blocks blanked out (the line
-    count stays, so blanked lines still separate what was around them)."""
-    text = re.sub(r"<!--.*?-->", lambda m: "\n" * m.group(0).count("\n"), text,
-                  flags=re.DOTALL)
+    """The lines of `text`, with fenced code blocks and HTML comments blanked out (the line
+    count stays, so blanked lines still separate what was around them). A comment marker
+    inside a code block is code; a comment that is never closed is refused, since GitHub
+    hides everything after it."""
     out: list[str] = []
     fence: str | None = None
+    in_comment = False
     for line in text.splitlines():
-        m = _FENCE_RE.match(line)
-        if fence is None:
-            if m:
-                fence = m.group(1)            # opens a code block
-            out.append("" if m else line)
+        if fence is not None:
+            if _closes_fence(line, fence):
+                fence = None
+            out.append("")
             continue
-        if (m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence)
-                and not line.strip().strip(fence[0])):
-            fence = None                      # closes it: the same character, as long, alone
-        out.append("")
+        if not in_comment and (opened := _opens_fence(line)) is not None:
+            fence = opened
+            out.append("")
+            continue
+        kept: list[str] = []
+        rest = line
+        while True:
+            if in_comment:
+                end = rest.find("-->")
+                if end < 0:
+                    break
+                rest, in_comment = rest[end + 3:], False
+            start = rest.find("<!--")
+            if start < 0:
+                kept.append(rest)
+                break
+            # "<!-->" and "<!--->" are whole comments, as on GitHub
+            kept.append(rest[:start])
+            rest, in_comment = rest[start + 2:], True
+        out.append("".join(kept))
+    if in_comment:
+        raise TableError("PREREG.md has an HTML comment (<!--) that is never closed, so "
+                         "GitHub hides everything after it")
     return out
 
 
@@ -126,7 +171,36 @@ def _section(text: str, number: str = SECTION) -> list[str]:
         if h is not None and h[0] <= level:
             break
         body.append(line)
+    _check_plain(body, number)
     return body
+
+
+def _indent(line: str) -> int:
+    return len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip(" "))
+
+
+def _check_plain(lines: list[str], number: str) -> None:
+    """Refuse what would make GitHub show the section differently from how it is read."""
+    where = f"PREREG.md §{number}"
+    for i, line in enumerate(lines):
+        before = lines[i - 1] if i else ""
+        if not line.strip():
+            continue
+        if _SETEXT_RE.match(line) and before.strip() and not _QUOTE_RE.match(before):
+            raise TableError(f"{where} has a line underlined with '=' or '-' (on GitHub a "
+                             f"setext heading, which may end the section); use '#' "
+                             f"headings: {before.strip()!r}")
+        if _indent(line) >= 4 and "|" in line:
+            raise TableError(f"{where} has a line with '|' indented 4 or more spaces (on "
+                             f"GitHub code or a nested list, not a table): {line.strip()!r}")
+        if _HTML_RE.match(line):
+            raise TableError(f"{where} has raw HTML; write it in plain Markdown: "
+                             f"{line.strip()!r}")
+        if (_QUOTE_RE.match(before) and not _QUOTE_RE.match(line)
+                and _heading(line) is None):
+            raise TableError(f"{where} has a line directly after a blockquote (GitHub may "
+                             f"show it inside the quote); leave a blank line: "
+                             f"{line.strip()!r}")
 
 
 def _cells(line: str) -> list[str]:
@@ -141,14 +215,29 @@ def _is_delimiter(line: str) -> bool:
 
 
 def _body_rows(lines: list[str]) -> Iterator[list[str]]:
-    """The body rows of every table in `lines`, outside blockquotes, as lists of cells."""
-    lines = ["" if ln.lstrip().startswith(">") else ln for ln in lines]
+    """The body rows of every table in `lines`, outside blockquotes, as lists of cells. A
+    table whose rows GitHub would show differently is refused (see the module docstring)."""
+    lines = ["" if _QUOTE_RE.match(ln) else ln for ln in lines]
     i = 0
     while i + 1 < len(lines):
         if "|" in lines[i] and _is_delimiter(lines[i + 1]):
+            width, n_delim = len(_cells(lines[i])), len(_cells(lines[i + 1]))
+            if width != n_delim:
+                raise TableError(f"PREREG.md §{SECTION} has a table whose header row has "
+                                 f"{width} cells but its delimiter row {n_delim} (GitHub "
+                                 f"does not show it as a table): {lines[i].strip()!r}")
             i += 2
-            while i < len(lines) and lines[i].strip() and "|" in lines[i]:
-                yield _cells(lines[i])
+            while i < len(lines) and lines[i].strip() and _heading(lines[i]) is None:
+                if "|" not in lines[i]:
+                    raise TableError(f"PREREG.md §{SECTION} has a line directly after a "
+                                     f"table that is not a row (GitHub shows it as one); "
+                                     f"leave a blank line: {lines[i].strip()!r}")
+                cells = _cells(lines[i])
+                if len(cells) > width:
+                    raise TableError(f"PREREG.md §{SECTION} has a table row with more "
+                                     f"cells than its header ({len(cells)} > {width}; GitHub "
+                                     f"does not show the extra cells): {lines[i].strip()!r}")
+                yield cells
                 i += 1
         else:
             i += 1

@@ -32,6 +32,7 @@ from common.tests.gitrepo import decisions_text, git_in, guarded_repo, push_main
 
 RECORD = freeze.load_record()
 RECORD_BYTES = freeze.FREEZE_PATH.read_bytes()
+PATCHES = ap.patch_files()           # the files the launcher applies (arc/patches)
 # A frozen PREREG.md whose §7.1 config freeze table gives the committed record's values.
 FROZEN = prereg_text(RECORD)
 DRAFT = "Version: 0.2-draft\n\n**Status: DRAFT. Not yet frozen.**\n"
@@ -50,13 +51,26 @@ def _commit_file(repo: Path, rel: str, data: bytes, message: str) -> None:
     git_in(repo, "commit", "-q", "-m", message)
 
 
-def _repo(tmp_path: Path, *, record: bytes | None = RECORD_BYTES, **kwargs) -> Path:
+def _repo(tmp_path: Path, *, record: bytes | None = RECORD_BYTES,
+          patches: list[Path] | None = PATCHES, **kwargs) -> Path:
     """A guarded repo (common.tests.gitrepo) whose HEAD and origin/main also hold
-    arc/config_freeze.json (`record`; None leaves it out)."""
+    arc/config_freeze.json (`record`) and arc/patches (copies of `patches`); None leaves
+    either out."""
     (tmp_path / "repo").mkdir()
     repo = guarded_repo(tmp_path / "repo", push=False, **kwargs)
+    added = []
     if record is not None:
-        _commit_file(repo, rp.FREEZE_GIT_PATH, record, "freeze record")
+        (repo / rp.FREEZE_GIT_PATH).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rp.FREEZE_GIT_PATH).write_bytes(record)
+        added.append(rp.FREEZE_GIT_PATH)
+    if patches:
+        (repo / rp.PATCHES_GIT_PATH).mkdir(parents=True)
+        for patch in patches:
+            (repo / rp.PATCHES_GIT_PATH / patch.name).write_bytes(patch.read_bytes())
+        added.append(rp.PATCHES_GIT_PATH)
+    if added:
+        git_in(repo, "add", *added)
+        git_in(repo, "commit", "-q", "-m", "freeze record and patch series")
     push_main(repo)
     return repo
 
@@ -108,16 +122,20 @@ class FakeHarness:
         return self.inner(command, Path(cwd))
 
 
-@pytest.fixture
-def world(tmp_path, monkeypatch):
+def _world(tmp_path, monkeypatch, **repo_kwargs):
     repo = _repo(tmp_path, prereg=FROZEN,
-                        decisions=decisions_text(BLOCK, experiments=EXPERIMENTS,
-                                                 max_usd="500"))
+                 decisions=decisions_text(BLOCK, experiments=EXPERIMENTS, max_usd="500"),
+                 **repo_kwargs)
     costs_csv = tmp_path / "costs.csv"
     costs_csv.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
     paths = rp.Paths(repo=repo, costs=costs_csv, results=tmp_path / "results",
                      raw=tmp_path / "raw", lock=tmp_path / "paid.lock")
     return paths, FakeHarness(monkeypatch, tmp_path)
+
+
+@pytest.fixture
+def world(tmp_path, monkeypatch):
+    return _world(tmp_path, monkeypatch)
 
 
 # ── What the fake inner process writes ────────────────────────────────
@@ -614,13 +632,67 @@ def test_the_table_is_read_from_the_merged_prereg_not_the_working_tree(world):
 
 
 def test_refused_when_the_patch_files_changed_since_the_freeze(world, monkeypatch, capsys):
+    """A merged series the record was not regenerated for: prepare_harness's own check."""
     paths, h = world
-    patches = ap.patch_files()
-    monkeypatch.setattr(ap, "patch_files", lambda *a: patches[:-1])
+    git_in(paths.repo, "rm", "-q", f"{rp.PATCHES_GIT_PATH}/{PATCHES[-1].name}")
+    git_in(paths.repo, "commit", "-q", "-m", "drop the last patch")
+    push_main(paths.repo)
+    monkeypatch.setattr(ap, "patch_files", lambda *a: PATCHES[:-1])
 
     err = _refusal(paths, h, capsys)
 
     assert "does not match arc/patches" in err and h.calls == ["pin"]
+
+
+def test_patches_git_path_is_the_series_the_launcher_applies():
+    assert ap.PATCH_DIR.relative_to(runmeta.REPO_ROOT).as_posix() == rp.PATCHES_GIT_PATH
+
+
+@pytest.mark.parametrize("argv", [GAME_ARGS, PILOT_ARGS, ACCEPT_ARGS])
+def test_refused_when_a_patch_was_left_out_of_the_merged_commit(tmp_path, monkeypatch,
+                                                               capsys, argv):
+    """The merged record and §7.1 name the whole series (its SHA-256 binds the bytes), but
+    one patch file is not committed: untracked here, so not even git_dirty. Refused before
+    the harness is built."""
+    paths, h = _world(tmp_path, monkeypatch, patches=PATCHES[:-1])
+
+    err = _refusal(paths, h, capsys, argv)
+
+    assert "paid ARC runs need the merged patch series" in err
+    assert "are not the .patch files committed in arc/patches" in err
+    assert h.calls == []
+
+
+def test_refused_when_a_patch_change_is_committed_but_not_merged(world, capsys):
+    paths, h = world
+    first = PATCHES[0]
+    _commit_file(paths.repo, f"{rp.PATCHES_GIT_PATH}/{first.name}",
+                 first.read_bytes() + b"\n", "patch change, not merged")
+
+    err = _refusal(paths, h, capsys)
+
+    assert ("arc/patches in HEAD differs from arc/patches on origin/main (an unmerged "
+            "patch?)") in err
+    assert h.calls == []
+
+
+def test_refused_when_a_patch_file_is_not_the_committed_one(world, capsys):
+    """The file this run would apply is not the merged blob (an uncommitted edit)."""
+    paths, h = world
+    last = PATCHES[-1]
+    _commit_file(paths.repo, f"{rp.PATCHES_GIT_PATH}/{last.name}", b"other bytes\n",
+                 "merged bytes differ from the file on disk")
+    push_main(paths.repo)
+
+    err = _refusal(paths, h, capsys)
+
+    assert f"arc/patches/{last.name} differs from the committed file" in err
+    assert h.calls == []
+
+
+def test_refused_when_the_patch_series_is_not_committed(tmp_path, monkeypatch, capsys):
+    paths, h = _world(tmp_path, monkeypatch, patches=None)
+    assert "arc/patches is not in the HEAD commit" in _refusal(paths, h, capsys)
 
 
 def test_refused_while_another_paid_run_holds_the_lock(world):

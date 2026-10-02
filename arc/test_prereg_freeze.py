@@ -197,6 +197,88 @@ def test_quotes_code_comments_and_other_sections_are_ignored():
     assert pf.problems(text, SAMPLE) == []
 
 
+UNFILLED = dict.fromkeys(("S0", "S1", "S2", "S4", "series", "pin", "pin7", "commit", "tree"),
+                         "TBD")
+
+
+def _filled_tables() -> str:
+    """The fixture's two §7.1 tables with SAMPLE's values, as one block of lines."""
+    text = prereg_text(SAMPLE)
+    return text[text.index("| Config | Config entry name"):text.index("**Checks behind")]
+
+
+def _unfilled_plus(old: str, new: str) -> str:
+    """The fixture with §7.1's tables unfilled ("TBD"), and `old` replaced by `new`."""
+    text = prereg_text(SAMPLE, **UNFILLED)
+    assert text.count(old) == 1, old
+    return text.replace(old, new)
+
+
+def _indented(block: str) -> str:
+    return "\n".join("    " + ln for ln in block.splitlines()) + "\n"
+
+
+CHECKS = "**Checks behind"
+GITHUB_SHOWS_NO_TABLE = {
+    "setext heading ends 7.1": (
+        ("### 7.2 Eligibility rule",
+         "7.2 Eligibility rule\n--------------------\n\n" + _filled_tables()),
+        "a line underlined with '=' or '-'"),
+    "indented code block": (
+        (CHECKS, "Filled, for example:\n\n" + _indented(_filled_tables()) + "\n" + CHECKS),
+        "indented 4 or more spaces"),
+    "lazy blockquote continuation": (
+        ("(PLAN §16.4)\n\n**Operational**", "(PLAN §16.4)\n" + _filled_tables()
+         + "\n**Operational**"),
+        "directly after a blockquote"),
+    "raw HTML block": (
+        (CHECKS, "<pre>\n" + _filled_tables() + "</pre>\n\n" + CHECKS),
+        "raw HTML"),
+    "header and delimiter cell counts differ": (
+        (CHECKS, _filled_tables().replace("|---|---|---|", "|---|---|") + "\n" + CHECKS),
+        "header row has 3 cells but its delimiter row 2"),
+    "a cell beyond the header": (
+        ("| S0 | `google-gemini-3-8-flash-high` | `TBD` |",
+         f"| S0 | `google-gemini-3-8-flash-high` | `TBD` | `{_sha('S0')}` |"),
+        "more cells than its header (4 > 3"),
+    "a paragraph line continues the table": (
+        ("| Patched tree | `TBD` |\n", "| Patched tree | `TBD` |\nfilled below:\n"
+         + _filled_tables().split("\n", 2)[2]),
+        "a line directly after a table that is not a row"),
+}
+
+
+@pytest.mark.parametrize("edit, message", GITHUB_SHOWS_NO_TABLE.values(),
+                         ids=GITHUB_SHOWS_NO_TABLE.keys())
+def test_values_github_would_not_show_in_the_table_are_refused(edit, message):
+    """Each edit puts the record's values where the reader would once have found them, but
+    GitHub shows the unfilled table: refused, never read as a filled table."""
+    (problem,) = pf.problems(_unfilled_plus(*edit), SAMPLE)
+    assert message in problem
+
+
+def test_an_html_comment_that_is_never_closed_is_refused():
+    (problem,) = pf.problems(prereg_text(SAMPLE) + "\n<!-- a note\n", SAMPLE)
+    assert "never closed" in problem
+
+
+def test_backticks_in_a_backtick_fence_info_string_make_inline_code():
+    """```` ```S0``` ```` is inline code: it opens no code block, so it cannot hide the
+    unfilled table and expose a fenced example in its place."""
+    text = _unfilled_plus("| Config | Config entry name",
+                          "```S0``` is Standard.\n\n| Config | Config entry name")
+    text = text.replace(CHECKS, "Not the values:\n\n```\n" + _filled_tables() + "```\n\n"
+                        + CHECKS)
+    assert pf.problems(text, SAMPLE) == [
+        ("PREREG.md §7.1 has no filled config freeze table: it gives no config hash, "
+         "patch-series SHA-256 or pin")]
+
+
+def test_comment_markers_in_code_and_empty_comments():
+    text = prereg_text(SAMPLE).replace(CHECKS, "```\n<!-- in code\n```\n\n<!-->\n\n" + CHECKS)
+    assert pf.problems(text + "\n-->\n", SAMPLE) == []
+
+
 def test_formatting_variations_are_read():
     h = {label: _sha(label) for label in ("S0", "S1", "S2", "S4")}
     text = "\r\n".join([

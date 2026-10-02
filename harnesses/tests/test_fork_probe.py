@@ -5,6 +5,7 @@ the two arms differ only in `reasoning.context`, and every scoring rule holds.""
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import re
 from collections import Counter
@@ -335,6 +336,22 @@ def test_fork_limits(bad_target, bad_attempts):
     with pytest.raises(ValueError):
         probes.run_fork_arms("gpt-6-luna", _Scripted(lambda c, a: AGREE),
                              target=bad_target, max_attempts=bad_attempts)
+
+
+@pytest.mark.parametrize("change", [{"reasoning_effort": "high"}, {"reasoning_mode": "pro"},
+                                    {"service_tier": "default"}, {"reasoning_summary": None},
+                                    {"max_output_tokens": 16000}, {"instructions": "Be brief."},
+                                    {"strip_summaries_on_replay": False}])
+def test_fork_arms_refuse_settings_other_than_the_registered_ones(change):
+    """PREREG §17.1: effort medium, mode standard, Flex, 32,000, summary "auto". A run at
+    other settings would report condition (b) as met, so nothing is sent."""
+    tr = _Scripted(lambda c, a: AGREE)
+    cfg = dataclasses.replace(probes.REPLAY_CONFIG, **change)
+    with pytest.raises(ValueError, match="registered settings"):
+        probes.run_fork_arms("gpt-6.1-sol", tr, cfg)
+    assert tr.calls == []
+    probes.check_fork_config(probes.REPLAY_CONFIG)  # the registered config passes
+    probes.check_fork_config(dataclasses.replace(probes.REPLAY_CONFIG))
 
 
 def _arms(n_agree_all, n_agree_cur):

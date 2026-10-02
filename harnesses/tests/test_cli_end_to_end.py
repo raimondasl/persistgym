@@ -243,9 +243,12 @@ def test_probe_replay_fork_cli(paid_env, monkeypatch, capsys):
                                   ["--design", "fork", "--max-attempts", "41"],
                                   ["--design", "fork", "--n", "10", "--max-attempts", "9"],
                                   ["--design", "fork", "--n", "0"],
-                                  ["--max-attempts", "40"]])
-def test_probe_replay_fork_refuses_bad_limits_before_the_lock(paid_env, monkeypatch, capsys,
-                                                              args):
+                                  ["--max-attempts", "40"],
+                                  ["--design", "fork", "--effort", "high"],
+                                  ["--design", "fork", "--mode", "pro"],
+                                  ["--design", "fork", "--service-tier", "default"]])
+def test_probe_replay_fork_refuses_bad_limits_or_settings_before_the_lock(paid_env, monkeypatch,
+                                                                          capsys, args):
     _, costs_csv, fakes = paid_env
 
     def no_lock(*a, **k):

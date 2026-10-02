@@ -375,7 +375,7 @@ The summary text is stripped from the reasoning items sent back (`summary: []`),
 2. Turn 2 is the original filler.
 3. Turn 3 asks which number from the list it picked, with the number only, in K = 2 forks: two API calls whose requests are copies of one built request (the same history, the same stripped reasoning items as §9.2, the same settings). Each trial records the SHA-256 of each fork's request body.
 
-Both arms send identical payloads except `reasoning.context`, with the settings of §9.2: medium effort, standard mode, Flex, `max_output_tokens` 32,000 and `reasoning.summary: "auto"`. The summary setting each response echoes is recorded too; all 240 responses of the block-1 replay probe (§9.2) echoed `"detailed"`.
+Both arms send identical payloads except `reasoning.context`, with the settings of §9.2: medium effort, standard mode, Flex, `max_output_tokens` 32,000 and `reasoning.summary: "auto"`. The summary setting each response echoes is recorded too; all 240 responses of the block-1 replay probe (§9.2) echoed `"detailed"`. These are the registered settings: `run_fork_arms` (`check_fork_config`) and the CLI refuse any other `--effort`, `--mode` or `--service-tier`, before the paid-run lock, so a fork report can read condition (b) as met only at those settings.
 
 **Scoring** (`score_fork_probe`):
 - *scorable*: the turn-1 and turn-2 responses completed, neither visible reply contains a three-digit number, and every echoed `reasoning.context` (four per trial) equals the request. Unscorable trials are replaced, up to 40 attempts per arm per model (`run_fork_arms`; an arm stops once it has 20 scorable trials).

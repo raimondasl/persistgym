@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from collections import Counter
 from decimal import Decimal
 
 import pytest
@@ -327,6 +328,87 @@ def test_run_cli_refuses_bad_matrix_options(paid_env, capsys):
     assert cli.main([*base, "--cell-templates", "derived-rec-near=1", "--n-observed", "1"]) == 2
     assert cli.main([*base, "--matrix", "d11", "--n", "33"]) == 2  # 88 episodes > 10
     assert "at most 10" in capsys.readouterr().err
+
+
+# --- parallel episodes (PREREG §4.6, §0.3 line 15; harnesses/parallel.py) ------------------
+
+PILOT_RUN = ["run", "--cell", "F-r", "--model", "gpt-6-luna", "--n", "1",
+             "--gen-set", "W_tokens=6400", "--gen-set", "v_tokens=400",
+             "--gen-set", "assumed_max_reply_tokens=200",
+             "--approved-block", "1-pilots", "--planned-usd", "1"]
+
+
+def test_run_cli_parallel_writes_what_sequential_play_writes(paid_env, monkeypatch):
+    """Through the real guarded transport: `--parallel 4` writes the episodes, transcript and
+    summary that `--parallel 1` writes, byte for byte (the fake answers by payload, the call
+    clock is fixed), one costs row with the same calls, tokens and cost, reserves spend
+    episode by episode, and releases the lock and its reservation like any run."""
+    tmp, costs_csv, _ = paid_env
+    monkeypatch.setattr(runner, "CLOCK", lambda: 0.0)
+    fakes = []
+
+    def transport(**kw):
+        fakes.append(FakeModel(ids="payload"))
+        return OpenAIResponsesTransport(
+            **kw, costs_path=costs_csv, repo=tmp,
+            client_factory=lambda timeout, fake=fakes[-1]: _FakeBackedClient(fake))
+    monkeypatch.setattr(cli, "OpenAIResponsesTransport", transport)
+    held, real = [], cli.run_batch
+
+    def spy(*args, **kw):
+        held.append(_lock())
+        return real(*args, **kw)
+    monkeypatch.setattr(cli, "run_batch", spy)
+    assert cli.main([*PILOT_RUN, "--run-id", "seq"]) == 0
+    assert cli.main([*PILOT_RUN, "--run-id", "par", "--parallel", "4"]) == 0
+
+    raw, out = tmp / "raw" / "persistgym_pilot", tmp / "results" / "persistgym_pilot"
+    assert (raw / "par" / "episodes.jsonl").read_bytes() == (
+        raw / "seq" / "episodes.jsonl").read_bytes()
+    with (gzip.open(raw / "par" / "transcript.jsonl.gz", "rb") as p,
+          gzip.open(raw / "seq" / "transcript.jsonl.gz", "rb") as s):
+        assert p.read() == s.read()
+    assert (out / "par" / "summary.json").read_bytes() == (
+        out / "seq" / "summary.json").read_bytes()
+    assert ([Counter(json.dumps(c, sort_keys=True) for c in f.calls) for f in fakes[1:]]
+            == [Counter(json.dumps(c, sort_keys=True) for c in fakes[0].calls)])
+    seq_row, par_row = costs.read_rows(costs_csv)
+    for k in ("n_calls", "input_tokens", "cached_input_tokens", "output_tokens",
+              "reasoning_tokens", "model_returned", "service_tier", "cell_or_config"):
+        assert par_row[k] == seq_row[k], k
+    for k in ("cost_usd_list", "cost_usd_billed_est"):
+        assert float(par_row[k]) == pytest.approx(float(seq_row[k]), abs=2e-6)
+    assert " matrix=full parallel=4;" in par_row["notes"] and "parallel" not in seq_row["notes"]
+    assert held[1]["what"] == "persistgym_pilot: F-r on gpt-6-luna, 8 episodes, 4 at once"
+    # one lock, released; the reservation of the run's planned spend is gone
+    assert not cli.LOCK_PATH.exists() and _last_run()["run_id"] == "par"
+    assert not paidlock.reservation_path(cli.LOCK_PATH, cli.STREAM).exists()
+    meta = json.loads((out / "par" / "meta.json").read_text(encoding="utf-8"))
+    seq_meta = json.loads((out / "seq" / "meta.json").read_text(encoding="utf-8"))
+    assert meta["config_hash"] == seq_meta["config_hash"] and meta["paid"] is True
+    info = meta["parallel"]
+    assert info["max_episodes_in_flight"] == 4 and info["episodes_started"] == 8
+    assert info["peak_episodes_in_flight"] == 4 and info["stop_reason"] is None
+    assert info["spend_reservation"]["planned_usd"] == 1.0
+    assert seq_meta["parallel"] == {"max_episodes_in_flight": 1}
+    # pilot blinding: the reservation log and the transcripts stay under raw/
+    assert sorted(p.name for p in (raw / "par").iterdir()) == [
+        "episodes.jsonl", runner.RESERVATIONS_LOG, "transcript.jsonl.gz"]
+    assert sorted(p.name for p in out.rglob("*") if p.is_file()) == [
+        "meta.json", "meta.json", "summary.json", "summary.json"]
+
+
+@pytest.mark.parametrize("n", ["0", "17", "-2"])
+def test_run_cli_refuses_a_bad_parallel_before_the_lock(paid_env, monkeypatch, capsys, n):
+    _, costs_csv, fakes = paid_env
+
+    def no_lock(*a, **k):
+        raise AssertionError("must not take the paid-run lock")
+    monkeypatch.setattr(paidlock, "paid_run_lock", no_lock)
+    assert cli.main([*PILOT_RUN, "--parallel", n]) == 2
+    assert f"--parallel is 1 to 16 episodes at once (PREREG §4.6), got {n}" in (
+        capsys.readouterr().err)
+    assert fakes == [] and costs.read_rows(costs_csv) == []
 
 
 # --- the paid-run lock (common/paidlock.py; PREREG §12) ---------------------------------------

@@ -5,11 +5,16 @@ $0 commands (fake model or local files, no network):
     uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far
     uv run python -m harnesses pilot-report      # pooled pilot report (PREREG §11)
 
-Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, --approved-block and --planned-usd are
-given, PREREG.md is committed, and results/decisions.md holds the researcher's line
+Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other paid run (ARC or PersistGym)
+holds the paid-run lock, this checkout's results/costs.csv holds the last paid run's row,
+--approved-block and --planned-usd are given, PREREG.md is committed, merged to origin/main
+and frozen, and results/decisions.md holds the researcher's line
 "approved_block: <name> | experiments: <exp1>,<exp2>,... | max_usd: <amount>" on origin/main,
 in HEAD and in the working tree, listing the experiment, with room under max_usd and the
-phase cap (common/approval.py). The OpenAI SDK reads the key from the environment:
+phase cap (common/approval.py). The lock (common/paidlock.py, in the git common directory,
+shared with the ARC launcher) is taken before those checks and held until the command ends;
+a run whose costs.csv row could not be written leaves it held, with the reason. The OpenAI
+SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-echo \
         --approved-block "1-pilots" --planned-usd 0.5
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
@@ -25,18 +30,22 @@ import argparse
 import dataclasses
 import gzip
 import json
+import os
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 import openai
 
-from common import runmeta
+from common import paidlock, runmeta
 from harnesses import blinding, diagnostics, probes
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.matrix import RunMatrix
 from harnesses.openai_transport import (
+    ALLOW_ENV,
     BudgetExceeded,
     OpenAIResponsesTransport,
     PaidCallsNotAllowed,
@@ -49,6 +58,10 @@ from persistgym.render import generate
 PILOT_MAX_EPISODES = 10  # CLAUDE.md: a pilot is <= 10 episodes
 PILOT_EXPERIMENT = "persistgym_pilot"
 PILOT_SPLIT = "pilot"
+# The paid-run lock. None: persistgym-paid-run.lock in the git common directory of this
+# checkout, shared with every other checkout and with the ARC launcher. Tests point it at a
+# temporary file, so that they never take the real lock or write its last-run record.
+LOCK_PATH: Path | None = None
 
 
 def _run_id(tag: str) -> str:
@@ -123,13 +136,44 @@ def cmd_dry_run(a) -> int:
     return 0
 
 
-def _guarded_transport(a, model: str, experiment: str, planned_usd: float | None):
+def _guarded_transport(a, model: str, experiment: str, planned_usd: float | None,
+                       held: paidlock.HeldLock):
     try:
         return OpenAIResponsesTransport(model=model, approved_block=a.approved_block,
-                                        experiment=experiment, planned_usd=planned_usd)
+                                        experiment=experiment, planned_usd=planned_usd,
+                                        paid_lock=held)
     except PaidCallsNotAllowed as e:
         print(f"refused: {e}", file=sys.stderr)
         return None
+
+
+def _with_paid_lock(run_id: str, what: str, body: Callable[[paidlock.HeldLock], int]) -> int:
+    """`body(held)` while this command holds the paid-run lock: one paid run at a time,
+    whether ARC or PersistGym (PREREG §12). The lock is taken before the transport's spend
+    checks, so two paid runs cannot both pass them. Refuses (2) when paid calls are off, which
+    the transport would refuse anyway, so a command that cannot spend never touches the
+    shared lock, or when another paid run holds it or kept it after an unaccounted run."""
+    if os.environ.get(ALLOW_ENV) != "1":
+        print(f"refused: paid calls are off: set {ALLOW_ENV}=1 for an approved block",
+              file=sys.stderr)
+        return 2
+    try:
+        lock = LOCK_PATH or paidlock.lock_path(runmeta.REPO_ROOT)
+        with paidlock.paid_run_lock(lock, run_id=run_id, what=what) as info:
+            return body(paidlock.HeldLock(lock, info))
+    except paidlock.LockHeld as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+
+
+def _check_accounted(transport: OpenAIResponsesTransport, run_id: str) -> None:
+    """After a paid run: if it made calls whose costs.csv row was not appended, the lock
+    stays held with the reason (the transport's `keep_lock_if_unaccounted`), and the operator
+    is told."""
+    why = transport.keep_lock_if_unaccounted(run_id)
+    if why:
+        print(f"ERROR: could not account for the run. {why}. The paid-run lock stays held: "
+              f"{transport.paid_lock.path}", file=sys.stderr)
 
 
 def cmd_run(a) -> int:
@@ -168,21 +212,37 @@ def cmd_run(a) -> int:
     except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
-    transport = _guarded_transport(a, a.model, a.experiment, a.planned_usd)
-    if transport is None:
-        return 2
-    meta = run_batch(episodes, cell, _harness_config(a), transport, experiment=a.experiment,
-                     run_id=run_id, milestone=a.milestone, results_root=RESULTS,
-                     raw_root=RAW, run_matrix=matrix.to_dict(),
-                     notes=(f"{a.split} {a.start}-{a.start + matrix.n_templates - 1}"
-                            f" matrix={matrix.name}"))
-    print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason", "reasoning_context_echoed",
-                                           "model_returned", "cost_usd")}, indent=2))
-    return 0
+
+    def paid(held: paidlock.HeldLock) -> int:
+        transport = _guarded_transport(a, a.model, a.experiment, a.planned_usd, held)
+        if transport is None:
+            return 2
+        try:
+            meta = run_batch(episodes, cell, _harness_config(a), transport,
+                             experiment=a.experiment, run_id=run_id, milestone=a.milestone,
+                             results_root=RESULTS, raw_root=RAW, run_matrix=matrix.to_dict(),
+                             notes=(f"{a.split} {a.start}-{a.start + matrix.n_templates - 1}"
+                                    f" matrix={matrix.name}"))
+        finally:
+            _check_accounted(transport, run_id)
+        print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason",
+                                               "reasoning_context_echoed", "model_returned",
+                                               "cost_usd")}, indent=2))
+        return 0
+
+    return _with_paid_lock(run_id, f"{a.experiment}: {cell.cell_id} on {a.model}, "
+                                   f"{len(episodes)} episodes", paid)
 
 
 def _probe_run(a, kind: str) -> int:
     experiment = "toggle_pilot" if kind == "echo" else "replay_probe"
+    return _with_paid_lock(a.run_id or _run_id(f"{kind}-probe"),
+                           f"{experiment}: {kind} probe on {', '.join(a.model)}",
+                           lambda held: _probe_locked(a, kind, experiment, held))
+
+
+def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int:
+    """The probe on each --model in turn, under the paid-run lock `held`."""
     status = 0
     # --planned-usd is the total for the whole command: each model's transport may spend only
     # what the earlier models left, measured like block spend (transport.spent_usd).
@@ -193,7 +253,7 @@ def _probe_run(a, kind: str) -> int:
             print(f"refused: --planned-usd {a.planned_usd} is the total for all models and "
                   f"was used up before {model}", file=sys.stderr)
             return 2
-        transport = _guarded_transport(a, model, experiment, remaining)
+        transport = _guarded_transport(a, model, experiment, remaining, held)
         if transport is None:
             return 2
         run_id = (f"{a.run_id}-{model}" if a.run_id and len(a.model) > 1
@@ -222,8 +282,11 @@ def _probe_run(a, kind: str) -> int:
             exit_reason, status = f"ERROR:{type(e).__name__}: {e}", 1
         finally:
             spent += transport.spent_usd
-            row = transport.finalize(run_id=run_id, milestone=a.milestone,
-                                     cell_or_config=f"{kind}-probe")
+            try:
+                row = transport.finalize(run_id=run_id, milestone=a.milestone,
+                                         cell_or_config=f"{kind}-probe")
+            finally:
+                _check_accounted(transport, run_id)
             with (out_dir / "trials.jsonl").open("a", encoding="utf-8") as f:
                 for t in trials:
                     f.write(json.dumps(t, ensure_ascii=False) + "\n")

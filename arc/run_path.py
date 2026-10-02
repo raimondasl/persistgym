@@ -21,8 +21,10 @@ It spends money only after every check below passes, in this order:
    researcher's line `approved_block: <name> | experiments: <list> | max_usd: <n>` on
    origin/main (fetched now), HEAD and the working tree, the experiment listed, block spend
    + planned spend <= max_usd, and phase headroom.
-4. PREREG.md frozen (`arc.draw_games.prereg_state`) and the same blob in HEAD and on
-   origin/main (read after the guard's fetch).
+4. PREREG.md frozen (`common.prereg.prereg_state`, the rule draw_games.py uses) and the
+   same blob in HEAD and on origin/main (read after the guard's fetch). Steps 2-4 are
+   `common.approval.require_paid_run`, which the PersistGym launcher (harnesses/cli.py)
+   runs too.
 5. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
    commit and tree, and each resolved profile's config hash.
 
@@ -68,7 +70,7 @@ if __package__ in (None, ""):
 
 from arc import apply_patches as ap
 from arc import config_hash as freeze
-from arc import draw_games, pricing
+from arc import pricing
 from arc import run_path_inner as inner
 from common import approval, costs, paidlock, runmeta
 from common.approval import MAIN, PaidCallsNotAllowed, RemoteRef
@@ -298,44 +300,19 @@ def plain_name(name: str) -> str:
 # ── Checks that need git ───────────────────────────────────────────────
 
 
-def prereg_not_frozen(repo: Path, remote: RemoteRef = MAIN) -> str | None:
-    """None if PREREG.md in HEAD is the same blob as on `remote` and is frozen; otherwise
-    why not. Reads the remote-tracking ref, so call it after the guard's fetch."""
-    def blob(rev: str) -> str | None:
-        try:
-            r = approval._git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:PREREG.md")
-        except OSError:
-            return None
-        return r.stdout.strip() if r.returncode == 0 else None
-    head, merged = blob("HEAD"), blob(remote.tracking)
-    if head is None:
-        return "PREREG.md is not in the HEAD commit"
-    if merged is None:
-        return f"PREREG.md is not on {remote.label}"
-    if head != merged:
-        return f"PREREG.md in HEAD differs from PREREG.md on {remote.label}"
-    text = approval._git(repo, "cat-file", "blob", head).stdout
-    state = draw_games.prereg_state(text)
-    return None if state.frozen else f"PREREG.md is not frozen: {state.why_not}"
+# PREREG.md in HEAD, the blob on origin/main, is frozen (the rule of common/prereg.py, which
+# draw_games.py uses too). Kept under this name for the launcher's callers and tests.
+prereg_not_frozen = approval.prereg_not_frozen
 
 
-def check_paid(plan: Plan, paths: Paths, lock: Path) -> approval.PaidApproval:
-    try:
-        rows = costs.read_rows(paths.costs)
-    except (OSError, ValueError) as e:
-        raise PaidCallsNotAllowed(f"cannot read {paths.costs}: {e}") from None
-    reason = paidlock.last_run_missing(lock, rows)
-    if reason is not None:
-        raise PaidCallsNotAllowed(reason)
-    granted = approval.require_paid_approval(
-        approved_block=plan.approved_block, experiment=plan.experiment,
+def check_paid(plan: Plan, paths: Paths, lock: paidlock.HeldLock) -> approval.PaidApproval:
+    """Steps 2-4 of the module docstring, shared with the PersistGym launcher
+    (`common.approval.require_paid_run`): the lock is held by this run, this checkout's
+    costs.csv holds the last paid run's row, the paid guard, and a frozen, merged PREREG."""
+    return approval.require_paid_run(
+        lock=lock, approved_block=plan.approved_block, experiment=plan.experiment,
         planned_usd=plan.planned_usd, costs_path=paths.costs, repo=paths.repo,
         remote=paths.remote)
-    reason = prereg_not_frozen(paths.repo, paths.remote)
-    if reason is not None:
-        raise PaidCallsNotAllowed(f"paid ARC runs need the frozen, merged PREREG.md "
-                                  f"(PLAN §16.3): {reason}")
-    return granted
 
 
 # ── Patched harness ────────────────────────────────────────────────────
@@ -736,7 +713,8 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
             raise
         if row is not None:
             try:
-                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs)
+                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs,
+                                         timestamp_utc=row["timestamp_utc"])
             except OSError as e:
                 print(f"warning: could not record the last paid run next to {lock}: {e}",
                       file=sys.stderr)
@@ -793,7 +771,7 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
     harness: Harness | None = None
     try:
         with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe()) as held:
-            granted = check_paid(plan, paths, lock)
+            granted = check_paid(plan, paths, paidlock.HeldLock(lock, held))
             print(f"approved: block {plan.approved_block!r} ({granted.phase}), planned "
                   f"${plan.planned_usd:.2f}, block headroom after this run "
                   f"${granted.block_headroom_usd:.2f}; harness cost guard "

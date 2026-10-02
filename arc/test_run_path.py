@@ -25,7 +25,7 @@ from arc import pricing
 from arc import run_path as rp
 from arc import run_path_inner as inner
 from arc import run_path_offline as rpo
-from common import approval, costs, runmeta
+from common import approval, costs, paidlock, runmeta
 from common.tests.gitrepo import decisions_text, git_in, guarded_repo, push_main
 
 FROZEN = "Version: 1.0\n\n**Status: Frozen on 2026-10-03 by the researcher.**\n"
@@ -362,6 +362,9 @@ def test_the_last_run_must_be_in_this_checkouts_ledger(world, tmp_path, capsys):
     h.inner = lambda command, cwd: fake_game(cwd)
     assert rp.main(GAME_ARGS, paths=paths) == 0
     (row,) = _rows(paths)
+    last = json.loads(paidlock.last_run_path(paths.lock).read_text(encoding="utf-8"))
+    assert last["run_id"] == row["run_id"]
+    assert last["row_timestamp_utc"] == row["timestamp_utc"]   # the row, not just its ID
 
     other = tmp_path / "other-costs.csv"
     other.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")

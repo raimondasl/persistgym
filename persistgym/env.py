@@ -6,7 +6,8 @@ Lookup (recoverable cells only; PREREG D3). If the reply's action is `lookup(<ke
 episode still has lookups left, the pending step is NOT scored and does not advance. The next
 observation is a lookup result (padded to v tokens like every observation) that re-shows
 every record displayed at or before the pending step about an entity named in the key (the
-target or a distractor; whole word, ignoring case: `render.lookup_key_matches`), then repeats
+target, a distractor or the withheld control's stand-in; whole word, ignoring case:
+`render.lookup_key_matches`), then repeats
 the pending EVENT. So a lookup costs exactly one extra turn. A key with no such record shown
 yet returns "no such record" and also costs the turn.
 
@@ -19,6 +20,11 @@ the pending step is scored wrong and the episode advances (no extra turn).
 
 Any other reply is scored against the pending step and the episode advances. A reply with no
 parseable action is scored wrong (no re-prompt).
+
+A harness can also declare a reply invalid before it is parsed (`step(reply,
+invalid="incomplete")`: the model's response stopped at its output cap, PREREG §6 and §13).
+The pending step is then scored wrong with that outcome, whatever the reply says: it is not
+parsed, so no lookup is served, and the episode advances as after any other scored action.
 """
 
 from __future__ import annotations
@@ -30,6 +36,11 @@ from persistgym.episode import Episode
 
 ACTION_LINE = re.compile(r"ACTION:\s*(.+)", re.IGNORECASE)
 CALL = re.compile(r"([A-Za-z_]+)\s*\(\s*([^()]*?)\s*\)")
+
+INVALID_REPLY_OUTCOMES = frozenset({"incomplete"})
+"""Outcomes a harness may declare with `EpisodeEnv.step(reply, invalid=...)`: the reply is
+scored wrong without being parsed. "incomplete": the response stopped at its output cap
+(status `incomplete`), a content failure that scores 0 (PREREG §6, §13)."""
 
 
 @dataclass
@@ -94,7 +105,7 @@ class Turn:
     reply: str | None = None
     action: str | None = None
     outcome: str | None = None
-    """correct | wrong | unparsed | lookup | lookup_unavailable | invalid_lookup"""
+    """correct | wrong | unparsed | lookup | lookup_unavailable | invalid_lookup | incomplete"""
     is_lookup_unavailable: bool = False  # this observation is a "lookup unavailable" response
 
 
@@ -175,17 +186,27 @@ class EpisodeEnv:
         return self._current_obs, False
 
     # ------------------------------------------------------------------
-    def step(self, reply: str) -> tuple[str | None, bool]:
-        """Submit a reply to the current observation. Returns (next observation, done)."""
+    def step(self, reply: str, *, invalid: str | None = None) -> tuple[str | None, bool]:
+        """Submit a reply to the current observation. Returns (next observation, done).
+
+        `invalid` (one of `INVALID_REPLY_OUTCOMES`) declares the reply invalid before it is
+        parsed: the pending step is scored wrong with that outcome and no action, even if the
+        reply text holds a correct action or a lookup, and the episode advances."""
         if self.done:
             raise RuntimeError("episode is done")
+        if invalid is not None and invalid not in INVALID_REPLY_OUTCOMES:
+            raise ValueError(f"invalid must be one of {sorted(INVALID_REPLY_OUTCOMES)}, "
+                             f"got {invalid!r}")
         turn = self.turns[-1]
         turn.reply = reply
-        parsed = parse_action(reply, self.known_verbs, self.cfg["strict_action_parse"])
+        parsed = (None if invalid is not None
+                  else parse_action(reply, self.known_verbs, self.cfg["strict_action_parse"]))
         turn.action = parsed.raw if parsed else None
         step = self.ep.steps[self.pending]
 
-        if parsed and parsed.verb == "lookup":
+        if invalid is not None:
+            outcome = invalid
+        elif parsed and parsed.verb == "lookup":
             if self.ep.lookup.available and self.lookups_used < self.ep.lookup.max_per_episode:
                 text, ntok, _ = self._renderer.lookup_observation(
                     self.ep, self.pending, self.lookups_used, parsed.arg or "")

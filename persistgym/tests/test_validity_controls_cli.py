@@ -9,6 +9,8 @@ from persistgym.config import GeneratorConfig
 from persistgym.controls import score_single_turn, single_turn_control
 from persistgym.episode import read_jsonl
 from persistgym.filler import Reserved
+from persistgym.skins import get_skin
+from persistgym.template import entity_token_length
 from persistgym.validity import (
     generator_aware_weights,
     heuristic_baselines,
@@ -29,6 +31,10 @@ def _failed(report):
     return [c["check"] for c in report if not c["pass"]]
 
 
+def _detail(report, name):
+    return next(c for c in report if c["check"] == name)["detail"]
+
+
 def test_audit_passes(small_eps):
     report = shortcut_audit(small_eps)
     assert _failed(report) == []
@@ -39,6 +45,88 @@ def test_audit_passes(small_eps):
 def test_lookup_audit_passes(small_eps):
     report = lookup_audit(small_eps)
     assert _failed(report) == [] and report[0]["detail"]["n_episodes"] == 10 * 4
+    assert report[0]["detail"]["n_withheld_episodes"] == 10 * 4
+
+
+def test_audit_catches_withheld_problems(small_eps):
+    """D39: a withheld episode that names the target before need (as the null records of
+    generator 0.2.0 did), a stand-in value that is an option, a stand-in of another token
+    length, a derived stand-in whose clues sum to an option, and an evidence step whose
+    filler differs from the base episode all fail the audit."""
+    named, stand_ins = ("withheld_never_names_target_before_need",
+                        "withheld_stand_ins_equal_length_and_valid")
+    base = pick(small_eps, "observed-nonrec-far")
+    wh = copy.deepcopy(pick(small_eps, "observed-nonrec-far", "withheld"))
+    assert _failed(shortcut_audit([base, wh])) == []
+    x = wh.substitutes[0]
+    st = wh.steps[x.step]
+    null = f"{wh.kind.capitalize()} {wh.entity} has been logged at intake."
+    st.observation = st.observation.replace(x.sentence, null)
+    assert named in _failed(shortcut_audit([base, wh]))
+
+    wh = copy.deepcopy(pick(small_eps, "observed-nonrec-far", "withheld"))
+    x = wh.substitutes[0]
+    st = wh.steps[x.step]
+    opt = wh.options[0].value
+    new = x.sentence.replace(f" {x.value}.", f" {opt}.")
+    st.observation, st.event = (st.observation.replace(x.sentence, new),
+                                st.event.replace(x.sentence, new))
+    x.value, x.sentence = opt, new
+    report = shortcut_audit([base, wh])
+    assert stand_ins in _failed(report)
+    assert any("is an option" in str(d) for d in _detail(report, stand_ins))
+
+    wh = copy.deepcopy(pick(small_eps, "observed-nonrec-far", "withheld"))
+    x = wh.substitutes[0]
+    st = wh.steps[x.step]
+    other = next(e for e in get_skin(wh.skin).entities
+                 if entity_token_length(e) != entity_token_length(wh.entity))
+    new = x.sentence.replace(x.entity, other)
+    st.observation, st.event = (st.observation.replace(x.sentence, new),
+                                st.event.replace(x.sentence, new))
+    x.entity, x.sentence = other, new
+    assert stand_ins in _failed(shortcut_audit([base, wh]))
+
+    dbase = pick(small_eps, "derived-nonrec-far")
+    wh = copy.deepcopy(pick(small_eps, "derived-nonrec-far", "withheld"))
+    assert _failed(shortcut_audit([dbase, wh])) == []
+    x = wh.substitutes[0]  # the stand-in base clue: make the clues sum to an option
+    target = wh.options[0].value - sum(y.value for y in wh.substitutes[1:] if y.value)
+    st = wh.steps[x.step]
+    new = x.sentence.replace(f" {x.value}.", f" {target}.")
+    st.observation, st.event = (st.observation.replace(x.sentence, new),
+                                st.event.replace(x.sentence, new))
+    x.value, x.sentence = target, new
+    report = shortcut_audit([dbase, wh])
+    assert stand_ins in _failed(report)
+    assert any("is an option" in str(d) for d in _detail(report, stand_ins))
+
+    wh = copy.deepcopy(pick(small_eps, "derived-nonrec-far", "withheld"))
+    st = wh.steps[wh.substitutes[0].step]
+    mid = (st.filler_start + st.filler_end) // 2
+    st.observation = st.observation[:mid] + "~" + st.observation[mid + 1:]
+    assert stand_ins in _failed(shortcut_audit([dbase, wh]))
+    assert stand_ins not in _failed(shortcut_audit([wh]))  # needs the base episode
+
+    # text after the filler but outside the event field (the log footer) must match too
+    wh = copy.deepcopy(pick(small_eps, "derived-nonrec-far", "withheld"))
+    st = wh.steps[wh.substitutes[0].step]
+    assert st.observation.count("--- end of log ---") == 1
+    st.observation = st.observation.replace("--- end of log ---", "--- end of LOG ---")
+    assert stand_ins in _failed(shortcut_audit([dbase, wh]))
+
+    # a stand-in whose name contains the target's (as BITTERN contains TERN) spells the
+    # target at the evidence steps without naming it as a word
+    wh = copy.deepcopy(pick(small_eps, "observed-nonrec-far", "withheld"))
+    old, new_name = wh.substitutes[0].entity, f"{wh.entity}X"
+    for st in wh.steps:
+        st.observation, st.event = (st.observation.replace(old, new_name),
+                                    st.event.replace(old, new_name))
+    for x in wh.substitutes:
+        x.entity, x.sentence = new_name, x.sentence.replace(old, new_name)
+    report = shortcut_audit([base, wh])
+    assert named not in _failed(report) and stand_ins in _failed(report)
+    assert any("overlaps the target name" in str(d) for d in _detail(report, stand_ins))
 
 
 def test_audit_catches_distractor_problems(small_eps):

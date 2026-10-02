@@ -7,7 +7,8 @@ script. They never come from agent trajectories (PLAN §4).
 Node ids:
   obs:<t>     the scheduled observation at step t
   act:<t>     the action expected at step t
-  comp:<id>   a revealed component (fact, clue0..clue2, rule) or distractor (dist0, dist1)
+  comp:<id>   a revealed component (fact, clue0..clue2, rule), a distractor (dist0, dist1) or,
+              in the withheld control, a stand-in binding (sub_fact, sub_clue0.., sub_rule)
   fact        the target fact (k=1)
   env:lookup  the lookup action (recoverable cells only)
 """
@@ -72,9 +73,11 @@ def build_graph(n_steps: int, need_step: int, components: list[dict], fact_kind:
     """Build the graph from the episode script.
 
     `components`: dicts with comp_id, role and step (step None = always visible, e.g. a rule
-    in the system prompt; or not shown at all in the withheld control, role 'null').
-    `distractors`: dicts with comp_id and step. A distractor is revealed (and re-shown by
-    lookup) but has no edge to the fact, so it is never needed and never live.
+    in the system prompt). Empty in the withheld control, where the fact has no parents.
+    `distractors`: dicts with comp_id, step and optionally role ('distractor' by default;
+    'substitute' for the withheld control's stand-in bindings, PREREG D39). A distractor is
+    revealed (and re-shown by lookup) but has no edge to the fact, so it is never needed and
+    never live.
     """
     g = DependencyGraph(need_step=need_step)
     for t in range(n_steps):
@@ -98,7 +101,8 @@ def build_graph(n_steps: int, need_step: int, components: list[dict], fact_kind:
         g.live[cid] = [first, need_step]
     for d in distractors:
         did = f"comp:{d['comp_id']}"
-        g.nodes.append({"id": did, "kind": "component", "role": "distractor", "step": d["step"]})
+        g.nodes.append({"id": did, "kind": "component", "role": d.get("role", "distractor"),
+                        "step": d["step"]})
         g.edges.append({"src": f"obs:{d['step']}", "dst": did, "rel": "reveals"})
         if recoverable:
             g.edges.append({"src": "env:lookup", "dst": did, "rel": "re-shows"})

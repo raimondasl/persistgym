@@ -21,9 +21,18 @@ It spends money only after every check below passes, in this order:
    researcher's line `approved_block: <name> | experiments: <list> | max_usd: <n>` on
    origin/main (fetched now), HEAD and the working tree, the experiment listed, block spend
    + planned spend <= max_usd, and phase headroom.
-4. PREREG.md frozen (`arc.draw_games.prereg_state`) and the same blob in HEAD and on
-   origin/main (read after the guard's fetch).
-5. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
+4. PREREG.md frozen (`common.prereg.prereg_state`, the rule draw_games.py uses) and the
+   same blob in HEAD and on origin/main (read after the guard's fetch). Steps 2-4 are
+   `common.approval.require_paid_run`, which the PersistGym launcher (harnesses/cli.py)
+   runs too; steps 5-7 are this launcher's own.
+5. arc/config_freeze.json the same blob in HEAD and on origin/main, the record this run
+   loaded equal to it, and its four profile hashes, patch-series SHA-256 and pin (and the
+   patched commit and tree, where listed) equal to the config freeze table in that frozen
+   PREREG.md's §7.1 (`arc.prereg_freeze`). A §7.1 without a filled table is a refusal.
+6. arc/patches the same tree in HEAD and on origin/main, and the patch files this run
+   applies exactly its committed .patch files, byte for byte: an untracked, uncommitted or
+   unmerged patch cannot run, even under a merged record that names it.
+7. The patched harness matches arc/config_freeze.json: the patch files' SHA-256, the patched
    commit and tree, and each resolved profile's config hash.
 
 Then it runs arc/run_path_inner.py in the patched harness with a sanitized environment
@@ -47,6 +56,7 @@ Exit codes: 0 the run (or check) completed; 1 it ran but failed or was interrupt
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -68,7 +78,7 @@ if __package__ in (None, ""):
 
 from arc import apply_patches as ap
 from arc import config_hash as freeze
-from arc import draw_games, pricing
+from arc import prereg_freeze, pricing
 from arc import run_path_inner as inner
 from common import approval, costs, paidlock, runmeta
 from common.approval import MAIN, PaidCallsNotAllowed, RemoteRef
@@ -87,6 +97,9 @@ INTERRUPT_GRACE_S = 120.0
 ARC_KEY = "ARC_API_KEY"
 GAME_RE = re.compile(r"(?P<base>[a-z0-9]{4})(?:-(?P<version>[0-9a-f]{4,64}))?")
 RESULTS = runmeta.REPO_ROOT / "results"
+PREREG_GIT_PATH = "PREREG.md"
+FREEZE_GIT_PATH = "arc/config_freeze.json"       # freeze.FREEZE_PATH, as git names it
+PATCHES_GIT_PATH = "arc/patches"                 # ap.PATCH_DIR, as git names it
 
 
 class Refused(RuntimeError):
@@ -298,43 +311,137 @@ def plain_name(name: str) -> str:
 # ── Checks that need git ───────────────────────────────────────────────
 
 
-def prereg_not_frozen(repo: Path, remote: RemoteRef = MAIN) -> str | None:
-    """None if PREREG.md in HEAD is the same blob as on `remote` and is frozen; otherwise
-    why not. Reads the remote-tracking ref, so call it after the guard's fetch."""
-    def blob(rev: str) -> str | None:
-        try:
-            r = approval._git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:PREREG.md")
-        except OSError:
-            return None
-        return r.stdout.strip() if r.returncode == 0 else None
-    head, merged = blob("HEAD"), blob(remote.tracking)
-    if head is None:
-        return "PREREG.md is not in the HEAD commit"
-    if merged is None:
-        return f"PREREG.md is not on {remote.label}"
-    if head != merged:
-        return f"PREREG.md in HEAD differs from PREREG.md on {remote.label}"
-    text = approval._git(repo, "cat-file", "blob", head).stdout
-    state = draw_games.prereg_state(text)
-    return None if state.frozen else f"PREREG.md is not frozen: {state.why_not}"
+# PREREG.md in HEAD, the blob on origin/main, is frozen (the rule of common/prereg.py, which
+# draw_games.py uses too). Kept under this name for the launcher's callers and tests.
+prereg_not_frozen = approval.prereg_not_frozen
 
 
-def check_paid(plan: Plan, paths: Paths, lock: Path) -> approval.PaidApproval:
+def _blob(repo: Path, rev: str, path: str) -> str | None:
     try:
-        rows = costs.read_rows(paths.costs)
-    except (OSError, ValueError) as e:
-        raise PaidCallsNotAllowed(f"cannot read {paths.costs}: {e}") from None
-    reason = paidlock.last_run_missing(lock, rows)
-    if reason is not None:
-        raise PaidCallsNotAllowed(reason)
-    granted = approval.require_paid_approval(
-        approved_block=plan.approved_block, experiment=plan.experiment,
+        r = approval._git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:{path}")
+    except OSError:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def merged_text(repo: Path, path: str, remote: RemoteRef = MAIN) -> tuple[str | None, str]:
+    """(text, "") if `path` is the same blob in HEAD as on `remote`, else (None, why not).
+    Reads the remote-tracking ref, so call it after the guard's fetch."""
+    head, merged = _blob(repo, "HEAD", path), _blob(repo, remote.tracking, path)
+    if head is None:
+        return None, f"{path} is not in the HEAD commit"
+    if merged is None:
+        return None, f"{path} is not on {remote.label}"
+    if head != merged:
+        return None, f"{path} in HEAD differs from {path} on {remote.label}"
+    r = approval._git(repo, "cat-file", "blob", head)
+    if r.returncode != 0:
+        return None, f"cannot read {path} from HEAD: {r.stderr.strip()}"
+    return r.stdout, ""
+
+
+def freeze_record_not_merged(repo: Path, record: Mapping[str, Any],
+                             remote: RemoteRef = MAIN) -> str | None:
+    """None if arc/config_freeze.json in HEAD is the same blob as on `remote` and `record`
+    (what this run loaded and planned with) is its content; otherwise why not."""
+    text, why = merged_text(repo, FREEZE_GIT_PATH, remote)
+    if text is None:
+        return why
+    try:
+        merged = json.loads(text)
+    except ValueError as e:
+        return f"{FREEZE_GIT_PATH} in HEAD is not valid JSON: {e}"
+    if merged != record:
+        return (f"the freeze record this run loaded differs from {FREEZE_GIT_PATH} in HEAD and "
+                f"on {remote.label} (an uncommitted change?)")
+    return None
+
+
+def freeze_record_not_preregistered(repo: Path, record: Mapping[str, Any],
+                                    remote: RemoteRef = MAIN) -> str | None:
+    """None if `record` gives the values of the config freeze table in PREREG.md §7.1 (the
+    blob in HEAD and on `remote`); otherwise why not."""
+    text, why = merged_text(repo, PREREG_GIT_PATH, remote)
+    if text is None:
+        return why
+    problems = prereg_freeze.problems(text, record)
+    return "; ".join(problems) if problems else None
+
+
+def _git_blob_id(data: bytes, object_id: str) -> str:
+    """The id git gives a blob of `data`, in the hash of `object_id` (SHA-1 or SHA-256)."""
+    algo = hashlib.sha256 if len(object_id) == 64 else hashlib.sha1
+    return algo(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def patches_not_merged(repo: Path, patches: Sequence[Path],
+                       remote: RemoteRef = MAIN) -> str | None:
+    """None if arc/patches is the same tree in HEAD as on `remote` and `patches` (the files
+    this run applies) are exactly its committed .patch files, byte for byte; otherwise why
+    not. The freeze record's series SHA-256 binds the files' bytes, not that they are merged:
+    without this, a patch left out of the merged commit (untracked, so not even `git_dirty`)
+    could run under a merged record and §7.1 that name it."""
+    head = _blob(repo, "HEAD", PATCHES_GIT_PATH)
+    merged = _blob(repo, remote.tracking, PATCHES_GIT_PATH)
+    if head is None:
+        return f"{PATCHES_GIT_PATH} is not in the HEAD commit"
+    if merged is None:
+        return f"{PATCHES_GIT_PATH} is not on {remote.label}"
+    if head != merged:
+        return (f"{PATCHES_GIT_PATH} in HEAD differs from {PATCHES_GIT_PATH} on {remote.label} "
+                f"(an unmerged patch?)")
+    r = approval._git(repo, "ls-tree", "-z", head)
+    if r.returncode != 0:
+        return f"cannot list {PATCHES_GIT_PATH} in HEAD: {r.stderr.strip()}"
+    committed: dict[str, tuple[str, str]] = {}
+    for entry in filter(None, r.stdout.split("\0")):
+        info, _, name = entry.partition("\t")
+        _, kind, oid = info.split()
+        if name.endswith(".patch"):
+            committed[name] = (kind, oid)
+    names = [p.name for p in patches]
+    if sorted(names) != sorted(committed):
+        return (f"the patch files this run would apply ({', '.join(names) or 'none'}) are not "
+                f"the .patch files committed in {PATCHES_GIT_PATH} "
+                f"({', '.join(sorted(committed)) or 'none'})")
+    for patch in patches:
+        kind, oid = committed[patch.name]
+        try:
+            data = patch.read_bytes()
+        except OSError as e:
+            return f"cannot read {patch}: {e}"
+        if kind != "blob" or _git_blob_id(data, oid) != oid:
+            return (f"{PATCHES_GIT_PATH}/{patch.name} differs from the committed file (an "
+                    f"uncommitted change?)")
+    return None
+
+
+def check_paid(plan: Plan, paths: Paths, lock: paidlock.HeldLock,
+               record: Mapping[str, Any]) -> approval.PaidApproval:
+    """Steps 2-6 of the module docstring. Steps 2-4 are shared with the PersistGym launcher
+    (`common.approval.require_paid_run`): the lock is held by this run, this checkout's
+    costs.csv holds the last paid run's row, the paid guard, and a frozen, merged PREREG.
+    Steps 5-6 are ARC's own and run after that guard's fetch: the merged freeze record
+    (`record` is what this run loaded) equal to the frozen PREREG §7.1 table, and the
+    merged patch series."""
+    granted = approval.require_paid_run(
+        lock=lock, approved_block=plan.approved_block, experiment=plan.experiment,
         planned_usd=plan.planned_usd, costs_path=paths.costs, repo=paths.repo,
         remote=paths.remote)
-    reason = prereg_not_frozen(paths.repo, paths.remote)
+    reason = freeze_record_not_merged(paths.repo, record, paths.remote)
     if reason is not None:
-        raise PaidCallsNotAllowed(f"paid ARC runs need the frozen, merged PREREG.md "
-                                  f"(PLAN §16.3): {reason}")
+        raise PaidCallsNotAllowed(f"paid ARC runs need the merged config freeze record: "
+                                  f"{reason}")
+    reason = freeze_record_not_preregistered(paths.repo, record, paths.remote)
+    if reason is not None:
+        raise PaidCallsNotAllowed(
+            f"{FREEZE_GIT_PATH} does not match the config freeze table in the frozen "
+            f"PREREG.md §{prereg_freeze.SECTION} (a config change after the freeze needs "
+            f"amendment A-cfg to put the new values in that table; `uv run python -m "
+            f"arc.prereg_freeze` compares the two files): {reason}")
+    reason = patches_not_merged(paths.repo, ap.patch_files(), paths.remote)
+    if reason is not None:
+        raise PaidCallsNotAllowed(f"paid ARC runs need the merged patch series: {reason}")
     return granted
 
 
@@ -736,7 +843,8 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
             raise
         if row is not None:
             try:
-                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs)
+                paidlock.record_last_run(lock, run_id=plan.run_id, costs_csv=paths.costs,
+                                         timestamp_utc=row["timestamp_utc"])
             except OSError as e:
                 print(f"warning: could not record the last paid run next to {lock}: {e}",
                       file=sys.stderr)
@@ -793,7 +901,7 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
     harness: Harness | None = None
     try:
         with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe()) as held:
-            granted = check_paid(plan, paths, lock)
+            granted = check_paid(plan, paths, paidlock.HeldLock(lock, held), record)
             print(f"approved: block {plan.approved_block!r} ({granted.phase}), planned "
                   f"${plan.planned_usd:.2f}, block headroom after this run "
                   f"${granted.block_headroom_usd:.2f}; harness cost guard "

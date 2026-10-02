@@ -186,6 +186,12 @@ def test_dependency_graph(small_eps):
     assert not [e for e in g.edges if e["dst"] == f"act:{ep.need_step - 1}"
                 and e["src"] != f"obs:{ep.need_step - 1}"]  # routine needs only its own obs
     wh = pick(small_eps, "derived-rec-far", "withheld")
-    assert wh.graph.required_components() == []
+    assert wh.graph.required_components() == [] and wh.graph.parents("fact") == []
+    for x in wh.substitutes:  # D39: stand-ins are shown and re-shown, never needed
+        node = next(nd for nd in wh.graph.nodes if nd["id"] == f"comp:{x.comp_id}")
+        assert node["role"] == "substitute" and node["step"] == x.step
+        assert wh.graph.needed_step(f"comp:{x.comp_id}") is None
+        assert {"src": "env:lookup", "dst": f"comp:{x.comp_id}", "rel": "re-shows"} in (
+            wh.graph.edges)
     non = pick(small_eps, "observed-nonrec-near")
     assert not [e for e in non.graph.edges if e["src"] == "env:lookup"]

@@ -162,6 +162,36 @@ def test_lookup_serves_distractor_keys(small_eps):
     assert lookup_obs.index(first) < lookup_obs.index(second)
 
 
+def test_lookup_in_withheld_control_serves_the_stand_in_only(small_eps):
+    """D39: the target has no record in the withheld control, so lookup(target) answers 'no
+    such record'; lookup(stand-in) re-shows every stand-in record (the clues with the rule)."""
+    wh = pick(small_eps, "derived-rec-far", "withheld")
+    sub = wh.substitutes[0].entity
+    keys = [wh.entity, f"{wh.kind} {sub.lower()}"]
+
+    def policy(env):
+        if env.pending == wh.need_step and env.lookups_used < len(keys):
+            return f"ACTION: lookup({keys[env.lookups_used]})"
+        return _key(env)
+
+    env, seen = _play(wh, policy)
+    first, second = seen[wh.need_step + 1], seen[wh.need_step + 2]
+    assert "no such record" in first and not any(x.sentence in first for x in wh.substitutes)
+    assert all(x.sentence in second for x in wh.substitutes)
+    assert f"LOOKUP RESULT for {wh.kind} {sub}:" in second
+    assert not any(d.sentence in second for d in wh.distractors)
+    assert env.result().need_correct and env.result().n_lookups == 2
+
+
+def test_withheld_control_puts_the_oracles_at_chance(small_eps):
+    """Without the target's records the text oracle (with memory) and the lookup oracle fall
+    back to the first option, which block balance makes correct once per 10 templates."""
+    wh = [e for e in small_eps if e.variant == "withheld"]
+    for pol in (lambda: TextOracle(), lambda: TextOracle(memory=False, use_lookup=True)):
+        acc = sum(run_episode(e, pol()).need_correct for e in wh) / len(wh)
+        assert acc == pytest.approx(0.1)
+
+
 def test_lookup_over_the_cap_is_unavailable_not_wrong(small_eps):
     """D3: the 4th lookup returns 'lookup unavailable' at the cost of one turn and is not
     scored; the agent's next action at the need step is. A second over-cap lookup at the
@@ -212,6 +242,43 @@ def test_lookup_in_nonrecoverable_cell_is_invalid(small_eps):
     r = _play(non, one_lookup)[0].result()
     assert r.n_lookups == 0 and r.n_turns == non.n_steps
     assert r.step_outcomes[non.need_step] == "invalid_lookup"
+
+
+def test_reply_declared_incomplete_is_scored_invalid_without_parsing(small_eps):
+    """PREREG §6, §13 (D13): a response that stopped at its output cap is a content failure.
+    `step(reply, invalid="incomplete")` scores the pending step wrong with no action, even
+    when the partial text holds the correct answer or a lookup, and the episode advances."""
+    rec = pick(small_eps, "observed-rec-far")
+    n = rec.need_step
+
+    def incomplete_at(steps, text_for):
+        env = EpisodeEnv(rec)
+        done = False
+        while not done:
+            if env.pending in steps:
+                _, done = env.step(text_for(env), invalid="incomplete")
+            else:
+                _, done = env.step(_key(env))
+        return env.result()
+
+    # the partial text is the correct answer: still scored wrong, with no action or label
+    r = incomplete_at({n}, _key)
+    assert not r.need_correct and r.step_outcomes[n] == "incomplete"
+    assert r.need_action is None and r.need_label is None
+    assert r.n_turns == rec.n_steps and r.turns[n].reply == _key_at(rec, n)
+    # a lookup in the partial text is not served (no extra turn), at a routine step too
+    r = incomplete_at({n - 1, n}, lambda env: f"ACTION: lookup({rec.entity})")
+    assert r.n_lookups == 0 and r.n_turns == rec.n_steps
+    assert r.step_outcomes[n - 1] == r.step_outcomes[n] == "incomplete"
+    assert r.routine_correct == r.routine_total - 1
+    # an empty reply (stopped while reasoning) is scored the same way
+    assert incomplete_at({n}, lambda env: "").step_outcomes[n] == "incomplete"
+    with pytest.raises(ValueError, match="invalid must be one of"):
+        EpisodeEnv(rec).step("ACTION: ack(none)", invalid="wrong")
+
+
+def _key_at(ep: Episode, step: int) -> str:
+    return f"ACTION: {ep.steps[step].expected_action}"
 
 
 def test_env_works_on_episode_loaded_from_json(small_eps):

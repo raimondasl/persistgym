@@ -1,12 +1,14 @@
-"""$0 validity checks (PLAN §5 validity gate, amendment §16.3, PREREG D1-D3).
+"""$0 validity checks (PLAN §5 validity gate, amendment §16.3, PREREG D1-D3, D39).
 
 1. `shortcut_audit`: re-derives from the rendered text, independently of the generator's own
    bookkeeping, that the target, its clues and the distractor bindings never leak through
    filler, routine text or option ordering, that the cell manipulation is what it claims to
-   be, and that templates are balanced within their blocks.
+   be, that the fact-withheld control never names the target and replaces its bindings with
+   equal-length stand-in bindings (D39), and that templates are balanced within their blocks.
 2. `lookup_audit`: lookup re-shows the target's records or a distractor's binding by key,
    answers unknown keys with "no such record" and answers a lookup over the cap with "lookup
-   unavailable" without scoring it (D3).
+   unavailable" without scoring it (D3); in the withheld control it re-shows the stand-in's
+   records and answers the target's key with "no such record".
 3. `heuristic_baselines`: no-memory heuristics (most-frequent option, last-seen option and
    position/prior guesses) on views without the fact. Each must score <= chance + margin.
 4. `partial_memory_diagnostic`: in derived cells, no proper subset of the clues (with the
@@ -25,12 +27,19 @@ from collections.abc import Sequence
 from scipy import stats
 
 from persistgym import tokens
+from persistgym.config import GeneratorConfig
 from persistgym.env import EpisodeEnv
-from persistgym.episode import Episode
+from persistgym.episode import Component, Episode
 from persistgym.oracle import KeyOracle, TextOracle, run_episode
 from persistgym.skins import get_skin
 from persistgym.survival import window_keep_start
-from persistgym.template import BASE_CLUE_RANGE, split_of_seed
+from persistgym.template import (
+    BASE_CLUE_RANGE,
+    component_schedule,
+    entity_token_length,
+    names_overlap,
+    split_of_seed,
+)
 
 OPTION_LINE = re.compile(r"^[A-Z]\) \d+$", re.MULTILINE)
 
@@ -44,13 +53,18 @@ def _word_re(words: Sequence[str]) -> re.Pattern:
     return re.compile(rf"(?<![A-Za-z])(?:{ws})(?![A-Za-z])", re.IGNORECASE)
 
 
-def reserved_of(ep: Episode, clue_values: Sequence[int] = ()) -> tuple[list[int], list[str]]:
-    """Reserved numbers and words, derived from the episode alone."""
+def reserved_of(ep: Episode, clue_values: Sequence[int] = (),
+                substitutes: Sequence[Component] = ()) -> tuple[list[int], list[str]]:
+    """Reserved numbers and words, derived from the episode, plus the clue values and the
+    withheld control's stand-ins (D39) seen in other episodes of its template."""
     skin = get_skin(ep.skin)
+    subs = [*ep.substitutes, *substitutes]
     nums = {o.value for o in ep.options} | {ep.target_value} | set(clue_values)
     nums |= {c.value for c in ep.components if c.value is not None}
     nums |= {d.value for d in ep.distractors}
-    words = [ep.entity, ep.quantity, *skin.components, *(d.entity for d in ep.distractors)]
+    nums |= {s.value for s in subs if s.value is not None}
+    words = [ep.entity, ep.quantity, *skin.components, *(d.entity for d in ep.distractors),
+             *sorted({s.entity for s in subs})]
     return sorted(nums), words
 
 
@@ -68,20 +82,27 @@ def shortcut_audit(episodes: Sequence[Episode], v_tokens: int | None = None,
     by_template: dict[str, list[Episode]] = defaultdict(list)
     for ep in episodes:
         by_template[ep.template_id].append(ep)
-    # Clue values are visible only in derived base episodes; collect them per template.
+    # Clue values are visible only in derived base episodes and the withheld stand-ins only in
+    # withheld episodes; collect both per template.
     clue_vals: dict[str, set[int]] = defaultdict(set)
+    subs_of: dict[str, list[Component]] = defaultdict(list)
+    base_of: dict[tuple[str, str], Episode] = {}
     for ep in episodes:
         clue_vals[ep.template_id] |= {c.value for c in ep.components if c.role == "clue"}
+        subs_of[ep.template_id] += ep.substitutes
+        if ep.variant == "base":
+            base_of[(ep.template_id, ep.cell.id)] = ep
 
     filler_hits, routine_hits, budget_bad, final_form, observed_extra = [], [], [], [], []
     option_bad, clue_in_options, design_bad, too_long, not_cluster = [], [], [], [], []
-    distractor_bad = []
+    distractor_bad, withheld_named, withheld_bad = [], [], []
     recounted: dict[str, int] = {}  # observation text -> recounted tokens (deduplicated)
     regexes: dict[str, tuple[re.Pattern, re.Pattern]] = {}
     for ep in episodes:
         cfg = ep.config
         if ep.template_id not in regexes:
-            nums, words = reserved_of(ep, sorted(clue_vals[ep.template_id]))
+            nums, words = reserved_of(ep, sorted(clue_vals[ep.template_id]),
+                                      subs_of[ep.template_id])
             regexes[ep.template_id] = (_num_re(nums), _word_re(words))
         num_re, word_re = regexes[ep.template_id]
         v = v_tokens or cfg["v_tokens"]
@@ -121,6 +142,11 @@ def shortcut_audit(episodes: Sequence[Episode], v_tokens: int | None = None,
         if set(vals) & clue_vals[ep.template_id]:
             clue_in_options.append(ep.episode_id)
         distractor_bad += _distractor_problems(ep, clue_vals[ep.template_id])
+        if ep.variant == "withheld":
+            if named := _names_target_before_need(ep):
+                withheld_named.append((ep.episode_id, named[:5]))
+            withheld_bad += _withheld_problems(ep, base_of.get((ep.template_id, ep.cell.id)),
+                                               clue_vals[ep.template_id])
 
         # Near/far re-derived from the text: where each component sentence first appears,
         # recounted observation tokens, and the drop-oldest window model.
@@ -169,6 +195,9 @@ def shortcut_audit(episodes: Sequence[Episode], v_tokens: int | None = None,
             inconsistent.append(tid + ":routine_or_distractor")
         if len({tuple((d.comp_id, d.step, d.sentence) for d in e.distractors) for e in eps}) > 1:
             inconsistent.append(tid + ":distractors")
+        # D39: one stand-in entity per template, in every withheld cell
+        if len({s.entity for e in eps for s in e.substitutes}) > 1:
+            withheld_bad.append((tid, "the withheld cells use different stand-in entities"))
 
     # Balance of the correct letter, the correct value's rank and the number of clues (one
     # episode per template; a derived one where possible, since it knows the clue count).
@@ -201,6 +230,9 @@ def shortcut_audit(episodes: Sequence[Episode], v_tokens: int | None = None,
         _check("options_form_one_evenly_spaced_cluster", not not_cluster, not_cluster[:10]),
         _check("options_exclude_clue_values", not clue_in_options, clue_in_options[:10]),
         _check("distractor_bindings_valid", not distractor_bad, distractor_bad[:10]),
+        _check("withheld_never_names_target_before_need", not withheld_named,
+               withheld_named[:10]),
+        _check("withheld_stand_ins_equal_length_and_valid", not withheld_bad, withheld_bad[:10]),
         _check("near_far_hold_when_recomputed_from_text", not design_bad, design_bad[:10]),
         _check("full_history_context_within_max", not too_long, too_long[:10]),
         _check("cells_share_need_step_options_routine_and_distractors", not inconsistent,
@@ -237,6 +269,97 @@ def _distractor_problems(ep: Episode, clue_values: set[int]) -> list[tuple]:
         if (where != [d.step] or d.step >= ep.need_step or d.step in evidence
                 or ep.steps[d.step].kind != "distractor"):
             out.append((ep.episode_id, d.comp_id, where))
+    return out
+
+
+def _names_target_before_need(ep: Episode) -> list:
+    """Steps before need (and the system prompt) whose text names the target entity as a
+    word. The fact-withheld control must name it only at the need step (D39)."""
+    rx = re.compile(rf"(?<![A-Za-z]){re.escape(ep.entity)}(?![A-Za-z])", re.IGNORECASE)
+    hits: list = [s.index for s in ep.steps[: ep.need_step] if rx.search(s.observation)]
+    if rx.search(ep.system_prompt):
+        hits.append("system_prompt")
+    return hits
+
+
+def _withheld_problems(ep: Episode, base: Episode | None, clue_values: set[int]) -> list[tuple]:
+    """PREREG §4.3, D39: at each step that shows evidence in the base episode of its cell,
+    the withheld episode shows instead a binding in the same frame about one stand-in entity
+    (another entity of the skin, not a distractor, with the target's token length, whose name
+    neither contains nor is contained in the target's) whose value has the replaced value's
+    format and is no option, clue value or distractor value; the rule sentence, which binds
+    no entity, is kept. The stand-in's own value (observed) or the sum its clues give under
+    the rule (derived) is never an option. Each stand-in is shown once, at its step. When the
+    base episode of the cell is among the audited episodes, the two must be identical except
+    for these bindings, which keep the token count of the sentences they replace: swapping
+    them back gives the base observation, and the evidence steps keep the base log filler,
+    token count and expected action."""
+    out: list[tuple] = []
+    eid, subs, n = ep.episode_id, ep.substitutes, ep.need_step
+    enc = ep.config["tokenizer"]
+    skin = get_skin(ep.skin)
+    sched = component_schedule(n, ep.n_clues, ep.cell.fact, ep.cell.distance,
+                               GeneratorConfig.from_dict(ep.config))
+    want = {cid: st for cid, st in sched.items() if st is not None}
+    got = {s.comp_id.removeprefix("sub_"): s.step for s in subs}
+    if got != want or len(subs) != len(want) or ep.components:
+        out.append((eid, "stand-ins are not exactly at the evidence steps", got, want))
+    ents = {s.entity for s in subs}
+    if len(ents) != 1:
+        out.append((eid, "not exactly one stand-in entity", sorted(ents)))
+    else:
+        e = next(iter(ents))
+        if e in {ep.entity, *(d.entity for d in ep.distractors)} or (
+                e not in skin.entities
+                or entity_token_length(e, enc) != entity_token_length(ep.entity, enc)):
+            out.append((eid, "stand-in entity", e))
+        if names_overlap(e, ep.entity):  # e.g. stand-in BITTERN for target TERN spells it
+            out.append((eid, "stand-in name overlaps the target name", e, ep.entity))
+    options = {o.value for o in ep.options}
+    taken = options | clue_values | {ep.target_value} | {d.value for d in ep.distractors}
+    names = {"sub_fact": ep.quantity, **{f"sub_clue{i}": nm
+                                         for i, nm in enumerate(skin.components)}}
+    rule = (f"Rule: for every {ep.kind}, {ep.quantity} = "
+            f"{' + '.join(skin.components[: ep.n_clues])}.")
+    bound = [s for s in subs if s.comp_id != "sub_rule"]
+    for s in subs:
+        if s.comp_id == "sub_rule":
+            ok = s.sentence == rule and s.value is None
+        else:
+            digits = 2 if s.comp_id in ("sub_clue1", "sub_clue2") else 3
+            ok = (s.value is not None and s.value not in taken and len(str(s.value)) == digits
+                  and s.sentence == f"For {ep.kind} {s.entity}, the {names.get(s.comp_id)} "
+                                    f"is {s.value}.")
+        where = [st.index for st in ep.steps if s.sentence in st.observation]
+        if not ok or where != [s.step] or ep.steps[s.step].kind != "reveal":
+            out.append((eid, s.comp_id, s.value, where))
+    if bound and all(s.value is not None for s in bound):
+        stand_in = sum(s.value for s in bound) if ep.cell.fact == "derived" else bound[0].value
+        if stand_in in options or stand_in == ep.target_value:
+            out.append((eid, "the stand-in's value is an option", stand_in))
+    if base is None:
+        return out
+    orig = {c.comp_id: c.sentence for c in base.components}
+    swap = {s.sentence: orig.get(s.comp_id.removeprefix("sub_"), "") for s in subs}
+    if any(tokens.count(a, enc) != tokens.count(b, enc) for a, b in swap.items()):
+        out.append((eid, "a stand-in sentence does not keep the token count it replaces"))
+    if ([s.kind for s in ep.steps] != [s.kind for s in base.steps]
+            or ep.system_prompt != base.system_prompt):
+        return [*out, (eid, "steps or system prompt differ from the base episode")]
+    evidence = {s.step for s in subs}
+    for a, b in zip(ep.steps, base.steps, strict=True):
+        if a.index not in evidence:
+            if a.observation != b.observation:
+                out.append((eid, a.index, "differs from the base episode"))
+            continue
+        restored, restored_obs = a.event, a.observation
+        for x, y in swap.items():
+            restored, restored_obs = restored.replace(x, y), restored_obs.replace(x, y)
+        if (a.observation[: a.filler_end] != b.observation[: b.filler_end]
+                or restored != b.event or restored_obs != b.observation
+                or tokens.count(a.event, enc) != tokens.count(b.event, enc)
+                or a.obs_tokens != b.obs_tokens or a.expected_action != b.expected_action):
+            out.append((eid, a.index, "evidence step differs beyond equal-length bindings"))
     return out
 
 
@@ -313,15 +436,33 @@ def lookup_audit(episodes: Sequence[Episode]) -> list[dict]:
     * after the cap, a lookup answers "lookup unavailable", costs one turn, is not scored,
       and the next answer is scored as usual; a second over-cap lookup at the same step is
       an invalid action.
+    In recoverable withheld episodes (D39), lookup(target) answers "no such record" (the
+    target has no record) and lookup(stand-in) re-shows every stand-in record and no
+    distractor.
     """
     bad: list[tuple] = []
-    n = 0
+    n = n_withheld = 0
     for ep in episodes:
-        if ep.variant != "base" or not ep.cell.recoverable:
+        if not ep.cell.recoverable or ep.variant not in ("base", "withheld"):
             continue
-        n += 1
         cap = ep.lookup.max_per_episode
         answer = f"ACTION: {ep.need.expected_action}"
+        if ep.variant == "withheld":
+            n_withheld += 1
+            subs = ep.substitutes
+            if cap < 2 or not subs:
+                bad.append((ep.episode_id, "withheld lookup not testable"))
+                continue
+            env, seen = _play(ep, [f"ACTION: lookup({ep.entity})",
+                                   f"ACTION: lookup({ep.kind} {subs[0].entity})", answer])
+            if not ("no such record" in seen[0]
+                    and not any(s.sentence in seen[0] for s in subs)
+                    and all(s.sentence in seen[1] for s in subs)
+                    and not any(d.sentence in seen[1] for d in ep.distractors)
+                    and env.result().need_correct):
+                bad.append((ep.episode_id, "withheld lookup by key"))
+            continue
+        n += 1
         keys = [f'key="{ep.entity.lower()}"', *(f"{ep.kind} {d.entity}" for d in ep.distractors)]
         env, seen = _play(ep, [f"ACTION: lookup({k})" for k in keys[:cap]] + [answer])
         target_ok = (all(c.sentence in seen[0] for c in ep.components)
@@ -344,7 +485,7 @@ def lookup_audit(episodes: Sequence[Episode]) -> list[dict]:
         if env.result().step_outcomes[ep.need_step] != "invalid_lookup":
             bad.append((ep.episode_id, "second over-cap lookup"))
     return [_check("lookup_serves_keys_and_refuses_after_cap", not bad,
-                   {"n_episodes": n, "problems": bad[:10]})]
+                   {"n_episodes": n, "n_withheld_episodes": n_withheld, "problems": bad[:10]})]
 
 
 # ---------------------------------------------------------------------------

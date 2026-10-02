@@ -1,6 +1,6 @@
 # PersistGym harness cells: design
 
-_Track: M0 harness cells (PLAN.md §6, §7; amendment A1 §16.3, §16.5). Built on the generator in `persistgym/` (generator 0.2.0, episode schema 2). Everything here is $0: no API call has been made. The paid transport exists but has never run._
+_Track: M0 harness cells (PLAN.md §6, §7; amendment A1 §16.3, §16.5). Built on the generator in `persistgym/` (generator 0.3.0, episode schema 3). Everything here is $0: no API call has been made. The paid transport exists but has never run._
 
 A harness cell decides what the model sees at every turn of a PersistGym episode. This package turns each new observation into the exact JSON body of an OpenAI Responses API request (`POST /v1/responses`) and asserts, with payload snapshot tests, exactly which turns, reasoning items and instructions every cell sends. PLAN §6 calls these tests the single most important correctness check, and no paid run may happen until they pass.
 
@@ -43,8 +43,11 @@ Every request of every cell has exactly these fields:
 | `include` | `["reasoning.encrypted_content"]` |
 | `service_tier` | `HarnessConfig.service_tier` (default `flex`) |
 | `truncation` | `"disabled"`, so the API never drops items on its own |
+| `max_output_tokens` | 32,000 (PREREG D13) on every request: step requests send `HarnessConfig.max_output_tokens`, summary requests `summary_max_output_tokens` (§4.3). Always sent; a config cannot omit it |
 
-Added only when configured: `max_output_tokens`, `prompt_cache_key`, `reasoning.summary`. Summary requests also carry `max_output_tokens` (§4.3). No tools and no server-side `context_management` are sent.
+Added only when configured: `prompt_cache_key`, `reasoning.summary`. No tools and no server-side `context_management` are sent.
+
+- **Output cap (D13).** On OpenAI `max_output_tokens` counts reasoning and visible tokens together. A response that reaches it comes back with status `incomplete` and `incomplete_details.reason` = `max_output_tokens`, possibly before any visible text, with only a reasoning item ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning), "Allocating space for reasoning"). The runner scores such a step as an invalid action (§7.5).
 
 - **Input items.** An observation, the bridge and the summary request are user messages: `{"type": "message", "role": "user", "content": [{"type": "input_text", "text": ...}]}`. An earlier turn is its observation followed by that response's output items, sent back as returned (reasoning items with `encrypted_content`, then the assistant message), with null fields dropped. This follows OpenAI's stateless pattern `context += response.output` ([reasoning items cookbook](https://developers.openai.com/cookbook/examples/responses_api/reasoning_items)). Output items of any other type are left out and logged; none are expected because no tools are offered.
 - **Reasoning settings.** `effort` defaults to `medium`, the documented default for GPT-6.1 Sol, GPT-6 Sol and GPT-6 Luna. `mode` defaults to `standard`, the documented default ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)). Both are configurable.
@@ -70,7 +73,7 @@ Before sending observation m, compute the visible context that the step request 
 - `instructions`: ARC's summary system prompt, verbatim;
 - `input`: the current bridge (if any), the turns to compact with their reasoning items, then ARC's `SUMMARY_REQUEST_PROMPT` as a user message;
 - the same `reasoning` settings as the cell, including its `reasoning.context`;
-- `max_output_tokens` 8,192, as ARC.
+- `max_output_tokens` 32,000, as every luna and sol request (PREREG §6, D13). ARC's summary cap of 8,192 applies to the ARC leg's Gemini configs only.
 
 The summary text then replaces the compacted turns with **one user-role bridge message** in ARC's bridge template. The summary call's own reasoning and message items are discarded. The step request follows: bridge, any turns kept, observation m.
 
@@ -93,7 +96,7 @@ The snapshot tests cover both settings.
 
 **Near cells.** The generator's DESIGN.md §8 warns that a summary cell which compacts the whole history can compact a near reveal. With the default `summary_keep_recent_tokens` = 0, near-cell S in Σ cells is therefore **measured, not designed**. The runner records payload S at every need step, and `compacted_between` (§7.2) for every Σ episode.
 
-`uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config (0.2.0, with the system prompt counted toward W, PREREG D5), with every reply at the assumed 1,000 tokens and a 300-token summary:
+`uv run python -m harnesses summary-timing --n 20` ($0, fake model) measures this. It runs the non-recoverable near cells of main templates 0-19 (40 episodes) at the default generator config (0.3.0, with the system prompt counted toward W, PREREG D5; 0.2.0 gave the same numbers), with every reply at the assumed 1,000 tokens and a 300-token summary:
 
 | `summary_keep_recent_tokens` | Compactions at turn | Near episodes with S = 0 at need | Summary calls per episode (input tokens each) | Input tokens per episode: summary / step requests |
 |---|---|---|---|---|
@@ -152,6 +155,8 @@ Per episode it also records:
 - `compacted_between` in Σ cells, and the step of every compaction and whether it fired during a lookup round-trip (§7.2);
 - `call_latency_s`: wall-clock seconds of every call, retries and backoff included;
 - `n_unparsed_routine`: unparsed replies at routine steps (a format-error count; the need step is left out because it is an outcome);
+- `need_outcome`: the need step's outcome from the environment (`correct`, `wrong`, `unparsed`, `invalid_lookup` or `incomplete`; `None` if it was never scored);
+- `incomplete` and `n_incomplete_routine`: every step response with status `incomplete`, and how many of them were at routine steps (§7.5);
 - `n_lookups` (lookups served, at most the cap) and next to it `n_lookups_unavailable` (lookups past the cap that got one "lookup unavailable" turn; generator 0.2.0, D3). Each costs one turn, so `n_turns` = steps + `n_lookups` + `n_lookups_unavailable` for an episode that finishes;
 - `model` (requested) and `designed.evidence_steps`.
 
@@ -235,10 +240,34 @@ Two CLI checks keep pilot data inside this path:
 - `--split pilot` runs only under `--experiment persistgym_pilot`, the reverse of the older check. Pilot templates are pilot data, and `run` defaults to `--split pilot`, so `--experiment persistgym` without `--split main` would otherwise commit per-arm outcomes on pilot templates.
 - `run_batch` and the CLI refuse a run id or experiment that is not one plain folder name. A run id like `../../x` would otherwise put a blinded run's `episodes.jsonl` at `results/x/`.
 
+`summary.json`'s errors also count `n_incomplete_routine`, the step responses that stopped at the output cap at routine steps (§7.5). One at the need step scores 0, so it is an outcome: the per-step `incomplete` records and `need_outcome` stay in `episodes.jsonl`, under `results/raw/` for a pilot.
+
 What this does not blind (§11): the per-run `costs.csv` row (one per run, required by CLAUDE.md) still holds that run's input and output tokens, calls and cost, and so does the run's `meta.json` (`tokens` without `reasoning_tokens`, as CLAUDE.md asks for token totals). `summary.json`'s `latency.n_calls` is the run's call count. Output tokens are mostly reasoning tokens, and calls minus steps counts lookups and summaries, so these approximate the withheld numbers for one arm. Only the explicit `reasoning_tokens` fields are withheld.
 
+### 7.5 Incomplete responses (D13)
+> A response with status `incomplete` at the need step (for example, hitting `max_output_tokens`) counts as a content failure and scores 0. (PREREG §6; §13: content failures score 0 and are not re-run)
+
+Every request, step or summary, carries `max_output_tokens` 32,000 (§3). When a **step** response comes back with status `incomplete`, for whatever reason:
+- **It is scored as an invalid action.** The runner calls `EpisodeEnv.step(reply, invalid="incomplete")`: the pending step's outcome is `incomplete`, with no action and no option label, even if the partial text holds the correct answer. Nothing in the partial text is parsed, so a `lookup(...)` in it is not served and adds no turn.
+  - At the need step this is the scored action and scores 0 (`need_outcome` = `incomplete`). That includes an incomplete answer to a lookup result at the need step. The need phase (§7.1) ends with that call, and `need_phase.complete` is true.
+  - At a routine step it counts against `routine_accuracy`, like any wrong action, and the episode goes on.
+  - The episode is not excluded and not re-run, and the exit reason stays `DONE`.
+- **It is logged.**
+  - The episode record gets one `incomplete` entry: `turn`, `pending_step`, `at_need` (0 or 1), `is_lookup_result`, `reason` (`incomplete_details.reason`), the `max_output_tokens` requested, the `output_tokens` used and `reply_chars` (length of the partial text).
+  - `n_incomplete_routine` counts the routine-step entries, and `summary.json` sums it (§7.4).
+  - The raw transcript's `echo` holds `status` and `incomplete_reason` for every call, and the paid transport logs a warning with the reason.
+- **The history keeps the turn as returned.** The session sends its output items back on later turns like any other turn (§3): the reasoning item, and the partial message if there is one. A response that stopped while reasoning therefore leaves a turn with no reply, and its visible reply counts 0 tokens toward W. The r and 0 arms of a pair do the same, so they still differ only in `reasoning.context` (tested). OpenAI's stateless pattern says to preserve every output item and replay the complete history ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning), "Preserve reasoning without stored responses"); whether the API accepts a reasoning item replayed without a following message has not been checked (§11).
+
+Summary responses are not scored. An incomplete summary is retried, as before (§4.3), and is counted in `n_summary_failures`, not in `incomplete`.
+
+The probes send the same 32,000 cap (§9). They record each trial's `incomplete_turns`.
+
 ## 8. Paid calls (`openai_transport.py`)
-`OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless every check of the shared guard passes. The guard is `common.approval.require_paid_approval`. It lives in `common/` so that the ARC launcher can reuse it, and `harnesses.openai_transport` re-exports its names. The checks:
+`OpenAIResponsesTransport` is the only code here that can spend money. Its constructor refuses (`PaidCallsNotAllowed`) **before building any client** unless every check passes. The checks are `common.approval.require_paid_run`, which the ARC launcher (`arc/run_path.py`) runs too. First:
+- the run holds the **paid-run lock** (below), which `cli.py` takes before any of these checks, so two paid runs cannot both pass them;
+- this checkout's `results/costs.csv` can be read and holds the **last paid run's row** (below).
+
+Then come the checks of the shared guard, `common.approval.require_paid_approval`. It lives in `common/` so that the ARC launcher can reuse it, and `harnesses.openai_transport` re-exports its names. The checks:
 1. `PERSISTGYM_ALLOW_PAID=1` is set;
 2. `--approved-block <name>` is given. This is the researcher's approved spending block from PLAN §16.2;
 3. the experiment has a budget phase in `common/costs.py`;
@@ -250,6 +279,13 @@ What this does not blind (§11): the per-run `costs.csv` row (one per run, requi
 9. every `results/costs.csv` row can be counted (`common.approval.check_ledger`): each cost is empty or a finite, non-negative number, at least one of the two is filled in, and each experiment has a budget phase. A `nan` cost would otherwise make the phase-cap comparison pass, a negative one would add headroom, a row with no cost would count as free, and a row with no phase would count toward no cap;
 10. block spend + `--planned-usd` ≤ the line's `max_usd`;
 11. `common.costs.headroom(planned_usd, phase, rows)` ≥ 0: the phase cap still applies.
+
+Last, `PREREG.md` (the blob check 7 compared) must be **frozen**: a `Version:` line of at least 0.2 with no suffix such as `-draft`, and a `Status:` line starting "Frozen" (`common.approval.prereg_not_frozen`; the rule is `common/prereg.py`, which `arc/draw_games.py` and the ARC launcher use too). Check 7 alone accepts a draft that has been merged to `main`, and the draft says no paid call may be made under it.
+
+**One paid run at a time: the lock.** `run`, `probe-echo` and `probe-replay` take the paid-run lock (`common/paidlock.py`): `persistgym-paid-run.lock` in the git common directory, shared by every checkout and with the ARC launcher. They take it after their argument checks and before the transport's checks, and hold it for the whole command (all models of a probe). A command refuses (exit 2) while another paid run, ARC or PersistGym, holds it. With `PERSISTGYM_ALLOW_PAID` unset the command refuses before it touches the lock.
+- *The last run's row.* After appending its costs.csv row, `finalize` records the run in `persistgym-paid-last-run.json` next to the lock: its run ID and the row's `timestamp_utc`, because a `--run-id` can be given again and an older row with the same ID must not stand in for the newest one. A paid run whose own `results/costs.csv` lacks that row refuses: each checkout has its own ledger, so a run started in another checkout would undercount the block and phase spend. Run from one checkout, or bring the row over first.
+- *Spend the ledger does not show.* If a run made calls whose row is not in costs.csv, the lock stays held, with the reason and the run's usage totals in the file (`keep_lock_if_unaccounted`; reasoning tokens left out for a blinded pilot, §7.4). That covers a row that cannot be built or written (`finalize` keeps the lock and raises) and a run whose `finalize` never ran (the CLI checks every transport after its run). Every later paid run refuses and prints the reason until the operator has added the row by hand and deleted the lock file. A process that is killed leaves the lock behind too.
+- *Tests.* Every harness test points `cli.LOCK_PATH` into a folder that does not exist (`conftest.no_shared_paid_lock`), so a test cannot take the shared lock or write its last-run record; the paid-path tests use a temporary lock of their own.
 
 **The approval line.** One line, with exactly this spacing:
 
@@ -285,7 +321,7 @@ The approval line records the researcher's decision. It is added only on the res
 While running, it:
 - stops before a call once the run's spend (the measure above) reaches `--planned-usd` (`COST_CAP`). The call that crosses it is not cut short, so a run can end above its planned spend by up to one call;
 - retries 429s, timeouts and 5xx errors with exponential backoff, but never `insufficient_quota`. Flex 429s are not charged ([Flex guide](https://developers.openai.com/api/docs/guides/flex-processing)). A timed-out or dropped connection may still have been processed and billed; such attempts are not in the ledger;
-- logs the echoed `reasoning.context`, the returned model string and the served service tier of every response;
+- logs the echoed `reasoning.context`, the returned model string, the served service tier and the status of every response, with a warning and `incomplete_details.reason` for an `incomplete` one (§7.5);
 - appends one costs.csv row per run. Its `notes` start with `approved_block=<name>;` (what block spend sums) and hold the number of context mismatches and the git dirty flag. For a pilot-blinded experiment `reasoning_tokens` is left empty (§7.4). `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
 
 It never switches service tier. The API can still serve a request on a different tier than requested; the response says so and the row records it.
@@ -307,10 +343,10 @@ PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-
 ```
 `run` defaults to the pilot split, which has a disjoint seed range, and the `persistgym_pilot` experiment. It refuses more than 10 episodes for a pilot.
 
-`tests/test_cli_end_to_end.py` runs all three commands, and a D11 matrix run, through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls. It also checks that a pilot run commits only `meta.json` and `summary.json` and leaves `reasoning_tokens` empty in its costs row.
+`tests/test_cli_end_to_end.py` runs all three commands, and a D11 matrix run, through the real guarded transport with a stub client answered by the fake model. It checks that each run writes its results, `meta.json` and exactly one costs.csv row, so a bookkeeping crash cannot happen for the first time after paid calls. It also checks that a pilot run commits only `meta.json` and `summary.json` and leaves `reasoning_tokens` empty in its costs row, and that the commands hold the paid-run lock while they run, refuse while another run holds it, under a merged draft PREREG or when the last run's row is missing, and keep it held when a run's row cannot be written or `finalize` never ran.
 
 ## 9. Probes (`probes.py`)
-Both probes are excluded from every analysis (§16.3). Their snapshot tests show that the two arms send identical payloads except `reasoning.context`, at every turn.
+Both probes are excluded from every analysis (§16.3). Their snapshot tests show that the two arms send identical payloads except `reasoning.context`, at every turn. Every probe request carries `max_output_tokens` 32,000, as the harness cells (`ProbeConfig.max_output_tokens`, D13), and every trial records its `incomplete_turns` (the turns whose response came back `incomplete`).
 
 ### 9.1 Echo check
 For gpt-6.1-sol and gpt-6-luna, each in both contexts, the probe runs a two-turn stateless conversation ("Reply with only the word: ready", then "...: done"). It passes when every response echoes the requested `reasoning.context`. The second turn carries the first turn's reasoning item, so the echo is observed with earlier reasoning present.
@@ -324,8 +360,8 @@ The probe has three turns:
 The prompts contain no digits. Under `all_turns`, the turn-3 sample can see the turn-1 reasoning; under `current_turn`, it cannot.
 
 **Scoring.** The picked number exists only inside the encrypted reasoning, so both arms request `reasoning.summary: "auto"`, identically. A trial is scored as follows:
-- *scorable*: the turn-1 summary names exactly one three-digit number, no visible reply leaks one, and every echo matches;
-- *match*: the turn-3 answer equals that number.
+- *scorable*: the turn-1 summary names exactly one three-digit number, no visible reply leaks one, every echo matches, and the turn-1 and turn-2 responses completed (an incomplete one leaves the set-up unclear, so the trial is replaced, like a leak);
+- *match*: the turn-3 answer equals that number. An incomplete turn-3 response is an invalid answer (`answer` = `None`, a miss), whatever its partial text says (D13).
 
 The summary text is stripped from the reasoning items sent back (`summary: []`), so the only channel for the number is the encrypted reasoning.
 
@@ -337,7 +373,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - [RESEARCHER DECISION] `reasoning_mode` = `standard`, sent explicitly.
 - [RESEARCHER DECISION] `reasoning_summary` = off in harness cells. Summaries would help failure labelling but add a field to every request; whether summary text in replayed items is rendered is undocumented.
 - [RESEARCHER DECISION] `service_tier` = `flex` for every cell, never switched per episode.
-- [RESEARCHER DECISION] `max_output_tokens` = none. A cap bounds runaway cost but truncates long reasoning and yields `incomplete` replies.
+- [RESEARCHER DECISION] `max_output_tokens` = 32,000 on every step request, sent explicitly (decided: PREREG D13, 2026-10-01). It bounds a runaway reply's cost; a step response that reaches it is `incomplete` and is scored as an invalid action (§7.5). Before D13 this was "none" (the field omitted).
 - [RESEARCHER DECISION] `W_tokens` = the episode's generator W, so eviction matches the near/far design.
 - [RESEARCHER DECISION] `window_counts_system_prompt` = the episode's generator setting (true since generator 0.2.0, PREREG D5). The episode's system prompt counts toward W; the notes sentence does not, so notes pairs evict at the same steps (§4).
 - [RESEARCHER DECISION] `token_accounting`: visible text only (observations, replies, bridge), tiktoken `o200k_base`, no per-message overhead; reasoning items not counted.
@@ -345,7 +381,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - [RESEARCHER DECISION] `summary_keep_recent_tokens` = 0: compact everything, as ARC. Near-cell S in Σ cells is then measured, not designed (§4.3).
 - [RESEARCHER DECISION] `summary_system_prompt` = ARC's summary system prompt, which replaces the task instructions in the summary call, as ARC does. The summarizer then does not see "Some requests depend on records shown in earlier updates." Set it to `None` to keep the task instructions.
 - [RESEARCHER DECISION] `summary_request_reasoning`: the summary call uses the arm's `reasoning.context` and includes the compacted turns' reasoning items, as ARC's Adapter state does. In r arms the summarizer may therefore draw on earlier reasoning.
-- [RESEARCHER DECISION] `summary_max_output_tokens` = 8,192, as ARC. On OpenAI this cap includes reasoning tokens.
+- [RESEARCHER DECISION] `summary_max_output_tokens` = 32,000 (decided: PREREG D13, 2026-10-01; PREREG §6 sets `max_output_tokens: 32000` on luna and sol requests and makes no exception for summary calls). On OpenAI this cap includes reasoning tokens. Before D13 this was 8,192, as ARC.
 - [RESEARCHER DECISION] `notes_placement`: the last line of the instructions.
 - [RESEARCHER DECISION] `stop_on_context_mismatch` = true: stop and exclude the episode; abort the run after 2 such episodes.
 - [RESEARCHER DECISION] `output_items_replay`: output items are sent back verbatim with null fields dropped. The pilot confirms that the API accepts this with `store: false`.
@@ -355,7 +391,8 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - D11 option A, sol on derived-far × T_d plus observed-far × T_d/3 (§7.3);
 - D12, `compacted_between` logged in Σ cells (§7.2);
 - pilot outcomes only under `results/raw/` (§7.4);
-- the paid guard requires the researcher's approval line in `results/decisions.md` (§8).
+- the paid guard requires the researcher's approval line in `results/decisions.md` (§8);
+- D13, `max_output_tokens` 32,000 on every step, summary and probe request, with an `incomplete` response at the need step scored 0 (PREREG §6, §13; §3, §7.5).
 
 **Changed after the #13 review** (2026-10-01; its four open items):
 - An approval is specific, so the researcher decides at every spending point. The line names the block, the experiments it may run and a dollar limit (`approved_block: <name> | experiments: ... | max_usd: ...`). It must be on `origin/main` as well as in `HEAD` and the working tree (§8). The guard moved to `common/approval.py`.
@@ -373,17 +410,31 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - A costs.csv row with both costs empty no longer counts as $0. It refuses, like any other unreadable row.
 - `PREREG.md` in `HEAD` must be identical to `PREREG.md` on `origin/main` (check 7). Before, a PREREG committed on any branch unlocked paid calls.
 
+**Changed on 2026-10-01: the paid-run lock and a frozen PREREG for PersistGym runs** (§8; PREREG draft v0.3 §0.3, line 14, whose recommendation "add both before block 1" the researcher accepted on 2026-10-01):
+- The paid commands take the paid-run lock the ARC launcher takes (`common/paidlock.py`), before the spend checks, and hold it for the whole command. Before, one paid run at a time was an operator rule for PersistGym runs.
+- A paid run refuses unless this checkout's costs.csv holds the last paid run's row, and the lock stays held, with the reason, when a run's spend is not in costs.csv.
+- The merged `PREREG.md` must be frozen. Before, check 7 accepted any PREREG that was the same blob in `HEAD` and on `origin/main`, a merged draft included.
+- These checks and the ARC launcher's are one function, `common.approval.require_paid_run`, and the freeze rule moved from `arc/draw_games.py` to `common/prereg.py`.
+
 **Technical choices made here** (not D-items; open to the researcher's review):
 - Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
 - The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells (§7.4).
 - An approval line is compared as text across the three copies: changing its `max_usd` or experiments revokes it until the new line is on all three (§8).
 - Spend is measured in one place, `common.costs.spend_usd` (re-exported as `common.approval.spend_usd`): block spend, the phase caps, a run's stop and the probe split all call it (§8).
+- D13 as implemented (§7.5):
+  - an `incomplete` step response is invalid at **every** step, not only at the need step. PREREG §6 names the need step; at a routine step it is scored wrong in `routine_accuracy` and the episode goes on, as PREREG §2.5 treats an invalid lookup there;
+  - any `incomplete` status counts, whatever `incomplete_details.reason` says (the cap, or for example a content filter), and the reason is logged;
+  - the incomplete turn stays in the history as returned (reasoning item, partial message if any), rather than being dropped or stripped;
+  - an incomplete summary is retried as before (§4.3), never scored. Summary requests carry 32,000 too: the first version of this change kept ARC's 8,192 there, but PREREG §6 sets 32,000 on every luna and sol request, and §5 only freezes the summary cap with the snapshot tests, which now assert 32,000;
+  - committed run summaries count incomplete responses at routine steps only (`n_incomplete_routine`), since one at the need step is an outcome;
+  - in the replay probe an incomplete turn-3 response is a miss, and an incomplete turn 1 or 2 makes the trial unscorable (§9.2).
 
 ## 11. Known limitations and what this does not show
 - **No payload has been sent to the API.** The tests show that the payloads are what the design says. They do not show that the API accepts them, for example:
   - replayed message items with ids under `store: false`;
   - stripped summaries in the replay probe;
-  - `reasoning.mode` on luna.
+  - `reasoning.mode` on luna;
+  - a turn whose response stopped at `max_output_tokens` while reasoning, replayed as a reasoning item with no message after it (§7.5). A pilot reaches this only if a response hits the 32,000 cap. If the API rejects it, the next call fails with `API_ERROR`, so the episode is lost rather than scored, and the run aborts after 2 such episodes.
 
   The first paid pilot checks this. A 400 error is not billed.
 - **The echo check shows the reported mode, not use.** That the API reports `all_turns` does not show that the model uses earlier reasoning. The replay-use probe tests that, and its scoring depends on reasoning summaries naming the picked number. If they rarely do, most trials are unscorable and the probe needs a redesign.
@@ -394,6 +445,6 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - **Pilot blinding is partial, and was kept that way after the #13 review.** CLAUDE.md asks for one costs.csv row per run. Each pilot run's row keeps its input and output tokens, calls and cost, and leaves `reasoning_tokens` empty. The run's `meta.json` does the same (§7.4). Output tokens are mostly reasoning tokens, so these rows approximate one arm's withheld reasoning tokens and lookups. Running `pilot-report` before and after a run also gives that run's numbers by difference. Fully closing this would mean pooling the pilot arms into one ledger row, which departs from one row per run. The rule (PREREG §11) is that nobody computes per-arm outcomes from pilot data. The code makes them hard to see, not impossible.
 - **The guard trusts `origin/main`.** It checks that the approval line and `PREREG.md` were merged. It cannot check who merged them, so its strength is the branch protection and review on `main`. A paid command needs network access to GitHub at launch, because a failed fetch refuses.
 - **The guard catches mistakes, not a hostile operator.** Anyone who can edit this code, point `origin` at another repository or edit `costs.csv` can get past it. A merged line that the reviewer did not read as an approval still counts: a gate entry should show a proposed line only in a code block, which the guard ignores.
-- **The guard checks once, at launch.** A run continues if its approval is revoked while it runs. Two commands started at the same time both see the same block spend, so together they can pass `max_usd`. Run paid commands one at a time.
-- **Block spend is the logged estimate.** It sums the billed estimates of the costs.csv rows tagged with the block, so it is only as good as the price table in `pricing.py` and the served tier the response reports. A response reported as Flex but billed at the standard rate would count at half its real cost. It does not see spend the provider billed that was never logged. That includes a timed-out attempt the provider still processed, and a process killed before `finalize` wrote its row. The provider-side spend limits (decisions.md, 2026-10-01), which the researcher sets in real billed dollars, remain the backstop against under-estimation. Only launchers that tag their rows `approved_block=<name>;` are counted, so the ARC launcher must use `common.approval.spend_tag` too.
+- **The guard checks once, at launch.** A run continues if its approval is revoked while it runs. Two paid commands cannot both pass the checks, since each takes the paid-run lock first (§8). The lock catches mistakes: deleting its file while a run is going, or starting a run from a script that takes the lock itself, gets past it.
+- **Block spend is the logged estimate.** It sums the billed estimates of the costs.csv rows tagged with the block, so it is only as good as the price table in `pricing.py` and the served tier the response reports. A response reported as Flex but billed at the standard rate would count at half its real cost. It does not see spend the provider billed that was never logged. That includes a timed-out attempt the provider still processed, and a process killed before `finalize` wrote its row (such a process leaves the paid-run lock behind, so the next paid run refuses until the operator has checked costs.csv and deleted the lock). The provider-side spend limits (decisions.md, 2026-10-01), which the researcher sets in real billed dollars, remain the backstop against under-estimation. Only launchers that tag their rows `approved_block=<name>;` are counted, so the ARC launcher must use `common.approval.spend_tag` too.
 - **Need-phase tokens are provider counts.** They include rendered reasoning in r arms and per-message overhead, unlike W's tiktoken counts (§4).

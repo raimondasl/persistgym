@@ -37,6 +37,13 @@ in for the fetched file.
 changes) and identical in HEAD and on origin/main, read after the same fetch as the approval
 line. A PREREG committed on a branch but not merged, or a HEAD that lacks an amendment
 merged to main, refuses: only the merged (frozen) PREREG unlocks paid calls (PLAN §16.3).
+`require_paid_approval` stops there; `require_paid_run`, which both paid launchers call,
+also requires that merged text to be frozen (`prereg_not_frozen`: the rule of
+common/prereg.py), so a draft merged to main does not unlock paid calls either.
+
+**One paid run at a time.** `require_paid_run` also refuses unless the run holds the
+paid-run lock (common/paidlock.py), taken before these checks so that two runs cannot both
+pass them, and unless this checkout's costs.csv holds the last paid run's row.
 
 **What it allows.** The run's experiment must be in the line's list. Spend is measured one
 way everywhere (`spend_usd`, defined in common/costs.py): the billed estimate, or the list
@@ -70,8 +77,9 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from common import costs, runmeta
+from common import costs, paidlock, runmeta
 from common.costs import spend_usd  # the one spend measure, re-exported for the launchers
+from common.prereg import prereg_state
 
 ALLOW_ENV = "PERSISTGYM_ALLOW_PAID"
 DECISIONS_MD = "results/decisions.md"  # relative to the repo root, as git paths are
@@ -409,6 +417,12 @@ def prereg_not_on_remote(repo: Path, remote: RemoteRef = MAIN) -> str | None:
     It does not fetch. It reads the remote-tracking ref, so call it right after
     `fetch_remote` (`find_approval` fetches), as `require_paid_approval` does. Replace refs
     are ignored, as for decisions.md."""
+    return _merged_prereg_blob(repo, remote)[1]
+
+
+def _merged_prereg_blob(repo: Path, remote: RemoteRef) -> tuple[str | None, str | None]:
+    """(the blob id of PREREG.md in HEAD, None) if it is the same blob as on `remote`;
+    otherwise (None, why not)."""
     def blob(rev: str) -> str | None:
         try:
             r = _git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:PREREG.md")
@@ -417,13 +431,34 @@ def prereg_not_on_remote(repo: Path, remote: RemoteRef = MAIN) -> str | None:
         return r.stdout.strip() if r.returncode == 0 else None
     head = blob("HEAD")
     if head is None:
-        return "PREREG.md is not in the HEAD commit"
+        return None, "PREREG.md is not in the HEAD commit"
     merged = blob(remote.tracking)
     if merged is None:
-        return f"PREREG.md is not on {remote.label}"
+        return None, f"PREREG.md is not on {remote.label}"
     if head != merged:
-        return f"PREREG.md in HEAD differs from PREREG.md on {remote.label}"
-    return None
+        return None, f"PREREG.md in HEAD differs from PREREG.md on {remote.label}"
+    return head, None
+
+
+def prereg_not_frozen(repo: Path, remote: RemoteRef = MAIN) -> str | None:
+    """None if PREREG.md in HEAD is the same blob as on `remote` (`prereg_not_on_remote`) and
+    that text is frozen (`common.prereg.prereg_state`: a release version of at least 0.2 with
+    no suffix such as -draft, and a status line starting "Frozen"); otherwise why not. The
+    draft says no paid call may be made under it, and a draft merged to main passes
+    `prereg_not_on_remote`, so `require_paid_run` checks this too. Like
+    `prereg_not_on_remote`, it reads the remote-tracking ref without fetching: call it after
+    `fetch_remote`."""
+    head, reason = _merged_prereg_blob(repo, remote)
+    if reason is not None:
+        return reason
+    try:
+        r = _git(repo, "cat-file", "blob", head)
+    except OSError as e:
+        return f"cannot read PREREG.md in HEAD: {e}"
+    if r.returncode != 0:
+        return "cannot read PREREG.md in HEAD"
+    state = prereg_state(r.stdout)
+    return None if state.frozen else f"PREREG.md is not frozen: {state.why_not}"
 
 
 def require_paid_approval(*, approved_block: str | None, experiment: str, planned_usd: float,
@@ -506,3 +541,45 @@ def require_paid_approval(*, approved_block: str | None, experiment: str, planne
     return PaidApproval(block, experiment, phase, float(planned_usd), room, prereg,
                         Path(costs_path), approval.experiments, float(approval.max_usd),
                         float(spent), float(block_room))
+
+
+def require_paid_run(*, lock: paidlock.HeldLock | None, approved_block: str | None,
+                     experiment: str, planned_usd: float, costs_path: Path = costs.COSTS_CSV,
+                     repo: Path = runmeta.REPO_ROOT, remote: RemoteRef = MAIN) -> PaidApproval:
+    """Every check a paid launcher runs before it may spend, in this order. Both launchers
+    call it: the ARC launcher (arc/run_path.py) and the PersistGym transport
+    (harnesses/openai_transport.py, built by harnesses/cli.py). Raises PaidCallsNotAllowed
+    with the first reason it may not:
+    1. the run holds the paid-run lock `lock` (common/paidlock.py): one paid run at a time.
+       The launcher takes it before these checks, so two runs cannot both pass them;
+    2. this checkout's costs.csv can be read and holds the last paid run's row
+       (`paidlock.last_run_missing`): the lock is shared by every checkout, the ledger is
+       not, so a run elsewhere would undercount the block and phase spend;
+    3. `require_paid_approval`: the paid switch, the block's approval line on `remote`
+       (fetched now), HEAD and the working tree, PREREG.md committed and the same blob as on
+       `remote`, the experiment listed, block and phase room;
+    4. that PREREG.md is frozen (`prereg_not_frozen`), read after 3's fetch."""
+    if lock is None:
+        raise PaidCallsNotAllowed(
+            "paid calls need the paid-run lock (common/paidlock.py), taken by the launcher "
+            "before the spend checks: one paid run at a time. Start PersistGym runs with "
+            "`python -m harnesses` and ARC runs with `python -m arc.run_path`")
+    if not lock.holds():
+        raise PaidCallsNotAllowed(
+            f"this run does not hold the paid-run lock {lock.path}: it is gone or another "
+            f"run's (one paid run at a time)")
+    try:
+        rows = costs.read_rows(costs_path)
+    except (OSError, ValueError) as e:
+        raise PaidCallsNotAllowed(f"cannot read {costs_path}: {e}") from None
+    reason = paidlock.last_run_missing(lock.path, rows)
+    if reason is not None:
+        raise PaidCallsNotAllowed(reason)
+    granted = require_paid_approval(approved_block=approved_block, experiment=experiment,
+                                    planned_usd=planned_usd, costs_path=costs_path, repo=repo,
+                                    remote=remote)
+    reason = prereg_not_frozen(repo, remote)  # reads what require_paid_approval fetched
+    if reason is not None:
+        raise PaidCallsNotAllowed(f"paid runs need the frozen, merged PREREG.md "
+                                  f"(PLAN §16.3): {reason}")
+    return granted

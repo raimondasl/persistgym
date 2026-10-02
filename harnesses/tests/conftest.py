@@ -15,7 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from common.tests.gitrepo import decisions_text, guarded_repo
+from common import paidlock
+from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
+from harnesses import cli
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT, HarnessConfig
 from harnesses.fake import FakeModel, padded_text
 from harnesses.session import HarnessSession
@@ -84,14 +86,25 @@ def no_network():
     mp.undo()
 
 
+@pytest.fixture(autouse=True)
+def no_shared_paid_lock(monkeypatch, tmp_path_factory):
+    """The paid CLI's lock and its last-run record live in the git common directory that
+    every checkout shares (common/paidlock.py). No harness test may take that lock or write
+    that record: one would block a real paid run, the other would make it refuse. Here the
+    CLI's lock points into a directory that does not exist, so a test that reaches the lock
+    without naming its own (`cli.LOCK_PATH`) fails instead."""
+    monkeypatch.setattr(cli, "LOCK_PATH", tmp_path_factory.getbasetemp()
+                        / "no-shared-paid-lock" / paidlock.LOCK_NAME)
+
+
 # --- a throwaway git repo with a committed PREREG.md (paid-guard tests) --------------------
 # The helpers live in common/tests/gitrepo.py (shared with the common/approval.py tests).
 
-def prereg_repo(path: Path, text: str = "Version: 0.1\n",
+def prereg_repo(path: Path, text: str = FROZEN_PREREG,
                 approved_blocks: tuple[str, ...] = ("1-pilots",)) -> Path:
-    """`path` as a git repo whose HEAD holds PREREG.md and a results/decisions.md approving
-    `approved_blocks`, with a local bare `origin` whose main equals HEAD (what the paid guard
-    requires)."""
+    """`path` as a git repo whose HEAD holds PREREG.md (default: frozen) and a
+    results/decisions.md approving `approved_blocks`, with a local bare `origin` whose main
+    equals HEAD (what the paid guard requires)."""
     return guarded_repo(path, prereg=text, decisions=decisions_text(*approved_blocks))
 
 

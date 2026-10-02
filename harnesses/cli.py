@@ -47,7 +47,7 @@ with the reason. The OpenAI SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
         --model gpt-6.1-sol --effort high --split pilot --start 0 --n 2 \
         --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far \
-        --experiment persistgym_pilot --approved-block "1-pilots" --planned-usd 3
+        --experiment persistgym_pilot --approved-block "1-pilots" --planned-usd 6
     # D11 as amended by R2: sol on derived-far x T_d = 210 templates plus observed-far x
     # T_o = 70 of them, at sol's registered effort (high), only after an ENGAGED check;
     # PREREG §4.6: up to 16 episodes at once, with the same payloads and outputs and spend

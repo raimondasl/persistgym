@@ -277,7 +277,7 @@ def _check_run(argv: list[str]):
     it generates the episodes of block 1's sol pilot under the same generator config."""
     a = cli.parse_args(argv)
     assert (a.cmd, a.model, a.effort, a.experiment) == ("run", SOL, "high", "persistgym_pilot")
-    assert (a.approved_block, a.planned_usd, a.split, a.start) == ("1-pilots", 3.0, "pilot", 0)
+    assert (a.approved_block, a.planned_usd, a.split, a.start) == ("1-pilots", 6.0, "pilot", 0)
     eps = cli._run_matrix(a).episodes(a.split, a.start, cli._gen_config(a.gen_set), a.variant)
     assert len(eps) <= cli.PILOT_MAX_EPISODES
     assert registered.check_run_settings(a.experiment, a.model, a.effort, Path("nowhere")) \
@@ -320,7 +320,7 @@ def _prereg_17_2() -> str:
 
 def test_the_prereg_check_commands_run_block_1s_sol_pilot_episodes_at_high_effort():
     """PREREG §17.2's two check runs are F-r and F-0, sol at high effort, on the 16 episodes
-    of block 1's medium-effort sol pilot, under block 1 with $3 planned each; its
+    of block 1's medium-effort sol pilot, under block 1 with $6 planned each; its
     reasoning-check command names that pilot as the reference."""
     commands = _commands(_prereg_17_2())
     runs = [c for c in commands if c[0] == "run"]

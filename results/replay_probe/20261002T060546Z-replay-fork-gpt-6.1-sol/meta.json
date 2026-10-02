@@ -1,0 +1,109 @@
+{
+  "experiment": "replay_probe",
+  "run_id": "20261002T060546Z-replay-fork-gpt-6.1-sol",
+  "cell_or_config": "replay-fork-probe",
+  "config": {
+    "probe": "replay",
+    "probe_config": {
+      "reasoning_effort": "medium",
+      "reasoning_mode": "standard",
+      "reasoning_summary": "auto",
+      "service_tier": "flex",
+      "max_output_tokens": 32000,
+      "instructions": null,
+      "strip_summaries_on_replay": true
+    },
+    "contexts": [
+      "all_turns",
+      "current_turn"
+    ],
+    "n_per_context": 20,
+    "fork": {
+      "design": "fork",
+      "target_scorable_per_arm": 20,
+      "max_attempts_per_arm": 40,
+      "list_len": 20,
+      "forks": 2,
+      "seed_start": 290000,
+      "turns": [
+        "Here is a list of three-digit numbers:\n{numbers}\n\nPrivately pick one number from this list at random. Do not write the number or any hint about it. Reply with only the word: ready",
+        "Unrelated question: what is the capital of France? Reply with only the city name.",
+        "Which number from the list did you privately pick at the start of this conversation? Reply with only the number."
+      ],
+      "pass_rule": {
+        "min_agree_all_turns": 15,
+        "max_agree_current_turn": 5,
+        "of_scorable": 20
+      }
+    }
+  },
+  "model_requested": "gpt-6.1-sol",
+  "model_returned": [
+    "gpt-6.1-sol"
+  ],
+  "reasoning_effort": "medium",
+  "reasoning_context_requested": [
+    "all_turns",
+    "current_turn"
+  ],
+  "reasoning_context_echoed": {
+    "all_turns": 80,
+    "current_turn": 80
+  },
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": {
+    "seed_start": 290000,
+    "seeds": [
+      290000,
+      290001,
+      290002,
+      290003,
+      290004,
+      290005,
+      290006,
+      290007,
+      290008,
+      290009,
+      290010,
+      290011,
+      290012,
+      290013,
+      290014,
+      290015,
+      290016,
+      290017,
+      290018,
+      290019
+    ]
+  },
+  "started_utc": "2026-10-02T06:05:46+00:00",
+  "finished_utc": "2026-10-02T06:10:58+00:00",
+  "exit_reason": "COMPLETED",
+  "tokens": {
+    "n_calls": 160,
+    "input_tokens": 23647,
+    "cached_input_tokens": 0,
+    "cache_write_tokens": 0,
+    "output_tokens": 5350,
+    "reasoning_tokens": 4105,
+    "cost_usd_list": 0.10079399999999991,
+    "cost_usd_billed_est": 0.050396999999999956
+  },
+  "cost_usd": {
+    "list": 0.10079399999999991,
+    "billed_est": 0.050396999999999956,
+    "costs_csv_row_appended": true
+  },
+  "raw_transcript_path": "results/raw/replay_probe/20261002T060546Z-replay-fork-gpt-6.1-sol/transcript.jsonl.gz",
+  "config_hash": "70008720ac87d286c2e73513cd5faadafb96a0cc8aa24dd548ad29da6c535c00",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "0ed61f088d6f7956557c0de9cd01fb1a48ea7b1c",
+  "git_dirty": true
+}

@@ -1,0 +1,229 @@
+{
+  "run_id": "20261002T061101Z-replay-fork-gpt-6-luna",
+  "model_requested": "gpt-6-luna",
+  "exit_reason": "COMPLETED",
+  "design": "fork",
+  "list_len": 20,
+  "forks": 2,
+  "target_scorable_per_arm": 20,
+  "max_attempts_per_arm": 40,
+  "arms": {
+    "all_turns": {
+      "attempts": 20,
+      "scorable": 20,
+      "unscorable": {
+        "total": 0,
+        "leak": 0,
+        "echo_mismatch": 0,
+        "turn1_or_turn2_incomplete": 0
+      },
+      "agreements": 13,
+      "agreement_rate": 0.65,
+      "answered_in_list_per_fork": [
+        20,
+        19
+      ],
+      "out_of_list_per_fork": [
+        0,
+        0
+      ],
+      "no_number_per_fork": [
+        0,
+        1
+      ],
+      "incomplete_per_fork": [
+        0,
+        0
+      ],
+      "answer_counts": {
+        "419": 2,
+        "466": 2,
+        "476": 2,
+        "478": 2,
+        "523": 2,
+        "581": 2,
+        "607": 2,
+        "659": 2,
+        "676": 2,
+        "713": 2,
+        "731": 2,
+        "736": 2,
+        "743": 2,
+        "356": 1,
+        "453": 1,
+        "463": 1,
+        "516": 1,
+        "556": 1,
+        "613": 1,
+        "614": 1,
+        "617": 1,
+        "643": 1,
+        "692": 1,
+        "778": 1,
+        "821": 1,
+        "852": 1
+      },
+      "agreed_answer_counts": {
+        "419": 1,
+        "466": 1,
+        "476": 1,
+        "478": 1,
+        "523": 1,
+        "581": 1,
+        "607": 1,
+        "659": 1,
+        "676": 1,
+        "713": 1,
+        "731": 1,
+        "736": 1,
+        "743": 1
+      },
+      "position_counts": {
+        "8": 6,
+        "14": 5,
+        "18": 5,
+        "4": 3,
+        "7": 3,
+        "6": 2,
+        "9": 2,
+        "12": 2,
+        "16": 2,
+        "19": 2,
+        "20": 2,
+        "1": 1,
+        "3": 1,
+        "13": 1,
+        "15": 1,
+        "17": 1
+      },
+      "agreed_position_counts": {
+        "8": 3,
+        "14": 2,
+        "18": 2,
+        "4": 1,
+        "6": 1,
+        "7": 1,
+        "9": 1,
+        "12": 1,
+        "20": 1
+      },
+      "position_coincidence_rate": 0.08744247205785667,
+      "responses": 80,
+      "echo_mismatched_responses": 0,
+      "reasoning_summary_echoed": {
+        "detailed": 80
+      }
+    },
+    "current_turn": {
+      "attempts": 20,
+      "scorable": 20,
+      "unscorable": {
+        "total": 0,
+        "leak": 0,
+        "echo_mismatch": 0,
+        "turn1_or_turn2_incomplete": 0
+      },
+      "agreements": 6,
+      "agreement_rate": 0.3,
+      "answered_in_list_per_fork": [
+        18,
+        18
+      ],
+      "out_of_list_per_fork": [
+        0,
+        0
+      ],
+      "no_number_per_fork": [
+        2,
+        2
+      ],
+      "incomplete_per_fork": [
+        0,
+        0
+      ],
+      "answer_counts": {
+        "613": 3,
+        "356": 2,
+        "523": 2,
+        "581": 2,
+        "596": 2,
+        "659": 2,
+        "713": 2,
+        "237": 1,
+        "261": 1,
+        "367": 1,
+        "456": 1,
+        "476": 1,
+        "478": 1,
+        "486": 1,
+        "487": 1,
+        "489": 1,
+        "516": 1,
+        "517": 1,
+        "530": 1,
+        "593": 1,
+        "629": 1,
+        "640": 1,
+        "643": 1,
+        "646": 1,
+        "681": 1,
+        "731": 1,
+        "743": 1,
+        "813": 1
+      },
+      "agreed_answer_counts": {
+        "356": 1,
+        "581": 1,
+        "596": 1,
+        "613": 1,
+        "659": 1,
+        "713": 1
+      },
+      "position_counts": {
+        "18": 6,
+        "7": 5,
+        "8": 4,
+        "3": 3,
+        "6": 3,
+        "14": 3,
+        "16": 3,
+        "9": 2,
+        "17": 2,
+        "5": 1,
+        "10": 1,
+        "11": 1,
+        "15": 1,
+        "20": 1
+      },
+      "agreed_position_counts": {
+        "7": 2,
+        "18": 2,
+        "3": 1,
+        "6": 1
+      },
+      "position_coincidence_rate": 0.09722222222222222,
+      "responses": 80,
+      "echo_mismatched_responses": 0,
+      "reasoning_summary_echoed": {
+        "detailed": 80
+      }
+    }
+  },
+  "chance_baseline": {
+    "arm": "current_turn",
+    "agreements": 6,
+    "scorable": 20,
+    "rate": 0.3
+  },
+  "uniform_chance_if_both_answer": 0.05,
+  "all_probe_echoes_match": true,
+  "condition_b": {
+    "registered_settings": true,
+    "enough_scorable": true,
+    "all_turns_agreements": 13,
+    "all_turns_needs": ">= 15 of 20",
+    "current_turn_agreements": 6,
+    "current_turn_needs": "<= 5 of 20",
+    "met": false
+  }
+}

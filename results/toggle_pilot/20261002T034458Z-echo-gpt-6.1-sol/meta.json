@@ -1,0 +1,67 @@
+{
+  "experiment": "toggle_pilot",
+  "run_id": "20261002T034458Z-echo-gpt-6.1-sol",
+  "cell_or_config": "echo-probe",
+  "config": {
+    "probe": "echo",
+    "probe_config": {
+      "reasoning_effort": "medium",
+      "reasoning_mode": "standard",
+      "reasoning_summary": null,
+      "service_tier": "flex",
+      "max_output_tokens": 32000,
+      "instructions": null,
+      "strip_summaries_on_replay": true
+    },
+    "contexts": [
+      "all_turns",
+      "current_turn"
+    ],
+    "n_per_context": 1
+  },
+  "model_requested": "gpt-6.1-sol",
+  "model_returned": [
+    "gpt-6.1-sol"
+  ],
+  "reasoning_effort": "medium",
+  "reasoning_context_requested": [
+    "all_turns",
+    "current_turn"
+  ],
+  "reasoning_context_echoed": {
+    "all_turns": 2,
+    "current_turn": 2
+  },
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": null,
+  "started_utc": "2026-10-02T03:44:58+00:00",
+  "finished_utc": "2026-10-02T03:45:07+00:00",
+  "exit_reason": "COMPLETED",
+  "tokens": {
+    "n_calls": 4,
+    "input_tokens": 116,
+    "cached_input_tokens": 0,
+    "cache_write_tokens": 0,
+    "output_tokens": 20,
+    "reasoning_tokens": 0,
+    "cost_usd_list": 0.000432,
+    "cost_usd_billed_est": 0.000216
+  },
+  "cost_usd": {
+    "list": 0.000432,
+    "billed_est": 0.000216,
+    "costs_csv_row_appended": true
+  },
+  "raw_transcript_path": "results/raw/toggle_pilot/20261002T034458Z-echo-gpt-6.1-sol/transcript.jsonl.gz",
+  "config_hash": "0fb8cc1155021522e88c9130b9a84fd989579e70920fa4792839065095909bbb",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "b9f3d8ec3cb13374667f20a43fc41fba34958c7b",
+  "git_dirty": true
+}

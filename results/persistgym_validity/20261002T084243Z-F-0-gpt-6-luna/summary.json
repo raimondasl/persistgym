@@ -1,0 +1,29 @@
+{
+  "blinded": false,
+  "n_episodes": 160,
+  "errors": {
+    "exit_reasons": {
+      "DONE": 160
+    },
+    "n_excluded": 0,
+    "n_summary_failures": 0,
+    "n_unparsed_routine": 0,
+    "n_incomplete_routine": 0
+  },
+  "latency": {
+    "n_calls": 3848,
+    "median_s": 1.0,
+    "p90_s": 1.359,
+    "max_s": 14.344
+  },
+  "cost_usd": {
+    "cost_usd_list": 1.267163,
+    "cost_usd_billed_est": 0.633581
+  },
+  "echo_match": {
+    "F-0": {
+      "requests": 3848,
+      "matched": 3848
+    }
+  }
+}

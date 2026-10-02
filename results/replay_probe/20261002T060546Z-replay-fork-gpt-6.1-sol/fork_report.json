@@ -1,0 +1,177 @@
+{
+  "run_id": "20261002T060546Z-replay-fork-gpt-6.1-sol",
+  "model_requested": "gpt-6.1-sol",
+  "exit_reason": "COMPLETED",
+  "design": "fork",
+  "list_len": 20,
+  "forks": 2,
+  "target_scorable_per_arm": 20,
+  "max_attempts_per_arm": 40,
+  "arms": {
+    "all_turns": {
+      "attempts": 20,
+      "scorable": 20,
+      "unscorable": {
+        "total": 0,
+        "leak": 0,
+        "echo_mismatch": 0,
+        "turn1_or_turn2_incomplete": 0
+      },
+      "agreements": 20,
+      "agreement_rate": 1.0,
+      "answered_in_list_per_fork": [
+        20,
+        20
+      ],
+      "out_of_list_per_fork": [
+        0,
+        0
+      ],
+      "no_number_per_fork": [
+        0,
+        0
+      ],
+      "incomplete_per_fork": [
+        0,
+        0
+      ],
+      "answer_counts": {
+        "523": 4,
+        "607": 4,
+        "367": 2,
+        "425": 2,
+        "456": 2,
+        "463": 2,
+        "469": 2,
+        "478": 2,
+        "479": 2,
+        "481": 2,
+        "563": 2,
+        "629": 2,
+        "631": 2,
+        "632": 2,
+        "644": 2,
+        "659": 2,
+        "685": 2,
+        "854": 2
+      },
+      "agreed_answer_counts": {
+        "523": 2,
+        "607": 2,
+        "367": 1,
+        "425": 1,
+        "456": 1,
+        "463": 1,
+        "469": 1,
+        "478": 1,
+        "479": 1,
+        "481": 1,
+        "563": 1,
+        "629": 1,
+        "631": 1,
+        "632": 1,
+        "644": 1,
+        "659": 1,
+        "685": 1,
+        "854": 1
+      },
+      "position_counts": {
+        "7": 6,
+        "9": 6,
+        "12": 6,
+        "6": 4,
+        "8": 4,
+        "10": 4,
+        "16": 4,
+        "15": 2,
+        "17": 2,
+        "18": 2
+      },
+      "agreed_position_counts": {
+        "7": 3,
+        "9": 3,
+        "12": 3,
+        "6": 2,
+        "8": 2,
+        "10": 2,
+        "16": 2,
+        "15": 1,
+        "17": 1,
+        "18": 1
+      },
+      "position_coincidence_rate": 0.115,
+      "responses": 80,
+      "echo_mismatched_responses": 0,
+      "reasoning_summary_echoed": {
+        "detailed": 80
+      }
+    },
+    "current_turn": {
+      "attempts": 20,
+      "scorable": 20,
+      "unscorable": {
+        "total": 0,
+        "leak": 0,
+        "echo_mismatch": 0,
+        "turn1_or_turn2_incomplete": 0
+      },
+      "agreements": 0,
+      "agreement_rate": 0.0,
+      "answered_in_list_per_fork": [
+        3,
+        2
+      ],
+      "out_of_list_per_fork": [
+        0,
+        0
+      ],
+      "no_number_per_fork": [
+        17,
+        18
+      ],
+      "incomplete_per_fork": [
+        0,
+        0
+      ],
+      "answer_counts": {
+        "263": 1,
+        "436": 1,
+        "469": 1,
+        "623": 1,
+        "678": 1
+      },
+      "agreed_answer_counts": {},
+      "position_counts": {
+        "3": 1,
+        "5": 1,
+        "6": 1,
+        "10": 1,
+        "20": 1
+      },
+      "agreed_position_counts": {},
+      "position_coincidence_rate": 0.2,
+      "responses": 80,
+      "echo_mismatched_responses": 0,
+      "reasoning_summary_echoed": {
+        "detailed": 80
+      }
+    }
+  },
+  "chance_baseline": {
+    "arm": "current_turn",
+    "agreements": 0,
+    "scorable": 20,
+    "rate": 0.0
+  },
+  "uniform_chance_if_both_answer": 0.05,
+  "all_probe_echoes_match": true,
+  "condition_b": {
+    "registered_settings": true,
+    "enough_scorable": true,
+    "all_turns_agreements": 20,
+    "all_turns_needs": ">= 15 of 20",
+    "current_turn_agreements": 0,
+    "current_turn_needs": "<= 5 of 20",
+    "met": true
+  }
+}

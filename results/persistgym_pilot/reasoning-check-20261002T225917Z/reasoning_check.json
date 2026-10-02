@@ -1,0 +1,118 @@
+{
+  "rule": {
+    "prereg": "PREREG.md §17.2 (amendment R2)",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "reasoning_token_floor": 32,
+    "e_threshold": 0.5,
+    "derived_far_episodes": 8,
+    "min_derived_far_ended_normally": 6
+  },
+  "check_run_ids": [
+    "20261002T173710Z-F-r-gpt-6.1-sol",
+    "20261002T180358Z-F-0-gpt-6.1-sol"
+  ],
+  "check_templates": [
+    "pilot-000000",
+    "pilot-000001"
+  ],
+  "reference_run_ids": [
+    "20261002T083238Z-F-r-gpt-6.1-sol",
+    "20261002T083706Z-F-0-gpt-6.1-sol"
+  ],
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "derived_far_episodes": 8,
+  "derived_far_ended_normally": 8,
+  "runs_stopped_on_echo_mismatch": 0,
+  "evidence_step_calls": 20,
+  "evidence_step_calls_at_floor": 0,
+  "E": 0.0,
+  "verdict": "NOT_ENGAGED",
+  "verdict_reason": "E = 0/20 = 0.0000 (evidence-step calls with >= 32 reasoning tokens) < 0.50",
+  "descriptive": {
+    "check": {
+      "run_ids": [
+        "20261002T173710Z-F-r-gpt-6.1-sol",
+        "20261002T180358Z-F-0-gpt-6.1-sol"
+      ],
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "n_episodes": 16,
+      "derived_far_episodes": 8,
+      "derived_far_ended_normally": 8,
+      "runs_stopped_on_echo_mismatch": 0,
+      "evidence_step_calls": 20,
+      "evidence_step_calls_at_floor": 0,
+      "E": 0.0,
+      "pre_need_step_calls": {
+        "n_calls": 336,
+        "reasoning_tokens_mean": 0.432,
+        "reasoning_tokens_median": 0.0,
+        "share_with_reasoning": 0.0327
+      },
+      "n_calls": 360,
+      "output_tokens": 4398,
+      "cost_usd_billed_est": 0.699085,
+      "cost_usd_billed_est_per_episode": 0.043693,
+      "errors": {
+        "exit_reasons": {
+          "DONE": 16
+        },
+        "n_excluded": 0,
+        "n_summary_failures": 0,
+        "n_unparsed_routine": 0,
+        "n_incomplete_routine": 0
+      },
+      "echo_match": {
+        "responses": 360,
+        "context_matched": 360,
+        "effort_matched": 360
+      }
+    },
+    "reference": {
+      "run_ids": [
+        "20261002T083238Z-F-r-gpt-6.1-sol",
+        "20261002T083706Z-F-0-gpt-6.1-sol"
+      ],
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "n_episodes": 16,
+      "derived_far_episodes": 8,
+      "derived_far_ended_normally": 8,
+      "runs_stopped_on_echo_mismatch": 0,
+      "evidence_step_calls": 20,
+      "evidence_step_calls_at_floor": 0,
+      "E": 0.0,
+      "pre_need_step_calls": {
+        "n_calls": 336,
+        "reasoning_tokens_mean": 0.0,
+        "reasoning_tokens_median": 0.0,
+        "share_with_reasoning": 0.0
+      },
+      "n_calls": 360,
+      "output_tokens": 4119,
+      "cost_usd_billed_est": 0.652356,
+      "cost_usd_billed_est_per_episode": 0.040772,
+      "errors": {
+        "exit_reasons": {
+          "DONE": 16
+        },
+        "n_excluded": 0,
+        "n_summary_failures": 0,
+        "n_unparsed_routine": 0,
+        "n_incomplete_routine": 0
+      },
+      "echo_match": {
+        "responses": 360,
+        "context_matched": 360,
+        "effort_matched": 360
+      }
+    }
+  },
+  "blinding": "PREREG §11 pilot blinding: every quantity pools both arms (F-r and F-0); no per-arm value, need-step quantity or success measure",
+  "generated_utc": "2026-10-02T22:59:16+00:00",
+  "prereg_version": "1.0",
+  "git_commit": "574465d2039e4f044ea8ada3da79545e017b00f8",
+  "git_dirty": true
+}

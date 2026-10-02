@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from common import costs, paidlock, runmeta
-from common.tests.gitrepo import DRAFT_PREREG, git_in, push_main
+from common import costs, hold, paidlock, runmeta
+from common.tests.gitrepo import DRAFT_PREREG, git_in, push_main, write_decisions
 from harnesses import blinding, cli, probes, runner
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
@@ -456,6 +456,45 @@ def test_a_run_whose_finalize_never_ran_keeps_the_lock(paid_env, monkeypatch, ca
         reason)
     assert '"reasoning_tokens": null' in reason               # blinded pilot (PREREG §11)
     assert "ERROR: could not account for the run" in capsys.readouterr().err
+
+
+# --- the hold after COST_CAP (common/hold.py; PREREG §0.3 line 12, §7.7) ------------------
+
+ARC_RUN = "20261009T120000Z-S0-ft09-s1"
+
+
+def test_refused_while_a_hold_stands_until_the_researcher_clears_it(paid_env, capsys):
+    """A hold placed by an ARC run that ended COST_CAP stops PersistGym runs too (either
+    stream), before the transport builds a client, until its clearing line is merged."""
+    tmp, costs_csv, fakes = paid_env
+    hold.place_hold(cli.LOCK_PATH, run_id=ARC_RUN, experiment="arc_path",
+                    reason="ended COST_CAP at its harness cost guard of $120.00 list")
+    assert cli.main(RUN) == 2
+    err = capsys.readouterr().err
+    assert f"1 hold stands: run {ARC_RUN} (arc_path;" in err
+    assert f"'cleared_hold: {ARC_RUN}'" in err
+    assert [f.calls for f in fakes] == [[]]                  # no client call
+    assert costs.read_rows(costs_csv) == [] and not cli.LOCK_PATH.exists()
+
+    text = (tmp / "results" / "decisions.md").read_text(encoding="utf-8")
+    write_decisions(tmp, text + f"cleared_hold: {ARC_RUN}\n")
+    git_in(tmp, "commit", "-q", "-am", "clear the hold")
+    push_main(tmp)                                           # the researcher's merge
+    assert cli.main([*RUN[:-1], "r2"]) == 0
+    assert [r["run_id"] for r in costs.read_rows(costs_csv)] == ["r2"]
+
+
+def test_a_run_stopped_at_its_planned_spend_places_no_hold(paid_env):
+    """The transport's stop at --planned-usd is recorded as COST_CAP, but it is the planned
+    spend, not a per-run cost guard (PREREG §7.7): it places no hold."""
+    tmp, _, fakes = paid_env
+    tiny = [*RUN[:RUN.index("--planned-usd") + 1], "0.0000001", "--run-id", "tiny"]
+    assert cli.main(tiny) == 0
+    meta = json.loads((tmp / "results" / "persistgym_pilot" / "tiny" / "meta.json")
+                      .read_text(encoding="utf-8"))
+    assert meta["exit_reason"] == "COST_CAP" and len(fakes[0].calls) == 1
+    assert not hold.holds_path(cli.LOCK_PATH).exists()
+    assert cli.main([*RUN[:-1], "r2"]) == 0                  # the next run is not held
 
 
 def test_paid_calls_off_never_touch_the_lock(monkeypatch, capsys):

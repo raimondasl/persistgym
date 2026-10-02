@@ -4,7 +4,11 @@ and the spend reservations. Every lock here is in a temporary folder."""
 from __future__ import annotations
 
 import json
+import os
+import socket
 import subprocess
+import sys
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -185,6 +189,48 @@ def test_a_second_keep_adds_its_reason_to_the_first(tmp_path):
     with (pytest.raises(paidlock.LockHeld, match="hold by hand ALSO: add the costs row"),
           paidlock.paid_run_lock(path, run_id="run-2", what="y", stream=ARC)):
         pass
+
+
+def test_release_kept_removes_only_the_kept_lock_it_read(tmp_path):
+    """`harnesses account-run` releases a lock kept by the run it has just accounted for, and
+    nothing else: not another run's lock, not a lock that is not kept, not one that changed
+    after it was read."""
+    path = _lock(tmp_path, PERSISTGYM)
+    with paidlock.paid_run_lock(path, run_id="run-1", what="x", stream=PERSISTGYM) as info:
+        with pytest.raises(paidlock.LockHeld, match="is not kept"):
+            paidlock.release_kept(path, run_id="run-1", token=info["token"])
+        kept = paidlock.keep(path, info, "its costs row could not be written")
+    for run_id, token, message in (("run-2", kept["token"], "is not run run-2's"),
+                                   ("run-1", info["token"], "changed after it was read")):
+        with pytest.raises(paidlock.LockHeld, match=message):
+            paidlock.release_kept(path, run_id=run_id, token=token)
+        assert json.loads(path.read_text(encoding="utf-8")) == kept   # left alone
+    paidlock.release_kept(path, run_id="run-1", token=kept["token"])
+    assert not path.exists()
+    with pytest.raises(paidlock.LockHeld, match="cannot read"):
+        paidlock.release_kept(path, run_id="run-1", token=kept["token"])
+
+
+def test_holder_alive(tmp_path):
+    """A kept lock is released only once the process that took it has ended."""
+    host = socket.gethostname()
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    assert "is still running" in paidlock.holder_alive(
+        {"pid": os.getpid(), "host": host, "started_utc": now})
+    ended = subprocess.Popen([sys.executable, "-c", "pass"])
+    ended.wait()
+    assert paidlock.holder_alive({"pid": ended.pid, "host": host, "started_utc": now}) is None
+    assert "not this one" in paidlock.holder_alive({"pid": 1, "host": "elsewhere",
+                                                    "started_utc": now})
+    assert "names no process id" in paidlock.holder_alive({"host": host})
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="process start times are read on Windows")
+def test_a_process_id_reused_after_the_lock_was_taken_is_not_the_holder():
+    """Windows reuses process ids: a process with the lock's id that started after the lock
+    was taken is another process, so the one that took the lock has ended."""
+    assert paidlock.holder_alive({"pid": os.getpid(), "host": socket.gethostname(),
+                                  "started_utc": "2020-01-01T00:00:00+00:00"}) is None
 
 
 def test_keep_leaves_a_lock_that_is_not_ours_alone(tmp_path):

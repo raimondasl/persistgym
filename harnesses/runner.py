@@ -37,6 +37,13 @@ with the whole block under results/raw/.
 `harnesses.parallel`): the same payloads, cell assignment, seeds and per-episode outputs,
 written in the same order, with spend reserved for the episodes in flight. N = 1, the
 default, is the sequential loop.
+
+`run_batch` reads the git state once, at its start (a paid transport's, read when it was
+built), and meta.json records that value, so no process is started after a paid run's calls
+(common/runmeta.py). With a paid transport it also writes the run's plan,
+results/raw/<experiment>/<run_id>/run_plan.json (`RUN_PLAN`), before the first call:
+everything `harnesses account-run` needs to rebuild the run's accounting from its raw files
+if its costs.csv row cannot be written, and no outcome.
 """
 
 from __future__ import annotations
@@ -62,6 +69,7 @@ from harnesses.openai_transport import BudgetExceeded
 from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
 from harnesses.pricing import cost_usd, usage_numbers
 from harnesses.session import EmptySummaryError, HarnessSession
+from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION
 from persistgym.env import EpisodeEnv
 from persistgym.episode import Episode
 from persistgym.survival import carried_in_text, survival_from_payload
@@ -79,8 +87,14 @@ PARALLEL_INFO = "parallel.json"
 sequential runs included; its meta.json holds the allowlisted part
 (`blinding.blinded_parallel`, PREREG §11) and names this file in `blinding.parallel_path`,
 or null if it could not be written."""
+RUN_PLAN = "run_plan.json"
+"""Under results/raw/<experiment>/<run_id>/: a paid run's plan (`run_plan`), written before its
+first call."""
+RUN_PLAN_VERSION = 1
 CLOCK = time.monotonic
 """Times each call (`call_latency_s`). Tests fix it to compare outputs byte for byte."""
+ABORT_AFTER_API_ERRORS = 2
+"""`run_batch`'s default: abort the run after this many episodes ended API_ERROR."""
 
 
 class Transport(Protocol):
@@ -417,11 +431,37 @@ def _stop_reason(runs: list[EpisodeRun], last: EpisodeRun, cfg: HarnessConfig,
     return None
 
 
+def run_plan(*, run_id: str, experiment: str, milestone: str, cell: CellSpec,
+             cfg: HarnessConfig, episodes: list[Episode], run_matrix: dict | None,
+             repeat_index: int, notes: str, abort_after_api_errors: int, parallel: int,
+             git: dict, started: str, reservation_id: str | None,
+             run_args: dict | None) -> dict:
+    """A paid run's plan (`RUN_PLAN`): what `harnesses account-run` needs to rebuild the run's
+    costs row, summary.json and meta.json from its raw files, written before the first call.
+    `run_args` are the arguments of the `run` command (None when the runner is called
+    otherwise); the rest is what `run_batch` was given, the git state read at the start, the
+    start time, the spend reservation's id and the code's versions. It holds no outcome."""
+    return {
+        "plan_version": RUN_PLAN_VERSION,
+        "run_id": run_id, "experiment": experiment, "milestone": milestone,
+        "run_args": run_args,
+        "harness_cell": cell.cell_id, "harness_config": cfg.to_dict(),
+        "run_matrix": run_matrix, "episode_ids": [e.episode_id for e in episodes],
+        "repeat_index": repeat_index, "notes": notes,
+        "abort_after_api_errors": abort_after_api_errors, "parallel": parallel,
+        "git": git, "started_utc": started, "reservation_id": reservation_id,
+        "prereg_version": runmeta.prereg_version(), "sdk_versions": runmeta.sdk_versions(),
+        "code_version": {"generator_version": GENERATOR_VERSION,
+                         "episode_schema_version": SCHEMA_VERSION},
+    }
+
+
 def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
               transport: Transport, *, experiment: str, run_id: str, milestone: str = "M0",
               results_root: Path = RESULTS, raw_root: Path = RAW, repeat_index: int = 0,
-              notes: str = "", abort_after_api_errors: int = 2,
-              run_matrix: dict | None = None, parallel: int = 1) -> dict[str, Any]:
+              notes: str = "", abort_after_api_errors: int = ABORT_AFTER_API_ERRORS,
+              run_matrix: dict | None = None, parallel: int = 1,
+              run_args: dict | None = None) -> dict[str, Any]:
     """Run episodes in order; write results/<experiment>/<run_id>/{meta.json,summary.json,
     episodes.jsonl} and the raw transcript under results/raw/. For a pilot-blinded
     experiment (`blinding.BLINDED_EXPERIMENTS`) episodes.jsonl goes to
@@ -436,7 +476,13 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     `episodes`, the stop rule (`_stop_reason`) stops the episodes in flight too, and a paid
     transport's planned spend is reserved episode by episode and guarded call by call
     (`harnesses.parallel.CallGate`); meta.json's `parallel` says
-    how it went (outside `config`, so the config hash is that of sequential play)."""
+    how it went (outside `config`, so the config hash is that of sequential play).
+
+    The git state is read once, here at the start (a paid transport's `git`, read before its
+    first call), and meta.json records it. With a paid transport, the run's plan
+    (`run_plan`, with the `run` command's arguments `run_args`) is written to
+    results/raw/<experiment>/<run_id>/run_plan.json before the first call; if it cannot be
+    written the run raises before any call."""
     for what, name in (("experiment", experiment), ("run_id", run_id)):
         require_plain_name(what, name)
     parallel = check_parallel(parallel)
@@ -451,8 +497,22 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                          "parallel run with this run id; move them before reusing the id")
     out_dir.mkdir(parents=True, exist_ok=True)
     episodes_path.parent.mkdir(parents=True, exist_ok=True)
-    recorder = JsonlRecorder(raw_path)
+    # Once, before any call (common/runmeta.py): a paid transport read it when it was built.
+    git = getattr(transport, "git", None) or runmeta.git_state()
     started = runmeta.utc_now()
+    if getattr(transport, "paid", False):
+        approval = getattr(transport, "approval", None)
+        plan = run_plan(run_id=run_id, experiment=experiment, milestone=milestone, cell=cell,
+                        cfg=cfg, episodes=episodes, run_matrix=run_matrix,
+                        repeat_index=repeat_index, notes=notes,
+                        abort_after_api_errors=abort_after_api_errors, parallel=parallel,
+                        git=git, started=started,
+                        reservation_id=getattr(approval, "reservation_id", None) or None,
+                        run_args=run_args)
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        (raw_dir / RUN_PLAN).write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n",
+                                        encoding="utf-8")
+    recorder = JsonlRecorder(raw_path)
     runs: list[EpisodeRun] = []
     play: ParallelPlay | None = None
     exit_reason = "COMPLETED"
@@ -533,7 +593,7 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                            exit_reason=exit_reason, repeat_index=repeat_index,
                            cost_row=cost_row, blinded=blinded, episodes_path=episodes_path,
                            run_matrix=run_matrix, parallel=parallel_info,
-                           parallel_path=parallel_path)
+                           parallel_path=parallel_path, git=git)
     return meta
 
 
@@ -570,7 +630,10 @@ def _rel(path: Path) -> str:
 def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, experiment, run_id,
                 started, exit_reason, repeat_index, cost_row, blinded=False,
                 episodes_path=None, run_matrix=None, parallel=None,
-                parallel_path=None) -> dict:
+                parallel_path=None, git=None, finished=None, recorded=None) -> dict:
+    """Write meta.json. `git`: the git state read at the run's start (None: read now);
+    `finished`: the finish time (None: now). `recorded` adds fields: `harnesses account-run`
+    gives `recovered` and the run's own `prereg_version` and `sdk_versions`."""
     echoed: Counter = Counter()
     efforts: Counter = Counter()
     models: Counter = Counter()
@@ -610,12 +673,12 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
         reasoning_context_echoed=dict(echoed), service_tier_requested=cfg.service_tier,
         template_id=sorted({e.template_id for e in episodes}), repeat_index=repeat_index,
         seeds={"template_seeds": sorted({e.template_seed for e in episodes})},
-        started_utc=started, finished_utc=runmeta.utc_now(), exit_reason=exit_reason,
-        tokens=tokens,
+        started_utc=started, finished_utc=finished or runmeta.utc_now(),
+        exit_reason=exit_reason, tokens=tokens,
         cost_usd={"list": sum(listed) if None not in listed else None,
                   "billed_est": sum(billed) if None not in billed else None,
                   "costs_csv_row_appended": cost_row is not None},
         raw_transcript_path=_rel(raw_path), paid=bool(getattr(transport, "paid", False)),
         n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs),
-        parallel=parallel, **extra)
+        parallel=parallel, git=git, **extra, **(recorded or {}))
     return json.loads(path.read_text(encoding="utf-8"))

@@ -1,5 +1,6 @@
 import csv
 import re
+import subprocess
 
 import pytest
 
@@ -153,3 +154,58 @@ def test_summary_prints_spend_billed_and_list(monkeypatch, capsys):
                                                            cost_usd_billed_est="")])
     assert costs.main() == 1
     assert "line 2: no cost" in capsys.readouterr().err
+
+
+# --- the git state of a paid run (common/runmeta.py) ---------------------------------------
+
+def _record_runs(monkeypatch, platform: str) -> list[dict]:
+    seen = []
+
+    def run(args, **kw):
+        seen.append({"args": args, **kw})
+        return subprocess.CompletedProcess(args, 0, stdout="0" * 40 + "\n", stderr="")
+    monkeypatch.setattr(runmeta.subprocess, "run", run)
+    monkeypatch.setattr(runmeta.sys, "platform", platform)
+    return seen
+
+
+@pytest.mark.parametrize("platform, flags", [("win32", 0x08000000), ("linux", 0)])
+def test_git_starts_without_a_console_window_on_windows(monkeypatch, platform, flags):
+    """A process that has lost its console (the 2026-10-02 incident: a run left going after
+    the shell that started it was stopped) cannot start a console program that would attach
+    to it (exit 0xC0000142); git started with CREATE_NO_WINDOW gets no console window."""
+    seen = _record_runs(monkeypatch, platform)
+    assert runmeta.git_state() == {"git_commit": "0" * 40, "git_dirty": True}
+    assert [s["args"][1:] for s in seen] == [["rev-parse", "HEAD"],
+                                             ["status", "--porcelain", "--untracked-files=no"]]
+    assert all(s["creationflags"] == flags and s["check"] is True
+               and s["stdin"] == subprocess.DEVNULL for s in seen)
+    assert runmeta.CREATE_NO_WINDOW == 0x08000000
+
+
+def test_a_git_that_fails_raises(monkeypatch):
+    """The error stays explicit: no guessed commit is ever recorded."""
+    def fails(args, **kw):
+        raise subprocess.CalledProcessError(3221225794, args)
+    monkeypatch.setattr(runmeta.subprocess, "run", fails)
+    with pytest.raises(subprocess.CalledProcessError, match="3221225794"):
+        runmeta.git_state()
+
+
+def test_build_meta_records_the_git_state_given_and_starts_no_git(monkeypatch):
+    def fails(repo=None):
+        raise AssertionError("git_state must not run")
+    fields = {k: None for k in runmeta.REQUIRED}
+    fields["config"] = {"cell": "F-0"}
+    state = {"git_commit": "c0de" * 10, "git_dirty": False}
+    monkeypatch.setattr(runmeta, "git_state", fails)
+    meta = runmeta.build_meta(git=state, **fields)
+    assert {k: meta[k] for k in runmeta.GIT_KEYS} == state
+    # the run's own PREREG and SDK versions may be given (account-run)
+    meta = runmeta.build_meta(git=state, prereg_version="9.9", sdk_versions={"x": "1"},
+                              **fields)
+    assert (meta["prereg_version"], meta["sdk_versions"]) == ("9.9", {"x": "1"})
+    for bad in ({"git_commit": "c0de"}, {"git_commit": "zz" * 20, "git_dirty": False},
+                {"git_commit": "c0de" * 10, "git_dirty": "no"}, None):
+        with pytest.raises(ValueError, match="not a git state"):
+            runmeta.check_git_state(bad)

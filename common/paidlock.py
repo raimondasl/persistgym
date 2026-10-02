@@ -23,7 +23,10 @@ the file while a run is going. A run whose spend could not be written to results
 leaves the lock held on purpose (`keep`), with the reason, so no paid run of its stream
 starts on an incomplete ledger (and its reservation, below, keeps counting for the other).
 A lock kept by a run that may have placed a hold the hold record does not show is marked,
-and stops paid runs of both streams (`unrecorded_hold`), as the hold would.
+and stops paid runs of both streams (`unrecorded_hold`), as the hold would. A PersistGym
+lock kept because a run's row could not be written is released by `harnesses account-run`
+once it has written that row from the run's raw files (`release_kept`), and only if the
+process that took it has ended (`holder_alive`).
 
 **The old single lock.** Before the per-stream locks, both launchers took one lock,
 `persistgym-paid-run.lock` (`LEGACY_LOCK_NAME`). While that file exists (a run started by
@@ -72,6 +75,7 @@ import math
 import os
 import socket
 import subprocess
+import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -277,6 +281,107 @@ def keep(path: Path, info: dict, reason: str, *,
         return held
     except (OSError, ValueError):
         return None
+
+
+def release_kept(path: Path, *, run_id: str, token: str) -> None:
+    """Delete the lock at `path`, kept (`keep`) by run `run_id`, once that run's spend is in
+    results/costs.csv: `harnesses account-run` calls it after writing the run's row. Raises
+    LockHeld, leaving the file alone, unless it still holds what account-run read before it
+    wrote anything: run `run_id`, a reason it was kept, and lock token `token`. So a lock of
+    another run, or one changed meanwhile, is never removed."""
+    try:
+        held = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise LockHeld(f"cannot read the paid-run lock {path} ({e}); left alone") from None
+    if not isinstance(held, dict) or held.get("run_id") != run_id:
+        raise LockHeld(f"the paid-run lock {path} is not run {run_id}'s: "
+                       f"{_held_text(path)}; left alone")
+    if not held.get("kept_because"):
+        raise LockHeld(f"the paid-run lock {path} of run {run_id} is not kept (no "
+                       f"kept_because): the run may still be going; left alone")
+    if held.get("token") != token:
+        raise LockHeld(f"the paid-run lock {path} of run {run_id} changed after it was read; "
+                       f"left alone")
+    path.unlink()
+
+
+# Windows (kernel32): OpenProcess access right, its error for a process id that names no
+# process, and GetExitCodeProcess's code for a process that has not exited
+_QUERY_LIMITED_INFORMATION = 0x1000
+_ERROR_INVALID_PARAMETER = 87
+_STILL_ACTIVE = 259
+# FILETIME counts 100 ns intervals from 1601-01-01 UTC
+_FILETIME_EPOCH_S = 11_644_473_600
+# A lock is written by its run's process after that process started, to the second
+_STARTED_SLACK_S = 2
+
+
+def _windows_process(pid: int) -> tuple[str, float | None]:
+    """("gone", None) if process `pid` does not exist or has exited; ("running", creation
+    time in seconds since the epoch) if it runs; ("unknown", None) if it cannot be
+    queried (access denied, say)."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    filetime = ctypes.POINTER(wintypes.FILETIME)
+    kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE, filetime, filetime, filetime,
+                                         filetime]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel32.OpenProcess(_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ("gone" if ctypes.get_last_error() == _ERROR_INVALID_PARAMETER
+                else "unknown"), None
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return "unknown", None
+        if code.value != _STILL_ACTIVE:
+            return "gone", None
+        times = [wintypes.FILETIME() for _ in range(4)]
+        if not kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times)):
+            return "running", None
+        created = times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
+        return "running", created / 1e7 - _FILETIME_EPOCH_S
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def holder_alive(info: dict) -> str | None:
+    """None if the process that took the lock whose contents are `info` has ended; otherwise
+    why it may still be running. Checked on this host only: a lock taken on another host,
+    or naming no process id, may be held. On Windows a process with that id that started
+    after the lock was taken is another process (ids are reused), so the holder has ended;
+    a process that cannot be queried counts as running."""
+    pid, host = info.get("pid"), info.get("host")
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return f"the lock names no process id ({pid!r})"
+    if host != socket.gethostname():
+        return (f"the lock was taken on host {host!r}, not this one "
+                f"({socket.gethostname()!r}): check there that process {pid} has ended")
+    if sys.platform == "win32":
+        state, created = _windows_process(pid)
+        if state == "gone":
+            return None
+        try:
+            taken = datetime.fromisoformat(str(info.get("started_utc"))).timestamp()
+        except ValueError:
+            taken = None
+        if (state == "running" and created is not None and taken is not None
+                and created > taken + _STARTED_SLACK_S):
+            return None
+        return (f"process {pid}, which took the lock, is still running"
+                + ("" if state == "running" else " or cannot be queried"))
+    try:
+        os.kill(pid, 0)  # signal 0: no signal, only the check (POSIX)
+    except ProcessLookupError:
+        return None
+    except PermissionError:
+        pass
+    return f"process {pid}, which took the lock, is still running"
 
 
 def unrecorded_hold(lock: Path) -> str | None:

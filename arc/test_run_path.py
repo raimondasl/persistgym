@@ -379,6 +379,31 @@ def test_a_crashed_run_is_still_accounted(world):
     assert h.calls[-1] == "remove" and not paths.lock.exists()
 
 
+def test_the_git_state_is_read_once_before_the_harness_runs(world, monkeypatch):
+    """common/runmeta.py: the costs row and meta.json record the git state read before the
+    harness makes any model call. A git that fails after that (on 2026-10-02 a PersistGym
+    run's process lost its console, so git could not start, exit 0xC0000142) stops neither."""
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd)
+    real, reads = runmeta.git_state, []
+
+    def git_state(repo=runmeta.REPO_ROOT):
+        if reads:
+            raise subprocess.CalledProcessError(3221225794, ["git", "rev-parse", "HEAD"])
+        reads.append(list(h.calls))
+        return real(repo)
+    monkeypatch.setattr(runmeta, "git_state", git_state)
+
+    assert rp.main(GAME_ARGS, paths=paths) == 0
+    assert len(reads) == 1 and "inner" not in reads[0]
+    git = real(paths.repo)
+    (row,) = _rows(paths)
+    meta = _meta(paths, "arc_path")
+    assert row["git_commit"] == meta["git_commit"] == git["git_commit"]
+    assert f"git_dirty={git['git_dirty']}" in row["notes"]
+    assert meta["git_dirty"] == git["git_dirty"] and not paths.lock.exists()
+
+
 def test_usage_only_in_the_run_total_is_priced_and_noted(world):
     paths, h = world
     extra = {"prompt_tokens": 1_000, "completion_tokens": 100}    # e.g. a failed summary

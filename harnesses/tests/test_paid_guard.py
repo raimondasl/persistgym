@@ -7,6 +7,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -140,6 +141,27 @@ def test_guard_refuses_before_building_a_client(repo, monkeypatch, env, kw, msg)
     with pytest.raises(PaidCallsNotAllowed, match=msg):
         _make(repo, factory, **kw)
     assert built == []
+
+
+def test_the_git_state_is_read_once_when_the_transport_is_built(repo, monkeypatch):
+    """Before any call (common/runmeta.py): `finalize` writes that value, and starts no git
+    process. A git state that cannot be read refuses, before any client is built."""
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    factory, built = _factory([_response()])
+    t = _make(repo, factory)
+    assert t.git == runmeta.git_state()
+
+    def no_git(repo=runmeta.REPO_ROOT):
+        raise subprocess.CalledProcessError(3221225794, ["git", "rev-parse", "HEAD"])
+    monkeypatch.setattr(runmeta, "git_state", no_git)
+    _call(t)
+    row = t.finalize(run_id="r1", milestone="M0", cell_or_config="c")
+    assert row["git_commit"] == t.git["git_commit"]
+    assert f"git_dirty={t.git['git_dirty']}" in row["notes"]
+    with pytest.raises(PaidCallsNotAllowed, match="cannot read the git state of the code .*"
+                                                  "3221225794.*no paid call was made"):
+        _make(repo, factory)
+    assert len(built) == 1
 
 
 def test_guard_requires_prereg(repo, monkeypatch):
@@ -964,8 +986,10 @@ def test_harness_tests_cannot_reach_the_network():
 def test_harness_tests_cannot_take_the_shared_paid_lock():
     """conftest.no_shared_paid_lock: in every harness test the CLI's lock points into a
     folder that does not exist, never into the git common directory all checkouts share, so
-    a test cannot block (or, through the last-run record, refuse) a real paid run."""
+    a test cannot block (or, through the last-run record, refuse) a real paid run; and
+    `account-run`'s ledger points there too, never at this checkout's costs.csv."""
     assert cli.LOCK_PATH is not None and not cli.LOCK_PATH.parent.exists()
+    assert cli.COSTS_PATH is not None and cli.COSTS_PATH.parent == cli.LOCK_PATH.parent
     for stream in paidlock.STREAMS:
         assert cli.LOCK_PATH != paidlock.lock_path(Path(__file__).resolve().parent, stream)
     with (pytest.raises(FileNotFoundError),

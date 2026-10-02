@@ -48,6 +48,11 @@ pilot-blinded experiment (`harnesses.blinding`, PREREG §11) the row's `reasonin
 left empty, and no call's status is logged (no warning per incomplete response); the per-call
 values stay in the raw transcript under results/raw/.
 
+The git state of the code is read once, when the transport is built, after the guard and
+before any call (`git`, `common.runmeta.git_state`), and `finalize` uses that value: no process
+is started between the first paid call and the row (common/runmeta.py says why). The runner
+uses it for meta.json too.
+
 After appending the row, `finalize` records the run next to the lock as the PersistGym
 stream's last paid run (`common.paidlock.record_last_run`), then removes its spend
 reservation (as it does for a run that made no call). A run that made calls whose row is not
@@ -56,7 +61,10 @@ held with the reason and its usage totals (`keep_lock_if_unaccounted`; the CLI c
 every run), so no PersistGym paid run starts on an incomplete ledger until the row is added
 by hand, and keeps its reservation, which goes on counting against ARC runs until it is
 deleted by hand. So does a run finalized while calls were still in flight (a parallel run
-whose episodes were abandoned by a second Ctrl+C): those calls are never recorded.
+whose episodes were abandoned by a second Ctrl+C): those calls are never recorded. For a
+`run` whose row could not be written, `harnesses account-run` (harnesses/account.py) adds the
+row from the run's raw files, as `finalize` would have written it (`build_costs_row`), and
+releases the lock and the reservation.
 
 The OpenAI SDK reads its API key from the environment itself; this module never reads, prints
 or stores a key. Load keys with `uv run --env-file .env ...`.
@@ -66,6 +74,7 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 import threading
 import time
 from collections.abc import Callable
@@ -92,7 +101,8 @@ from harnesses.pricing import UsageLedger, price_for
 
 # The guard lives in common/approval.py; its names are re-exported here for the CLI and tests.
 __all__ = ["ALLOW_ENV", "BudgetExceeded", "OpenAIResponsesTransport", "PaidApproval",
-           "PaidCallsNotAllowed", "require_paid_approval", "require_paid_run"]
+           "PaidCallsNotAllowed", "build_costs_row", "require_paid_approval",
+           "require_paid_run"]
 
 log = logging.getLogger("harnesses.openai")
 
@@ -108,6 +118,28 @@ def _default_client(timeout_s: float) -> Any:
 
 RETRYABLE = (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError,
              openai.InternalServerError)
+
+
+def build_costs_row(ledger: UsageLedger, *, timestamp_utc: str, run_id: str, milestone: str,
+                    approved_block: str, experiment: str, cell_or_config: str, git: dict,
+                    context_mismatches: int, effort_mismatches: int, notes: str = "") -> dict:
+    """The run's results/costs.csv row as `finalize` appends it: the ledger's totals, notes that
+    start with the block's spend tag and count the `reasoning.context` and `reasoning.effort`
+    echo mismatches, the git state the run read at its start, and, for a pilot-blinded
+    experiment, `reasoning_tokens` left empty (PREREG §11). `harnesses account-run` builds the
+    row of a run whose `finalize` could not write it with this function too."""
+    row = ledger.costs_row(
+        timestamp_utc=timestamp_utc, run_id=run_id, milestone=milestone,
+        experiment=experiment, cell_or_config=cell_or_config, git_commit=git["git_commit"],
+        notes=(f"{spend_tag(approved_block)} context_mismatches={context_mismatches}; "
+               f"effort_mismatches={effort_mismatches}; git_dirty={git['git_dirty']}"
+               + (f"; {notes}" if notes else "")))
+    if blinding.is_blinded(experiment):
+        # PREREG §11: no per-arm reasoning tokens from pilot data in committed files. The
+        # per-call values stay in the raw transcript (results/raw/, gitignored).
+        row["reasoning_tokens"] = ""
+        row["notes"] = f"{row['notes']}; {blinding.WITHHELD_NOTE}"
+    return row
 
 
 @dataclass
@@ -127,6 +159,8 @@ class OpenAIResponsesTransport:
     sleep: Callable[[float], None] = time.sleep
     # where an approval must have been merged (origin/main); tests use a local bare repo
     approval_remote: RemoteRef = MAIN
+    # the git state of the code that makes the calls; None: read once the guard has passed
+    git: dict | None = None
     paid: bool = field(default=True, init=False)
 
     def __post_init__(self) -> None:
@@ -136,6 +170,15 @@ class OpenAIResponsesTransport:
             experiment=self.experiment, planned_usd=self.planned_usd,
             costs_path=self.costs_path, repo=self.repo, remote=self.approval_remote)
         price_for(self.model)  # refuse a model we cannot cost
+        if self.git is None:
+            # Once, before any call: `finalize` and the runner's meta.json use this value,
+            # so no process is started after the calls (common/runmeta.py).
+            try:
+                self.git = runmeta.git_state()
+            except (OSError, subprocess.CalledProcessError) as e:
+                raise PaidCallsNotAllowed(f"cannot read the git state of the code ({e}); no "
+                                          f"paid call was made") from None
+        self.git = runmeta.check_git_state(dict(self.git))
         self.ledger = UsageLedger(self.model)
         self.echo_log: list[dict] = []
         self._finalized = False
@@ -276,24 +319,16 @@ class OpenAIResponsesTransport:
                 self._release_reservation()      # spent nothing
             return None
         try:
-            mismatches = sum(1 for e in self.echo_log
-                             if e["requested_context"] != e["echoed_context"])
-            effort_mismatches = sum(1 for e in self.echo_log
-                                    if e["requested_effort"] != e["echoed_effort"])
-            git = runmeta.git_state()  # the commit of the code that made the calls
-            row = self.ledger.costs_row(
-                timestamp_utc=runmeta.utc_now(), run_id=run_id, milestone=milestone,
+            row = build_costs_row(
+                self.ledger, timestamp_utc=runmeta.utc_now(), run_id=run_id,
+                milestone=milestone, approved_block=self.approval.approved_block,
                 experiment=self.approval.experiment, cell_or_config=cell_or_config,
-                git_commit=git["git_commit"],
-                notes=(f"{spend_tag(self.approval.approved_block)} "
-                       f"context_mismatches={mismatches}; "
-                       f"effort_mismatches={effort_mismatches}; git_dirty={git['git_dirty']}"
-                       + (f"; {notes}" if notes else "")))
-            if blinding.is_blinded(self.approval.experiment):
-                # PREREG §11: no per-arm reasoning tokens from pilot data in committed files.
-                # The per-call values stay in the raw transcript (results/raw/, gitignored).
-                row["reasoning_tokens"] = ""
-                row["notes"] = f"{row['notes']}; {blinding.WITHHELD_NOTE}"
+                git=self.git,  # read before the first call: the code that made the calls
+                context_mismatches=sum(1 for e in self.echo_log
+                                       if e["requested_context"] != e["echoed_context"]),
+                effort_mismatches=sum(1 for e in self.echo_log
+                                      if e["requested_effort"] != e["echoed_effort"]),
+                notes=notes)
             costs.append_row(row, self.approval.costs_path)
         except BaseException as e:
             self.keep_lock_if_unaccounted(run_id, cause=f"{type(e).__name__}: {e}")

@@ -105,3 +105,17 @@ The researcher answered the 15 sign-off lines of the `PREREG.md` draft (§0.3, P
 - **Output:** `results/draw/20261002T033145Z/` from `arc/draw_games.py` at commit `ed340a1cda91153dafe78772861c40343b53dafa`, drawn 2026-10-02T03:31:45.183Z.
 - **Spend:** $0 (no paid calls).
 - **Independent check (Claude, 2026-10-02):** re-derived from the committed raw pulses with a separate script: pulse 1966405 (03:31:00Z) is the first at or after T = 03:30:28Z, the previous pulse 1966404 (03:30:00Z) is before T, SEED = int("38B7BD1E97A12D5E", 16) = 4086943125952605534, and `random.Random(SEED).sample(...)` gives R11L, SB26, FT09, CD82. All match.
+
+## 2026-10-02: Block 1 (pilots) — proposed by Claude, approved when the researcher merges the PR that adds this entry
+- **What it buys** (PLAN §16.2 block 1; PREREG §12), in this order, one paid run at a time:
+  1. OpenAI `reasoning.context` echo check on sol and luna (`toggle_pilot`). If sol's echo does not match, the replay probe and H2 on sol stop and Claude asks (kill criterion 1: E1 decision).
+  2. Private-number replay-use probe on sol, and on luna if its echo matches (`replay_probe`).
+  3. Gemini acceptance check of S0, S1, S2 and S4 at `thinking_level` high on the standard tier (`gemini_probe`).
+  4. Truncated ARC pilot on **R11L** (the drawn pilot game): S0 and S4 to 50 actions, S1 to its first summary plus 5 turns, S2 to 30 actions (`arc_pilot`). Pilot results are blinded (PREREG §11) and excluded from all analyses.
+  5. PersistGym pilots on the pilot seed range, at most 10 episodes per cell (`persistgym_pilot`), then the G1 validity runs (`persistgym_validity`): luna, then sol.
+- **Forecast** (`results/cost_model/20261001T203318Z/optA_central_line_items.csv`, billed): echo checks $0.28, replay probes $1.18, Gemini acceptance $1.60, ARC pilot $21.08, luna pilots and validity $7.85, sol pilot and validity $21.90; **total $53.90** at 1k output tokens per OpenAI call ($66.93 at 2k). Google about $22.68, OpenAI about $31.22.
+- **Limit:** $70 billed for the whole block. Phase caps also apply (phase 0 $100, 1a $500). If a run would pass the limit, it does not start and Claude asks. Provider-side limits set by the researcher (OpenAI project $50, Gemini project $100) are the backstop.
+- **Stop rules:** Claude stops and reports before the next step if a step shows payload rejections, error rates above the PREREG thresholds, or a cost per call more than 1.5× the forecast.
+- **Decides:** the inputs to G0 on Oct 7 (sol replay toggle, Gemini S0-S2 acceptance, ARC cost forecast) and to G1 (validity gate).
+
+approved_block: 1-pilots | experiments: toggle_pilot,replay_probe,gemini_probe,arc_pilot,persistgym_pilot,persistgym_validity | max_usd: 70

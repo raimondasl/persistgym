@@ -9,16 +9,20 @@ For an experiment in `BLINDED_EXPERIMENTS`:
   `results/raw/<experiment>/<run_id>/`;
 * the committed `results/<experiment>/<run_id>/` gets `meta.json`, whose `tokens` leave out
   `reasoning_tokens`, and `summary.json` (`run_summary`): errors, latency, cost and the
-  echo-match rate, nothing else;
+  echo-match rates of `reasoning.context` and `reasoning.effort`, nothing else;
 * `meta.json`'s `parallel` (`harnesses.parallel.ParallelPlay.info`) is cut to
   `PARALLEL_FIELDS` (`blinded_parallel`), and the whole block goes to the gitignored
   `results/raw/<experiment>/<run_id>/parallel.json` (`runner.PARALLEL_INFO`), next to the
   reservation log;
 * the transport's `results/costs.csv` row leaves `reasoning_tokens` empty;
 * `pooled_report` (CLI `pilot-report`) is the committed script that reads the raw episodes
-  of every run and reports, per model, pooled tokens (summed over the harness cells run),
+  of every run and reports, per model and requested reasoning effort (PREREG §17.2), pooled
+  tokens (summed over the harness cells run),
   validity levels of the restated and withheld variants, errors, latency, cost and the
-  per-cell echo-match rate (exempt: a toggle check, not an outcome; PREREG §11, D29).
+  per-cell echo-match rates (exempt: a toggle check, not an outcome; PREREG §11, D29; the
+  effort echo since PREREG §17.2).
+* `harnesses.reasoning_check` (CLI `reasoning-check`) scores the engagement check of PREREG
+  §17.2 from two pilot runs, with quantities pooled over both arms only.
 
 Both summaries and the committed `parallel` block are built from an allowlist of fields, so
 a field added to `EpisodeRun` or to `ParallelPlay.info` later never reaches a committed pilot
@@ -47,10 +51,13 @@ What this does not blind: the per-run `results/costs.csv` row (CLAUDE.md require
 run) and the run's `meta.json` token totals still carry that run's input and output tokens,
 calls and cost, and one run is one harness cell. Output tokens are mostly reasoning tokens,
 so they approximate the withheld column; n_calls approximates lookups. Only the explicit
-`reasoning_tokens` fields are left empty. For a parallel run, `summary.json`'s count of
-RUN_STOPPED episodes (and the message a Ctrl+C or an error prints) says roughly how many
-episodes were in flight when the run stopped; under a spend plan that bounds the per-episode
-estimate, as the withheld peak does, though more loosely.
+`reasoning_tokens` fields are left empty. Nor does it stop differencing: a run of a harness
+cell that joins a pool of the same model and effort which a report has already shown gives
+its own totals as the difference between that report and the next one. Splitting pools by
+effort keeps PREREG §17.2's check runs out of block 1's sol pool. For a parallel run,
+`summary.json`'s count of RUN_STOPPED episodes (and the message a Ctrl+C or an error prints)
+says roughly how many episodes were in flight when the run stopped; under a spend plan that
+bounds the per-episode estimate, as the withheld peak does, though more loosely.
 
 The CLI also refuses pilot-split templates under any other experiment, and `run_batch`
 refuses a run id that is not a plain folder name, so pilot episodes cannot be written
@@ -71,6 +78,10 @@ WITHHELD_NOTE = "reasoning_tokens withheld: pilot blinding (PREREG §11)"
 VALIDITY_VARIANTS = ("restated", "withheld")
 TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens",
                 "reasoning_tokens")
+LEGACY_EFFORT = "medium"
+"""The reasoning.effort of an episode recorded before the runner logged the requested effort
+(PREREG §17.2): every OpenAI request of block 1 before then asked for `medium`, and all 9,579
+responses echoed it (CLI `echo-count`)."""
 PARALLEL_FIELDS = (
     "max_episodes_in_flight", "episodes_started", "episodes_not_started", "stop_reason",
     "abandoned_episode_ids", "abandoned_transcripts",
@@ -151,15 +162,23 @@ def _cost(eps: list[dict]) -> dict:
 
 
 def _echo_match(eps: list[dict]) -> dict:
-    """Per harness cell: requests and how many echoed the requested reasoning.context."""
-    out: dict[str, dict[str, int]] = {}
+    """Per harness cell: requests, how many echoed the requested reasoning.context
+    (`matched`) and how many echoed the requested reasoning.effort (`effort_matched`, PREREG
+    §17.2; None when an episode was run before the runner counted effort echoes)."""
+    out: dict[str, dict[str, int | None]] = {}
     for e in eps:
         echo = e.get("echo") or {}
         want = str(echo.get("context_requested"))
         got = echo.get("context_echoed") or {}
-        d = out.setdefault(e["harness_cell"], {"requests": 0, "matched": 0})
+        d = out.setdefault(e["harness_cell"], {"requests": 0, "matched": 0,
+                                               "effort_matched": 0})
         d["requests"] += sum(got.values())
         d["matched"] += int(got.get(want, 0))
+        efforts = echo.get("effort_echoed")
+        if efforts is None or d["effort_matched"] is None:
+            d["effort_matched"] = None
+        else:
+            d["effort_matched"] += int(efforts.get(str(echo.get("effort_requested")), 0))
     return dict(sorted(out.items()))
 
 
@@ -203,13 +222,29 @@ def _validity_levels(eps: list[dict]) -> dict:
     return out
 
 
+def _effort(e: dict) -> str:
+    """The reasoning.effort an episode requested; `LEGACY_EFFORT` for an episode recorded
+    before the runner logged it."""
+    return str((e.get("echo") or {}).get("effort_requested") or LEGACY_EFFORT)
+
+
+def pool_key(model: str, effort: str) -> str:
+    """A pool's key in the report: the model at `LEGACY_EFFORT` (as before PREREG §17.2),
+    else the model and its effort."""
+    return model if effort == LEGACY_EFFORT else f"{model} (effort {effort})"
+
+
 def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
-    """Per model, pooled over every run (harness cell) given. Reasoning tokens are reported
-    only when at least 2 harness cells are pooled, so a pool can never equal one arm."""
+    """Per model and requested reasoning effort, pooled over every run (harness cell) given.
+    Reasoning tokens are reported only when at least 2 harness cells are pooled, so a pool
+    can never equal one arm. Pools are split by effort (PREREG §17.2), so that runs at a new
+    effort never join a pool that an earlier report has already shown: one check run at high
+    effort added to block 1's medium-effort pool would otherwise show its own reasoning total
+    as the difference between two reports."""
     by_model: dict[str, list[dict]] = {}
     for eps in runs.values():
         for e in eps:
-            by_model.setdefault(str(e.get("model")), []).append(e)
+            by_model.setdefault(pool_key(str(e.get("model")), _effort(e)), []).append(e)
     models = {}
     for model, eps in sorted(by_model.items()):
         cells = sorted({e["harness_cell"] for e in eps})
@@ -221,6 +256,7 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
             note = (f"{WITHHELD_NOTE}: only one harness cell ({cells[0]}) in the pool, so a "
                     "pooled total would be that arm's")
         models[model] = {
+            "reasoning_effort": _effort(eps[0]),
             "harness_cells_pooled": cells,
             "n_episodes": len(eps),
             "n_episodes_by_variant": dict(sorted(Counter(e.get("variant") for e in eps)

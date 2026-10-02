@@ -6,6 +6,13 @@ one reasoning item with fake `encrypted_content` and an assistant message, plus 
 step call i (counted over step calls only, so it equals the turn index when nothing is
 retried) gets `rs_t<i>` / `msg_t<i>`; summary call j gets `rs_s<j>` / `msg_s<j>`.
 
+The echoed `reasoning.context` and `reasoning.effort` are the requested ones unless
+`echo_context` or `echo_effort` say otherwise (a value, or a function of the payload and the
+call's 0-based arrival index). Every response reports `reasoning_tokens` reasoning tokens, or
+`reasoning_tokens_fn(payload, n)` with the index n that `reply_fn` gets; each replayed
+reasoning item that an `all_turns` request renders adds the constant `reasoning_tokens` to the
+input tokens.
+
 `status_fn(payload, tag)` sets a response's status. An `incomplete` response looks like one
 that stopped at `max_output_tokens` (`incomplete_details.reason`, the whole cap in
 `output_tokens`); if its text is empty it has no message item, as when the cap is hit while
@@ -63,8 +70,10 @@ class FakeModel:
                  summary_fn: ReplyFn | None = None,
                  reasoning_summary_fn: Callable[[dict, str], str] | None = None,
                  echo_context: str | Callable[[dict, int], str] = "request",
+                 echo_effort: str | Callable[[dict, int], str] = "request",
                  model_suffix: str = "-fake-2026-10-01",
                  reasoning_tokens: int = 37,
+                 reasoning_tokens_fn: Callable[[dict, int], int] | None = None,
                  summary_request_prompt: str = ARC_SUMMARY_REQUEST_PROMPT,
                  status_fn: Callable[[dict, str], str] | None = None,
                  ids: str = "call_order"):
@@ -76,8 +85,10 @@ class FakeModel:
         self.summary_fn = summary_fn or _default_summary
         self.reasoning_summary_fn = reasoning_summary_fn
         self.echo_context = echo_context
+        self.echo_effort = echo_effort
         self.model_suffix = model_suffix
         self.reasoning_tokens = reasoning_tokens
+        self.reasoning_tokens_fn = reasoning_tokens_fn
         self.summary_request_prompt = summary_request_prompt
         self.status_fn = status_fn
         self.calls: list[dict] = []  # deep copies of every payload received
@@ -112,6 +123,8 @@ class FakeModel:
         req = payload.get("reasoning") or {}
         echo = (self.echo_context(payload, k) if callable(self.echo_context)
                 else req.get("context") if self.echo_context == "request" else self.echo_context)
+        effort = (self.echo_effort(payload, k) if callable(self.echo_effort)
+                  else req.get("effort") if self.echo_effort == "request" else self.echo_effort)
         summary = []
         if req.get("summary") and self.reasoning_summary_fn:
             summary = [{"type": "summary_text", "text": self.reasoning_summary_fn(payload, tag)}]
@@ -120,7 +133,8 @@ class FakeModel:
         replayed = sum(1 for i in payload.get("input") or [] if i.get("type") == "reasoning")
         rendered = replayed * self.reasoning_tokens if echo == "all_turns" else 0
         status = self.status_fn(payload, tag) if self.status_fn else "completed"
-        reasoning_tokens = self.reasoning_tokens
+        reasoning_tokens = (self.reasoning_tokens_fn(payload, n) if self.reasoning_tokens_fn
+                            else self.reasoning_tokens)
         output = [{"type": "reasoning", "id": f"rs_{tag}", "summary": summary,
                    "encrypted_content": f"gAAAAB-fake-encrypted-{tag}"}]
         if status == "incomplete":
@@ -146,7 +160,7 @@ class FakeModel:
             "incomplete_details": details,
             "model": payload.get("model", "") + self.model_suffix,
             "output": output,
-            "reasoning": {"effort": req.get("effort"), "mode": req.get("mode"), "context": echo,
+            "reasoning": {"effort": effort, "mode": req.get("mode"), "context": echo,
                           "summary": req.get("summary")},
             "service_tier": payload.get("service_tier"),
             "store": payload.get("store"),

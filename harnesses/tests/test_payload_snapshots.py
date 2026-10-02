@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from harnesses import registered
 from harnesses.cells import CELLS, NOTES_INSTRUCTION
 from harnesses.config import (
     ARC_SUMMARY_BRIDGE_TEMPLATE,
@@ -118,6 +119,35 @@ def test_cell_payloads_exactly(cell_id):
             assert p["instructions"] == ARC_SUMMARY_SYSTEM_PROMPT
             assert p["max_output_tokens"] == SUMMARY_MAX_OUTPUT_TOKENS
             assert p["input"][-1]["content"][0]["text"] == ARC_SUMMARY_REQUEST_PROMPT
+
+
+# PREREG §4.6: sol runs the H2 core (F-r, F-0) and, if H2 shows signal, the W/Σ replay pairs
+SOL_CELLS = ["F-r", "F-0", "W-n-r", "W-n-0", "Σ-n-r", "Σ-n-0"]
+
+
+@pytest.mark.parametrize("cell_id", SOL_CELLS)
+def test_sols_registered_config_sends_high_effort_on_every_request(cell_id):
+    """PREREG §6 as amended by R2 (§17.2): sol's registered config sends `reasoning.effort:
+    high` on every step and summary request of each cell sol runs, and the requests are
+    otherwise those of the default config: the same turns, reasoning items, instructions
+    and settings."""
+    sol = HarnessConfig(model="gpt-6.1-sol",
+                        reasoning_effort=registered.registered_effort("gpt-6.1-sol"))
+    expected, instructions, context = EXPECTED[cell_id]
+    _, model, _ = run_synthetic(CELLS[cell_id], cfg=sol)
+    got = [("summary" if model.is_summary(p) else "step", label_payload(p)) for p in model.calls]
+    assert got == expected
+    kinds = {"step", "summary"} if CELLS[cell_id].history == "summary" else {"step"}
+    assert {kind for kind, _ in got} == kinds
+    for p in model.calls:
+        assert p["model"] == "gpt-6.1-sol"
+        assert p["reasoning"] == {"effort": "high", "mode": "standard", "context": context}
+        assert p["instructions"] == (ARC_SUMMARY_SYSTEM_PROMPT if model.is_summary(p)
+                                     else instructions)
+    _, default, _ = run_synthetic(CELLS[cell_id])
+    for ps, pd in zip(model.calls, default.calls, strict=True):
+        assert {**ps, "model": pd["model"],
+                "reasoning": {**ps["reasoning"], "effort": "medium"}} == pd
 
 
 @pytest.mark.parametrize("cell_id", ["Σ-n-r", "Σ-n-0", "Σ-0-r"])

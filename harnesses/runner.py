@@ -11,7 +11,10 @@ first presentation it records survival from the payload actually sent
 string-matched separately with `carried_in_text`).
 
 An episode whose echoed `reasoning.context` differs from the request on any response is
-excluded (CLAUDE.md); by default it stops at that response.
+excluded (CLAUDE.md); by default it stops at that response. So is an episode whose echoed
+`reasoning.effort` differs (PREREG §17.2, amendment R2), in the same way: exit reason
+`REASONING_EFFORT_MISMATCH`, and both kinds count toward the run's abort after
+`abort_after_mismatched_episodes` excluded episodes.
 
 Per episode it also logs (harnesses/DESIGN.md §7):
 * `need_phase` (D8): provider-reported tokens summed over every call made while the need step
@@ -86,6 +89,15 @@ class Transport(Protocol):
     def send(self, payload: dict) -> dict: ...
 
 
+ECHO_MISMATCH_EXITS = {"context": "REASONING_CONTEXT_MISMATCH",
+                       "effort": "REASONING_EFFORT_MISMATCH"}
+"""An episode's exit reason when it stops at a response whose echoed `reasoning.<kind>`
+differs from the request (CLAUDE.md; PREREG §13, §17.2)."""
+ECHO_ABORTS = ("ABORTED_CONTEXT_MISMATCH", "ABORTED_EFFORT_MISMATCH", "ABORTED_ECHO_MISMATCH")
+"""A run's exit reason after `abort_after_mismatched_episodes` excluded episodes: all for a
+context mismatch, all for an effort mismatch, or both kinds (`_stop_reason`)."""
+
+
 def check_echo(payload: dict, response: dict) -> dict:
     """Requested vs echoed reasoning settings, the returned model and service tier."""
     req = payload.get("reasoning") or {}
@@ -94,6 +106,7 @@ def check_echo(payload: dict, response: dict) -> dict:
         "context_requested": req.get("context"), "context_echoed": got.get("context"),
         "context_ok": req.get("context") == got.get("context"),
         "effort_requested": req.get("effort"), "effort_echoed": got.get("effort"),
+        "effort_ok": req.get("effort") == got.get("effort"),
         "mode_requested": req.get("mode"), "mode_echoed": got.get("mode"),
         "model_requested": payload.get("model"), "model_returned": response.get("model"),
         "service_tier_requested": payload.get("service_tier"),
@@ -143,6 +156,9 @@ class EpisodeRun:
     error: str | None = None
     excluded: bool = False
     exclusion_reason: str | None = None
+    # the echoes that differed from the request ("context", "effort"), in the order seen;
+    # each excludes the episode (ECHO_MISMATCH_EXITS)
+    echo_mismatches: list[str] = field(default_factory=list)
     need_correct: bool = False
     need_label: str | None = None
     # the need step's outcome (persistgym.env: correct, wrong, unparsed, invalid_lookup,
@@ -243,8 +259,10 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
     run.designed["evidence_steps"] = episode.reveal_steps
     need = episode.need_step
     echoed: Counter = Counter()
+    efforts: Counter = Counter()
     models: Counter = Counter()
     tiers: Counter = Counter()
+    stop_on = {"context": cfg.stop_on_context_mismatch, "effort": cfg.stop_on_effort_mismatch}
     obs = env.observation
     done = False
     n_compactions_seen_at_need = 0  # compactions applied before the need step's first call
@@ -280,6 +298,7 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 run.n_summary_requests += req.kind == "summary"
                 echo = check_echo(req.payload, response)
                 echoed[str(echo["context_echoed"])] += 1
+                efforts[str(echo["effort_echoed"])] += 1
                 models[str(echo["model_returned"])] += 1
                 tiers[str(echo["service_tier_returned"])] += 1
                 _add_usage(run, response)
@@ -292,13 +311,20 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                               "is_lookup_result": info["is_lookup_result"],
                               "trace": req.trace, "info": req.info, "echo": echo,
                               "payload": req.payload, "response": response})
-                if not echo["context_ok"]:
+                # CLAUDE.md (context) and PREREG §17.2 (effort): an echo that differs from the
+                # request excludes the episode, and by default stops it there. Both kinds are
+                # recorded before it stops, so a response that differs in both counts as both.
+                mismatched = [k for k in ECHO_MISMATCH_EXITS if not echo[f"{k}_ok"]]
+                if mismatched:
                     run.excluded = True
-                    run.exclusion_reason = (f"reasoning.context requested "
-                                            f"{echo['context_requested']!r}, echoed "
-                                            f"{echo['context_echoed']!r}")
-                    if cfg.stop_on_context_mismatch:
-                        run.exit_reason = "REASONING_CONTEXT_MISMATCH"
+                    run.exclusion_reason = "; ".join(
+                        f"reasoning.{k} requested {echo[f'{k}_requested']!r}, echoed "
+                        f"{echo[f'{k}_echoed']!r}" for k in mismatched)
+                    run.echo_mismatches += [k for k in mismatched
+                                            if k not in run.echo_mismatches]
+                    stop = next((k for k in mismatched if stop_on[k]), None)
+                    if stop is not None:
+                        run.exit_reason = ECHO_MISMATCH_EXITS[stop]
                         return run
                 try:
                     reply = session.record(req, response)
@@ -363,8 +389,9 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 c["at_step"] > r_first
                 for c in run.compactions[:n_compactions_seen_at_need]))
         run.echo = {"context_requested": cell.reasoning_context,
-                    "context_echoed": dict(echoed), "models_returned": dict(models),
-                    "service_tiers_returned": dict(tiers)}
+                    "context_echoed": dict(echoed),
+                    "effort_requested": cfg.reasoning_effort, "effort_echoed": dict(efforts),
+                    "models_returned": dict(models), "service_tiers_returned": dict(tiers)}
     return run
 
 
@@ -373,12 +400,18 @@ def _stop_reason(runs: list[EpisodeRun], last: EpisodeRun, cfg: HarnessConfig,
     """The run's stop rule, checked after each episode finishes (`runs`: those finished so
     far, `last` the one that just did): the run's exit reason if it must stop, else None.
     COST_CAP when the transport stopped `last` at the planned spend; an abort after
-    `cfg.abort_after_mismatched_episodes` excluded (echo-mismatched) episodes (CLAUDE.md) or
-    `abort_after_api_errors` episodes that ended API_ERROR."""
+    `cfg.abort_after_mismatched_episodes` excluded (echo-mismatched) episodes (CLAUDE.md;
+    PREREG §17.2 counts effort mismatches with context mismatches), named by the kinds of
+    mismatch among them (`ECHO_ABORTS`); or `abort_after_api_errors` episodes that ended
+    API_ERROR."""
     if last.exit_reason == "COST_CAP":
         return "COST_CAP"
-    if sum(x.excluded for x in runs) >= cfg.abort_after_mismatched_episodes:
-        return "ABORTED_CONTEXT_MISMATCH"
+    excluded = [x for x in runs if x.excluded]
+    if len(excluded) >= cfg.abort_after_mismatched_episodes:
+        kinds = {k for x in excluded for k in x.echo_mismatches}
+        if kinds == {"effort"}:
+            return "ABORTED_EFFORT_MISMATCH"
+        return "ABORTED_CONTEXT_MISMATCH" if kinds <= {"context"} else "ABORTED_ECHO_MISMATCH"
     if sum(x.exit_reason == "API_ERROR" for x in runs) >= abort_after_api_errors:
         return "ABORTED_API_ERRORS"
     return None
@@ -539,10 +572,12 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
                 episodes_path=None, run_matrix=None, parallel=None,
                 parallel_path=None) -> dict:
     echoed: Counter = Counter()
+    efforts: Counter = Counter()
     models: Counter = Counter()
     usage: Counter = Counter()
     for r in runs:
         echoed.update(r.echo.get("context_echoed", {}))
+        efforts.update(r.echo.get("effort_echoed", {}))
         models.update(r.echo.get("models_returned", {}))
         usage.update(r.usage)
     listed = [r.cost_usd_list for r in runs]
@@ -569,7 +604,8 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
     path = runmeta.write_meta(
         out_dir, experiment=experiment, run_id=run_id, cell_or_config=cell.cell_id,
         config=config, model_requested=cfg.model, model_returned=sorted(models),
-        reasoning_effort=cfg.reasoning_effort, reasoning_mode=cfg.reasoning_mode,
+        reasoning_effort=cfg.reasoning_effort, reasoning_effort_echoed=dict(efforts),
+        reasoning_mode=cfg.reasoning_mode,
         reasoning_context_requested=cell.reasoning_context,
         reasoning_context_echoed=dict(echoed), service_tier_requested=cfg.service_tier,
         template_id=sorted({e.template_id for e in episodes}), repeat_index=repeat_index,

@@ -11,6 +11,8 @@ uv run python -m harnesses cells                                 # the cell tabl
 uv run python -m harnesses dry-run --cell W-n-0 --task-cell observed-nonrec-far   # $0, fake model
 uv run python -m harnesses summary-timing --n 20                 # $0, Σ compaction timing (§4.3)
 uv run python -m harnesses pilot-report                          # $0, pooled pilot report (§7.4)
+uv run python -m harnesses echo-count                            # $0, echo matches of raw runs (§12.4)
+uv run python -m harnesses reasoning-check <F-r run_id> <F-0 run_id>   # $0, engagement check (§12.3)
 ```
 `dry-run` prints, for every request, its kind, the pending step, `reasoning.context` and the provenance of every input item (`U<t>` observation of turn t, `R<t>` its reasoning item, `A<t>` its reply, `B<k>` summary bridge k, `Q` the summary request).
 
@@ -50,7 +52,7 @@ Added only when configured: `prompt_cache_key`, `reasoning.summary`. No tools an
 - **Output cap (D13).** On OpenAI `max_output_tokens` counts reasoning and visible tokens together. A response that reaches it comes back with status `incomplete` and `incomplete_details.reason` = `max_output_tokens`, possibly before any visible text, with only a reasoning item ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning), "Allocating space for reasoning"). The runner scores such a step as an invalid action (§7.5).
 
 - **Input items.** An observation, the bridge and the summary request are user messages: `{"type": "message", "role": "user", "content": [{"type": "input_text", "text": ...}]}`. An earlier turn is its observation followed by that response's output items, sent back as returned (reasoning items with `encrypted_content`, then the assistant message), with null fields dropped. This follows OpenAI's stateless pattern `context += response.output` ([reasoning items cookbook](https://developers.openai.com/cookbook/examples/responses_api/reasoning_items)). Output items of any other type are left out and logged; none are expected because no tools are offered.
-- **Reasoning settings.** `effort` defaults to `medium`, the documented default for GPT-6.1 Sol, GPT-6 Sol and GPT-6 Luna. `mode` defaults to `standard`, the documented default ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)). Both are configurable.
+- **Reasoning settings.** `effort` is the model's registered effort (§12.1; PREREG §6 as amended by R2, §17.2): `medium` on luna, `high` on sol. `HarnessConfig`'s own default stays `medium`, the documented default for GPT-6.1 Sol, GPT-6 Sol and GPT-6 Luna; the CLI's `run` and `dry-run` set the registered one. `mode` defaults to `standard`, the documented default ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)). Both are configurable, but `run` refuses any effort other than the registered one outside pilots (§12.1).
 - **The reply** the environment scores is the concatenated `output_text` of the assistant message items (the SDK's `response.output_text`).
 
 ## 4. History policies
@@ -128,6 +130,8 @@ The tests assert that, for each pair, every request is identical after removing 
 - On a mismatch, the episode is excluded and, by default, stopped.
 - After 2 excluded episodes, the run is aborted (CLAUDE.md: log mismatches and exclude those episodes).
 
+The echoed `reasoning.effort` is compared on every response in the same way (PREREG §17.2, amendment R2; §12.2).
+
 The docs list `all_turns` support for the GPT-5.6 family and GPT-6.1 Sol, not for GPT-6 Luna, so the luna r arms depend on the echo check (PLAN §7, §16.6).
 
 **Relation to ARC.**
@@ -166,13 +170,14 @@ Per episode it also records:
 |---|---|
 | `DONE` | the episode finished |
 | `REASONING_CONTEXT_MISMATCH` | an echoed `reasoning.context` differed from the request (the episode is excluded) |
+| `REASONING_EFFORT_MISMATCH` | an echoed `reasoning.effort` differed from the request (the episode is excluded; PREREG §17.2, §12.2) |
 | `AGENT_ERROR` | one compaction's summary failed `summary_max_attempts` times (each compaction gets its own attempts) |
 | `API_ERROR` | an OpenAI error after retries |
 | `COST_CAP` | the run's spend reached the planned amount (the transport's stop at `--planned-usd`, not a per-run cost guard: it places no hold, §8) |
 | `MAX_TURNS` | the episode passed `max_turns` |
 | `RUN_STOPPED` | parallel play only (§7.6): the run stopped while the episode was in flight, and it made no further call |
 
-The run's own exit reason (`meta.json`) is `COMPLETED`, or the stop rule's (`runner._stop_reason`, checked after each episode): `COST_CAP` when the transport stopped an episode at the planned spend, `ABORTED_CONTEXT_MISMATCH` after 2 excluded episodes (§6), `ABORTED_API_ERRORS` after 2 episodes that ended `API_ERROR`. An exception the runner does not handle, Ctrl+C included, gives `ERROR:<type>` and is raised. Parallel play adds `SPEND_RESERVATION` (§7.6).
+The run's own exit reason (`meta.json`) is `COMPLETED`, or the stop rule's (`runner._stop_reason`, checked after each episode): `COST_CAP` when the transport stopped an episode at the planned spend, `ABORTED_CONTEXT_MISMATCH` after 2 excluded episodes (§6), or `ABORTED_EFFORT_MISMATCH` when every one of them was excluded for its effort echo and `ABORTED_ECHO_MISMATCH` when they were excluded for both kinds of echo (§12.2), `ABORTED_API_ERRORS` after 2 episodes that ended `API_ERROR`. An exception the runner does not handle, Ctrl+C included, gives `ERROR:<type>` and is raised. Parallel play adds `SPEND_RESERVATION` (§7.6).
 
 `run_batch` writes:
 - `results/<experiment>/<run_id>/meta.json`, with the fields required by CLAUDE.md, via `common.runmeta.write_meta`. Its `config` holds the run matrix (§7.3) when the CLI passes one;
@@ -231,10 +236,10 @@ Central case: `--matrix d11 --n 120` is 320 episodes per harness cell, 640 over 
 - The committed `results/<experiment>/<run_id>/` holds only `meta.json` and `summary.json`:
   - `meta.json`'s `tokens` sets `reasoning_tokens` to null. A `blinding` field names the rules and the raw paths. One run is one harness cell, so its reasoning total would be a per-arm number;
   - `meta.json`'s `parallel` (§7.6) keeps only the fields in `blinding.PARALLEL_FIELDS`, and the whole block goes to `results/raw/<experiment>/<run_id>/parallel.json`, next to the reservation log, for a sequential run too. If that file cannot be written, the run warns and `blinding.parallel_path` is null. Pilots report cost, but nothing finer than the run's total, which the costs row already holds. So the committed block leaves out the per-episode spend estimate (`spend_reservation.last_estimate_usd`, twice the largest finished episode's spend), the peak of episodes in flight (under a spend plan it bounds that estimate) and the per-call gate's waits and peak of calls in flight (they depend on the spend as it went and on each call's payload size, which in the replay arms grows with the reasoning replayed). It keeps the planned spend, the estimate rule and factor, the counts of episodes and calls, the stop reason and the abandoned episodes. Whether the plan held is in those: the stop reason (`SPEND_RESERVATION` or `COST_CAP`), the episodes not started, and the run's `cost_usd` against `planned_usd`;
-  - `summary.json` holds errors (exit reasons, exclusions, summary failures, unparsed routine replies), latency (median, p90, max seconds per call), cost (list, billed estimate) and the echo-match rate per cell. The echo-match rate is a toggle check and exempt (PREREG §11, D29). Both summaries and the committed `parallel` block are built from an allowlist, so a field added to `EpisodeRun` or to the `parallel` block later cannot leak into a committed pilot file.
+  - `summary.json` holds errors (exit reasons, exclusions, summary failures, unparsed routine replies), latency (median, p90, max seconds per call), cost (list, billed estimate) and the echo-match rate per cell: requests, how many echoed the requested `reasoning.context` (`matched`) and how many the requested `reasoning.effort` (`effort_matched`, PREREG §17.2; `null` for episodes run before the runner counted effort echoes). The echo-match rate is a toggle check and exempt (PREREG §11, D29). Both summaries and the committed `parallel` block are built from an allowlist, so a field added to `EpisodeRun` or to the `parallel` block later cannot leak into a committed pilot file.
 - The paid transport's `results/costs.csv` row leaves `reasoning_tokens` empty and says so in `notes`. The per-call values stay in the raw transcript.
-- `python -m harnesses pilot-report` ($0) is the committed script that produces the pilot report. It reads every raw pilot run and writes `results/persistgym_pilot/pooled-<time>/pilot_report.json`. Per model it reports:
-  - tokens pooled over the harness cells run. Reasoning tokens are shown only when at least 2 cells are pooled, so a pool never equals one arm;
+- `python -m harnesses pilot-report` ($0) is the committed script that produces the pilot report. It reads every raw pilot run and writes `results/persistgym_pilot/pooled-<time>/pilot_report.json`. Per model and requested `reasoning.effort` (since PREREG §17.2; a pool at `medium` keeps the bare model name as its key, and episodes recorded before the runner logged the requested effort count as `medium`, as all of them were) it reports:
+  - tokens pooled over the harness cells run. Reasoning tokens are shown only when at least 2 cells are pooled, so a pool never equals one arm. Splitting by effort keeps the engagement check's runs at high out of block 1's reported sol pool at medium: a report made after only the check's F-r run would otherwise show that arm's reasoning total as its difference from block 1's report. Any run that joins a pool a report has already shown can still be read that way (§11);
   - validity levels: the need-correct rate of the restated and withheld variants, pooled over cells and arms, counting finished, non-excluded episodes. The base variant's success is never reported;
   - errors, latency, cost and the per-cell echo-match rate.
 
@@ -357,13 +362,13 @@ It follows the rules of the approval line below: exactly this spacing, at column
 
 The approval line records the researcher's decision. It is added only on the researcher's explicit instruction, under that day's entry, and reaches `main` through the researcher's merge like every change. `results/decisions.md` explains the grammar near its top. Its examples are in a code block, indented and use `<placeholder>` names, so none of the three lets them count. A test checks this, and that every other line of the file is shown text, so no unclosed fence or comment hides later entries.
 
-`--planned-usd` is the planned spend of the whole command, in that measure: for `probe-echo` and `probe-replay` with several models, each model's transport gets only what the earlier models left. `run` refuses a `persistgym_pilot` run on any split other than `pilot` (§16.5: pilot templates use a disjoint seed range).
+`--planned-usd` is the planned spend of the whole command, in that measure: for `probe-echo` and `probe-replay` with several models, each model's transport gets only what the earlier models left. `run` refuses a `persistgym_pilot` run on any split other than `pilot` (§16.5: pilot templates use a disjoint seed range). Before it takes the lock, it also refuses an effort other than the model's registered one outside `persistgym_pilot`, and a non-pilot sol run without an ENGAGED engagement check (PREREG §17.2; §12.1).
 
 While running, it:
 - stops before a call once the run's spend (the measure above) reaches `--planned-usd` (`COST_CAP`). The call that crosses it is not cut short, so a run can end above its planned spend by up to one call; with `--parallel N` too, since the run's per-call gate sends calls that overlap only while even their most expensive outcome fits (§7.6);
 - retries 429s, timeouts and 5xx errors with exponential backoff, but never `insufficient_quota`. Flex 429s are not charged ([Flex guide](https://developers.openai.com/api/docs/guides/flex-processing)). A timed-out or dropped connection may still have been processed and billed; such attempts are not in the ledger;
 - logs the echoed `reasoning.context`, the returned model string, the served service tier and the status of every response, with a warning and `incomplete_details.reason` for an `incomplete` one (§7.5);
-- appends one costs.csv row per run. Its `notes` start with `approved_block=<name>;` (what block spend sums) and hold the number of context mismatches and the git dirty flag. For a pilot-blinded experiment `reasoning_tokens` is left empty (§7.4). `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
+- appends one costs.csv row per run. Its `notes` start with `approved_block=<name>;` (what block spend sums) and hold the numbers of `reasoning.context` and `reasoning.effort` mismatches (`context_mismatches=`, `effort_mismatches=`) and the git dirty flag. For a pilot-blinded experiment `reasoning_tokens` is left empty (§7.4). `service_tier` is the requested tier. The served tier, cache-write tokens and median seconds per call go into the `service_tier_served`, `cache_write_tokens` and `latency_s` columns when `common/costs.py` has them (schema of 2026-10-01 on `main`), and into `notes` otherwise. A response whose returned model string has no price is priced as the requested model and flagged in `notes` rather than dropped from the log.
 
 It never switches service tier. The API can still serve a request on a different tier than requested; the response says so and the row records it.
 
@@ -379,8 +384,8 @@ PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-replay 
 PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
     --model gpt-6-luna --split pilot --n 1 --approved-block "<block>" --planned-usd 1
 PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
-    --model gpt-6.1-sol --split main --matrix d11 --n 120 --experiment persistgym \
-    --approved-block "<block>" --planned-usd <usd> --parallel 16  # D11 (§7.3), §7.6
+    --model gpt-6.1-sol --split main --matrix d11 --n 210 --experiment persistgym \
+    --approved-block "<block>" --planned-usd <usd> --parallel 16  # D11 (§7.3), §7.6, §12
 ```
 `run` defaults to the pilot split, which has a disjoint seed range, and the `persistgym_pilot` experiment. It refuses more than 10 episodes for a pilot.
 
@@ -432,7 +437,7 @@ PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses probe-replay 
 
 ## 10. Researcher decisions
 Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RESEARCHER_DECISIONS`. Each needs the researcher's confirmation in PREREG.md.
-- [RESEARCHER DECISION] `reasoning_effort` = `medium` (§16.5 proposes the documented default), sent explicitly.
+- [RESEARCHER DECISION] `reasoning_effort`: sent explicitly; registered per model (§12.1): `medium` on luna (§16.5 proposed the documented default; PREREG D13), `high` on sol from PREREG amendment R2 (§17.2), whose non-pilot runs also need an ENGAGED engagement check.
 - [RESEARCHER DECISION] `reasoning_mode` = `standard`, sent explicitly.
 - [RESEARCHER DECISION] `reasoning_summary` = off in harness cells. Summaries would help failure labelling but add a field to every request; whether summary text in replayed items is rendered is undocumented.
 - [RESEARCHER DECISION] `service_tier` = `flex` for every cell, never switched per episode.
@@ -447,6 +452,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - [RESEARCHER DECISION] `summary_max_output_tokens` = 32,000 (decided: PREREG D13, 2026-10-01; PREREG §6 sets `max_output_tokens: 32000` on luna and sol requests and makes no exception for summary calls). On OpenAI this cap includes reasoning tokens. Before D13 this was 8,192, as ARC.
 - [RESEARCHER DECISION] `notes_placement`: the last line of the instructions.
 - [RESEARCHER DECISION] `stop_on_context_mismatch` = true: stop and exclude the episode; abort the run after 2 such episodes.
+- [RESEARCHER DECISION] `stop_on_effort_mismatch` = true: the same for the echoed `reasoning.effort` (PREREG §17.2, amendment R2), with both kinds counted toward the abort after 2 excluded episodes (§12.2).
 - [RESEARCHER DECISION] `output_items_replay`: output items are sent back verbatim with null fields dropped. The pilot confirms that the API accepts this with `store: false`.
 
 **Decided by the researcher on 2026-10-01 and implemented here** (decision-sheet items for the PREREG; D12 and the last two came with the researcher's acceptance of the technical recommendations):
@@ -497,9 +503,16 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - Pilot blinding (follow-up, PREREG §11): a pilot's `meta.json` commits only the allowlisted part of `parallel` (`blinding.PARALLEL_FIELDS`), without the per-episode spend estimate, the gate's waits or the peaks in flight; the whole block goes to `parallel.json` in the run's raw folder (§7.4). Before, a pilot played in parallel committed `spend_reservation.last_estimate_usd`, twice its largest episode's spend. No pilot committed so far was played in parallel, so no committed file had it. Other experiments' `meta.json` is unchanged.
 - Pilot blinding (found in that follow-up's review, PREREG §11): for a pilot, the paid transport no longer logs a warning per incomplete response, or any call's status (§7.5). The warning went to stderr while the pilot ran, and the warnings, less the routine ones `summary.json` counts, counted the incomplete responses at the need step, which score 0 (D13). Pilots run before this change printed the warning whenever a response came back incomplete. Other experiments still log it.
 
+**Changed on 2026-10-02: PREREG amendment R2** (§12; the researcher's decisions of 2026-10-02: sol at high effort after a blinded engagement check, T_d = 210):
+- `harnesses/registered.py`: sol's registered effort is `high`, luna's `medium`. `run` and `dry-run` default to it; `run` refuses another effort outside pilots and a non-pilot sol run without an ENGAGED check. The probes keep their medium settings.
+- The runner checks the echoed `reasoning.effort` on every response, as it checks `reasoning.context` (`stop_on_effort_mismatch`, `REASONING_EFFORT_MISMATCH`), and the summaries, `meta.json` and the costs row's notes count effort echoes too.
+- New $0 commands: `reasoning-check`, which scores the engagement check, and `echo-count`.
+- `FakeModel` takes `echo_effort` and `reasoning_tokens_fn`.
+- `pilot-report` pools by model and requested effort (§7.4).
+
 **Technical choices made here** (not D-items; open to the researcher's review):
 - Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
-- The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells (§7.4).
+- The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells, and pools by model and requested effort (§7.4).
 - An approval line is compared as text across the three copies: changing its `max_usd` or experiments revokes it until the new line is on all three (§8).
 - Spend is measured in one place, `common.costs.spend_usd` (re-exported as `common.approval.spend_usd`): block spend, the phase caps, a run's stop and the probe split all call it (§8).
 - D13 as implemented (§7.5):
@@ -535,3 +548,37 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
   - that latency is unchanged. `call_latency_s`, the summary's latency and the costs row's `latency_s` are wall-clock seconds per call, which concurrent load can change, so latency from a parallel run is not comparable with a sequential one (the costs row says `parallel=N`);
   - that cache hits are unchanged. Episodes of one template share their early payloads, and played together their calls may hit or miss the provider's prompt cache differently than one after another, which changes `cached_input_tokens` and the billed estimate, not the payloads.
 - **A spend estimate is an estimate.** Twice the largest finished episode can still be short, for example when reasoning tokens jump. The transport's stop then ends the run, with the episodes in flight cut short (`RUN_STOPPED`). The per-call gate keeps the spend within one call of the planned spend, as sequentially (§7.6), on its assumption that a request has no more input tokens than its JSON body has bytes. That is checked for text, not for replayed reasoning items.
+- **The engagement check counts tokens, not content** (§12.3). An evidence-step call with 32 or more reasoning tokens need not have reasoned about the clue, and the encrypted items are not inspected (PREREG §17.2, "What the check does not show").
+- **The check's pooled figures can be combined with the pilot report's** (§12.3, §7.4). The check's mean reasoning tokens per call before the need step, times the number of those calls, gives their pooled total; subtracted from the pooled pilot report's reasoning total for the same two runs, it leaves the reasoning at and after the need step (the need step comes near the end of an episode), pooled over both arms. That is never a per-arm value, but it is close to a need-step quantity, so nobody computes it.
+- **The registered-settings guard reads the working tree** (§12.1). It accepts any `reasoning_check.json` under `results/persistgym_pilot/` in this checkout, committed or not, as the paid guard's other checks catch mistakes rather than a hostile operator (§8). The check's report is meant to be committed with block 1's results before a sol validity run.
+
+## 12. Registered settings and the engagement check (PREREG §17.2)
+PREREG amendment R2 (2026-10-02) raises sol to `reasoning.effort: high` for H2, but only if a blinded check finds that sol's reasoning engages at high effort, and fixes sol's T_d at 210 (T_o = 70). This section is the code that enforces it.
+
+### 12.1 Registered efforts and the `run` guard (`registered.py`)
+`REGISTERED_EFFORT` = {`gpt-6-luna`: `medium`, `gpt-6.1-sol`: `high`}; a model not in the table gets `medium`. A model string that starts with a registered model and a hyphen, such as a dated snapshot, counts as that model (`model_family`, the prefix rule of `pricing.price_for`), so `--model gpt-6.1-sol-<date>` is sol. `run` and `dry-run` send the registered effort unless `--effort` is given (`cli.parse_args`). Before it takes the paid-run lock, `run` calls `registered.check_run_settings` and refuses (exit 2):
+- for any experiment other than `persistgym_pilot` (validity runs, the main sweep, any later experiment), an effort other than the model's registered one;
+- for a model in `ENGAGEMENT_REQUIRED` (sol) outside `persistgym_pilot`, unless the `results/persistgym_pilot/*/reasoning_check.json` files in this checkout for sol at `high`, under the registered rule (`registered.rule()`, the file's `rule` field), say `ENGAGED` in R2's order (`registered.engagement_refusal`): the check on pilot templates 0 and 1 (`CHECK_TEMPLATES`, the file's `check_templates`) decides; only if it is `UNSCORABLE` does the one on templates 2 and 3 decide; if that is `UNSCORABLE` too, nothing runs. It also refuses when any file for sol at `high` says `NOT_ENGAGED` (R2: if reasoning does not engage, no sol validity or main-sweep run, at either effort), when a file cannot be read, when two check pairs ran on the same templates, when two files on the same pair disagree, and when a check on templates 2 and 3 exists without an `UNSCORABLE` one on 0 and 1 or beside an `ENGAGED` one. Files of the same pair (a re-scoring) count once. Files under another rule or on other templates do not count, and the refusal names them.
+
+Pilots (`persistgym_pilot`) may use any explicit effort; the engagement check's own runs are sol pilots at `high`. The probes are not covered: `probe-echo` and `probe-replay` keep `--effort medium` as their default on both models, and the fork design still refuses any setting other than its registered ones (PREREG §17.1; §9.3).
+
+### 12.2 The effort echo
+`runner.check_echo` reports `effort_ok` next to `context_ok`. An episode in which any response (step or summary) echoes another `reasoning.effort` than it requested is excluded, with the exclusion reason `reasoning.effort requested ..., echoed ...`, and stops there with exit reason `REASONING_EFFORT_MISMATCH` (`stop_on_effort_mismatch`, default true). Its `echo_mismatches` lists the kinds of mismatch it had (`context`, `effort`); a response that differs in both is recorded as both before the episode stops, and its exclusion reason names both. Both kinds count toward the run's abort after 2 excluded episodes; the run ends `ABORTED_CONTEXT_MISMATCH`, `ABORTED_EFFORT_MISMATCH` or, for both kinds, `ABORTED_ECHO_MISMATCH` (`runner.ECHO_ABORTS`).
+
+Reported: each episode's `echo.effort_requested` and `echo.effort_echoed` (counts), `meta.json`'s `reasoning_effort_echoed`, `effort_matched` next to `matched` in the echo-match tables of `summary.json` and the pooled pilot report (§7.4), and `effort_mismatches=` in the costs row's notes. In block 1, before this check existed, all 9,579 responses echoed the requested `medium` (§12.4).
+
+### 12.3 The engagement check (`reasoning_check.py`, `reasoning-check`)
+```
+uv run python -m harnesses reasoning-check <F-r run_id> <F-0 run_id> \
+    --reference 20261002T083238Z-F-r-gpt-6.1-sol 20261002T083706Z-F-0-gpt-6.1-sol
+```
+$0. It reads the two check runs' `meta.json` (`results/persistgym_pilot/<run_id>/`) and their raw `episodes.jsonl` and `transcript.jsonl.gz` (`results/raw/persistgym_pilot/<run_id>/`), and refuses (exit 2) unless they are one F-r and one F-0 `persistgym_pilot` run of `gpt-6.1-sol` at `high`, on the same base episodes of pilot templates 0 and 1, or 2 and 3 (`registered.CHECK_TEMPLATES`), × the 4 D11 far task cells. It also refuses a run whose `episodes.jsonl` holds an episode twice (a run id reused, whose raw files were appended to). Reference runs (`--reference`, descriptive only) must also be one F-r and one F-0 sol pilot run, so that no pool is one arm.
+- **Need steps** come from the generator: each run's episodes are re-generated from its `meta.json` (generator config and episode ids), checked against the config hashes and evidence steps the run recorded. The need step only bounds the "before the need step" calls; no need-step quantity is computed.
+- **Evidence-step calls:** in each derived-far episode that is not excluded, the first step call at each of its `designed.evidence_steps`, not a lookup result and not a summary call. An episode that stopped early for another reason (`API_ERROR`, `COST_CAP`, `MAX_TURNS`) counts with the calls it made; no episode is re-run. Reasoning tokens are `usage.output_tokens_details.reasoning_tokens` (`pricing.usage_numbers`, the runner's accessor).
+- **E** = the share of those calls, over both arms, with at least 32 reasoning tokens. **Verdict:** `UNSCORABLE` if fewer than 6 of the 8 derived-far episodes ended `DONE` and not excluded, or either run ended in one of `ECHO_ABORTS`; otherwise `ENGAGED` iff E ≥ 0.50 (exact fraction), else `NOT_ENGAGED`.
+- **Descriptive pools** (check runs; reference runs), each over both arms: episodes, derived-far episodes and how many ended normally, runs stopped on an echo mismatch, E with its numerator and denominator, the step calls before the need step with their reasoning tokens (mean, median, share with at least 1), calls, output tokens of all calls, billed cost in total and per episode, errors (as in `summary.json`) and the echo-match counts of `reasoning.context` and `reasoning.effort`.
+
+It writes `results/persistgym_pilot/reasoning-check-<time>/reasoning_check.json` and prints it, with the verdict on stderr. The file is built from allowlists (`OUTPUT_KEYS`, `POOL_KEYS`): the rule's constants and PREREG reference, the run ids and the check's templates, model and effort, the counts and E above, the verdict and its reason, the pools, a blinding note, the time, the PREREG version and the git commit. Raw episode records are cut down to the fields the check needs as they are read, so `need_correct`, `need_phase` and the other outcome fields reach no computation. Tests (`tests/test_reasoning_check.py`) check that the keys are exactly the allowlists, that swapping every per-arm value between the two runs' raw files (reasoning tokens at every call, need step included, and need-step success) leaves the output unchanged, and that need-step success alone changes nothing.
+
+### 12.4 Echo counts (`echo-count`)
+`uv run python -m harnesses echo-count` ($0) prints, per raw run of the PersistGym-stream experiments (or of `--experiment`), the responses and how many echoed the requested `reasoning.context` and `reasoning.effort`. It reads only those four echo fields of each transcript record: one echo per request for harness runs, the `echoes` of each trial for the probes. On 2026-10-02 it gave the block-1 count in PREREG §17.2: 9,579 of 9,579 responses echoed the requested effort, over the echo checks, both replay-probe designs, the PersistGym pilots and luna's two validity runs.

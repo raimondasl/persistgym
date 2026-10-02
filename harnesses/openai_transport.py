@@ -39,7 +39,8 @@ sequential run can. The
 runner records that stop as `COST_CAP`, but it is the planned spend, not a per-run cost guard
 (PREREG §7.7's hold is about the ARC run guard), so it places no hold; a per-run guard, if
 one is ever added here, must place one (`common.hold.place_hold`). It logs
-every response's echoed `reasoning.context`, returned model string and served service tier,
+every response's echoed `reasoning.context` and `reasoning.effort` (the row's notes count the
+mismatches of each), returned model string and served service tier,
 and `finalize` appends exactly one results/costs.csv row via `common.costs.append_row`, with
 both the list cost and the billed estimate. A response whose returned model string has no
 price is still logged, priced as the requested model and flagged in the row's notes. For a
@@ -223,6 +224,8 @@ class OpenAIResponsesTransport:
             echo = {
                 "requested_context": (payload.get("reasoning") or {}).get("context"),
                 "echoed_context": (data.get("reasoning") or {}).get("context"),
+                "requested_effort": (payload.get("reasoning") or {}).get("effort"),
+                "echoed_effort": (data.get("reasoning") or {}).get("effort"),
                 "model_returned": data.get("model"),
                 "service_tier_requested": payload.get("service_tier"),
                 "service_tier_returned": data.get("service_tier"),
@@ -236,9 +239,11 @@ class OpenAIResponsesTransport:
         # response, less the routine ones its summary.json counts, would count those at the
         # need step, which score 0 (D13); the raw transcript holds every call's status.
         blinded = blinding.is_blinded(self.approval.experiment)
-        log.info("model=%s reasoning.context requested=%s echoed=%s tier=%s status=%s",
-                 echo["model_returned"], echo["requested_context"], echo["echoed_context"],
-                 echo["service_tier_returned"], "withheld" if blinded else echo["status"])
+        log.info("model=%s reasoning.context requested=%s echoed=%s reasoning.effort "
+                 "requested=%s echoed=%s tier=%s status=%s", echo["model_returned"],
+                 echo["requested_context"], echo["echoed_context"], echo["requested_effort"],
+                 echo["echoed_effort"], echo["service_tier_returned"],
+                 "withheld" if blinded else echo["status"])
         if echo["status"] == "incomplete" and not blinded:
             # D13: the caller scores it (an invalid action at a step; a retry for a summary)
             log.warning("incomplete response (reason=%s, max_output_tokens=%s)",
@@ -273,13 +278,16 @@ class OpenAIResponsesTransport:
         try:
             mismatches = sum(1 for e in self.echo_log
                              if e["requested_context"] != e["echoed_context"])
+            effort_mismatches = sum(1 for e in self.echo_log
+                                    if e["requested_effort"] != e["echoed_effort"])
             git = runmeta.git_state()  # the commit of the code that made the calls
             row = self.ledger.costs_row(
                 timestamp_utc=runmeta.utc_now(), run_id=run_id, milestone=milestone,
                 experiment=self.approval.experiment, cell_or_config=cell_or_config,
                 git_commit=git["git_commit"],
                 notes=(f"{spend_tag(self.approval.approved_block)} "
-                       f"context_mismatches={mismatches}; git_dirty={git['git_dirty']}"
+                       f"context_mismatches={mismatches}; "
+                       f"effort_mismatches={effort_mismatches}; git_dirty={git['git_dirty']}"
                        + (f"; {notes}" if notes else "")))
             if blinding.is_blinded(self.approval.experiment):
                 # PREREG §11: no per-arm reasoning tokens from pilot data in committed files.

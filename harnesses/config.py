@@ -48,7 +48,12 @@ class HarnessConfig:
     # --- model and request settings (PLAN §7, amendment §16.5) ---
     model: str = "gpt-6-luna"
     reasoning_effort: str = "medium"
-    """Always sent explicitly. 'medium' is the documented default for luna and sol."""
+    """Always sent explicitly (`reasoning.effort`), on every step and summary request. 'medium'
+    is the documented default for luna and sol. The registered effort is per model
+    (`harnesses.registered.REGISTERED_EFFORT`; PREREG §6 as amended by R2, §17.2): luna
+    medium, sol high. The CLI's `run` and `dry-run` default to it, and `run` refuses any other
+    effort outside pilots. The runner checks the echoed effort on every response
+    (`stop_on_effort_mismatch`)."""
     reasoning_mode: str = "standard"
     """Always sent explicitly (`reasoning.mode`)."""
     reasoning_summary: str | None = None
@@ -102,8 +107,12 @@ class HarnessConfig:
     stop_on_context_mismatch: bool = True
     """Stop an episode at the first response whose echoed reasoning.context differs from the
     request. The episode is excluded either way."""
+    stop_on_effort_mismatch: bool = True
+    """The same for the echoed reasoning.effort (PREREG §17.2, amendment R2: an effort
+    mismatch excludes the episode as a context mismatch does)."""
     abort_after_mismatched_episodes: int = 2
-    """Abort the whole run after this many excluded (mismatched) episodes."""
+    """Abort the whole run after this many excluded (echo-mismatched) episodes, whichever echo
+    differed."""
 
     max_turns: int = 200
     """Safety stop for one episode (lookups add at most lookup_max_per_episode turns)."""
@@ -144,7 +153,9 @@ class HarnessConfig:
 # Fields (or fixed behaviours) the researcher must confirm in PREREG.md. Each entry:
 # (PLAN reference, what it decides). DESIGN.md lists every one; a test checks that it does.
 RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
-    "reasoning_effort": ("§16.5", "medium proposed (documented default), sent explicitly"),
+    "reasoning_effort": ("§16.5, PREREG D13, R2", ("registered per model, sent explicitly: "
+                                                    "luna medium; sol high after an ENGAGED "
+                                                    "engagement check (PREREG §17.2)")),
     "reasoning_mode": ("§16.5", "standard, sent explicitly"),
     "reasoning_summary": ("§7", "whether harness cells request reasoning summaries (off)"),
     "service_tier": ("§12, §16.1", "flex for every cell; never switched per episode"),
@@ -165,5 +176,7 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
                                                       "8,192)")),
     "notes_placement": ("§6", "last line of the instructions"),
     "stop_on_context_mismatch": ("§7, CLAUDE.md", "stop and exclude the episode"),
+    "stop_on_effort_mismatch": ("PREREG §17.2 (R2)", ("stop and exclude the episode, as for "
+                                                      "reasoning.context")),
     "output_items_replay": ("§7", "output items sent back verbatim, null fields dropped"),
 }

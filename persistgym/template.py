@@ -403,7 +403,14 @@ def hidden_values(t: Template) -> list[int]:
 
     * Chain form: the target, its resolved clue values and running totals, each chain's H1
       and H3 values, and the stand-in's value, resolved clue values and running totals.
-    * Direct form: the target and the running totals of 2 or more clue values.
+      All are reserved strings, so no log filler or routine text shows them (audited:
+      `chain_hidden_values_never_shown`). The stand-in's running totals are not drawn
+      apart from the options, so one can equal a non-target option (pilot template 1 and 6
+      of main templates 0-999), which only the need step's option list shows.
+    * Direct form: the target and the running totals of 2 or more clue values. The direct
+      form does not reserve the running totals (generator 0.3.0), so the log filler can show
+      one; `harnesses.reasoning_check` drops, per episode, any number shown before the need
+      step.
 
     Less the distractor values, which every episode shows: they are drawn as in generator
     0.3.0, avoiding options and clue values but not running totals, so a 3-clue running

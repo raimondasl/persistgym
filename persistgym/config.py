@@ -98,8 +98,9 @@ class GeneratorConfig:
     `sol-chain`). 'direct': the clue's binding prints its value. 'chain': the value is never
     printed; the clue's record gives it through a two-hop relay over helper entities (an
     anchor value, a far and a near difference, and a decoy difference), so that working it
-    out takes two 3-digit operations (`template.ChainSpec`). Template values (options, clue
-    values, ranks, stand-in) are those of the direct form for every seed."""
+    out takes two 3-digit operations (`template.ChainSpec`), though the units digits alone pick
+    the option. Template values (options, clue values, ranks, stand-in) are those of the
+    direct form for every seed."""
 
     # --- distractor bindings (PREREG D1) ---
     n_distractors: int = 2

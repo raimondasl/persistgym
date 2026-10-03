@@ -29,9 +29,12 @@ R2's check runs) quantities pooled over both arms: the step calls before the nee
 their reasoning tokens (mean, median, share with at least 1), E with its numerator and
 denominator, output tokens, billed cost per episode, errors, the echo-match counts of
 `reasoning.context` and `reasoning.effort`, and (R3) how many of the counted evidence-step
-calls wrote a value the episode never shows (`persistgym.template.hidden_values`: a clue's
-worked-out value, a running total, the target) in their visible reply, as whole numbers
-matched as in D6: whether the notice's "do not write it" held. No threshold applies to it.
+calls wrote a value the episode never shows before its need step (`_hidden`: the template's
+`persistgym.template.hidden_values`, such as a clue's worked-out value, a running total, a
+helper's value or the target, less any number the episode shows) in their visible reply, as
+whole numbers matched as in D6: whether the notice's "do not write it" held. The list also
+holds the stand-in's values, which a base episode never derives (a reply can hold one only
+by chance). No threshold applies to it.
 
 Blinding (PREREG §11). The output is built from explicit allowlists (`OUTPUT_KEYS`,
 `POOL_KEYS`). Every number in it pools both arms of a pair: there is no per-arm value, no
@@ -126,7 +129,7 @@ class Run:
     episodes: list[dict]  # raw episode records, EPISODE_FIELDS and evidence_steps only
     calls: list[Call]
     design: dict[str, Episode]  # episode id -> the generated episode (need step, evidence)
-    hidden: dict[str, frozenset[int]]  # episode id -> its template's `hidden_values`
+    hidden: dict[str, frozenset[int]]  # episode id -> what it never shows before need (`_hidden`)
 
     @property
     def cell(self) -> str:
@@ -147,9 +150,13 @@ def _echo_ok(echo: dict, kind: str) -> bool:
     return echo.get(f"{kind}_requested") == echo.get(f"{kind}_echoed")
 
 
-_WHOLE_NUMBER = re.compile(r"(?<![0-9A-Za-z])[0-9]+(?![0-9A-Za-z])")
+_WHOLE_NUMBER = re.compile(r"(?<![0-9A-Za-z])[1-9][0-9]*(?![0-9A-Za-z])")
 """A whole number in a reply, by D6's rule (`survival.whole_word_regex`): not part of a
-longer run of digits or letters."""
+longer run of digits or letters. A run with a leading zero ("064") is not the value 64
+under that rule, so it is not read as one."""
+_SHOWN_NUMBER = re.compile(r"(?<![0-9])[1-9][0-9]*(?![0-9])")
+"""A number an observation shows, by the reserved-string rule (`filler.Reserved`): not part
+of a longer run of digits, whatever letters stand next to it."""
 
 
 def _call(rec: dict) -> Call:
@@ -198,16 +205,25 @@ def _design(meta: dict, run_id: str) -> dict[str, Episode]:
 
 
 def _hidden(meta: dict, design: dict[str, Episode]) -> dict[str, frozenset[int]]:
-    """Per episode, the values its template never shows (`persistgym.template.hidden_values`,
-    from the template re-sampled with the run's generator config)."""
+    """Per episode, the values it never shows before its need step: its template's
+    `persistgym.template.hidden_values` (re-sampled with the run's generator config), less
+    any number the episode's system prompt or observations before the need step show. On
+    `sol-chain` that takes nothing away (the audit `chain_hidden_values_never_shown`); in
+    the direct form (a reference run on the default config) it drops a running total that
+    the log filler happens to show, since the direct form does not reserve them."""
     cfg = GeneratorConfig.from_dict(meta["config"]["generator_config"])
     by_template = {}
-    for ep in design.values():
+    out = {}
+    for eid, ep in design.items():
         if ep.template_id not in by_template:
             split, _, index = ep.template_id.rpartition("-")
             by_template[ep.template_id] = frozenset(
                 hidden_values(sample_template(split, int(index), cfg)))
-    return {eid: by_template[ep.template_id] for eid, ep in design.items()}
+        shown = {int(x) for text in [ep.system_prompt, *(s.observation for s in
+                                                         ep.steps[: ep.need_step])]
+                 for x in _SHOWN_NUMBER.findall(text)}
+        out[eid] = by_template[ep.template_id] - shown
+    return out
 
 
 def load_run(run_id: str, *, results_root: Path, raw_root: Path) -> Run:

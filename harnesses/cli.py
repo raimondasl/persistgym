@@ -25,13 +25,16 @@ each --gen-set FIELD=JSON applied. Before the paid-run lock, `run` refuses
 * outside persistgym_pilot, any effort but the model's registered one;
 * outside persistgym_pilot, a gpt-6.1-sol run off the generator preset sol-chain (exactly: a
   --gen-set changes its config hash) or in a harness cell other than F-r and F-0;
+* in persistgym_validity, a gpt-6.1-sol run other than its validity run: F-0 on --split
+  validity, --variant restated or withheld (`registered.VALIDITY_RUN`; it needs no G1);
 * outside persistgym_pilot, a gpt-6.1-sol run unless the reasoning_check.json files on
   sol-chain's config under results/persistgym_pilot/ say ENGAGED in R2's order and none says
   NOT_ENGAGED (`registered.engagement_refusal`; a check file decides only for the config its
   runs played, so R2's NOT_ENGAGED file binds the default config only), and outside
   persistgym_validity unless `registered.G1_PASSED` records G1 on sol-chain;
-* a gpt-6.1-sol pilot at effort high (R3's engagement check) off sol-chain, and any such
-  pilot after R3's hard stop (a NOT_ENGAGED check on sol-chain, or an UNSCORABLE one twice).
+* a gpt-6.1-sol pilot at effort high (R3's engagement check) off sol-chain or in a harness
+  cell other than F-r and F-0, and any gpt-6.1-sol pilot above medium effort after R3's hard
+  stop (a NOT_ENGAGED check on sol-chain, or an UNSCORABLE one twice).
 The probes keep their registered settings (medium on both models; PREREG §17.1).
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the
@@ -301,7 +304,8 @@ def cmd_run(a) -> int:
         print(f"refused: --gen-set: {e}", file=sys.stderr)
         return 2
     why = registered.check_run_settings(a.experiment, a.model, a.effort, cell.cell_id,
-                                        runmeta.config_hash(gen.to_dict()), RESULTS)
+                                        runmeta.config_hash(gen.to_dict()), RESULTS,
+                                        split=a.split, variant=a.variant)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2
@@ -569,9 +573,14 @@ def cmd_reasoning_check(a) -> int:
     two sol pilot runs at high effort on the sol-chain config, F-r and F-0
     (`harnesses.reasoning_check`). Writes
     results/persistgym_pilot/reasoning-check-<time>/reasoning_check.json and prints it: the
-    verdict and quantities pooled over both arms, nothing per arm."""
+    verdict and quantities pooled over both arms, nothing per arm. After R3's hard stop
+    (`registered.hard_stop`) it scores nothing more."""
     results_root = Path(a.results_root) if a.results_root else RESULTS
     raw_root = Path(a.raw_root) if a.raw_root else RAW
+    stopped = registered.hard_stop(results_root)
+    if stopped:
+        print(f"refused: {stopped}; no further engagement check is scored", file=sys.stderr)
+        return 2
     try:
         for run_id in [*a.run_id, *a.reference]:
             require_plain_name("run id", run_id)

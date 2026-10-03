@@ -38,8 +38,10 @@ RESULTS = runmeta.REPO_ROOT / "results"
 
 
 def guard(experiment: str, model: str, effort: str, root: Path, cell: str = "F-0",
-          gen: str = VARIANT) -> str | None:
-    return registered.check_run_settings(experiment, model, effort, cell, gen, root)
+          gen: str = VARIANT, split: str = "validity", variant: str = "restated") -> str | None:
+    """The guard on these settings; the split and variant are a validity run's unless given."""
+    return registered.check_run_settings(experiment, model, effort, cell, gen, root,
+                                         split=split, variant=variant)
 
 
 def test_the_registered_settings():
@@ -163,21 +165,34 @@ def test_a_snapshot_or_alias_of_a_model_is_that_model(tmp_path):
 
 def test_pilots_may_use_any_settings_but_sol_at_high_effort(tmp_path):
     """R3: pilots stay free, except that a sol pilot at high effort is R3's engagement check:
-    sol-chain only, and none after R3's hard stop."""
-    for model, effort in ((LUNA, "high"), (LUNA, "medium"), (SOL, "medium"), (SOL, "low")):
+    sol-chain in F-r or F-0 only; and after R3's hard stop no sol pilot runs above medium
+    effort ("no further variant or effort")."""
+    for model, effort in ((LUNA, "high"), (LUNA, "medium"), (LUNA, "xhigh"), (SOL, "medium"),
+                          (SOL, "low"), (SOL, "xhigh"), (SOL, "max")):
         for gen in (DEFAULT, VARIANT, "0" * 64):
             for cell in ("F-r", "W-n-0", "Σ-n-r"):
-                assert guard("persistgym_pilot", model, effort, tmp_path, cell, gen) is None
+                assert guard("persistgym_pilot", model, effort, tmp_path, cell, gen,
+                             "pilot", "base") is None
     assert guard("persistgym_pilot", SOL, "high", tmp_path) is None
     assert guard("persistgym_pilot", SOL, "high", tmp_path, "F-r") is None
     why = guard("persistgym_pilot", SOL, "high", tmp_path, gen=DEFAULT)
     assert "is PREREG.md §17.3 (amendment R3)'s engagement check" in why
     assert "--gen-preset sol-chain" in why
+    for cell in ("W-n-r", "W-n-0", "Σ-n-r", "W-0"):
+        why = guard("persistgym_pilot", SOL, "high", tmp_path, cell)
+        assert "engagement check: it runs in the harness cells F-r, F-0 only" in why
     _r2_file(tmp_path)                                  # R2's NOT_ENGAGED binds the default
     assert guard("persistgym_pilot", SOL, "high", tmp_path) is None
     _write_check(tmp_path, "r3", verdict="NOT_ENGAGED")
-    assert registered.HARD_STOP in guard("persistgym_pilot", SOL, "high", tmp_path)
-    assert guard("persistgym_pilot", SOL, "medium", tmp_path) is None   # other pilots free
+    for effort in ("high", "xhigh", "max"):                            # R3's hard stop
+        for gen in (DEFAULT, VARIANT, "0" * 64):
+            why = guard("persistgym_pilot", SOL, effort, tmp_path, "F-0", gen) or ""
+            assert registered.HARD_STOP in why or "--gen-preset sol-chain" in why
+        assert registered.HARD_STOP in guard("persistgym_pilot", SOL, effort, tmp_path)
+    for effort in ("none", "minimal", "low", "medium"):                # not above medium
+        assert guard("persistgym_pilot", SOL, effort, tmp_path, "W-n-r", DEFAULT) is None
+    assert guard("persistgym_pilot", LUNA, "xhigh", tmp_path) is None  # luna not covered
+    assert registered.ABOVE_DEFAULT_EFFORT == ("high", "xhigh", "max")
 
 
 @pytest.mark.parametrize("experiment", ["persistgym", "persistgym_validity",
@@ -199,9 +214,12 @@ def test_outside_pilots_only_the_registered_effort(tmp_path, experiment, monkeyp
 def test_sol_outside_pilots_plays_sol_chain_in_f_r_and_f_0_only(tmp_path, monkeypatch):
     _write_check(tmp_path, "c1")
     monkeypatch.setitem(registered.G1_PASSED, SOL, VARIANT)
+    assert guard("persistgym", SOL, "high", tmp_path, "F-r", split="main",
+                 variant="base") is None
+    assert guard("persistgym", SOL, "high", tmp_path, "F-0", split="main",
+                 variant="base") is None
+    assert guard("persistgym_validity", SOL, "high", tmp_path, "F-0") is None
     for experiment in ("persistgym_validity", "persistgym"):
-        assert guard(experiment, SOL, "high", tmp_path, "F-r") is None
-        assert guard(experiment, SOL, "high", tmp_path, "F-0") is None
         for gen in (DEFAULT, "0" * 64):
             why = guard(experiment, SOL, "high", tmp_path, gen=gen)
             assert "on the generator preset 'sol-chain' only" in why
@@ -223,6 +241,28 @@ def test_the_main_sweep_needs_g1_on_the_variant(tmp_path, monkeypatch):
     monkeypatch.setitem(registered.G1_PASSED, SOL, VARIANT)
     assert guard("persistgym", SOL, "high", tmp_path) is None
     assert guard("statecarry_persistgym", SOL, "high", tmp_path) is None
+
+
+def test_sols_validity_experiment_holds_its_validity_run_only(tmp_path):
+    """PREREG §4.4, §17.3: sol's validity run needs no G1, so `persistgym_validity` lets sol
+    run exactly that, F-0 on the validity split, restated or withheld. A base-variant or F-r
+    run there (H2's contrast), or one on the main split, would bypass G1: it refuses."""
+    _write_check(tmp_path, "r3")
+    for variant in ("restated", "withheld"):
+        assert guard("persistgym_validity", SOL, "high", tmp_path, "F-0",
+                     variant=variant) is None
+    for cell, split, variant in (("F-r", "validity", "restated"), ("F-0", "validity", "base"),
+                                 ("F-r", "validity", "base"), ("F-0", "main", "restated"),
+                                 ("F-r", "main", "base")):
+        why = guard("persistgym_validity", SOL, "high", tmp_path, cell, split=split,
+                    variant=variant)
+        assert "as its validity run only" in why and f"got cell {cell}" in why
+        assert f"--split {split}, --variant {variant}" in why
+    # luna is not covered; sol's main sweep still waits for G1
+    assert guard("persistgym_validity", LUNA, "medium", tmp_path, "F-r", DEFAULT, "main",
+                 "base") is None
+    assert "G1_PASSED" in guard("persistgym", SOL, "high", tmp_path, "F-r", split="validity",
+                                variant="base")
 
 
 def test_checks_are_keyed_by_generator_config(tmp_path):
@@ -370,9 +410,9 @@ def armed(monkeypatch, tmp_path):
     return tmp_path / "results"
 
 
-VALIDITY = ["run", "--split", "validity", "--experiment", "persistgym_validity", "--n", "1",
-            "--task-cell", "derived-rec-far", "--approved-block", "1-pilots",
-            "--planned-usd", "1"]
+VALIDITY = ["run", "--split", "validity", "--variant", "restated", "--experiment",
+            "persistgym_validity", "--n", "1", "--task-cell", "derived-rec-far",
+            "--approved-block", "1-pilots", "--planned-usd", "1"]
 
 
 @pytest.mark.parametrize(("args", "message"), [
@@ -389,6 +429,14 @@ VALIDITY = ["run", "--split", "validity", "--experiment", "persistgym_validity",
      "registered reasoning effort 'medium'"),
     (["--cell", "F-r", "--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot",
       *SMALL_SETS], "generator preset 'sol-chain' only"),
+    (["--cell", "W-n-r", "--model", SOL, "--split", "pilot", "--experiment",
+      "persistgym_pilot", "--gen-preset", "sol-chain"], "harness cells F-r, F-0 only"),
+    (["--cell", "F-r", "--model", SOL, "--gen-preset", "sol-chain"],
+     "as its validity run only"),
+    (["--cell", "F-0", "--model", SOL, "--gen-preset", "sol-chain", "--variant", "base"],
+     "as its validity run only"),
+    (["--cell", "F-0", "--model", SOL, "--gen-preset", "sol-chain", "--split", "main"],
+     "as its validity run only"),
     (["--cell", "F-0", "--model", LUNA, "--gen-set", "nope=1"], "--gen-set")])
 def test_run_refuses_unregistered_settings_before_the_lock(armed, capsys, args, message):
     assert cli.main([*VALIDITY, *args]) == 2
@@ -470,7 +518,7 @@ def _check_run(argv: list[str], *, gen: str = VARIANT, allowed: bool = True):
     eps = cli._run_matrix(a).episodes(a.split, a.start, cfg, a.variant)
     assert len(eps) <= cli.PILOT_MAX_EPISODES
     why = guard(a.experiment, a.model, a.effort, RESULTS, a.cell,
-                runmeta.config_hash(cfg.to_dict()))
+                runmeta.config_hash(cfg.to_dict()), a.split, a.variant)
     assert (why is None) is allowed, why
     ids, _ = _medium_pilot()
     assert [ep.episode_id for ep in eps] == ids

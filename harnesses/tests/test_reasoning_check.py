@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import gzip
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,8 @@ from harnesses.matrix import DERIVED_FAR, RunMatrix
 from harnesses.runner import run_batch
 from harnesses.tests.conftest import SMALL, SMALL_CHAIN
 from persistgym.config import PRESETS
+from persistgym.episode import TaskCell
+from persistgym.render import generate
 from persistgym.template import hidden_values, sample_template
 
 SOL, LUNA = "gpt-6.1-sol", "gpt-6-luna"
@@ -425,9 +428,40 @@ def test_the_visible_carry_count(tmp_path):
         pool = _check(root)["descriptive"]["check"]
         assert pool["evidence_step_replies_with_hidden_value"] == {
             "calls": n, "with_hidden_value": want}
-    # whole numbers only: 654 inside x654b is not one, and 6547 is another number
+    # whole numbers only: 654 inside x654b is not one, and 6547 is another number; under
+    # D6's rule "064" is not the value 64
     assert reasoning_check._WHOLE_NUMBER.findall("a 654, x654b, 6547 (654) 654.") == [
         "654", "6547", "654", "654"]
+    assert reasoning_check._WHOLE_NUMBER.findall("064 (64) x64 0 -64") == ["64", "64"]
+
+
+def test_the_visible_carry_count_drops_values_an_episode_shows():
+    """`_hidden`: a template's hidden values less any number the episode shows before its
+    need step. On sol-chain nothing is dropped (all are reserved and audited); in the direct
+    form (a reference run on the default config) the log filler can show a running total,
+    which the direct form does not reserve, and that value is dropped."""
+    def hidden(cfg, split, indices, cell):
+        design = {ep.episode_id: ep for _, eps in generate(split, indices, cfg,
+                                                           [TaskCell.from_id(cell)])
+                  for ep in eps}
+        return design, reasoning_check._hidden({"config": {"generator_config": cfg.to_dict()}},
+                                               design)
+    design, got = hidden(PRESETS["sol-chain"], "pilot", range(4), "derived-rec-far")
+    for eid, ep in design.items():
+        split, _, index = ep.template_id.rpartition("-")
+        assert got[eid] == set(hidden_values(sample_template(split, int(index),
+                                                             PRESETS["sol-chain"])))
+    design, got = hidden(PRESETS["default"], "main", range(10), "derived-nonrec-far")
+    dropped = 0
+    for eid, ep in design.items():
+        split, _, index = ep.template_id.rpartition("-")
+        full = set(hidden_values(sample_template(split, int(index), PRESETS["default"])))
+        texts = [ep.system_prompt, *(s.observation for s in ep.steps[: ep.need_step])]
+        shown = {int(x) for t in texts
+                 for x in re.findall(r"(?<![0-9])[1-9][0-9]*(?![0-9])", t)}
+        assert ep.target_value in got[eid] and got[eid] == full - shown
+        dropped += len(full - got[eid])
+    assert dropped >= 1                     # main templates 0-9 show at least one running total
 
 
 def test_hidden_values_of_a_variant_template():
@@ -467,9 +501,10 @@ def test_reasoning_check_cli_writes_the_report_and_unlocks_sols_runs(tmp_path, c
     # (PREREG §17.3); its main sweep still waits for G1
     assert registered.engagement_refusal(results, SOL, variant) is None
     assert registered.check_run_settings("persistgym_validity", SOL, "high", "F-0", variant,
-                                         results) is None
+                                         results, split="validity", variant="restated") is None
     assert "G1_PASSED" in registered.check_run_settings("persistgym", SOL, "high", "F-0",
-                                                        variant, results)
+                                                        variant, results, split="main",
+                                                        variant="base")
     # bad arguments refuse
     assert cli.main([*args[:1], "../x", IDS[1], *args[3:]]) == 2
     assert cli.main([*args[:1], IDS[0], IDS[0], *args[3:]]) == 2
@@ -486,9 +521,19 @@ def test_a_not_engaged_check_keeps_sols_runs_refused(tmp_path, capsys):
     variant = registered.VARIANT_GENERATOR_HASH
     # R3's hard stop: no sol validity or main-sweep run, and no further sol pilot at high
     assert registered.HARD_STOP in registered.check_run_settings(
-        "persistgym_validity", SOL, "high", "F-0", variant, results)
+        "persistgym_validity", SOL, "high", "F-0", variant, results, split="validity",
+        variant="withheld")
     assert registered.HARD_STOP in registered.check_run_settings(
-        "persistgym_pilot", SOL, "high", "F-r", variant, results)
+        "persistgym_pilot", SOL, "high", "F-r", variant, results, split="pilot",
+        variant="base")
+    # ... and no further check is scored, on any runs (no third design, no re-run)
+    eps2 = _eps(start=2)
+    _runs(tmp_path, eps2, lambda cid: _fake(eps2, 40), ids=("again-F-r", "again-F-0"))
+    assert cli.main(["reasoning-check", "again-F-r", "again-F-0", "--results-root",
+                     str(results), "--raw-root", str(tmp_path / "raw")]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("refused:") and registered.HARD_STOP in err
+    assert len(list((results / PILOT).glob("reasoning-check-*/reasoning_check.json"))) == 1
 
 
 # --- echo counts ---------------------------------------------------------------------------------

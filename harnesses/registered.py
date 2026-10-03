@@ -25,16 +25,20 @@ as amended by R2, §17.2, and R3, §17.3).
   `sol-chain`, is scored under `rule()`.
 * R3's hard stop: a NOT_ENGAGED check on `sol-chain`, or an UNSCORABLE one there twice, ends
   H2 on sol for good: every non-pilot sol run refuses, and so does every further sol pilot
-  at high effort. So does a G1 failure on the variant: `G1_PASSED` stays empty.
+  at an effort above medium (high, and the higher ones: "no further variant or effort").
+  So does a G1 failure on the variant: `G1_PASSED` stays empty.
 * `G1_PASSED`: model -> the generator config hash on which the researcher recorded G1 as
   passed (§4.4). Only the researcher's G1 decision PR sets it; while it is empty, sol's main
-  sweep refuses (fail closed). sol's validity run (`persistgym_validity`) needs no entry.
+  sweep refuses (fail closed). sol's validity run (`persistgym_validity`) needs no entry, so
+  it must be exactly a validity run (`VALIDITY_RUN`: F-0 on the validity split, restated or
+  withheld; §4.4): a base-variant or F-r run there would be H2's contrast before G1.
 
 `check_run_settings` is the guard `harnesses run` applies before it takes the paid-run lock:
 pilots (`persistgym_pilot`) may use any settings, except that a sol pilot at high effort is
-R3's engagement check and must play `sol-chain` (and refuses after the hard stop); every other
-experiment must send the model's registered effort, a model in `REGISTERED_GENERATOR` must use
-its preset and a model in `REGISTERED_CELLS` one of its cells, a model in
+R3's engagement check and must play `sol-chain` in F-r or F-0, and a sol pilot above medium
+effort refuses after the hard stop; every other experiment must send the model's registered
+effort, a model in `REGISTERED_GENERATOR` must use its preset and a model in
+`REGISTERED_CELLS` one of its cells, sol's validity run must be `VALIDITY_RUN`, a model in
 `ENGAGEMENT_REQUIRED` needs an ENGAGED check on that config in the order R2 registers
 (`engagement_refusal`), and sol's main sweep needs `G1_PASSED`. A model string counts as a
 registered model when it is that model or starts with it and a hyphen (`model_family`, as
@@ -48,6 +52,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from harnesses.config import REASONING_EFFORTS
 from persistgym.config import PRESET_HASHES
 
 PREREG_REF = "PREREG.md §17.3 (amendment R3)"
@@ -67,6 +72,10 @@ REGISTERED_CELLS: dict[str, tuple[str, ...]] = {"gpt-6.1-sol": ("F-r", "F-0")}
 G1_PASSED: dict[str, str] = {}
 """Model -> the generator config hash on which the researcher recorded G1 (§4.4) as passed.
 Set only by the researcher's G1 decision PR; empty, sol's main sweep refuses."""
+VALIDITY_RUN = {"cell": ("F-0",), "split": ("validity",), "variant": ("restated", "withheld")}
+"""PREREG §4.4 (§17.3 for sol): a validity run is F-0 on the validity split, restated or
+withheld. sol's `persistgym_validity` runs need no `G1_PASSED`, so they are held to exactly
+this."""
 
 ENGAGEMENT_REQUIRED = frozenset({"gpt-6.1-sol"})
 """Models whose non-pilot runs need an ENGAGED engagement check (R2: no sol validity or
@@ -89,6 +98,9 @@ CHECK_TEMPLATES = (("pilot-000000", "pilot-000001"), ("pilot-000002", "pilot-000
 an UNSCORABLE check on 0 and 1."""
 HARD_STOP = (f"R3's hard stop ({PREREG_REF}): H2 on sol is not testable in this task "
              "family; no further variant or effort")
+ABOVE_DEFAULT_EFFORT = REASONING_EFFORTS[REASONING_EFFORTS.index(DEFAULT_EFFORT) + 1:]
+"""The efforts above medium (high, xhigh, max): after R3's hard stop no sol pilot runs at
+any of them ("no further variant or effort is tried")."""
 
 
 def _r2_rule() -> dict:
@@ -233,7 +245,8 @@ def engagement_refusal(results_root: Path, model: str, generator_hash: str) -> s
 
 def hard_stop(results_root: Path, model: str = ENGAGEMENT_MODEL) -> str | None:
     """R3's hard stop, if it has fired: a NOT_ENGAGED check on the variant, or an UNSCORABLE
-    one there twice (or an unreadable check file, which refuses until fixed); else None."""
+    one there twice (or an unreadable check file, which refuses until fixed); else None.
+    `check_run_settings` applies it to every sol pilot above medium effort."""
     why = engagement_refusal(results_root, model, VARIANT_GENERATOR_HASH)
     if why and (HARD_STOP in why or "cannot read the engagement check" in why):
         return why
@@ -241,28 +254,35 @@ def hard_stop(results_root: Path, model: str = ENGAGEMENT_MODEL) -> str | None:
 
 
 def check_run_settings(experiment: str, model: str, effort: str, cell: str,
-                       generator_hash: str, results_root: Path) -> str | None:
+                       generator_hash: str, results_root: Path, *, split: str,
+                       variant: str) -> str | None:
     """Why `harnesses run` must refuse these settings before any paid call, or None. In
     order:
     1. pilots may use any settings, except a sol pilot at high effort (R3's engagement
-       check), which must play the `sol-chain` config and refuses after R3's hard stop;
+       check), which must play the `sol-chain` config in F-r or F-0, and a sol pilot at any
+       effort above medium after R3's hard stop;
     2. every other experiment sends the model's registered effort (a dated snapshot or alias
        counts as its model, `model_family`);
     3. a model in `REGISTERED_GENERATOR` uses its preset's config;
     4. a model in `REGISTERED_CELLS` runs one of its cells;
-    5. a model in `ENGAGEMENT_REQUIRED` needs an ENGAGED check on that config
-       (`engagement_refusal`);
-    6. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config."""
+    5. in `persistgym_validity`, a model in `ENGAGEMENT_REQUIRED` runs exactly a validity
+       run (`VALIDITY_RUN`: cell F-0, `split` validity, `variant` restated or withheld);
+    6. such a model needs an ENGAGED check on that config (`engagement_refusal`);
+    7. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config."""
     family = model_family(model)
     sol = family in ENGAGEMENT_REQUIRED
     if experiment == PILOT_EXPERIMENT:
-        if not (sol and effort == ENGAGEMENT_EFFORT):
+        if not (sol and effort in ABOVE_DEFAULT_EFFORT):
             return None
-        if generator_hash != VARIANT_GENERATOR_HASH:
+        if effort == ENGAGEMENT_EFFORT and generator_hash != VARIANT_GENERATOR_HASH:
             return (f"a {family} pilot at effort {ENGAGEMENT_EFFORT} is {PREREG_REF}'s "
                     f"engagement check: it plays the generator preset {VARIANT_PRESET!r} only "
                     f"(--gen-preset {VARIANT_PRESET}, config {VARIANT_GENERATOR_HASH[:12]}), "
                     f"got config {generator_hash[:12]}")
+        if effort == ENGAGEMENT_EFFORT and cell not in REGISTERED_CELLS[ENGAGEMENT_MODEL]:
+            return (f"a {family} pilot at effort {ENGAGEMENT_EFFORT} is {PREREG_REF}'s "
+                    f"engagement check: it runs in the harness cells "
+                    f"{', '.join(REGISTERED_CELLS[ENGAGEMENT_MODEL])} only, got {cell}")
         return hard_stop(results_root, family)
     want = registered_effort(model)
     if effort != want:
@@ -278,6 +298,13 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
     if cells is not None and cell not in cells:
         return (f"{experiment} runs {family} in the harness cells {', '.join(cells)} only "
                 f"({PREREG_REF}), got {cell}")
+    got = {"cell": cell, "split": split, "variant": variant}
+    if sol and experiment == VALIDITY_EXPERIMENT and any(
+            got[k] not in allowed for k, allowed in VALIDITY_RUN.items()):
+        return (f"{experiment} runs {family} as its validity run only (PREREG §4.4, "
+                f"{PREREG_REF}): cell F-0, --split validity, --variant restated or withheld; "
+                f"got cell {cell}, --split {split}, --variant {variant}. Other sol runs "
+                "need G1 (harnesses/registered.py G1_PASSED)")
     why = engagement_refusal(results_root, model, generator_hash)
     if why:
         return why

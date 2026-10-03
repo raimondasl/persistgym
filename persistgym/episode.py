@@ -17,6 +17,7 @@ Schema 3 (generator 0.3.0, PREREG D39) adds the withheld control's stand-in bind
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
@@ -221,6 +222,20 @@ class Episode:
         d["lookup"] = LookupSpec(**d["lookup"])
         d["graph"] = DependencyGraph.from_dict(d["graph"])
         return cls(**d)
+
+
+def versionless_json(ep: Episode) -> str:
+    """The episode as canonical JSON (sorted keys, compact separators), without
+    `generator_version`: equal for two generator versions that render the same episode. The
+    golden fixtures and the spot-check digest compare episodes this way."""
+    d = ep.to_dict()
+    d.pop("generator_version")
+    return json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def content_sha256(ep: Episode) -> str:
+    """sha256 of `versionless_json(ep)`."""
+    return hashlib.sha256(versionless_json(ep).encode("utf-8")).hexdigest()
 
 
 def read_jsonl(path: str | Path) -> Iterator[Episode]:

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import html
 import io
 import itertools
@@ -40,7 +41,7 @@ from pathlib import Path
 
 from common.runmeta import REPO_ROOT, config_hash, git_state, prereg_version, utc_now
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, SEED_RANGES, GeneratorConfig
-from persistgym.episode import ALL_CELLS, VARIANTS, Episode
+from persistgym.episode import ALL_CELLS, VARIANTS, Episode, versionless_json
 from persistgym.render import EVENT_PREFIX, generate
 from persistgym.template import sample_template
 from persistgym.validity import (
@@ -58,6 +59,11 @@ VALIDITY_RUNS = (
     "results/persistgym_validity/20261002T084243Z-F-0-gpt-6-luna",
     "results/persistgym_validity/20261002T095135Z-F-0-gpt-6-luna",
 )
+GOLDEN_0_3_0_SPOTCHECK_SHA256 = "7d79178592c214e795c489412d6ec963e7112587468f7be57aa65931677fa9dc"
+"""`episodes_sha256` of the committed package `g1-validity-0-20-3d6bc648`'s 160 base episodes
+(validity templates 0-19 x 8 task cells, default config), taken with generator 0.3.0 before
+any change of generator 0.4.0. Its manifest predates `episodes_sha256`, so a rebuild matches
+it only while the current episodes still have this digest."""
 SPLIT = "validity"
 VARIANT = "base"
 DEFAULT_N = 20
@@ -75,6 +81,15 @@ OPTION_LINE = re.compile(r"^[A-Z]\) \d+$", re.MULTILINE)
 
 class SpotcheckError(RuntimeError):
     pass
+
+
+def episodes_sha256(eps: list[Episode]) -> str:
+    """sha256 over the episodes, in order, as canonical JSON lines without
+    `generator_version` (`episode.versionless_json`)."""
+    h = hashlib.sha256()
+    for ep in eps:
+        h.update(versionless_json(ep).encode("utf-8") + b"\n")
+    return h.hexdigest()
 
 
 def default_id(n: int, chash: str) -> str:

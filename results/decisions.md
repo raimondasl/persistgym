@@ -225,6 +225,31 @@ approved_block: 1-pilots | experiments: toggle_pilot,replay_probe,gemini_probe,a
 
 **Spend to date:** $23.54 billed of block 1's $70, unchanged ($46.46 left); this entry's pull request is $0.
 
+## 2026-10-03: R3 engagement check: NOT ENGAGED; hard stop, H2 on sol ends
+- **Runs** (PREREG §17.3; block `1-pilots`; each launched as a process with a console of its own): `20261003T055240Z-F-r-gpt-6.1-sol` and `20261003T060120Z-F-0-gpt-6.1-sol`, sol at effort high on the `sol-chain` variant (generator config `b0d0b020…`), pilot templates 0-1 × the 4 far task cells. Both `COMPLETED`.
+- **Verdict** (`uv run python -m harnesses reasoning-check 20261003T055240Z-F-r-gpt-6.1-sol 20261003T060120Z-F-0-gpt-6.1-sol --reference 20261002T173710Z-F-r-gpt-6.1-sol 20261002T180358Z-F-0-gpt-6.1-sol`; `results/persistgym_pilot/reasoning-check-20261003T061000Z/reasoning_check.json`): **E = 6/20 = 0.30 < 0.50, NOT_ENGAGED.** All 8 derived-far episodes ended normally, so the check is scorable.
+- **Descriptive, pooled over both arms:**
+
+  | | R3 check: `sol-chain`, high | R2 check: default config, high (reference) |
+  |---|---|---|
+  | Episodes; calls | 16; 360 | 16; 360 |
+  | Evidence-step calls with ≥ 32 reasoning tokens | 6 of 20 | 0 of 20 |
+  | Step calls before the need step | 336 | 336 |
+  | Reasoning tokens per such call: mean; median | 2.652; 0 | 0.432; 0 |
+  | Share of such calls with any reasoning | 12.2% | 3.3% |
+  | Output tokens, all calls | 5,274 | 4,398 |
+  | Billed cost; per episode | $0.890; $0.0556 | $0.699; $0.0437 |
+  | Errors | none (16 `DONE`, 0 excluded) | none |
+  | Echo match: `reasoning.context`; `reasoning.effort` | 360/360; 360/360 | 360/360; 360/360 |
+  | Evidence-step replies showing a hidden value | 0 of 20 | not counted |
+
+- **Consequence: R3's hard stop applies.** H2 on sol ends for good. It is reported as **not testable in this task family**, with both engagement checks as descriptive findings. No further variant, effort or check is tried, and the guard now refuses every non-pilot sol run for H2, every sol pilot above medium effort and any further scoring (checked: a `persistgym_validity` command on `sol-chain` refuses, citing this file).
+- **What it means:** told to work the value out at each clue and keep it private, sol at high effort reasoned more than before (6 of 20 evidence-step calls reached 32 tokens, against 0 of 20), but most evidence steps still drew little or no reasoning. Replay would have little to carry in most episodes.
+- **What it does not show:** anything about either arm, about success, or about reasoning at the need step. Token counts do not show content. It is about this task family, sol, and the two framings tried, not about reasoning replay in general.
+- **Open, the researcher's decision** (§17.3): whether H1 and H3 are adjusted as a Holm family of 4 (conservative) or of 2, recorded before any H1 or H3 test is computed.
+- **Unaffected:** luna's runs (H1, H3), the ARC path study (H4, H5), StateCarry and G0 (Oct 7). Amendment R4, a pre-registered sol replication of H1 on the default config at medium effort, is being prepared at the researcher's request.
+- **Spend:** the check cost $0.890 billed for both runs. Block 1: **$24.43 billed of $70** (phase 0 $20.57, phase 1a $3.87), 23 rows in `results/costs.csv`.
+
 ## 2026-10-03: Researcher request: a pre-registered sol replication of H1 (PREREG amendment R4)
 **Request (researcher, 2026-10-03, after PR #41 merged):** a small amendment that pre-registers a replication of H1 on gpt-6.1-sol now, before any H1 data exists, whatever happens to H2 ("please draft small amendment and I can approve it"). H2 on sol may stop under R3's hard stop, which would leave PersistGym with no frontier-model evidence; H1 concerns eviction and lookup, not reasoning.
 

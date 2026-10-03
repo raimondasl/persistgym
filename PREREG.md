@@ -170,7 +170,7 @@ For ARC runs: `run_id`, `game_id`, `config_id` (S0, S1, S2, S4, S0+SC), `config_
 - The `fact_value` string occurs nowhere else in the episode: not in other observations, the system prompt or the filler. There are three exceptions: (i) the need step's option list, where it is unbound and sits among 9 distractors; (ii) a lookup response in the recoverable variant (§2.5); (iii) the restated-at-need control (§4). The generator checks this by exact string search over the rendered episode and re-samples on failure. A $0 validity check re-verifies it.
 - Each episode also carries 2 **distractor bindings**: other keys with values in the same format. None of them is ever needed. They stop the target binding from standing out at reveal time.
 
-**Decision.** Accept the binding wording, the ban on the value string outside the three exceptions, and the 2 distractor bindings per episode. Generator 0.2.0 (PR #15) implements this:
+**Decision.** [Amended 2026-10-02, see §17.3] Accept the binding wording, the ban on the value string outside the three exceptions, and the 2 distractor bindings per episode. Generator 0.2.0 (PR #15) implements this:
 - the distractor bindings use the target's sentence frame and sit at steps that hold no evidence in any of the 8 task cells, so every cell shows them at the same steps in the same words;
 - their values come from the value range and are never an option or a clue value (audit check `distractor_bindings_valid`);
 - `lookup` serves distractor keys too (§2.5).
@@ -193,7 +193,7 @@ For ARC runs: `run_id`, `game_id`, `config_id` (S0, S1, S2, S4, S0+SC), `config_
 - Clue values obey the same string rules as an observed value (§2.3). Each one appears only in its own binding, in lookup responses and in the restated control. **Two addends may be equal** (in a small share of three-clue templates; PR #15). Forcing them apart would let an agent that kept the base and one addend rule out an option, which breaks (b) below. `S_carried` then needs that value only once (§2.8).
 - m is a template property, assigned from the template seed: exactly 5 templates with m = 2 and 5 with m = 3 in every complete 10-template block (§2.9).
 
-**Decision.** Accept (a) the rule binding as part of the evidence set, (b) the condition that all K options stay consistent under any proper subset of clues, implemented by clustered options, and (c) the exact 5/5 split of m within each 10-template block. Partial memory is a $0 validity gate in every derived task cell (§4.4): the oracle's enumeration must find no template where a proper subset of the clues narrows the options, and each partial-memory heuristic (the base clue plus the rule with a uniform pick; "the smallest option above the base clue") must score ≤ 0.20. (decided 2026-10-01, D2)
+**Decision.** [Amended 2026-10-02, see §17.3] Accept (a) the rule binding as part of the evidence set, (b) the condition that all K options stay consistent under any proper subset of clues, implemented by clustered options, and (c) the exact 5/5 split of m within each 10-template block. Partial memory is a $0 validity gate in every derived task cell (§4.4): the oracle's enumeration must find no template where a proper subset of the clues narrows the options, and each partial-memory heuristic (the base clue plus the rule with a uniform pick; "the smallest option above the base clue") must score ≤ 0.20. (decided 2026-10-01, D2)
 
 *Why:* in generator 0.1.1, keeping only the base clue and the rule narrowed the options to one in 0.45 of templates, and the two heuristics scored 0.69 and 0.23, above the 0.20 no-memory bar; generator 0.2.0 gives 0 narrowing templates and 0.100 on both heuristics (`persistgym/DESIGN.md`, PR #15), and so does 0.3.0, whose template values are unchanged (PR #25). Clustered options remove that without modular rules. A side effect: neighbouring options differ by 1, so an arithmetic slip lands on a wrong option. The per-cell restated-derived rate at G1 shows whether the 85% ceiling still holds.
 
@@ -211,7 +211,7 @@ For ARC runs: `run_id`, `game_id`, `config_id` (S0, S1, S2, S4, S0+SC), `config_
 - **Cap:** at most 3 lookups per episode. A 4th answers "lookup unavailable": it costs one step, is not scored, and the pending step is asked again. A second over-cap lookup at the same pending step is an invalid action (§2.6). This keeps every episode finite (§0.3, line 7, with "no such record" above).
 - When `recoverable = false`, `lookup` is not in the action list. A `lookup(...)` reply is an invalid action: it scores 0 at the need step, and at a routine step it is logged and the episode continues.
 
-**Decision.** Accept the generic lookup over any earlier key, the lookup response merged with the pending task (one extra step), the cap of 3, and the lenient whole-word match, with "no such record" and "lookup unavailable" as above. (decided 2026-10-01, D3)
+**Decision.** [Amended 2026-10-02, see §17.3] Accept the generic lookup over any earlier key, the lookup response merged with the pending task (one extra step), the cap of 3, and the lenient whole-word match, with "no such record" and "lookup unavailable" as above. (decided 2026-10-01, D3)
 
 *Why:* a generic lookup avoids cueing the target. Strict key matching made near-miss keys cost extra turns that are not about memory, and those turns feed H1's cost outcome. Scoring a 4th lookup as a wrong answer would turn a lookup habit into a success penalty in the recoverable cells (Penalty_R in H1).
 
@@ -331,7 +331,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 - **Equivalence:** the 90% CI of Δ_der lies inside (−8pp, +8pp) **and** TE < 10% (point estimate).
 - **"Signal"** for running the W/Σ replay pairs (PLAN §7: "The W/Σ replay pairs run only if H2 shows signal") means H2 is not falsified: Δ_der ≥ 3pp or TE ≥ 10%.
 
-**Decision.** Need-step reasoning tokens are the primary token measure; "under 3pp" and "under 10%" are judged on point estimates; Δ_der pools over recoverability; sol is the only confirmatory model; "signal" means not falsified. Under D11, Δ_obs pools the 2 observed-far cells only, which narrows the observed-fact prediction to far distance. (decided 2026-10-01, D9)
+**Decision.** [Amended 2026-10-02, see §17.3] Need-step reasoning tokens are the primary token measure; "under 3pp" and "under 10%" are judged on point estimates; Δ_der pools over recoverability; sol is the only confirmatory model; "signal" means not falsified. Under D11, Δ_obs pools the 2 observed-far cells only, which narrows the observed-fact prediction to far distance. (decided 2026-10-01, D9)
 
 *Why:* need-step reasoning targets the re-derivation step. An episode total would mix in any global "thinks less with replay" effect; on ARC, reasoning per call differs about fivefold between the harnesses (25,707 vs 4,726 reasoning tokens per action, token-weighted, over 8 recorded games; `results/arc_public_ops/20261001T035436Z/summary.md`). With observed-far cells on T_o = T_d/3 templates, the observed check is weak: with no true difference, |Δ_obs| < 3pp holds in only 0.35-0.39 of simulated runs at T_d = 120, with a 90% CI half-width of 9.4-11.4pp (`results/power_sim/20261001T190327Z/h2_sol_power.csv`). So Δ_obs is reported with its CI.
 
@@ -454,7 +454,7 @@ The cost rows are billed forecasts at 1k output tokens per call, with luna's con
 
 **Operational.** The single-turn control is built as in §3 H3, for the 4 non-recoverable task cells only. Restated-at-need appends the evidence bindings verbatim to the need observation (for a derived fact, the clue and rule bindings, not the value); it runs as full F-0 episodes on all 8 task cells. The **fact-withheld** control used by the validity gate replaces every evidence binding with a distractor binding of equal token length.
 
-**As implemented** (generator 0.3.0, PR #25). The fact-withheld control replaces every **fact and clue binding** with a binding of equal token length for a **stand-in entity**, in the same sentence frame and at the same step: an observed fact's binding becomes the same sentence about the stand-in, with the stand-in's own value, and each clue binding of a derived fact becomes the same clue about the stand-in, with the stand-in's own clue value.
+**As implemented** (generator 0.3.0, PR #25). [Amended 2026-10-02, see §17.3] The fact-withheld control replaces every **fact and clue binding** with a binding of equal token length for a **stand-in entity**, in the same sentence frame and at the same step: an observed fact's binding becomes the same sentence about the stand-in, with the stand-in's own value, and each clue binding of a derived fact becomes the same clue about the stand-in, with the stand-in's own clue value.
 - The stand-in is another entity of the episode's skin whose name has the target's token length. It is never one of the episode's distractor keys (§2.3), and its name never contains the target's name or is contained in it.
 - The stand-in's value, and for a derived fact its clue values (which sum to that value), are never an option, a clue value of the target or a distractor value.
 - So each stand-in binding has the token length of the binding it replaces, every observation keeps its base observation's token count (exactly v) and log filler, and the withheld episode differs from the base episode of its task cell only inside these bindings. No scripted observation before the need step names the target, and a `lookup` of the target's key answers "no such record" (§2.5).
@@ -468,7 +468,7 @@ The cost rows are billed forecasts at 1k output tokens per call, with luna's con
 >
 > Add $0 validity checks: a programmatic shortcut audit, and no-memory heuristic baselines (most frequent option, last-seen option) that must score ≤ chance + 10pp. (PLAN §16.3)
 
-**Operational.** Validity runs use harness cell F-0 and the validity seed range (§2.9). The 85% and 20% thresholds apply to the pooled rate over the 8 task cells, and per-cell rates are reported. The spot-check uses generated episodes from the validity range; the researcher reviews them without model output.
+**Operational.** Validity runs use harness cell F-0 and the validity seed range (§2.9). The 85% and 20% thresholds apply to the pooled rate over the 8 task cells, and per-cell rates are reported. The spot-check uses generated episodes from the validity range; the researcher reviews them without model output. [Amended 2026-10-02, see §17.3]
 
 **Heuristic baselines** ($0; 1,000 generated episodes per task cell; each must score ≤ 20% in **every** task cell):
 - **Position:** always choose the first option; always choose the last option.
@@ -478,7 +478,7 @@ The cost rows are billed forecasts at 1k output tokens per call, with luna's con
 
 A literal "last-seen" or "most frequent in the episode" heuristic on the normal rendering is not a no-memory baseline here: under §2.3 the target is the only option string that occurs before the option list, so such a heuristic recalls the fact and would score near 100% on observed cells. That is why it runs on the fact-withheld rendering, where any option string found before the list is a leak.
 
-**Decision.** Restated-at-need for a derived fact restates the clues and the rule, not the value; the fact-withheld control uses equal-length distractor bindings; validity runs use F-0; the 85% and 20% LLM thresholds apply to the rate pooled over the 8 task cells; the heuristic baselines above, including D2's partial-memory heuristics, apply per task cell. (decided 2026-10-01, D39)
+**Decision.** [Amended 2026-10-02, see §17.3] Restated-at-need for a derived fact restates the clues and the rule, not the value; the fact-withheld control uses equal-length distractor bindings; validity runs use F-0; the 85% and 20% LLM thresholds apply to the rate pooled over the 8 task cells; the heuristic baselines above, including D2's partial-memory heuristics, apply per task cell. (decided 2026-10-01, D39)
 
 *Why:* restating the clues keeps the derivation in the ceiling, which is the right ceiling for derived cells. Block balance pins the position and frequency baselines at exactly 0.10, so only the paid withheld run and the researcher's spot-check can detect a model's prior over values.
 
@@ -509,7 +509,7 @@ Validity runs (§4.4) use F-0 on each model that runs a main sweep. The sol H1 r
 
 **How the main sweep runs** (§0.3, line 15, changed by the researcher on 2026-10-01; line 9 confirmed). The main sweep is approved as its own block, `3-persistgym`, apart from the ARC block `3-arc` (§12). Its runs go one at a time, and a run may play up to 16 episodes in parallel. Parallel play changes no payload, cell assignment or cost; the run reserves spend for the episodes in flight, so it never exceeds its planned spend. Once the per-stream locks have landed (before block 3), the main sweep may run while ARC runs are going. Within the block, the order of line 9 decides what gives way when the 1a cap runs short.
 
-**Decision.** This run matrix, with the two changed rows: restated-at-need on all 8 task cells as full F-0 episodes on luna, the single-turn control on the 4 non-recoverable task cells only, and sol's F-r vs F-0 on the D11 cells. (decided 2026-10-01, D36)
+**Decision.** [Amended 2026-10-02, see §17.3] This run matrix, with the two changed rows: restated-at-need on all 8 task cells as full F-0 episodes on luna, the single-turn control on the 4 non-recoverable task cells only, and sol's F-r vs F-0 on the D11 cells. (decided 2026-10-01, D36)
 
 *Why:* fixing the matrix now stops cells being added or dropped after results are seen. The generator cannot build single-turn controls for recoverable cells, and restated-at-need needs a stated harness cell.
 
@@ -569,7 +569,7 @@ PLAN §7's rows for Qwen3.6-27B and gpt-oss-120b (extension E1) and DeepSeek V4.
   - An incomplete summary response is never scored; it is retried, like any failed summary call (`harnesses/DESIGN.md` §4.3).
   - In the replay-use probe (D29, §10.1), an incomplete turn-3 response counts as a miss, and an incomplete turn 1 or 2 makes the trial unscorable, so it is replaced like a trial excluded under D29.
 
-**Decision.** [Amended 2026-10-02, see §17.2] Effort `medium`, mode `standard`, explicit `reasoning.context`, `max_output_tokens` 32,000 and the Flex tier for OpenAI. (decided 2026-10-01, D13)
+**Decision.** [Amended 2026-10-02, see §17.2 and §17.3] Effort `medium`, mode `standard`, explicit `reasoning.context`, `max_output_tokens` 32,000 and the Flex tier for OpenAI. (decided 2026-10-01, D13)
 
 *Why:* medium is the documented default and keeps sol's H2 core, the largest phase-1a line, within reach of the cap. H2 is a PersistGym-only test, so it need not match the ARC leg's high effort; the risk that medium effort understates the value of replay is listed in §15.
 
@@ -845,7 +845,7 @@ Every primary contrast is reported on both the probability and the logit scale. 
 ### 9.4 Multiplicity
 > **Multiplicity:** Holm correction across the primary confirmatory contrasts (H1, H2, H3). H4 and H5 are descriptive. (PLAN §10)
 
-**Decision.** The Holm family has **4 one-sided tests** at a familywise α = 0.05:
+**Decision.** [Amended 2026-10-02, see §17.3] The Holm family has **4 one-sided tests** at a familywise α = 0.05:
 1. H1: H0 is Δ_H1 ≤ 0.
 2. H2 success: H0 is Δ_der ≤ 0 (sol).
 3. H2 tokens: H0 is TE ≤ 0 (sol).
@@ -953,7 +953,7 @@ A trial whose visible turn-1 reply contains any 3-digit number is excluded and r
 ### 10.2 G1 (Oct 14)
 > Validity gate (§5) passes. If it fails: one redesign pass until Oct 18. If it still fails: stop PersistGym and continue the ARC leg alone. (PLAN §11)
 
-The gate is defined in §4.4.
+The gate is defined in §4.4. [Amended 2026-10-02, see §17.3]
 
 ### 10.3 Checkpoint C (after block 2; ~Oct 12, latest Oct 14)
 > Propose stopping or re-scoping the ARC leg if any of these holds after block 2:
@@ -1025,7 +1025,7 @@ For criterion 2, "the chosen tier" is the standard tier (D21), the forecast foll
 **Block 1 contents** (PLAN §16.2, as changed by D21): the OpenAI `reasoning.context` echo check (~$0.35); the replay-use probe (~$2); a Gemini payload acceptance check on the standard tier (≤ $1; the Flex latency probe is dropped); the truncated ARC pilot on `perm[0]` (D17), on the standard tier; luna and sol pilots, and the validity runs. The block-1 forecast is $53.90 billed (`results/cost_model/20261001T203318Z/optA_approval_blocks.csv`).
 
 **Operational.**
-- Pilot reports come from committed scripts that output only the allowed fields: validity levels; pooled tokens (summed over arms); errors; latency; cost; echo-match rate; for ARC, cost per action, tokens per action, compaction occurrence and exit status.
+- Pilot reports come from committed scripts that output only the allowed fields: validity levels; pooled tokens (summed over arms); errors; latency; cost; echo-match rate; for ARC, cost per action, tokens per action, compaction occurrence and exit status. [Amended 2026-10-02, see §17.3]
 - No script, person or agent computes per-arm success, per-arm reasoning tokens or per-config ARC level progress (levels cleared, RHAE) from pilot data. Raw pilot transcripts stay in `results/raw/` and are not read for those quantities.
 - **As implemented** (PR #13; a technical choice accepted by the researcher on 2026-10-01): pilot episode outcomes (`episodes.jsonl`: need correctness, need-phase tokens, usage, lookups) are written only to the gitignored `results/raw/<experiment>/<run_id>/`. The committed run folder holds `meta.json` (with reasoning tokens set to null) and `summary.json`, both built from an allowlist. Each pilot run's `costs.csv` row leaves `reasoning_tokens` empty.
 - **Known limit:** CLAUDE.md requires one `costs.csv` row per run, and each row still carries that run's output tokens, calls and cost, which approximate the withheld quantities. Blinding is therefore partial, and this is reported.
@@ -1150,7 +1150,7 @@ Extensions are **not** pre-registered here, apart from the two rules carried ove
 - **The path decomposition is order-dependent and descriptive.** The S2→S4 step bundles native replay with the native item format, so no share is attributed to replay alone. With 8 game-seed units, no significance is claimed.
 - **It does not explain ARC's published gap.** The published runs are one-seed screens, may have used a different API surface, and include early endings. Our runs re-measure the gap; they do not audit those runs. Our S1 and S2 have no published counterpart, and our S0 requests thought summaries that ARC's Standard run probably did not (§7.1).
 - **PersistGym is synthetic.** Its results are not claimed to transfer to coding agents, ARC or real tasks without separate evidence. Window effects at S = 0 are mechanical and are not findings in themselves.
-- **H2 is narrow.** It runs at medium effort (D13), which may understate the value of replay relative to the high-effort ARC leg, and its observed-fact check covers far distance only (D11). [Amended 2026-10-02, see §17.2]
+- **H2 is narrow.** It runs at medium effort (D13), which may understate the value of replay relative to the high-effort ARC leg, and its observed-fact check covers far distance only (D11). [Amended 2026-10-02, see §17.2 and §17.3]
 - **Opaque replay is not inspected.** What a model "sees" in encrypted reasoning items cannot be observed. Toggle validity rests on the echoed field and the replay-use probe.
 - **Equivalence is not absence.** "Inside equivalence bounds" means the effect is within the stated bounds at the stated confidence. It does not mean there is no effect, and an underpowered result is called inconclusive. At the central sol size, the H2 equivalence test has well under 0.80 power (§4.2). [Amended 2026-10-02, see §17.2]
 - **StateCarry is not claimed to be new as an idea.** Ledger-style state and reasoning replay already exist (Ledger 2608.00808, the Kaggle "Duck" baseline, public Kaggle ablations). The claim is limited to closing the Standard-to-Adapter gap under ARC's rules on held-out games. It is not a state-of-the-art claim, and a coding success win would not be new.
@@ -1162,9 +1162,9 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 
 | ID | Section | Item | Outcome |
 |---|---|---|---|
-| D1 | §2.3 | Observed fact | Accepted as drafted: one key-value binding; the value string appears nowhere else except the options, lookups and the restated control; 2 distractor bindings whose values are never options or clues |
-| D2 | §2.4 | Derived fact | Accepted, with clustered options so that no proper subset of clues narrows the options; partial memory added to the $0 validity gate; m split exactly 5/5 per 10-template block |
-| D3 | §2.5 | Lookup | Accepted: generic lookup over any earlier key, whole-word match; one extra step; cap of 3; a 4th lookup answers "lookup unavailable" (how "no such record" and a second over-cap lookup count was confirmed at sign-off, §0.3 line 7) |
+| D1 | §2.3 | Observed fact | Accepted as drafted: one key-value binding; the value string appears nowhere else except the options, lookups and the restated control; 2 distractor bindings whose values are never options or clues [Amended 2026-10-02, see §17.3] |
+| D2 | §2.4 | Derived fact | Accepted, with clustered options so that no proper subset of clues narrows the options; partial memory added to the $0 validity gate; m split exactly 5/5 per 10-template block [Amended 2026-10-02, see §17.3] |
+| D3 | §2.5 | Lookup | Accepted: generic lookup over any earlier key, whole-word match; one extra step; cap of 3; a 4th lookup answers "lookup unavailable" (how "no such record" and a second over-cap lookup count was confirmed at sign-off, §0.3 line 7) [Amended 2026-10-02, see §17.3] |
 | D4 | §2.6 | Success scoring | Accepted: first non-lookup action scored, invalid output scores 0; letter or value accepted; parser fallback to the last `verb(arg)` |
 | D5 | §2.7 | Near and far | Accepted as drafted; the system prompt counts toward W everywhere (leaving the notes sentence out of W was confirmed at sign-off, §0.3 line 6) |
 | D6 | §2.8 | Survival | Accepted: whole-word match on the value or all clues; replayed reasoning not counted in W; bug stop; 2% re-tuning trigger |
@@ -1174,7 +1174,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D10 | §3 H3 | H3 control | Accepted as drafted |
 | D11 | §4.2 | sol design and sizing | Changed: sol runs derived-far (T_d) and observed-far (T_o = T_d/3) cells only; central T_d = 120; T_d a multiple of 30, raised up to 210 (the researcher's follow-up to A2) only before the sol main sweep and before any H2 outcome, with a 1a cap raise first if the cap does not afford it; 0.80 target kept, else "inconclusive" (which cells get 1a's money first was confirmed at sign-off, §0.3 line 9) [Amended 2026-10-02, see §17.2] |
 | D12 | §5 | Summary cells | Accepted, plus: Σ-cell survival is measured only, `compacted_between` logged and reported, Σ cells in no confirmatory test |
-| D13 | §6 | OpenAI settings | Accepted as drafted: medium effort, standard mode, explicit context, 32,000 output cap, Flex. As implemented (PR #22): the cap is sent on every step, summary and probe request, and an `incomplete` step response is an invalid action at any step (0 at the need step), whatever its reason, replayed as returned [Amended 2026-10-02, see §17.2] |
+| D13 | §6 | OpenAI settings | Accepted as drafted: medium effort, standard mode, explicit context, 32,000 output cap, Flex. As implemented (PR #22): the cap is sent on every step, summary and probe request, and an `incomplete` step response is an invalid action at any step (0 at the need step), whatever its reason, replayed as returned [Amended 2026-10-02, see §17.2 and §17.3] |
 | D14 | §7.2 | ARC games | Changed (option A): path games FT09, SB26, R11L, CD82 (normal Standard ending required); held-out SP80, VC33, TN36 by a cost-ranked rule; no draw of games |
 | D15 | §7.3 | Draw seed | Changed: seed from the first NIST beacon pulse at least 10 minutes after the freeze commit, with a drand fallback; it orders the 4 path games (the drand fallback when NIST cannot be reached was confirmed at sign-off, §0.3 line 5) |
 | D16 | §7.3 | Third held-out game | Replaced by D14's held-out rule (VC33 is in; RE86 is out) |
@@ -1197,13 +1197,13 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D33 | §13 | PersistGym errors | Accepted as drafted |
 | D34 | §3 H4 | H4 readings | Accepted as drafted |
 | D35 | §3 H5 | H5 details | Accepted as drafted |
-| D36 | §4.6 | Run matrix | Changed: single-turn control on non-recoverable cells only; restated-at-need as full F-0 episodes; sol on the D11 cells (sol's optional replay pairs on the D11 cells were confirmed at sign-off, §0.3 line 8) |
+| D36 | §4.6 | Run matrix | Changed: single-turn control on non-recoverable cells only; restated-at-need as full F-0 episodes; sol on the D11 cells (sol's optional replay pairs on the D11 cells were confirmed at sign-off, §0.3 line 8) [Amended 2026-10-02, see §17.3] |
 | D37 | §10.1 | Other G0 conditions | Accepted, on the standard tier, with the S1/S2 patches' snapshot tests required |
 | D38 | §10.4 | H1 in kill criterion 5 | Accepted: read as H1's kill condition |
-| D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim |
+| D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim [Amended 2026-10-02, see §17.3] |
 
 ## 17. Amendment log
-Amendments made: R1 (2026-10-02, §17.1) and R2 (2026-10-02, §17.2), at the end of this file. Pre-declared amendments, each merged by PR before the event it guards:
+Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2) and R3 (2026-10-02, §17.3), at the end of this file. Pre-declared amendments, each merged by PR before the event it guards:
 - **A-cfg:** only if the block-1 pilot forces an ARC config change after the freeze record (§7.1) is filled; merged before the first block-2 run. It writes the new values into the §7.1 tables themselves and is merged together with the regenerated `arc/config_freeze.json`: the ARC launcher reads §7.1, so a table added only to this log would make every paid ARC run refuse (PR #23).
 - **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8).
 - **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7).
@@ -1324,3 +1324,106 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 **T_d from here on.** T_d = 210 and T_o = 70 are not lowered without a further amendment, so §10.1's fallback 4 (fewer sol templates) now needs one too, and §12's Phase 1a sizing at T_d = 150 no longer applies. If the phase-1a forecast at measured costs (sol at high if it engages) exceeds the 1a cap, the researcher must raise the cap first, as D11 already requires. The G1 power re-simulation (§9.8) still runs with the measured variance, and its achieved power at T_d = 210 is reported, but it no longer sets T_d. The values are recorded in `results/decisions.md` before the sol main sweep (§4.2).
 
 **As implemented** (the pull request that adds this amendment; `harnesses/DESIGN.md` §12). `harnesses/registered.py` holds the registered efforts (luna `medium`, sol `high`) and the check's constants. `harnesses run` defaults to the model's registered effort (a dated snapshot or alias of a model counts as that model) and, before the paid-run lock, refuses any other effort outside `persistgym_pilot`. It also refuses a non-pilot sol run unless the `reasoning_check.json` files under `results/persistgym_pilot/` for sol at high effort, under this rule, say ENGAGED in the order above: on pilot indices 0 and 1, or on 2 and 3 after an UNSCORABLE check on 0 and 1. Any file that says NOT_ENGAGED refuses, and so do two check pairs on the same indices. `reasoning-check` scores only check runs on those indices. The probes keep their registered medium settings (§17.1). The runner excludes an episode whose echoed effort differs (exit `REASONING_EFFORT_MISMATCH`), counts it toward the abort after 2 excluded episodes, and reports effort echo-match counts next to the context ones in the pilot summaries. The pooled pilot report (`pilot-report`) pools by model and requested effort, so the check runs never join block 1's sol pool at medium; otherwise, a report made after only the F-r run would show that arm's reasoning total as its difference from block 1's report.
+
+### 17.3 Amendment R3 (2026-10-02): a sol-only derived-fact variant that needs reasoning; hard stop
+**Status.** Proposed by Claude after the researcher chose option (c) with a hard stop and both levers on 2026-10-02 (`results/decisions.md`): (i) a derivation that needs several steps of reasoning, and (ii) evidence steps that tell the agent the value will be needed later. It takes effect when the researcher merges the pull request that adds it, and that merge adopts the variant below, the engagement check's rule on it and the hard stop. The version line and the "Frozen" status line are unchanged. It adds no spending approval.
+
+**What it changes, for gpt-6.1-sol only.**
+1. **The derived fact's clues (§2.4) are given by chain records.** A clue's value is never printed. Its record gives it through a two-hop relay over three helper entities of the skin, in four sentences about the clue's name, shown in a shuffled order:
+   - the anchor: "For shipment SHAULA, the base bay is 314.";
+   - the far hop: "For shipment BELLATRIX, the base bay is 669 more than for shipment SHAULA.";
+   - the near hop: "For shipment HADAR, the base bay is 329 less than for shipment BELLATRIX.";
+   - a decoy: "For shipment ORION, the base bay is 268 more than for shipment SHAULA."
+
+   So the clue is 314 + 669 − 329 = 654, two 3-digit operations past a decoy; the decoy's value is never needed. The rule stays a plain sum of the clues and is shown with the first clue (`rule_placement` `with_first_clue`), so the evidence steps are exactly the clue steps. Each clue keeps its step (§2.7: n − g − (m − 1 − i), g = 4 near and 16 far). The full record of a clue step is "<source> <record id>. <the four sentences>" (with the rule sentence after them at the first clue).
+2. **The evidence notice.** At each evidence step of the target, after its record and before the ack request, the event says, for a derived fact: "The {quantity} of {kind} {ENTITY} will be requested in a later update. Before replying, work out as much of it as the records so far allow and keep the result in mind; do not write it in your reply." At an observed fact's reveal it says: "The {quantity} of {kind} {ENTITY} will be requested in a later update. Keep it in mind; do not write it in your reply." The two share the first sentence and the no-write clause, so Δ_obs stays parallel to Δ_der except for the derivation. The notice is 45-47 tokens (derived) and 28-30 tokens (observed), with the entity name's length; it comes out of the log filler, so every observation stays at v = 1,500 tokens. It is never part of a record, so lookup responses and the restated block do not repeat it. It is never at a distractor, routine or need step, and the system prompt is unchanged. It names the entity, since a chain record names four. Lever (ii) asked only for telling the agent that the value will be needed; the notice also asks for it to be worked out now and not written. The no-write clause matters because F-r and F-0 both keep every visible reply: a running total written there would carry the state in both arms and remove H2's contrast. The replay-use probe asks the same in its turn 1 ("Do not write the number or any hint about it."), and its block-1 runs showed no visible leak in 240 responses (§17.1).
+3. **Controls.** Restated-at-need (§4.3) repeats the record lines (the chain records and the rule), with no notice and no value, so derivation stays in the ceiling: 173-262 tokens on validity templates 0-19. The fact-withheld control (D39) changes, at each evidence step of a derived fact, only the near hop, to the stand-in with its own near delta n′ (the stand-in's clue is H1's value − n′, 0.3.0's stand-in clue value), and the notice, which names the stand-in. The anchor, far hop, decoy, rule, source and record id are byte-identical, and every sentence, event and observation keeps its token count. An observed fact's withheld binding is 0.3.0's stand-in binding, and its notice names the stand-in too. The notice in a withheld episode is false about the stand-in; the gated baseline below measures what that could give away.
+4. **Lookup (§2.5).** "Re-shows the clues" now means the chain records. Each helper named in a clue's record is also a key of that record: lookup(BELLATRIX) re-shows that clue's record, from its step on, in base and withheld episodes. The target's key re-shows all its records, as before.
+5. **New gated $0 checks** (all configs where they apply; listed under Validity below): chain records well formed and resolving, worked-out values never shown, the notice only at the evidence steps, lookup by helper keys, atom-level partial memory, six misreadings of the records, and the option nearest the stand-in's value on the withheld view.
+6. **sol's registered settings (§4.6, D36).** Outside pilots, sol runs on the variant only, and in F-r and F-0 only. sol's exploratory W-n and Σ-n replay pairs do not run on the variant: the notes instruction ("Include any context you want to carry forward in your reply") contradicts the notice's no-write clause. A sol pilot at high effort is this amendment's engagement check and runs on the variant only.
+7. **G1 for sol (§4.4, §10.2)** is judged on the variant (below), and its spot-check is proposed at 80 episodes.
+
+**What it does not change.** The combining rule stays a plain sum (§2.4); D2's options stay one cluster of 10 consecutive values, with the target at its block-balanced rank; every template value of generator 0.3.0 (options, letters, ranks, m, clue values, distractors, stand-in, need step, record ids, clock) is kept for every seed, so this check and R2's differ only in how the clues are rendered, in where the rule is shown (with the first clue rather than the last; the evidence steps are the same) and in the notice. T_d = 210 and T_o = 70 (§17.2) stay. R2's effort change (sol at high, §17.2 change 1) takes effect iff the check below finds ENGAGED. luna's generator config, episodes, pilots, validity runs and spot-check package do not change: the default config's hash is still `3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b`, and its episodes are byte for byte those of generator 0.3.0 apart from the version string (a committed golden fixture checks validity templates 0-19, pilot 0-3 and main 0-9 in all cells and variants). No hypothesis, prediction, threshold, other decision or blockquote changes. The frozen text of §2.3, §2.4, §2.5, §3 H2, §4.3, §4.4, §4.6, §6, §9.4, §10.2, §11 and §15 and the register rows D1, D2, D3, D13, D36 and D39 stays, with a pointer here.
+
+**Departures, stated.**
+- **D1's anti-salience** (§2.3) does not hold for sol's variant: the notice marks the target at its evidence steps, in both fact kinds, and distractor bindings get no notice. In F cells, which keep every observation, this does not change what is available at the need step.
+- **luna and sol run on different generator configs.** sol's H2 results on the variant are not comparable with luna's derived cells.
+- **The notice goes beyond lever (ii)'s literal "told it will be needed later"** (change 2).
+
+**Reason.** R2's engagement check (§17.2) found **NOT_ENGAGED**: E = 0/20; none of the 20 evidence-step calls of the 8 derived-far episodes, pooled over both arms, reported 32 or more reasoning tokens (`results/persistgym_pilot/reasoning-check-20261002T225917Z/reasoning_check.json`). Pooled over both arms, sol reported a mean of 0.432 reasoning tokens per step call before the need step at high effort (median 0; 3.3% of those calls with any), against 0.0 at medium. These are descriptive figures. A likely cause, plausible and not shown: a derived fact is a plain sum of 2-3 clue values (§2.4), which sol can do without reasoning, and nothing at a clue step gives the agent a reason to compute anything then. The variant addresses both: each clue now takes two 3-digit operations to resolve, and the notice asks for the work at the clue step.
+
+**Timing.** Written after R2's verdict, from the pooled figures above only (§11), and before any run on the variant, any sol validity or main-sweep run and any computation of an H2 quantity. No result of the check below exists as it is written.
+
+**The variant (generator 0.4.0, preset `sol-chain`).** `persistgym/config.py` `PRESETS["sol-chain"]` is the default config with `clue_form` `chain`, `evidence_notice` true and `rule_placement` `with_first_clue`; its config hash is `b0d0b020d5b9135bad3b4cb4c074a19bdbb8590e51dd04a690ba0fcaedbaaf97` (`PRESET_HASHES`). The exact rule (`persistgym/template.py`, `ChainSpec`; persistgym/DESIGN.md §2):
+- **Helpers** (their own random stream): the skin's entities that neither contain nor are contained in the target's, the stand-in's or a distractor's name, shuffled; the first 3m that overlap no earlier one. Clue i uses the next three: H1 (near hop), H2 (anchor), H3 (decoy).
+- **Numbers per clue** (their own stream), with c the target's clue value, c′ the stand-in's, and cmax the largest value the slot can take (98 for an addend; 899 − 61(m − 1) for the base): H1's value v1 is drawn uniformly from [cmax + 109, 999], whatever c and c′ are; the near deltas are n = v1 − c and n′ = v1 − c′; the far delta f from [109, min(990, v1 − 69)], and the anchor a = v1 − f; the decoy delta x from [109, min(990, 999 − a)]. A draw is kept only if its seven numbers (a, f, x, n, n′, v1 and a + x) are distinct, f differs from n, n′ and x by at least 10, and none of them is an option, a clue value or running total of the target or the stand-in, the stand-in's value, a distractor value or a number of an earlier chain. So n and n′ lie in [109, 938], a in [69, 890] and f and x in [109, 990]: every needed atom lies at least 9 inside its declared range (anchors [60, 999], differences [100, 999]), and no printed number is below 60, so none can be a clock field.
+- Every number and helper name of the chains, and the running totals, are reserved strings (never in log filler or routine text). The values the agent never sees before the need step are the target, the clue values and running totals, H1's and H3's values, and the same for the stand-in (`template.hidden_values`). The distractor values are drawn as in generator 0.3.0, avoiding options and clue values but not running totals, so a 3-clue running total can equal a distractor value, which every episode shows (6 of main templates 0-999); such a value counts as shown, not hidden.
+- **Example** (pilot template 1, the check's 3-clue template; target HADAR, 812): 314 + 669 − 329 = 654; 163 + 528 − 609 = 82; 300 + 693 − 917 = 76; 654 + 82 + 76 = 812. Its three evidence events are 149, 134 and 136 tokens.
+
+**The check's templates** (pilot indices, the same episode ids as R2's check; values from generator 0.3.0, unchanged):
+
+| Pilot | Skin | Target entity | m | Target | Clues |
+|---|---|---|---|---|---|
+| 0 | depot | CURLEW | 2 | 517 | 424, 93 |
+| 1 | warehouse | HADAR | 3 | 812 | 654, 82, 76 |
+| 2 | warehouse | ELNATH | 2 | 374 | (re-run only) |
+| 3 | archive | RHINE | 2 | 419 | (re-run only) |
+
+**Validity.** G1 (§4.4) applies to sol on the variant: F-0 at high effort, validity templates 0-19 on all 8 task cells, restated and withheld; the programmatic oracle 100%; restated-at-need ≥ 85% pooled over the 8 cells; fact-withheld ≤ 20% pooled; all $0 audits pass; and the researcher's spot-check. The $0 audits, run on the variant with the committed code (`persistgym/validity.py`), all pass:
+- **Every check,** on validity templates 0-19 and main templates 0-59 (all 8 cells × base, restated and withheld; `uv run python -m persistgym render --preset sol-chain ...`) and on main templates 0-999 (24,000 episodes, 3,000 per task cell; `uv run python -m persistgym audit --preset sol-chain --n 1000`): the 17 shortcut checks of generator 0.3.0, the lookup audit and three new checks, `chain_records_well_formed_and_resolve`, `chain_hidden_values_never_shown` and `evidence_notice_only_at_evidence_steps`. On pilot templates 0-3, an incomplete balance block, every check of the shortcut and lookup audits passes; the accuracy gates are not judged there (4 templates), in either config.
+- **Oracles:** the key and text oracles score 1.00 on base and restated episodes; the no-memory lookup oracle 1.00 where lookup is offered and on restated episodes; the text oracle 0.10 on withheld episodes.
+- **No-memory baselines** (position, most frequent, last seen, median, prior label): 0.10 in every view, since no option value occurs outside the option list.
+- **New gated baseline, all configs and all 8 cells:** `nearest_to_stand_in_value`, the option nearest the stand-in's value as the text oracle derives it on the withheld view, must score ≤ 0.20 in each task cell. The stand-in's value is never an option and is drawn whatever the rank, so this picks the lowest or the highest option and is right about once per block of 10: 0.100 in each task cell on main templates 0-999, in the variant and in the default config, and 0.10 (validity 0-19) and 0.05 (main 0-59) in each task cell of the variant.
+- **Clue level (D2's gate, unchanged code):** the resolved clues are 0.3.0's, so `uv run python -m persistgym partial-memory --preset sol-chain --n 2000` gives 0.3.0's figures exactly: 0 narrowing templates and 0.100 for the uniform pick with the base and the rule on the pilot, validity and main splits; the smallest option above the base 0.100 on each; the generator-aware Bayes guess (reported) at most 0.155 (pilot), 0.168 (validity) and 0.164 (main).
+- **Atom level (new; gated: 0 narrowing templates per derived cell).** The fact's value is Σ(a_i + f_i − n_i), 3m needed atoms. For every proper subset of them, with the rule and the chain structure known, every option must stay reachable when the missing anchors range over [60, 999] and the missing differences over [100, 999]. The reachable values form an interval, so the test is exact; it holds by construction (one missing atom, held at the 9-margin, reaches every option), and the enumeration finds 0 narrowing templates in 2,000 templates on each split.
+- **Six misreadings (new; each gated ≤ 0.20 per derived cell):** every number of the target's records signed by its word (error +x per clue), signs ignored (+2n), the anchor alone (n − f), H1's value as the clue (+n), one hop (−f) and the decoy as the near hop's base (x − f), each giving the nearest option to its sum. On 2,000 templates per split they score 0.081-0.118 by split and m, and 0.093-0.108 pooled over m.
+
+**The engagement check** (experiment `persistgym_pilot` under block 1's approval; a pilot under §11, excluded from all analyses). R2's rule, unchanged, on the variant:
+- **Runs:** sol at `reasoning.effort: high`, every other D13 setting unchanged; F-r, then F-0; pilot indices 0 and 1 on the 4 D11 far task cells, `--planned-usd 6` each:
+
+  ```
+  PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
+      --model gpt-6.1-sol --effort high --gen-preset sol-chain --split pilot --start 0 --n 2 \
+      --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far \
+      --experiment persistgym_pilot --approved-block "1-pilots" --planned-usd 6
+  PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+      --model gpt-6.1-sol --effort high --gen-preset sol-chain --split pilot --start 0 --n 2 \
+      --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far \
+      --experiment persistgym_pilot --approved-block "1-pilots" --planned-usd 6
+  ```
+- **Scored by** the committed $0 command, with R2's two check runs as the descriptive reference:
+
+  ```
+  uv run python -m harnesses reasoning-check <F-r run_id> <F-0 run_id> \
+      --reference 20261002T173710Z-F-r-gpt-6.1-sol 20261002T180358Z-F-0-gpt-6.1-sol
+  ```
+- **E** = the share of evidence-step calls (the first step call at each step that shows a clue of the target or the rule, in the derived-far episodes, pooled over both arms) with at least 32 provider-reported reasoning tokens. **Reasoning engages iff E ≥ 0.50.** With the rule at the first clue the evidence steps are the clue steps, so the denominator is 20 on pilot indices 0 and 1 and 16 on 2 and 3, as in R2.
+- **Unscorable:** if fewer than 6 of the 8 derived-far episodes end normally, or either run stops on an echo mismatch, the check runs once more on pilot indices 2 and 3 (the same two commands with `--start 2`), under the same rule.
+- **Reported alongside, descriptive only,** pooled over both arms, R2's figures (§17.2) and one more: of the counted evidence-step calls, how many visible replies hold a value the episode never shows (a clue's worked-out value, a running total, H1's or H3's value, the target; whole numbers matched as in D6). It shows whether the no-write clause held. It has no threshold.
+- **Recorded:** the verdict and the figures go into `results/decisions.md` with the committed `reasoning_check.json`, and the researcher is told, before any sol validity run.
+
+**Hard stop.**
+- **NOT_ENGAGED, or UNSCORABLE twice:** H2 on sol stops for good. It is reported as not testable in this task family, with both checks (R2's and this one) as descriptive findings. No further variant or effort is tried, and no further sol pilot at high effort runs.
+- **ENGAGED:** R2's change 1 takes effect. Claude forecasts sol's validity run at the check's measured cost per episode, pooled over both arms, × 320 episodes. If it fits block 1's remaining limit (after the check), it runs under block 1 with `--planned-usd` at most that remaining limit; otherwise Claude asks first. The two runs:
+
+  ```
+  PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+      --model gpt-6.1-sol --gen-preset sol-chain --split validity --start 0 --n 20 \
+      --variant restated --experiment persistgym_validity --approved-block "1-pilots" \
+      --planned-usd <usd>
+  ```
+
+  then the same with `--variant withheld`.
+- **ENGAGED, but G1 fails on the variant:** H2 on sol stops the same way, with no redesign; this replaces §10.2's "one redesign pass" for sol. It does not touch luna's G1 or kill criterion 3 for PersistGym, since luna's cells are unaffected.
+- **Holm family (§9.4).** If H2 on sol stops, the family's tests 2 and 3 are not run, and no H2 replication on luna exists (luna's toggle is not verified, §17.1). Whether the remaining tests (H1 and H3) are then adjusted as a family of 4 (conservative) or of 2 is the researcher's decision, recorded before any H1 or H3 test is computed.
+
+**Spot-check (a choice this merge adopts).** Claude proposes that the researcher's G1 spot-check for sol's variant covers **20 episodes per D11 task cell, 80 episodes**, rather than 20 in each of the 8 task cells. sol runs no near cell in H2, and the variant's new text (chain records, notice) is the same in near and far cells; luna's package already covered near placement. The package is built by `uv run python -m persistgym spotcheck --preset sol-chain` (validity templates 0-19, the 4 far cells, with the $0 audits on all 8 cells and 3 variants), and it shows each clue's relay worked out, marked as not shown in the episode.
+
+**What it does not show.** Token counts do not show content (§17.2). An ENGAGED check would show that sol reasons at the evidence steps of the variant, not what the reasoning holds. H2 on the variant tests the replay of derived state that the model was told to compute and keep private: a narrower question than incidental state, and less like ARC, where nothing announces what will be needed. Its results do not transfer to incidental memory, and they are not comparable with luna's derived cells, which play the default config. The withheld notice is false about the stand-in; the gated baseline above bounds what that gives away to a heuristic, not to a model.
+
+**Cost and approval.** The check is forecast at about $1-2 billed for both runs: R2's check cost $0.699 for the same 16 episode ids at high effort, and the variant adds the evidence-step and need-step reasoning that the check looks for. Planned spend is $6 per run. Block 1 has $46.46 of its $70 limit left ($23.54 spent, `results/costs.csv`). The validity run is forecast after the check, from its measured cost: at R2's $0.0437 per episode, 320 episodes would cost about $14, and the chain derivations in the restated episodes may add up to about half again. The sol main sweep belongs to block 3 (`3-persistgym`) and needs its own approval and a forecast at the validity run's measured cost. This amendment adds no spending approval.
+
+**As implemented** (the pull request that adds this amendment; persistgym/DESIGN.md §2, §9, §13; harnesses/DESIGN.md §12).
+- Generator 0.4.0 (`SCHEMA_VERSION` stays 3): `GeneratorConfig.clue_form` and `evidence_notice`, left out of `to_dict` at their defaults, so the default hash is unchanged; `PRESETS` and `PRESET_HASHES` (a test checks each hash); golden fixtures of the default config's 0.3.0 episodes and of the variant's pilot 0-3 and validity 0-19 episodes; `persistgym render`, `partial-memory`, `audit` and `spotcheck` take `--preset`.
+- `harnesses run`, `dry-run` and `account-run` take `--gen-preset` (default `default`; `account-run` gives a run plan written before it the default). Before the paid-run lock, `harnesses/registered.py` refuses a non-pilot sol run unless it plays exactly the `sol-chain` config hash, in F-r or F-0, with an ENGAGED check on that config in R2's order, and, outside `persistgym_validity`, the variant's hash in `G1_PASSED`, which only the researcher's G1 decision PR sets. Each `reasoning_check.json` records the generator config hash of its runs (`rule()`); a file without one is R2's and belongs to the default config, and a file decides only for its own config, so R2's NOT_ENGAGED file binds the default config only. A NOT_ENGAGED check on the variant, or an UNSCORABLE one twice, refuses every non-pilot sol run and every sol pilot at high effort. `reasoning-check` scores only check runs on the `sol-chain` hash, so no third design can be scored; reference runs may play any config.
+- The pooled pilot report pools by model, requested effort and generator config (`blinding.pool_key`), so a report made after this check's F-r run alone keeps it in a pool of one harness cell, with its reasoning tokens withheld, rather than joining R2's two check runs (sol at high on the default config), from which that arm's totals would show by difference. Each episode record logs its generator config hash.

@@ -40,21 +40,31 @@ from importlib import metadata
 from pathlib import Path
 
 from common.runmeta import REPO_ROOT, config_hash, git_state, prereg_version, utc_now
-from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, SEED_RANGES, GeneratorConfig
-from persistgym.episode import ALL_CELLS, VARIANTS, Episode, versionless_json
-from persistgym.render import EVENT_PREFIX, generate
+from persistgym.config import (
+    GENERATOR_VERSION,
+    PRESET_HASHES,
+    PRESETS,
+    SCHEMA_VERSION,
+    SEED_RANGES,
+    GeneratorConfig,
+)
+from persistgym.episode import ALL_CELLS, VARIANTS, Episode, TaskCell, versionless_json
+from persistgym.render import EVENT_PREFIX, generate, notice_text
 from persistgym.template import sample_template
 from persistgym.validity import (
     heuristic_baselines,
+    is_chain,
     lookup_audit,
     oracle_scores,
+    parse_chain,
     partial_memory_from_episodes,
     shortcut_audit,
 )
 
-EXPECTED_CONFIG_HASH = "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b"
+EXPECTED_CONFIG_HASH = PRESET_HASHES["default"]
 """`generator_config_hashes` of the luna validity runs (`VALIDITY_RUNS`): the default
-`GeneratorConfig()` of generator 0.3.0, hashed by `common.runmeta.config_hash`."""
+`GeneratorConfig()` of generator 0.3.0 (unchanged in 0.4.0), hashed by
+`common.runmeta.config_hash`."""
 VALIDITY_RUNS = (
     "results/persistgym_validity/20261002T084243Z-F-0-gpt-6-luna",
     "results/persistgym_validity/20261002T095135Z-F-0-gpt-6-luna",
@@ -64,6 +74,13 @@ GOLDEN_0_3_0_SPOTCHECK_SHA256 = "7d79178592c214e795c489412d6ec963e7112587468f7be
 (validity templates 0-19 x 8 task cells, default config), taken with generator 0.3.0 before
 any change of generator 0.4.0. Its manifest predates `episodes_sha256`, so a rebuild matches
 it only while the current episodes still have this digest."""
+PRESET_CELLS: dict[str, tuple[TaskCell, ...]] = {
+    "default": ALL_CELLS,
+    "sol-chain": tuple(c for c in ALL_CELLS if c.distance == "far"),
+}
+"""The task cells a package shows, per generator preset. gpt-6.1-sol's variant (PREREG §17.3,
+amendment R3, as proposed there) is spot-checked on its 4 D11 far task cells, 80 episodes;
+its validity run and the audits below cover all 8."""
 SPLIT = "validity"
 VARIANT = "base"
 DEFAULT_N = 20
@@ -213,11 +230,16 @@ def scan_episode(ep: Episode, m: Marks | None = None) -> dict:
     out: dict[str, list[dict]] = {"options_outside": [], "key_outside": []}
     texts = [("system prompt", ep.system_prompt, None)] + [
         (f"step {s.index}", s.observation, s) for s in ep.steps]
+    # PREREG §17.3: the evidence notice names the target at its evidence steps
+    notice = (notice_text(ep.cell.fact, ep.kind, ep.quantity, ep.entity)
+              if ep.config.get("evidence_notice", False) else None)
     for where, text, st in texts:
         here = [c for c in ep.components if c.step == (None if st is None else st.index)]
         allowed_opt = [(a, b) for c in here if c.role == "fact"
                        for a, b in _find_all(text, c.sentence)]
         allowed_key = [(a, b) for c in here for a, b in _find_all(text, c.sentence)]
+        if notice and st is not None and here:
+            allowed_key += _find_all(text, notice)
         if st is not None and st.kind == "need":
             allowed_opt += [(x.start(), x.end()) for x in OPTION_LINE.finditer(text)
                             if x.start() >= st.event_start]
@@ -298,8 +320,11 @@ def _summary(ep: Episode, m: Marks) -> str:
     else:
         clues = [c for c in ep.components if c.role == "clue"]
         rule = next(c for c in ep.components if c.role == "rule")
-        rows["Clues"] = "; ".join(
-            f"{_esc(c.name)} = <strong>{c.value}</strong> (step {c.step})" for c in clues)
+        if is_chain(ep):  # PREREG §17.3: each clue's relay, worked out
+            rows["Clues"] = "<br>".join(_chain_row(c, ep.kind) for c in clues)
+        else:
+            rows["Clues"] = "; ".join(
+                f"{_esc(c.name)} = <strong>{c.value}</strong> (step {c.step})" for c in clues)
         where = f"step {rule.step}" if rule.step is not None else "system prompt"
         rows["Rule"] = f"{highlight(rule.sentence, m)[0]} ({where})"
         total = sum(c.value for c in clues)
@@ -330,8 +355,27 @@ def _summary(ep: Episode, m: Marks) -> str:
                                    "needed)</span>")
     rows["Lookup"] = (f"offered (at most {ep.lookup.max_per_episode} per episode)"
                       if ep.lookup.available else "not offered")
+    if ep.config.get("evidence_notice", False):
+        rows["Evidence notice"] = (
+            f"after the record at each evidence step: "
+            f"{highlight(notice_text(ep.cell.fact, ep.kind, ep.quantity, ep.entity), m)[0]}")
     return '<dl class="summary">' + "".join(
         f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows.items()) + "</dl>"
+
+
+def _chain_row(c, kind: str) -> str:
+    """A chain-form clue in the summary box: its atoms, the relay worked out, and its value,
+    which the episode never shows."""
+    p = parse_chain(c.sentence, kind)
+    if p is None:
+        return f'{_esc(c.name)}: <span class="fail">not a chain record</span> (step {c.step})'
+    h1, h2, h3 = (_esc(h) for h in p.helpers)
+    return (f"{_esc(c.name)} (step {c.step}): anchor {h2} = {p.anchor}; far hop {h1} = {h2} + "
+            f"{p.far} = {p.h1_value}; near hop {h1} − {p.near} = <strong>{p.value}</strong>; "
+            f"decoy {h3} = {h2} + {p.decoy} = {p.decoy_value}, never needed. "
+            f'<span class="small muted">The episode prints {p.anchor}, {p.far}, {p.near} and '
+            f"{p.decoy} only: {p.h1_value}, {p.decoy_value} and the clue value {p.value} are not "
+            "shown in the episode.</span>")
 
 
 def _scan_html(ep: Episode, scan: dict) -> str:
@@ -479,6 +523,57 @@ def _audit_rows(audits: dict) -> str:
     return "".join(rows)
 
 
+def _preset(pkg: dict) -> str:
+    return pkg.get("preset", "default")
+
+
+def rebuild_command(pkg: dict) -> str:
+    return (f"uv run python -m persistgym spotcheck --n {pkg['n_templates']}"
+            + (f" --preset {_preset(pkg)}" if _preset(pkg) != "default" else "")
+            + f" --out-id {pkg['id']}")
+
+
+def _scope_html(pkg: dict) -> str:
+    """What the package holds and why these episodes (the index page's first paragraph)."""
+    seeds = pkg["template_seeds"]
+    which = (f"the base variant of validity templates {_esc(pkg['template_ids'][0])} to "
+             f"{_esc(pkg['template_ids'][-1])} (seeds {seeds[0]}-{seeds[-1]})")
+    version = (f"generator {_esc(pkg['generator_version'])}, config hash "
+               f"<code>{pkg['config_hash'][:12]}</code>")
+    if _preset(pkg) == "default":
+        return (f"PREREG §4.4: the researcher spot-checks 20 episodes per task cell for "
+                f"shortcuts. These pages hold {which} in all {len(pkg['task_cells'])} task "
+                f"cells, {pkg['n_episodes']} episodes, rendered with the default generator "
+                f"config ({version}), the same templates and config as the luna validity "
+                "runs. Those runs sent the restated and withheld renderings of these "
+                "templates.")
+    return (f"PREREG §4.4 as amended by R3 (§17.3): for gpt-6.1-sol's derived-fact variant "
+            f"the researcher spot-checks 20 episodes per D11 task cell for shortcuts. These "
+            f"pages hold {which} in the {len(pkg['task_cells'])} far task cells, "
+            f"{pkg['n_episodes']} episodes, rendered with sol's generator config "
+            f"<code>{_esc(_preset(pkg))}</code> ({version}): clue values are given by chain "
+            "records and never printed, and each evidence step carries the evidence notice. "
+            "sol's validity run sends the restated and withheld renderings of these "
+            "templates in all 8 task cells.")
+
+
+def _withheld_note(pkg: dict) -> str:
+    if _preset(pkg) == "default":
+        return ""
+    return ("; in a chain record only the sentence about the stand-in changes, and the "
+            "evidence notice names the stand-in")
+
+
+def _chain_checklist(pkg: dict) -> str:
+    if _preset(pkg) == "default":
+        return ""
+    return ("\n<li>for chain records: one record, or part of one (the anchor, a difference, "
+            "the decoy), that narrows the options on its own, or a misreading of the relays "
+            "(signs dropped, the decoy taken for a hop, the helper's value taken for the "
+            "clue) that still lands on the correct option; and whether the evidence notice "
+            "gives away anything beyond which entity is asked about;</li>")
+
+
 def render_index(pkg: dict) -> str:
     cells = "".join(
         f'<tr><td><a href="{cell}.html">{cell}</a><div class="small muted">'
@@ -506,17 +601,11 @@ def render_index(pkg: dict) -> str:
 <p id="message" class="notice" hidden></p>
 <section id="instructions">
 <h2>What you are checking</h2>
-<p>PREREG §4.4: the researcher spot-checks 20 episodes per task cell for shortcuts. These pages hold
-the base variant of validity templates {_esc(pkg["template_ids"][0])} to
-{_esc(pkg["template_ids"][-1])} (seeds {seeds[0]}-{seeds[-1]}) in all {len(pkg["task_cells"])} task
-cells, {pkg["n_episodes"]} episodes, rendered with the default generator config (generator
-{_esc(pkg["generator_version"])}, config hash <code>{pkg["config_hash"][:12]}</code>), the
-same templates and config as the luna validity runs. Those runs sent the restated and withheld
-renderings of these templates. The base rendering shown here differs from the restated one only
+<p>{_scope_html(pkg)} The base rendering shown here differs from the restated one only
 at the need step, where the restated one puts the evidence records before the question and keeps
 a shorter log filler to stay at v tokens, and from the withheld one only in the fact and clue
 bindings, which the withheld one replaces with stand-in bindings of equal length (the rule is
-kept).</p>
+kept){_withheld_note(pkg)}.</p>
 <p><strong>The pages show the answer.</strong> Every card marks the correct option and the evidence,
 so you can judge whether anything else gives the answer away. <strong>There is no model output
 here</strong>: no replies, transcripts or scores.</p>
@@ -528,7 +617,7 @@ evidence bindings. Look for:</p>
 the log filler, the routine events, the entity or skin names, the question wording, or the
 structure of the option list (order, spacing, a value that stands out);</li>
 <li>for derived facts: a subset of the clues (with the rule) already narrowing the options, or a
-clue or the rule that gives the value away on its own;</li>
+clue or the rule that gives the value away on its own;</li>{_chain_checklist(pkg)}
 <li>a distractor binding that points at the correct option;</li>
 <li>anything broken or odd: a duplicated fact, garbled text, a wrong option list (the value
 missing, two equal options), evidence at an unexpected step, a routine event whose expected
@@ -594,8 +683,7 @@ CSV</button><input type="file" id="import-file" accept=".csv,text/csv" hidden></
 {_esc(pkg["generator_version"])} (schema {pkg["schema_version"]}); config hash
 <code>{pkg["config_hash"]}</code>; PREREG version {_esc(str(pkg["prereg_version"]))}. The
 committed manifest is <code>{_esc(pkg["manifest_path"])}</code>. Rebuild these pages with
-<code>uv run python -m persistgym spotcheck --n {pkg["n_templates"]} --out-id
-{_esc(pkg["id"])}</code>.</p>
+<code>{_esc(rebuild_command(pkg))}</code>.</p>
 </section>"""
     return _page("G1 spot-check", _bar("G1 spot-check", back=False), body,
                  _data(pkg, "index"))
@@ -631,12 +719,24 @@ AUDIT_WHAT = {
         "the correct value's rank among the options is balanced (chi-square test)",
     "letter_rank_and_n_clues_exact_within_complete_blocks":
         "each block of 10 templates uses every letter and rank once and 5/5 clue counts",
+    "chain_records_well_formed_and_resolve":
+        "chain form (PREREG §17.3): each clue record is one anchor, a far hop, a near hop and "
+        "a decoy over distinct helpers, its numbers in range and apart, and it resolves to "
+        "its clue value (nothing to check in the default config)",
+    "chain_hidden_values_never_shown":
+        "chain form: no worked-out value (the target, a clue, a running total, a helper's "
+        "value, the stand-in's) appears before the need step",
+    "evidence_notice_only_at_evidence_steps":
+        "the evidence notice is at each evidence step and nowhere else (or, in the default "
+        "config, nowhere)",
     "lookup_serves_keys_and_refuses_after_cap":
         "lookup re-shows the right records, 'no such record' and the cap of 3",
     "heuristic_baselines": "no-memory baselines (most frequent, last seen, first, median "
-                           "option, prior letter) score ≤ chance + 10pp on every view",
+                           "option, prior letter; the option nearest the stand-in's value on "
+                           "the withheld view) score ≤ chance + 10pp on every view",
     "partial_memory": "derived cells: no proper subset of the clues narrows the options; "
-                      "partial-memory heuristics ≤ chance + 10pp",
+                      "partial-memory heuristics ≤ chance + 10pp (chain form: no subset of "
+                      "the chains' atoms narrows them; 6 misreadings ≤ chance + 10pp)",
     "oracles": "the key and text oracles answer every routine step, and every need step of "
                "the base and restated episodes, correctly; the no-memory lookup oracle answers "
                "every need step where lookup is offered (base) or the records are restated",
@@ -676,6 +776,15 @@ def findings_csv(rows: list[list]) -> str:
     return buf.getvalue()
 
 
+def _readme_scope(pkg: dict) -> str:
+    if _preset(pkg) == "default":
+        return ("all 8 task cells. They are rendered\nwith the default generator config, the "
+                "templates and config of the luna validity runs")
+    return (f"the {len(pkg['task_cells'])} far task cells (PREREG §17.3, amendment R3). They "
+            f"are rendered\nwith gpt-6.1-sol's generator config `{_preset(pkg)}` (chain "
+            "clues and the evidence notice), the templates\nand config of sol's validity run")
+
+
 def readme_text(pkg: dict) -> str:
     html_dir, n = pkg["html_dir"], pkg["n_templates"]
     return f"""# G1 spot-check package `{pkg["id"]}`
@@ -684,8 +793,7 @@ PREREG §4.4: the researcher spot-checks 20 episodes per task cell for shortcuts
 episodes from the validity range and no model output.
 
 This package holds {pkg["n_episodes"]} episodes: the base variant of validity templates
-{pkg["template_ids"][0]} to {pkg["template_ids"][-1]} (seeds {pkg["template_seeds"][0]}-{pkg["template_seeds"][-1]}) in all 8 task cells. They are rendered
-with the default generator config, the templates and config of the luna validity runs:
+{pkg["template_ids"][0]} to {pkg["template_ids"][-1]} (seeds {pkg["template_seeds"][0]}-{pkg["template_seeds"][-1]}) in {_readme_scope(pkg)}:
 - generator {pkg["generator_version"]};
 - config hash `{pkg["config_hash"]}`.
 
@@ -705,10 +813,10 @@ The pages are in this folder (gitignored, about {pkg["html_mb"]:.0f} MB):
 If it is missing, rebuild it from the repository root. The episodes are regenerated from their
 seeds, and the committed files here are kept:
 
-    uv run python -m persistgym spotcheck --n {n} --out-id {pkg["id"]}
+    {rebuild_command(pkg)}
 
 Open `index.html` in that folder in Chrome or Edge. It has the instructions, the audit results
-and a link to each task cell's page (20 episodes each). The pages are static: they load nothing
+and a link to each task cell's page ({n} episodes each). The pages are static: they load nothing
 from the network and send nothing anywhere.
 
 Findings are saved in the browser's local storage, which every page of the package shares. Some
@@ -743,30 +851,45 @@ findings to another browser.
 """
 
 
-def _verify_runs(chash: str) -> None:
-    if chash != EXPECTED_CONFIG_HASH:
+def _verify_config(preset: str, chash: str) -> None:
+    """The config must be the preset's pinned one (`config.PRESET_HASHES`); for the default
+    preset that is the config of the luna validity runs."""
+    want = PRESET_HASHES[preset]
+    if preset == "default" and chash != want:
         raise SpotcheckError(
             f"the generator config hash is {chash}, not the luna validity runs' "
             f"{EXPECTED_CONFIG_HASH} (generator_config_hashes in {', '.join(VALIDITY_RUNS)}): "
             "the default GeneratorConfig changed, so these would not be the episodes those "
             "runs used")
+    if chash != want:
+        raise SpotcheckError(f"the generator config hash is {chash}, not preset {preset!r}'s "
+                             f"pinned {want} (persistgym/config.py PRESET_HASHES)")
 
 
 def _same_episodes(old: dict, new: dict) -> bool:
-    keys = ("split", "variant", "config_hash", "generator_version", "episode_ids_by_task_cell")
-    return all(old.get(k) == new.get(k) for k in keys)
+    """Whether a committed manifest describes the episodes just built: the same split,
+    variant, config hash and episode ids, and the same `episodes_sha256`. A manifest from
+    before `episodes_sha256` (luna's, generator 0.3.0) matches only while the episodes
+    still have its pinned digest, `GOLDEN_0_3_0_SPOTCHECK_SHA256`."""
+    keys = ("split", "variant", "config_hash", "episode_ids_by_task_cell")
+    digest = old.get("episodes_sha256", GOLDEN_0_3_0_SPOTCHECK_SHA256)
+    return all(old.get(k) == new.get(k) for k in keys) and digest == new["episodes_sha256"]
 
 
 def build(out_id: str | None = None, n: int = DEFAULT_N, cfg: GeneratorConfig | None = None,
           raw_root: Path | None = None, results_root: Path | None = None,
-          audits: bool = True, command: str | None = None) -> dict:
+          audits: bool = True, command: str | None = None, preset: str = "default") -> dict:
     """Write the review pages (under `raw_root`, default `RAW_ROOT`) and the package files
-    (under `results_root`, default `RESULTS_ROOT`); returns the manifest. `audits=False`
-    skips the $0 audits (quick tests only: the index page then says they did not run)."""
+    (under `results_root`, default `RESULTS_ROOT`); returns the manifest. `preset` names the
+    generator config (`config.PRESETS`; `cfg`, if given, must hash to it) and the task cells
+    shown (`PRESET_CELLS`). `audits=False` skips the $0 audits (quick tests only: the index
+    page then says they did not run)."""
     started = utc_now()
-    cfg = cfg or GeneratorConfig()
+    if preset not in PRESETS:
+        raise SpotcheckError(f"unknown preset {preset!r}; known: {sorted(PRESETS)}")
+    cfg = cfg or PRESETS[preset]
     chash = config_hash(cfg.to_dict())
-    _verify_runs(chash)
+    _verify_config(preset, chash)
     lo, hi = SEED_RANGES[SPLIT]
     if not 1 <= n <= hi - lo:
         raise SpotcheckError(f"--n must be between 1 and {hi - lo}, got {n}")
@@ -774,9 +897,13 @@ def build(out_id: str | None = None, n: int = DEFAULT_N, cfg: GeneratorConfig | 
     html_dir = Path(raw_root or RAW_ROOT) / out_id
     pkg_dir = Path(results_root or RESULTS_ROOT) / out_id
 
+    # the audits cover all 8 task cells in every variant, as the validity runs play them
+    cells = PRESET_CELLS[preset]
     variants = list(VARIANTS) if audits else [VARIANT]
-    all_eps = [e for _, eps in generate(SPLIT, range(n), cfg, ALL_CELLS, variants) for e in eps]
-    base = {c.id: [e for e in all_eps if e.variant == VARIANT and e.cell == c] for c in ALL_CELLS}
+    audit_cells = ALL_CELLS if audits else cells
+    all_eps = [e for _, eps in generate(SPLIT, range(n), cfg, audit_cells, variants)
+               for e in eps]
+    base = {c.id: [e for e in all_eps if e.variant == VARIANT and e.cell == c] for c in cells}
     by_cell = {cid: [e.episode_id for e in eps] for cid, eps in base.items()}
     rows = [[e.episode_id, cid, e.template_seed, "", ""] for cid, eps in base.items()
             for e in eps]
@@ -788,13 +915,15 @@ def build(out_id: str | None = None, n: int = DEFAULT_N, cfg: GeneratorConfig | 
         "package": "PersistGym-lite G1 spot-check (PREREG §4.4)",
         "id": out_id,
         "split": SPLIT, "indices": list(range(n)), "n_templates": n,
-        "template_ids": [e.template_id for e in base[ALL_CELLS[0].id]],
-        "template_seeds": [e.template_seed for e in base[ALL_CELLS[0].id]],
-        "variant": VARIANT, "task_cells": [c.id for c in ALL_CELLS], "n_episodes": len(rows),
+        "template_ids": [e.template_id for e in base[cells[0].id]],
+        "template_seeds": [e.template_seed for e in base[cells[0].id]],
+        "variant": VARIANT, "task_cells": [c.id for c in cells], "n_episodes": len(rows),
         "generator_version": GENERATOR_VERSION, "schema_version": SCHEMA_VERSION,
-        "config_hash": chash, "config": cfg.to_dict(), "validity_runs": list(VALIDITY_RUNS),
+        "preset": preset, "config_hash": chash, "config": cfg.to_dict(),
+        "validity_runs": list(VALIDITY_RUNS) if preset == "default" else [],
         "prereg_version": prereg_version(),
         "episode_ids_by_task_cell": by_cell,
+        "episodes_sha256": episodes_sha256([e for eps in base.values() for e in eps]),
         "html_dir": _rel(html_dir), "html_index": _rel(html_dir / "index.html"),
         "html_pages": {cid: _rel(html_dir / f"{cid}.html") for cid in by_cell},
         "manifest_path": _rel(manifest_path),
@@ -846,9 +975,10 @@ def run(args: argparse.Namespace) -> int:
         return 2
     # the command as typed from the repository root, without this machine's paths
     command = (f"uv run python -m persistgym spotcheck --n {args.n}"
+               + (f" --preset {args.preset}" if args.preset != "default" else "")
                + (f" --out-id {args.out_id}" if args.out_id else ""))
     try:
-        manifest = build(args.out_id, args.n, command=command)
+        manifest = build(args.out_id, args.n, command=command, preset=args.preset)
     except SpotcheckError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
@@ -956,6 +1086,10 @@ def add_parsers(sub) -> None:
                     help="validity templates 0..n-1 (default 20, the validity runs' templates)")
     sc.add_argument("--out-id", default=None,
                     help="package id (default g1-validity-0-<n>-<confighash8>)")
+    sc.add_argument("--preset", choices=sorted(PRESETS), default="default",
+                    help="generator config (persistgym/config.py PRESETS): default, luna's "
+                         "and the validity runs' so far; sol-chain, gpt-6.1-sol's variant "
+                         "(PREREG §17.3), on its 4 far task cells")
     sf = sub.add_parser("spotcheck-findings",
                         help="check an exported findings.csv and count verdicts per task cell")
     sf.add_argument("--out-id", required=True, help="package id")

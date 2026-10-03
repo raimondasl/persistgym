@@ -16,13 +16,13 @@ For an experiment in `BLINDED_EXPERIMENTS`:
   reservation log;
 * the transport's `results/costs.csv` row leaves `reasoning_tokens` empty;
 * `pooled_report` (CLI `pilot-report`) is the committed script that reads the raw episodes
-  of every run and reports, per model and requested reasoning effort (PREREG §17.2), pooled
-  tokens (summed over the harness cells run),
+  of every run and reports, per model, requested reasoning effort (PREREG §17.2) and
+  generator config (PREREG §17.3), pooled tokens (summed over the harness cells run),
   validity levels of the restated and withheld variants, errors, latency, cost and the
   per-cell echo-match rates (exempt: a toggle check, not an outcome; PREREG §11, D29; the
   effort echo since PREREG §17.2).
 * `harnesses.reasoning_check` (CLI `reasoning-check`) scores the engagement check of PREREG
-  §17.2 from two pilot runs, with quantities pooled over both arms only.
+  §17.2 and §17.3 from two pilot runs, with quantities pooled over both arms only.
 
 Both summaries and the committed `parallel` block are built from an allowlist of fields, so
 a field added to `EpisodeRun` or to `ParallelPlay.info` later never reaches a committed pilot
@@ -54,7 +54,8 @@ so they approximate the withheld column; n_calls approximates lookups. Only the 
 `reasoning_tokens` fields are left empty. Nor does it stop differencing: a run of a harness
 cell that joins a pool of the same model and effort which a report has already shown gives
 its own totals as the difference between that report and the next one. Splitting pools by
-effort keeps PREREG §17.2's check runs out of block 1's sol pool. For a parallel run,
+effort keeps PREREG §17.2's check runs out of block 1's sol pool, and splitting them by
+generator config keeps PREREG §17.3's check runs out of §17.2's. For a parallel run,
 `summary.json`'s count of RUN_STOPPED episodes (and the message a Ctrl+C or an error prints)
 says roughly how many episodes were in flight when the run stopped; under a spend plan that
 bounds the per-episode estimate, as the withheld peak does, though more loosely.
@@ -72,6 +73,8 @@ import statistics
 from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
+
+from persistgym.config import PRESET_HASHES
 
 BLINDED_EXPERIMENTS = frozenset({"persistgym_pilot"})
 WITHHELD_NOTE = "reasoning_tokens withheld: pilot blinding (PREREG §11)"
@@ -228,23 +231,33 @@ def _effort(e: dict) -> str:
     return str((e.get("echo") or {}).get("effort_requested") or LEGACY_EFFORT)
 
 
-def pool_key(model: str, effort: str) -> str:
+def pool_key(model: str, effort: str, generator_hash: str | None = None) -> str:
     """A pool's key in the report: the model at `LEGACY_EFFORT` (as before PREREG §17.2),
-    else the model and its effort."""
-    return model if effort == LEGACY_EFFORT else f"{model} (effort {effort})"
+    else the model and its effort; and, for an episode on a generator config other than the
+    default one (PREREG §17.3: sol's `sol-chain`), ", generator <hash8>" too. An episode
+    recorded before the runner logged its config (`generator_config_hash` None) played the
+    default config."""
+    parts = [] if effort == LEGACY_EFFORT else [f"effort {effort}"]
+    if generator_hash not in (None, PRESET_HASHES["default"]):
+        parts.append(f"generator {generator_hash[:8]}")
+    return f"{model} ({', '.join(parts)})" if parts else model
 
 
 def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
-    """Per model and requested reasoning effort, pooled over every run (harness cell) given.
+    """Per model, requested reasoning effort and generator config (`pool_key`), pooled over
+    every run (harness cell) given.
     Reasoning tokens are reported only when at least 2 harness cells are pooled, so a pool
     can never equal one arm. Pools are split by effort (PREREG §17.2), so that runs at a new
     effort never join a pool that an earlier report has already shown: one check run at high
     effort added to block 1's medium-effort pool would otherwise show its own reasoning total
-    as the difference between two reports."""
+    as the difference between two reports. Pools are split by generator config (PREREG
+    §17.3) for the same reason: R3's check runs (sol at high on `sol-chain`) never join R2's
+    (sol at high on the default config)."""
     by_model: dict[str, list[dict]] = {}
     for eps in runs.values():
         for e in eps:
-            by_model.setdefault(pool_key(str(e.get("model")), _effort(e)), []).append(e)
+            key = pool_key(str(e.get("model")), _effort(e), e.get("generator_config_hash"))
+            by_model.setdefault(key, []).append(e)
     models = {}
     for model, eps in sorted(by_model.items()):
         cells = sorted({e["harness_cell"] for e in eps})
@@ -257,6 +270,8 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
                     "pooled total would be that arm's")
         models[model] = {
             "reasoning_effort": _effort(eps[0]),
+            "generator_config_hash": eps[0].get("generator_config_hash")
+            or PRESET_HASHES["default"],
             "harness_cells_pooled": cells,
             "n_episodes": len(eps),
             "n_episodes_by_variant": dict(sorted(Counter(e.get("variant") for e in eps)

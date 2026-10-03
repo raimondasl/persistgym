@@ -12,7 +12,7 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-GENERATOR_VERSION = "0.3.0"
+GENERATOR_VERSION = "0.4.0"
 SCHEMA_VERSION = 3
 
 # Disjoint seed ranges (half-open), PREREG D7. Template index i of a split has seed
@@ -28,6 +28,14 @@ SEED_RANGES: dict[str, tuple[int, int]] = {
 RULE_PLACEMENTS = ("with_last_clue", "with_first_clue", "separate_step", "system_prompt")
 RESTATE_MODES = ("as_revealed", "final_value")
 SINGLE_TURN_REPLY_MODES = ("oracle", "none")
+CLUE_FORMS = ("direct", "chain")
+ADDED_IN_0_4 = {"clue_form": "direct", "evidence_notice": False}
+"""Fields added by generator 0.4.0 (PREREG §17.3, amendment R3) and their defaults. `to_dict`
+leaves a field out while it has its default, so the default config's dict and hash
+(`common.runmeta.config_hash`) are those of generator 0.3.0."""
+CHAIN_V1_GAP = 109
+"""Chain form: the smallest near delta (H1 - clue) and far delta (H1 - anchor); see
+`template.CHAIN_DELTA_RANGE`. Repeated here for the config's own checks."""
 
 
 @dataclass(frozen=True)
@@ -85,6 +93,13 @@ class GeneratorConfig:
     rank * spacing above the bottom and (K - 1 - rank) * spacing below the top of
     `minor_component_range`, no proper subset of the clues (with the rule) rules out any
     option."""
+    clue_form: str = "direct"
+    """How each clue value is given (PREREG §17.3, amendment R3; gpt-6.1-sol only, preset
+    `sol-chain`). 'direct': the clue's binding prints its value. 'chain': the value is never
+    printed; the clue's record gives it through a two-hop relay over helper entities (an
+    anchor value, a far and a near difference, and a decoy difference), so that working it
+    out takes two 3-digit operations (`template.ChainSpec`). Template values (options, clue
+    values, ranks, stand-in) are those of the direct form for every seed."""
 
     # --- distractor bindings (PREREG D1) ---
     n_distractors: int = 2
@@ -103,6 +118,13 @@ class GeneratorConfig:
     # --- agent-facing task text ---
     warn_future_need: bool = True
     """System prompt says that later requests can depend on earlier records."""
+    evidence_notice: bool = False
+    """PREREG §17.3 (amendment R3; gpt-6.1-sol only, preset `sol-chain`): each evidence step
+    of the target says, after its record, that the target's quantity will be requested later,
+    and (derived) asks the agent to work out as much of it as the records allow and keep it
+    in mind without writing it (`render.notice_text`). The withheld control names its
+    stand-in instead. Never in the record line, so lookups and the restated block do not
+    repeat it."""
 
     # --- lookup (recoverable cells) ---
     lookup_max_per_episode: int = 3
@@ -169,6 +191,20 @@ class GeneratorConfig:
             raise ValueError(
                 f"need_index_range {self.need_index_range} too small: far derived cells need "
                 f"need index >= {self.min_need_index} with these W, v and clue settings")
+        if self.clue_form not in CLUE_FORMS:
+            raise ValueError(f"clue_form must be one of {CLUE_FORMS}")
+        if self.clue_form == "chain":
+            # The relay's H1 value is drawn from [clue max + CHAIN_V1_GAP, 999] for the
+            # target's and the stand-in's clue in each slot (template._chains), so that
+            # range must not be empty; atom-level partial memory needs consecutive options.
+            if self.option_spacing != 1:
+                raise ValueError("clue_form 'chain' needs option_spacing 1")
+            highest = [mhi] + [hi - (m - 1) * mlo for m in self.n_clues_choices]
+            if max(highest) + CHAIN_V1_GAP > 999:
+                raise ValueError(
+                    f"clue_form 'chain': a clue can reach {max(highest)}, so the relay's "
+                    f"H1 value (clue + at least {CHAIN_V1_GAP}) would pass 999; lower "
+                    "value_range or raise minor_component_range")
 
     # ------------------------------------------------------------------
     @property
@@ -199,10 +235,15 @@ class GeneratorConfig:
         return self.far_gap_steps + self.max_reveal_span + self.lead_in_min_steps
 
     def to_dict(self) -> dict:
+        """Every field, tuples as lists, except a field added by generator 0.4.0 that has
+        its default (`ADDED_IN_0_4`): so the default config's dict and hash are unchanged."""
         d = dataclasses.asdict(self)
         for k, v in d.items():
             if isinstance(v, tuple):
                 d[k] = list(v)
+        for k, default in ADDED_IN_0_4.items():
+            if d[k] == default:
+                del d[k]
         return d
 
     @classmethod
@@ -245,6 +286,26 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "accept_value_answers": ("§4, D4", "need-step scoring: letter only, or letter or value"),
     "strict_action_parse": ("§4, D4", "what counts as the reply's action"),
     "validity_margin_pp": ("§5, §16.3", "no-memory baselines <= chance + 10pp"),
+    "clue_form": ("§2.4, R3", ("clue values printed (direct) or given by a two-hop relay "
+                               "(chain; sol only)")),
+    "evidence_notice": ("§5, R3", ("evidence steps say the value will be requested and ask "
+                                   "for it to be worked out privately (sol only)")),
 }
 
 DEFAULT_CONFIG = GeneratorConfig()
+
+PRESETS: dict[str, GeneratorConfig] = {
+    "default": DEFAULT_CONFIG,
+    "sol-chain": GeneratorConfig(clue_form="chain", evidence_notice=True,
+                                 rule_placement="with_first_clue"),
+}
+"""Named generator configs. `default` is every model's config except where PREREG §17.3
+(amendment R3) gives gpt-6.1-sol `sol-chain`: chain clues, the evidence notice, and the rule
+shown with the first clue, so that the evidence steps are exactly the clue steps."""
+PRESET_HASHES: dict[str, str] = {
+    "default": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+    "sol-chain": "b0d0b020d5b9135bad3b4cb4c074a19bdbb8590e51dd04a690ba0fcaedbaaf97",
+}
+"""`common.runmeta.config_hash(PRESETS[name].to_dict())`, pinned (a test checks each). The
+spot-check and the registered-settings guard (`harnesses.registered`) read the hashes from
+here only."""

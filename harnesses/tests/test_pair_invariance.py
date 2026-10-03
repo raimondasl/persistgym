@@ -16,8 +16,13 @@ import pytest
 from harnesses.cells import CELLS, NOTES_INSTRUCTION, REPLAY_OFF_CELLS, REPLAY_PAIRS
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
-from harnesses.items import n_reasoning_items
+from harnesses.items import item_text, n_reasoning_items
+from harnesses.registered import registered_effort
+from harnesses.runner import run_episode
 from harnesses.tests.conftest import SYSTEM, reply_text, run_synthetic, summary_text
+from persistgym.config import PRESETS
+from persistgym.episode import TaskCell
+from persistgym.render import generate, notice_text
 
 CONFIGS = [HarnessConfig(), HarnessConfig(summary_keep_recent_tokens=500),
            HarnessConfig(reasoning_effort="high", service_tier="default",
@@ -108,3 +113,39 @@ def test_reasoning_settings_are_always_explicit():
             assert p["model"] == "gpt-6.1-sol" and p["service_tier"] == "default"
             assert p["reasoning"] == {"effort": "low", "mode": "pro",
                                       "context": cell.reasoning_context}
+
+
+def test_the_variant_episodes_payloads_differ_only_in_reasoning_context():
+    """PREREG §17.3: pilot-000001 derived-rec-far (an episode of R3's check, on sol-chain)
+    played with the fake model in F-r and F-0 at sol's registered effort: the payloads are
+    identical except `reasoning.context`, every request sends effort high, every user message
+    is an observation of the episode as generated, and the evidence notice is in exactly the
+    messages of the evidence steps."""
+    ep = next(e for _, es in generate("pilot", [1], PRESETS["sol-chain"],
+                                      [TaskCell.from_id("derived-rec-far")]) for e in es)
+    cfg = HarnessConfig(model="gpt-6.1-sol", reasoning_effort=registered_effort("gpt-6.1-sol"))
+    calls = {}
+    for cid in ("F-r", "F-0"):
+        fake = FakeModel(lambda p, i, ep=ep: _key_reply(ep, p))
+        run_episode(ep, CELLS[cid], cfg, fake)
+        calls[cid] = fake.calls
+    assert len(calls["F-r"]) == len(calls["F-0"]) == ep.n_steps
+    for pr, po in zip(calls["F-r"], calls["F-0"], strict=True):
+        assert (pr["reasoning"]["context"], po["reasoning"]["context"]) == (
+            "all_turns", "current_turn")
+        assert pr["reasoning"]["effort"] == po["reasoning"]["effort"] == "high"
+        assert _without(pr, "reasoning", "context") == _without(po, "reasoning", "context")
+    observations = [s.observation for s in ep.steps]
+    last = calls["F-0"][-1]["input"]
+    users = [item_text(i) for i in last if i.get("role") == "user"]
+    assert users == observations
+    notice = notice_text("derived", ep.kind, ep.quantity, ep.entity)
+    assert [k for k, u in enumerate(users) if notice in u] == ep.reveal_steps
+    assert len(ep.reveal_steps) == 3 and notice not in calls["F-0"][-1]["instructions"]
+
+
+def _key_reply(ep, payload) -> str:
+    """The expected action of the step whose observation the payload ends with."""
+    last = item_text(payload["input"][-1])
+    step = next(s for s in ep.steps if s.observation == last)
+    return f"ACTION: {step.expected_action}"

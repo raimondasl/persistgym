@@ -203,6 +203,10 @@ class EpisodeRun:
     call_latency_s: list[float] = field(default_factory=list)  # wall clock per call
     cost_usd_list: float | None = 0.0
     cost_usd_billed_est: float | None = 0.0
+    # the episode's generator config hash (PREREG §17.3: luna and sol play different configs;
+    # the pooled pilot report keeps them apart, `blinding.pool_key`). None in records written
+    # before it was logged
+    generator_config_hash: str | None = None
 
 
 def _add_usage(run: EpisodeRun, response: dict) -> None:
@@ -266,7 +270,8 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
     env = EpisodeEnv(episode)
     session = HarnessSession.for_episode(cell, episode, cfg)
     run = EpisodeRun(episode.episode_id, episode.template_id, episode.cell.id, episode.variant,
-                     cell.cell_id, model=cfg.model)
+                     cell.cell_id, model=cfg.model,
+                     generator_config_hash=episode.config_hash)
     run.designed = {k: episode.design.get(k) for k in (
         "S_window_obs_only", "S_window_assumed_replies", "far_by_obs_tokens",
         "gap_steps_latest", "gap_steps_earliest")}

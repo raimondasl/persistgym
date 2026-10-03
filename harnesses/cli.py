@@ -10,19 +10,29 @@ $0 commands (fake model or local files, no network):
     # rebuild the row, summary.json and meta.json from its raw files, then release the lock
     # and its spend reservation; --check verifies and prints the plan, writing nothing
     uv run python -m harnesses account-run <run_id> --check
-    # PREREG §17.2 (amendment R2): score sol's engagement check from its two pilot runs,
-    # with block 1's medium-effort sol pilot as the descriptive reference
+    # PREREG §17.3 (amendment R3): score sol's engagement check on its derived-fact variant
+    # from its two pilot runs, with R2's two check runs (default config) as the descriptive
+    # reference
     uv run python -m harnesses reasoning-check <F-r run_id> <F-0 run_id> \
-        --reference 20261002T083238Z-F-r-gpt-6.1-sol 20261002T083706Z-F-0-gpt-6.1-sol
+        --reference 20261002T173710Z-F-r-gpt-6.1-sol 20261002T180358Z-F-0-gpt-6.1-sol
 
 Request settings. `run` and `dry-run` send the model's registered reasoning effort unless
 --effort says otherwise (harnesses/registered.py; PREREG §6 as amended by R2, §17.2): medium
-on gpt-6-luna, high on gpt-6.1-sol (and on a dated snapshot or alias of each). `run` refuses,
-before the paid-run lock, any other effort outside persistgym_pilot, and a gpt-6.1-sol run
-outside persistgym_pilot unless the reasoning_check.json files under
-results/persistgym_pilot/ say ENGAGED in R2's order and none says NOT_ENGAGED
-(`registered.engagement_refusal`). The probes keep their registered settings (medium on both
-models; PREREG §17.1).
+on gpt-6-luna, high on gpt-6.1-sol (and on a dated snapshot or alias of each). They play the
+generator config of --gen-preset (persistgym/config.py PRESETS; "default" unless given) with
+each --gen-set FIELD=JSON applied. Before the paid-run lock, `run` refuses
+(`registered.check_run_settings`; PREREG §17.3, amendment R3):
+* outside persistgym_pilot, any effort but the model's registered one;
+* outside persistgym_pilot, a gpt-6.1-sol run off the generator preset sol-chain (exactly: a
+  --gen-set changes its config hash) or in a harness cell other than F-r and F-0;
+* outside persistgym_pilot, a gpt-6.1-sol run unless the reasoning_check.json files on
+  sol-chain's config under results/persistgym_pilot/ say ENGAGED in R2's order and none says
+  NOT_ENGAGED (`registered.engagement_refusal`; a check file decides only for the config its
+  runs played, so R2's NOT_ENGAGED file binds the default config only), and outside
+  persistgym_validity unless `registered.G1_PASSED` records G1 on sol-chain;
+* a gpt-6.1-sol pilot at effort high (R3's engagement check) off sol-chain, and any such
+  pilot after R3's hard stop (a NOT_ENGAGED check on sol-chain, or an UNSCORABLE one twice).
+The probes keep their registered settings (medium on both models; PREREG §17.1).
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the
 PersistGym stream's paid-run lock (an ARC run, with its own lock, may go beside it; PREREG
@@ -57,20 +67,28 @@ console program. The OpenAI SDK reads the key from the environment:
         --design fork --approved-block "1-pilots" --planned-usd 1
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
         --model gpt-6-luna --n 1 --approved-block "1-pilots" --planned-usd 1
-    # PREREG §17.2: the engagement check's two runs, this one and the same with --cell F-0:
-    # sol at high effort on the 4 D11 far task cells of pilot templates 0 and 1, the 16
-    # episodes of block 1's sol pilot at medium
+    # PREREG §17.3 (amendment R3): the engagement check's two runs, this one and the same
+    # with --cell F-0: sol at high effort on its derived-fact variant (sol-chain), on the 4
+    # D11 far task cells of pilot templates 0 and 1 (the episode ids of R2's check)
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
-        --model gpt-6.1-sol --effort high --split pilot --start 0 --n 2 \
-        --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far \
-        --experiment persistgym_pilot --approved-block "1-pilots" --planned-usd 6
-    # D11 as amended by R2: sol on derived-far x T_d = 210 templates plus observed-far x
-    # T_o = 70 of them, at sol's registered effort (high), only after an ENGAGED check;
-    # PREREG §4.6: up to 16 episodes at once, with the same payloads and outputs and spend
-    # reserved for the episodes in flight (harnesses/parallel.py)
+        --model gpt-6.1-sol --effort high --gen-preset sol-chain --split pilot --start 0 \
+        --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far \
+        derived-rec-far --experiment persistgym_pilot --approved-block "1-pilots" \
+        --planned-usd 6
+    # R3, only after an ENGAGED check: sol's validity run (§4.4) on sol-chain, F-0 on
+    # validity templates 0-19 x the 8 task cells, restated (then the same with withheld)
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+        --model gpt-6.1-sol --gen-preset sol-chain --split validity --start 0 --n 20 \
+        --variant restated --experiment persistgym_validity --approved-block "1-pilots" \
+        --planned-usd <usd>
+    # D11 as amended by R2 and R3: sol on derived-far x T_d = 210 templates plus observed-far
+    # x T_o = 70 of them, at sol's registered effort (high) on sol-chain, only after an
+    # ENGAGED check and G1 (registered.G1_PASSED); PREREG §4.6: up to 16 episodes at once,
+    # with the same payloads and outputs and spend reserved for the episodes in flight
+    # (harnesses/parallel.py)
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
-        --model gpt-6.1-sol --split main --matrix d11 --n 210 --experiment persistgym \
-        --approved-block "<block>" --planned-usd <usd> --parallel 16
+        --model gpt-6.1-sol --gen-preset sol-chain --split main --matrix d11 --n 210 \
+        --experiment persistgym --approved-block "<block>" --planned-usd <usd> --parallel 16
 """
 
 from __future__ import annotations
@@ -101,7 +119,7 @@ from harnesses.openai_transport import (
 )
 from harnesses.parallel import MAX_PARALLEL
 from harnesses.runner import RAW, RESULTS, require_plain_name, run_batch, run_episode
-from persistgym.config import GeneratorConfig
+from persistgym.config import PRESETS, GeneratorConfig
 from persistgym.episode import TaskCell
 from persistgym.render import generate
 
@@ -117,9 +135,9 @@ LOCK_PATH: Path | None = None
 # The ledger `account-run` appends to. None: this checkout's results/costs.csv. Tests point it
 # at a temporary file.
 COSTS_PATH: Path | None = None
-RUN_ARGS = ("cell", "split", "start", "variant", "W", "gen_set", "model", "effort", "mode",
-            "service_tier", "milestone", "approved_block", "planned_usd", "n", "task_cell",
-            "matrix", "n_observed", "cell_templates", "experiment", "parallel")
+RUN_ARGS = ("cell", "split", "start", "variant", "W", "gen_preset", "gen_set", "model",
+            "effort", "mode", "service_tier", "milestone", "approved_block", "planned_usd", "n",
+            "task_cell", "matrix", "n_observed", "cell_templates", "experiment", "parallel")
 """The arguments of `run` that decide what it runs and how it is accounted for (all but
 --run-id): its run plan records them, and `account-run` takes them."""
 
@@ -135,13 +153,15 @@ def _rel(path) -> str:
         return str(path)
 
 
-def _gen_config(sets: list[str]) -> GeneratorConfig:
+def _gen_config(preset: str, sets: list[str]) -> GeneratorConfig:
+    """The generator config of --gen-preset (`persistgym.config.PRESETS`) with each --gen-set
+    FIELD=JSON applied."""
     changes = {}
     for s in sets or []:
         key, _, raw = s.partition("=")
         val = json.loads(raw)
         changes[key] = tuple(val) if isinstance(val, list) else val
-    return GeneratorConfig().replace(**changes)
+    return PRESETS[preset].replace(**changes)
 
 
 def _harness_config(a) -> HarnessConfig:
@@ -190,7 +210,7 @@ def cmd_cells(a) -> int:
 def cmd_dry_run(a) -> int:
     """Run one generated episode with the fake model and print what every request sends."""
     cell = get_cell(a.cell)
-    gen = _gen_config(a.gen_set)
+    gen = _gen_config(a.gen_preset, a.gen_set)
     ep = next(e for _, eps in generate(a.split, [a.start], gen, [TaskCell.from_id(a.task_cell)],
                                        (a.variant,)) for e in eps)
     events: list[dict] = []
@@ -271,13 +291,20 @@ def cmd_run(a) -> int:
               f"--experiment {PILOT_EXPERIMENT} (blinded, PREREG §11), got "
               f"{a.experiment!r}; a main-sweep run needs --split main", file=sys.stderr)
         return 2
-    # PREREG §6 as amended by R2 (§17.2): outside pilots, the model's registered effort only,
-    # and sol only after an ENGAGED engagement check
-    why = registered.check_run_settings(a.experiment, a.model, a.effort, RESULTS)
+    # PREREG §6 as amended by R2 (§17.2) and R3 (§17.3): outside pilots, the model's
+    # registered effort, generator preset and cells only, and sol only after an ENGAGED
+    # engagement check on that config (and outside its validity run, after G1); a sol pilot
+    # at high effort is R3's check, on sol-chain only, and none runs after R3's hard stop
+    try:
+        gen = _gen_config(a.gen_preset, a.gen_set)
+    except (TypeError, ValueError) as e:
+        print(f"refused: --gen-set: {e}", file=sys.stderr)
+        return 2
+    why = registered.check_run_settings(a.experiment, a.model, a.effort, cell.cell_id,
+                                        runmeta.config_hash(gen.to_dict()), RESULTS)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2
-    gen = _gen_config(a.gen_set)
     try:
         matrix = _run_matrix(a)
     except ValueError as e:
@@ -538,8 +565,9 @@ def cmd_probe_summary(a) -> int:
 
 
 def cmd_reasoning_check(a) -> int:
-    """$0: the engagement check of PREREG §17.2 (amendment R2) on two sol pilot runs at high
-    effort, F-r and F-0 (`harnesses.reasoning_check`). Writes
+    """$0: the engagement check of PREREG §17.2 (amendment R2), as amended by R3 (§17.3), on
+    two sol pilot runs at high effort on the sol-chain config, F-r and F-0
+    (`harnesses.reasoning_check`). Writes
     results/persistgym_pilot/reasoning-check-<time>/reasoning_check.json and prints it: the
     verdict and quantities pooled over both arms, nothing per arm."""
     results_root = Path(a.results_root) if a.results_root else RESULTS
@@ -606,8 +634,8 @@ def cmd_account_run(a) -> int:
             args.effort = registered.registered_effort(args.model)
         cell = get_cell(args.cell)
         matrix = _run_matrix(args)
-        episodes = matrix.episodes(args.split, args.start, _gen_config(args.gen_set),
-                                   args.variant)
+        episodes = matrix.episodes(args.split, args.start,
+                                   _gen_config(args.gen_preset, args.gen_set), args.variant)
         run = account.Run(run_id=a.run_id, args=args, cell=cell, cfg=_harness_config(args),
                           matrix=matrix, episodes=episodes, notes=_run_notes(args, matrix),
                           what=_run_what(args, cell, len(episodes)))
@@ -696,7 +724,12 @@ def build_parser() -> argparse.ArgumentParser:
         add("--start", type=int, default=0)
         add("--variant", default="base")
         add("--W", type=int, default=None, help="default: the episode's W")
-        add("--gen-set", action="append", default=[], metavar="FIELD=JSON")
+        add("--gen-preset", choices=sorted(PRESETS), default="default",
+            help="generator config (persistgym/config.py PRESETS): default, or sol-chain, "
+                 "gpt-6.1-sol's derived-fact variant (PREREG §17.3), which every non-pilot "
+                 "sol run and sol's engagement check at high effort use")
+        add("--gen-set", action="append", default=[], metavar="FIELD=JSON",
+            help="override one field of the --gen-preset config")
 
     def paid_args(sp, account=False):
         add = adder(sp, account)
@@ -790,13 +823,13 @@ def build_parser() -> argparse.ArgumentParser:
     ps.set_defaults(fn=cmd_probe_summary)
 
     rc = sub.add_parser("reasoning-check",
-                        help="the engagement check of PREREG §17.2 on two sol pilot runs at "
-                             "high effort, F-r and F-0 ($0)")
+                        help="the engagement check of PREREG §17.2 and §17.3 on two sol "
+                             "pilot runs at high effort on sol-chain, F-r and F-0 ($0)")
     rc.add_argument("run_id", nargs=2, metavar="RUN_ID",
                     help="the check runs: one F-r and one F-0 persistgym_pilot run")
     rc.add_argument("--reference", nargs="+", action="extend", default=[], metavar="RUN_ID",
                     help="runs reported alongside, descriptive only: one F-r and one F-0 sol "
-                         "pilot run (e.g. block 1's at medium effort)")
+                         "pilot run, on any config (e.g. R2's check runs)")
     rc.add_argument("--results-root", default=None, help="default: this checkout's results/")
     rc.add_argument("--raw-root", default=None, help="default: this checkout's results/raw/")
     rc.set_defaults(fn=cmd_reasoning_check)

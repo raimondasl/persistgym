@@ -28,7 +28,7 @@ import pytest
 
 from common import costs, paidlock, runmeta
 from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
-from harnesses import account, blinding, cli, runner
+from harnesses import account, blinding, cli, registered, runner
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
 from harnesses.pricing import usage_numbers
@@ -293,6 +293,25 @@ def test_account_run_writes_what_the_run_would_have_written(env, monkeypatch, ca
     # the next paid run's guard passes: the run is accounted for
     assert _run(RUN_ARGS, "after") == 0
     assert [r["run_id"] for r in world.rows()] == [RID, "after"]
+
+
+def test_a_plan_from_before_gen_preset_rebuilds_with_the_default_config(env, monkeypatch,
+                                                                         capsys):
+    """A run plan written before --gen-preset existed (PREREG §17.3) has no `gen_preset` in
+    its run arguments: account-run takes `run`'s default for it, "default", and rebuilds the
+    run's episodes with the default config. A plan that names sol-chain rebuilds those."""
+    world = _incident(env, monkeypatch)
+    _, raw = env.dirs()
+    plan = json.loads((raw / runner.RUN_PLAN).read_text(encoding="utf-8"))
+    assert plan["run_args"]["gen_preset"] == "default"
+    del plan["run_args"]["gen_preset"]
+    _edit_json(raw / runner.RUN_PLAN, run_args=plan["run_args"])
+    capsys.readouterr()
+    assert _account("--check") == 0
+    assert "--check: nothing written" in capsys.readouterr().out
+    assert _account("--gen-preset", "sol-chain", "--check") == 2   # differs from the plan's
+    assert "--gen-preset" in capsys.readouterr().err
+    assert _account() == 0 and len(world.rows()) == 1
 
 
 def test_check_writes_nothing(env, monkeypatch, capsys):
@@ -613,6 +632,9 @@ def test_the_incident_command(env, monkeypatch, capsys):
     the 8 episodes in the run's order, refuses --git-dirty false (the F-r row was in the
     ledger, uncommitted, when F-0 started) and goes through with --git-dirty true."""
     world = env.use(World(env.tmp, "incident"))
+    # the incident's runs played the default config, before R3's guard sent every sol pilot
+    # at high effort to sol-chain (PREREG §17.3); account-run applies no guard
+    monkeypatch.setattr(registered, "check_run_settings", lambda *a, **k: None)
     assert _run(["--cell", "F-r", *CHECK_ARGS], "20261002T173710Z-F-r-gpt-6.1-sol") == 0
     # the F-r row was written seconds before F-0 started (whole seconds: set it earlier)
     text = world.costs.read_text(encoding="utf-8")
@@ -737,7 +759,8 @@ def test_the_run_plan_is_written_before_the_first_call(env, monkeypatch):
     assert plan["git"] == runmeta.git_state() and plan["notes"] == "pilot 0-0 matrix=full"
     assert plan["run_args"] == {
         "cell": "F-0", "split": "pilot", "start": 0, "variant": "base", "W": None,
-        "gen_set": SMALL[1::2], "model": "gpt-6-luna", "effort": "medium",
+        "gen_preset": "default", "gen_set": SMALL[1::2], "model": "gpt-6-luna",
+        "effort": "medium",
         "mode": "standard", "service_tier": "flex", "milestone": "M0",
         "approved_block": "1-pilots", "planned_usd": 1.0, "n": 1,
         "task_cell": ["observed-nonrec-far", "derived-rec-far"], "matrix": "full",

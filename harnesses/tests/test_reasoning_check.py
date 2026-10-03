@@ -1,7 +1,12 @@
-"""The engagement check of PREREG §17.2 (amendment R2; harnesses/reasoning_check.py) on
-synthetic check runs made with the fake model: the statistic, the verdicts, the pair checks,
-the allowlisted output (no per-arm value, need-step quantity or success measure can be read
-from it), the CLI and the guard it unlocks. Also `echo-count`. Fake model, no network."""
+"""The engagement check of PREREG §17.2 (amendment R2) as amended by R3 (§17.3;
+harnesses/reasoning_check.py) on synthetic check runs made with the fake model: the
+statistic, the verdicts, the pair checks (sol-chain only), the allowlisted output (no per-arm
+value, need-step quantity or success measure can be read from it), the visible-carry count,
+the CLI and the guard it unlocks. Also `echo-count`. Fake model, no network.
+
+The check runs play sol's variant at the small volume (`SMALL_CHAIN`), registered as the
+variant's config for these tests by the `small_variant` fixture; one test plays the real
+`sol-chain` preset."""
 
 from __future__ import annotations
 
@@ -19,7 +24,9 @@ from harnesses.fake import FakeModel
 from harnesses.items import item_text
 from harnesses.matrix import DERIVED_FAR, RunMatrix
 from harnesses.runner import run_batch
-from harnesses.tests.conftest import SMALL
+from harnesses.tests.conftest import SMALL, SMALL_CHAIN
+from persistgym.config import PRESETS
+from persistgym.template import hidden_values, sample_template
 
 SOL, LUNA = "gpt-6.1-sol", "gpt-6-luna"
 PILOT = "persistgym_pilot"
@@ -27,9 +34,15 @@ FAR = ["observed-nonrec-far", "observed-rec-far", "derived-nonrec-far", "derived
 IDS = ("chk-F-r", "chk-F-0")
 
 
-def _eps(start: int = 0):
+@pytest.fixture(autouse=True)
+def _variant(small_variant):
+    """SMALL_CHAIN is sol's variant config in every test of this module."""
+    return small_variant
+
+
+def _eps(start: int = 0, cfg=SMALL_CHAIN):
     """The check's episodes: 2 pilot templates x the 4 far task cells (small volume)."""
-    return RunMatrix.full(2, FAR).episodes("pilot", start, SMALL)
+    return RunMatrix.full(2, FAR).episodes("pilot", start, cfg)
 
 
 def _evidence_obs(eps) -> set[str]:
@@ -287,7 +300,7 @@ def test_check_runs_must_play_the_same_far_episodes(tmp_path):
     _runs(tmp_path, other, lambda cid: _fake(other, 40), cells=("F-0",), ids=IDS[1:])
     with pytest.raises(reasoning_check.CheckError, match="same episodes"):
         _check(tmp_path)
-    near = RunMatrix.full(2, ["derived-rec-near", *FAR[1:]]).episodes("pilot", 0, SMALL)
+    near = RunMatrix.full(2, ["derived-rec-near", *FAR[1:]]).episodes("pilot", 0, SMALL_CHAIN)
     _runs(tmp_path / "near", near, lambda cid: _fake(near, 40))
     with pytest.raises(reasoning_check.CheckError, match="4 far task cells"):
         _check(tmp_path / "near")
@@ -342,13 +355,106 @@ def test_the_runs_episodes_must_regenerate(tmp_path):
         _check(tmp_path)
 
 
+# --- R3: the variant config, R2's reference pair, the visible-carry count ---------------------
+
+def test_check_runs_must_play_the_variant_config(tmp_path):
+    """R3: the check scores runs on sol-chain only (here its small-volume stand-in), so no
+    third design is scored: runs on the default config, or on any other, refuse."""
+    for cfg, name in ((SMALL, "direct"), (PRESETS["default"].replace(v_tokens=SMALL.v_tokens,
+                      W_tokens=SMALL.W_tokens, assumed_max_reply_tokens=200,
+                      clue_form="chain"), "other")):
+        eps = _eps(cfg=cfg)
+        _runs(tmp_path / name, eps, lambda cid, eps=eps: _fake(eps, 40))
+        with pytest.raises(reasoning_check.CheckError, match="preset 'sol-chain' only"):
+            _check(tmp_path / name)
+
+
+def test_an_r2_reference_pair_is_accepted(tmp_path):
+    """R2's check runs (sol at high effort on the default config) are R3's descriptive
+    reference: they may play any config, and their pool is reported next to the check's."""
+    eps = _eps()
+    _runs(tmp_path, eps, lambda cid: _fake(eps, 40))
+    r2 = _eps(cfg=SMALL)
+    _runs(tmp_path, r2, lambda cid: _fake(r2, 0), ids=("r2-r", "r2-0"))
+    out = _check(tmp_path, reference=("r2-r", "r2-0"))
+    assert out["verdict"] == "ENGAGED" and out["reference_run_ids"] == ["r2-r", "r2-0"]
+    ref = out["descriptive"]["reference"]
+    assert (ref["model"], ref["effort"], ref["E"]) == (SOL, "high", 0.0)
+    assert ref["evidence_step_replies_with_hidden_value"] == {
+        "calls": _n_evidence(r2), "with_hidden_value": 0}
+
+
+def _carry_fake(eps, write_in):
+    """A fake that writes into its visible reply, at each evidence step of a derived-far
+    episode, in the arms named in `write_in`, a value the episode never shows (a clue's
+    worked-out value); in the other arm the same digits glued to letters (not a whole
+    number); and everywhere else, the target as a whole number (not an evidence step)."""
+    evidence = {}
+    for ep in eps:
+        split, _, index = ep.template_id.rpartition("-")
+        t = sample_template(split, int(index), SMALL_CHAIN)
+        assert t.clue_values[0] in hidden_values(t)
+        if ep.cell.id in DERIVED_FAR:
+            for s in ep.reveal_steps:
+                evidence[ep.steps[s].observation] = t.clue_values[0]
+    targets = {ep.steps[ep.need_step].observation: ep for ep in eps}
+
+    def reply(payload, n):
+        last = item_text(payload["input"][-1])
+        if last in targets:
+            return f"ACTION: {targets[last].need.expected_action}"
+        if last in evidence:
+            v = evidence[last]
+            text = (f"Noted ({v})." if payload["reasoning"]["context"] in write_in
+                    else f"Noted (x{v}b, {v}7).")
+            return f"{text}\nACTION: ack(none)"
+        return f"Ok {max(ep.target_value for ep in eps)}.\nACTION: ack(none)"
+    return FakeModel(reply)
+
+
+def test_the_visible_carry_count(tmp_path):
+    """R3, descriptive: of the counted evidence-step calls, pooled over both arms, how many
+    replies hold a value the episode never shows, as a whole number (D6). Calls at other
+    steps and digits inside longer words or numbers do not count."""
+    eps = _eps()
+    n = _n_evidence(eps)
+    for write_in, want in ((("all_turns",), n // 2), ((), 0),
+                           (("all_turns", "current_turn"), n)):
+        root = tmp_path / str(len(write_in))
+        _runs(root, eps, lambda cid, w=write_in: _carry_fake(eps, w))
+        pool = _check(root)["descriptive"]["check"]
+        assert pool["evidence_step_replies_with_hidden_value"] == {
+            "calls": n, "with_hidden_value": want}
+    # whole numbers only: 654 inside x654b is not one, and 6547 is another number
+    assert reasoning_check._WHOLE_NUMBER.findall("a 654, x654b, 6547 (654) 654.") == [
+        "654", "6547", "654", "654"]
+
+
+def test_hidden_values_of_a_variant_template():
+    """`template.hidden_values` in chain form: the target, the clue values and running
+    totals, each chain's H1 and H3 values, the stand-in's; none of them is printed in the
+    chain records (the audits check every episode: chain_hidden_values_never_shown)."""
+    t = sample_template("pilot", 1, PRESETS["sol-chain"])
+    h = set(hidden_values(t))
+    assert {812, 654, 82, 76, 736} <= h                                 # PREREG §17.3
+    assert {c.h1_value for c in t.chains} | {c.decoy_value for c in t.chains} <= h
+    s = t.substitute
+    assert {s.value, *s.clue_values} <= h
+    printed = {x for c in t.chains for x in (c.anchor, c.far, c.near, c.decoy,
+                                             c.stand_in_near)}
+    assert not printed & h
+    d = sample_template("pilot", 1, PRESETS["default"])
+    assert hidden_values(d) == [736, 812]                               # direct form
+
+
 # --- the CLI and the guard -------------------------------------------------------------------
 
 def test_reasoning_check_cli_writes_the_report_and_unlocks_sols_runs(tmp_path, capsys):
     eps = _eps()
     _runs(tmp_path, eps, lambda cid: _fake(eps, 40))
     results = tmp_path / "results"
-    assert registered.engagement_refusal(results, SOL) is not None
+    variant = registered.VARIANT_GENERATOR_HASH
+    assert registered.engagement_refusal(results, SOL, variant) is not None
     args = ["reasoning-check", *IDS, "--results-root", str(results), "--raw-root",
             str(tmp_path / "raw")]
     assert cli.main(args) == 0
@@ -357,9 +463,13 @@ def test_reasoning_check_cli_writes_the_report_and_unlocks_sols_runs(tmp_path, c
     report = json.loads(path.read_text(encoding="utf-8"))
     assert json.loads(captured.out) == report and report["verdict"] == "ENGAGED"
     assert "verdict: ENGAGED" in captured.err and "written:" in captured.err
-    # the guard of `run` now lets sol's non-pilot runs go at high effort (PREREG §17.2)
-    assert registered.engagement_refusal(results, SOL) is None
-    assert registered.check_run_settings("persistgym", SOL, "high", results) is None
+    # the guard of `run` now lets sol's validity run on the variant go at high effort
+    # (PREREG §17.3); its main sweep still waits for G1
+    assert registered.engagement_refusal(results, SOL, variant) is None
+    assert registered.check_run_settings("persistgym_validity", SOL, "high", "F-0", variant,
+                                         results) is None
+    assert "G1_PASSED" in registered.check_run_settings("persistgym", SOL, "high", "F-0",
+                                                        variant, results)
     # bad arguments refuse
     assert cli.main([*args[:1], "../x", IDS[1], *args[3:]]) == 2
     assert cli.main([*args[:1], IDS[0], IDS[0], *args[3:]]) == 2
@@ -373,8 +483,12 @@ def test_a_not_engaged_check_keeps_sols_runs_refused(tmp_path, capsys):
     assert cli.main(["reasoning-check", *IDS, "--results-root", str(results), "--raw-root",
                      str(tmp_path / "raw")]) == 0
     assert "verdict: NOT_ENGAGED" in capsys.readouterr().err
-    assert "does not engage" in registered.check_run_settings("persistgym_validity", SOL,
-                                                              "high", results)
+    variant = registered.VARIANT_GENERATOR_HASH
+    # R3's hard stop: no sol validity or main-sweep run, and no further sol pilot at high
+    assert registered.HARD_STOP in registered.check_run_settings(
+        "persistgym_validity", SOL, "high", "F-0", variant, results)
+    assert registered.HARD_STOP in registered.check_run_settings(
+        "persistgym_pilot", SOL, "high", "F-r", variant, results)
 
 
 # --- echo counts ---------------------------------------------------------------------------------

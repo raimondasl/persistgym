@@ -10,6 +10,12 @@ The withheld variant (PREREG §4.3, D39) shows, at each evidence step, bindings 
 length about a stand-in entity instead of the target's bindings (the rule sentence, which
 binds no entity, is kept). Every other observation, and the log filler of the evidence steps,
 is byte-identical to the base episode of the same cell.
+
+Generator 0.4.0 (PREREG §17.3; gpt-6.1-sol's preset `sol-chain`): in chain form a clue's
+binding is its four-sentence chain record (`chain_text`), whose withheld version changes only
+the near hop; with `evidence_notice`, each evidence step's event carries the notice
+(`notice_text`) after its record, and each helper of a chain record is a lookup key of it.
+Neither applies to the default config, whose episodes are those of generator 0.3.0.
 """
 
 from __future__ import annotations
@@ -47,6 +53,7 @@ from persistgym.graph import build_graph
 from persistgym.survival import episode_design
 from persistgym.template import (
     LABELS,
+    ChainSpec,
     Template,
     component_schedule,
     rng,
@@ -69,8 +76,52 @@ def fact_sentence(kind: str, entity: str, name: str, value: int) -> str:
     return f"For {kind} {entity}, the {name} is {value}."
 
 
+def relation_sentence(kind: str, entity: str, name: str, delta: int, direction: str,
+                      other: str) -> str:
+    """Chain form (PREREG §17.3): entity's value = other's value + delta ("more") or
+    - delta ("less"). No period follows the number, so `oracle.FACT_RE` never matches it."""
+    if direction not in ("more", "less"):
+        raise ValueError(f"direction must be 'more' or 'less', got {direction!r}")
+    return f"For {kind} {entity}, the {name} is {delta} {direction} than for {kind} {other}."
+
+
+def chain_sentences(kind: str, name: str, entity: str, near: int,
+                    chain: ChainSpec) -> dict[str, str]:
+    """The four sentences of a clue's chain record (`template.ChainSpec`) about `entity`
+    (the target, or the stand-in with its near delta in the withheld control)."""
+    h1, h2, h3 = chain.helpers
+    return {
+        "near": relation_sentence(kind, entity, name, near, "less", h1),
+        "far": relation_sentence(kind, h1, name, chain.far, "more", h2),
+        "anchor": fact_sentence(kind, h2, name, chain.anchor),
+        "decoy": relation_sentence(kind, h3, name, chain.decoy, "more", h2),
+    }
+
+
+def chain_text(kind: str, name: str, entity: str, near: int, chain: ChainSpec) -> str:
+    """A clue's chain record: its four sentences in `chain.order`."""
+    s = chain_sentences(kind, name, entity, near, chain)
+    return " ".join(s[k] for k in chain.order)
+
+
 def rule_sentence(kind: str, quantity: str, names: list[str]) -> str:
     return f"Rule: for every {kind}, {quantity} = {' + '.join(names)}."
+
+
+DERIVED_NOTICE = ("The {quantity} of {kind} {entity} will be requested in a later update. "
+                  "Before replying, work out as much of it as the records so far allow and "
+                  "keep the result in mind; do not write it in your reply.")
+OBSERVED_NOTICE = ("The {quantity} of {kind} {entity} will be requested in a later update. "
+                   "Keep it in mind; do not write it in your reply.")
+
+
+def notice_text(fact: str, kind: str, quantity: str, entity: str) -> str:
+    """The evidence notice (PREREG §17.3; `GeneratorConfig.evidence_notice`), shown after
+    the record at each evidence step: the derived text at a clue (or rule) step, the
+    observed text at an observed fact's reveal. It names the entity, since a chain record
+    names four."""
+    text = DERIVED_NOTICE if fact == "derived" else OBSERVED_NOTICE
+    return text.format(quantity=quantity, kind=kind, entity=entity)
 
 
 def need_event(kind: str, entity: str, quantity: str, verb: str, options: list[Option]) -> str:
@@ -80,7 +131,11 @@ def need_event(kind: str, entity: str, quantity: str, verb: str, options: list[O
     return "\n".join(lines)
 
 
-def memo_event(record: str, record_id: str) -> str:
+def memo_event(record: str, record_id: str, notice: str = "") -> str:
+    """A memo step's event: the record, the evidence notice if any, then the ack request.
+    Without a notice the text is that of generator 0.3.0."""
+    if notice:
+        return f"{record} {notice} Reply ack({record_id}) to acknowledge it."
     return f"{record} Reply ack({record_id}) to acknowledge it."
 
 
@@ -199,7 +254,11 @@ class TemplateRenderer:
         comps = []
         names = list(sk.components[: t.n_clues])
         for i in range(t.n_clues):
-            sent = fact_sentence(kind, ent, names[i], t.clue_values[i])
+            if t.chains:  # chain form: the record gives the value through a relay
+                ch = t.chains[i]
+                sent = chain_text(kind, names[i], ent, ch.near, ch)
+            else:
+                sent = fact_sentence(kind, ent, names[i], t.clue_values[i])
             comps.append(Component(f"clue{i}", "clue", names[i], t.clue_values[i], sent, "",
                                    steps[f"clue{i}"], ent))
         comps.append(Component("rule", "rule", sk.quantity, None,
@@ -248,6 +307,13 @@ class TemplateRenderer:
                 continue
             if c.role == "rule":
                 sent, value = c.sentence, None
+            elif c.role == "clue" and self.t.chains:
+                # chain form (PREREG §17.3): only the near hop changes, to the stand-in with
+                # its own near delta n' (same position in the order); value = its clue c'
+                i = int(c.comp_id[-1])
+                ch = self.t.chains[i]
+                value = s.clue_values[i]
+                sent = chain_text(sk.kind, c.name, s.entity, ch.stand_in_near, ch)
             else:
                 value = s.value if c.role == "fact" else s.clue_values[int(c.comp_id[-1])]
                 sent = fact_sentence(sk.kind, s.entity, c.name, value)
@@ -256,8 +322,10 @@ class TemplateRenderer:
         return out
 
     def _check_equal_length(self, comps: list[Component], subs: list[Component],
-                            rec_lines: dict[int, str], sub_lines: dict[int, str]) -> None:
-        """D39: every stand-in sentence and record line has the token count of the one it
+                            rec_lines: dict[int, str], sub_lines: dict[int, str],
+                            events: dict[int, tuple[str, str]]) -> None:
+        """D39: every stand-in sentence, record line and evidence event (`events`: step ->
+        (base event, withheld event), the notice included) has the token count of the one it
         replaces, so the evidence observations keep their filler and their v tokens."""
         enc = self.cfg.tokenizer
         orig = {c.comp_id: c for c in comps}
@@ -265,9 +333,18 @@ class TemplateRenderer:
                != tokens.count(orig[s.comp_id.removeprefix("sub_")].sentence, enc)]
         bad += [f"step {st}" for st in rec_lines
                 if tokens.count(sub_lines[st], enc) != tokens.count(rec_lines[st], enc)]
+        bad += [f"event {st}" for st, (a, b) in events.items()
+                if tokens.count(a, enc) != tokens.count(b, enc)]
         if bad or set(sub_lines) != set(rec_lines):
             raise GenerationError(f"{self.t.template_id}: withheld stand-ins are not of equal "
                                   f"token length: {bad}")
+
+    def notice(self, cell: TaskCell, entity: str) -> str:
+        """The evidence notice about `entity` for this cell's fact kind, or "" when the config
+        has none (`GeneratorConfig.evidence_notice`)."""
+        if not self.cfg.evidence_notice:
+            return ""
+        return notice_text(cell.fact, self.skin.kind, self.skin.quantity, entity)
 
     def options(self) -> list[Option]:
         return [Option(LABELS[i], v) for i, v in enumerate(self.t.option_values)]
@@ -289,13 +366,22 @@ class TemplateRenderer:
         if set(dist_at) & set(reveal_steps) or len(dist_at) != len(dists):
             raise GenerationError(f"{t.template_id} {cell.id}: distractor step collides")
         rec_lines, rec_ids = self._records(comps)
+        base_notice = self.notice(cell, t.entity)
+        base_events = {st: memo_event(rec_lines[st], rec_ids[st], base_notice)
+                       for st in rec_lines}
         subs: list[Component] = []
         if variant == "withheld":  # PREREG §4.3, D39: equal-length stand-in bindings
             subs = self._substitutes(comps)
             shown_lines, shown_ids = self._records(subs)
-            self._check_equal_length(comps, subs, rec_lines, shown_lines)
+            # the notice names the stand-in, which has the target's token length
+            notice = self.notice(cell, t.substitute.entity)
+            shown_events = {st: memo_event(shown_lines[st], shown_ids[st], notice)
+                            for st in shown_lines}
+            self._check_equal_length(comps, subs, rec_lines, shown_lines,
+                                     {st: (base_events[st], shown_events.get(st, ""))
+                                      for st in base_events})
         else:
-            shown_lines, shown_ids = rec_lines, rec_ids
+            shown_lines, shown_ids, shown_events = rec_lines, rec_ids, base_events
         options = self.options()
         need_ev = need_event(sk.kind, t.entity, sk.quantity, sk.need_verb, options)
         restates: list[str] = []
@@ -322,7 +408,7 @@ class TemplateRenderer:
                 expected = f"{sk.need_verb}({t.correct_label})"
             elif i in shown_lines:
                 kind, rtype = "reveal", "memo"
-                event = memo_event(shown_lines[i], shown_ids[i])
+                event = shown_events[i]
                 expected = f"ack({shown_ids[i]})"
             elif i in dist_at:
                 d, rid = dist_at[i]
@@ -335,7 +421,7 @@ class TemplateRenderer:
             if subs and i in shown_lines:
                 # D39: the stand-in leaves the head and the log filler of the base observation
                 # unchanged, so the observations differ only in the bindings
-                base = self.observation(("step", i), clock, memo_event(rec_lines[i], rec_ids[i]))
+                base = self.observation(("step", i), clock, base_events[i])
                 if fitted.text[: fitted.filler_end] != base.text[: base.filler_end]:
                     raise GenerationError(f"{t.template_id} {cell.id}: withheld step {i} "
                                           "does not keep the base filler")
@@ -356,6 +442,15 @@ class TemplateRenderer:
         lookup_records = {c.comp_id: c.record for c in shown}
         lookup_steps = {c.comp_id: c.step for c in shown}
         record_keys = {c.comp_id: c.entity for c in shown}
+        # Chain form (PREREG §2.5 fidelity, §17.3): every helper named in a clue's record is
+        # a key of that record too, so lookup(<helper>) re-shows it from its step on.
+        for c in shown:
+            cid = c.comp_id.removeprefix("sub_")
+            if t.chains and cid.startswith("clue"):
+                for h in t.chains[int(cid[-1])].helpers:
+                    lookup_records[f"{c.comp_id}@{h}"] = c.record
+                    lookup_steps[f"{c.comp_id}@{h}"] = c.step
+                    record_keys[f"{c.comp_id}@{h}"] = h
         for d in dists:  # lookup serves the distractor keys too (PREREG D3)
             lookup_records[d.comp_id] = d.record
             lookup_steps[d.comp_id] = d.step

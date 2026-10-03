@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from common import paidlock
+from common import paidlock, runmeta
 from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
-from harnesses import cli
+from harnesses import cli, registered
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT, HarnessConfig
 from harnesses.fake import FakeModel, padded_text
 from harnesses.session import HarnessSession
 from persistgym import tokens
-from persistgym.config import GeneratorConfig
+from persistgym.config import PRESETS, GeneratorConfig
 from persistgym.episode import ALL_CELLS
 from persistgym.render import generate
 
@@ -206,3 +206,22 @@ def small_eps():
     """3 templates x 8 task cells, base variant, at the small volume."""
     return [ep for _, eps in generate("main", range(3), SMALL, ALL_CELLS, ("base",))
             for ep in eps]
+
+
+# sol's derived-fact variant (PREREG §17.3) at the small volume, and its --gen-set arguments
+SMALL_CHAIN = PRESETS["sol-chain"].replace(W_tokens=SMALL.W_tokens, v_tokens=SMALL.v_tokens,
+                                           assumed_max_reply_tokens=SMALL.assumed_max_reply_tokens)
+SMALL_CHAIN_ARGS = ["--gen-preset", "sol-chain", "--gen-set", f"W_tokens={SMALL.W_tokens}",
+                    "--gen-set", f"v_tokens={SMALL.v_tokens}", "--gen-set",
+                    f"assumed_max_reply_tokens={SMALL.assumed_max_reply_tokens}"]
+
+
+@pytest.fixture
+def small_variant(monkeypatch):
+    """Registers SMALL_CHAIN as sol's variant config (`registered.VARIANT_GENERATOR_HASH`, and
+    `PRESET_HASHES["sol-chain"]`, which the guard reads), so that tests can run the variant's
+    guard and engagement check at the small volume. Returns its hash."""
+    h = runmeta.config_hash(SMALL_CHAIN.to_dict())
+    monkeypatch.setattr(registered, "VARIANT_GENERATOR_HASH", h)
+    monkeypatch.setitem(registered.PRESET_HASHES, "sol-chain", h)
+    return h

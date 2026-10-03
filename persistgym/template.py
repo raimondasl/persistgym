@@ -22,6 +22,12 @@ of the target's bindings (`SubstituteSpec`). The stand-in has the target's token
 its values have the formats of the values they replace and are never options, clue values or
 distractor values, so the withheld episode keeps every observation's text and token count
 except the bindings themselves.
+
+Chain form (generator 0.4.0, `GeneratorConfig.clue_form` = "chain"; PREREG §17.3) keeps every
+value above and adds, from streams of its own, one relay per clue (`ChainSpec`, `_chains`):
+helper entities, an anchor value and three differences that give the clue's value without
+printing it. Its numbers, helper names and running totals are reserved strings in chain form
+only, so the direct form's filler and routine events are those of generator 0.3.0.
 """
 
 from __future__ import annotations
@@ -40,6 +46,26 @@ LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 BASE_CLUE_RANGE = (100, 999)
 """The base clue is a 3-digit value (its displayed format); addends use
 `GeneratorConfig.minor_component_range`."""
+
+# Chain form (generator 0.4.0, PREREG §17.3; `GeneratorConfig.clue_form` = "chain"). Changing
+# any of these needs a new generator version.
+CHAIN_ANCHOR_RANGE = (60, 999)
+"""Declared range of an anchor value (the one printed value of a chain): what an agent that
+lost an anchor knows of it (atom-level partial memory, `validity.atom_narrowing`)."""
+CHAIN_DELTA_RANGE = (100, 999)
+"""Declared range of a difference (far, near or decoy delta)."""
+CHAIN_MARGIN = 9
+"""K - 1 at spacing 1: every needed atom lies at least this far inside its declared range,
+so with any one atom missing every option of the cluster stays reachable."""
+CHAIN_MIN_GAP = 10
+"""The far delta differs from the near deltas (target and stand-in) and from the decoy
+delta by at least this much, so a slip that uses the wrong one lands outside the cluster."""
+CHAIN_KINDS = ("near", "far", "anchor", "decoy")
+"""The four sentences of a clue's chain record, in `ChainSpec.order` (shuffled per clue)."""
+_DELTA_LO = CHAIN_DELTA_RANGE[0] + CHAIN_MARGIN  # 109
+_DELTA_HI = CHAIN_DELTA_RANGE[1] - CHAIN_MARGIN  # 990
+_ANCHOR_LO = CHAIN_ANCHOR_RANGE[0] + CHAIN_MARGIN  # 69
+_TOP = 999  # every chain number is at most 3 digits
 
 
 def rng(seed: int, stream: str) -> random.Random:
@@ -97,6 +123,51 @@ class SubstituteSpec:
     clue_values: list[int]  # [base, addend(, addend)], len == the template's n_clues
 
 
+@dataclass
+class ChainSpec:
+    """One clue of a derived fact in chain form (PREREG §17.3): the clue's value c is given
+    by a two-hop relay over three helper entities and is never printed.
+
+    * anchor (H2): "For <kind> H2, the <clue> is a."
+    * far hop: "For <kind> H1, the <clue> is f more than for <kind> H2."  (H1 = a + f)
+    * near hop: "For <kind> TARGET, the <clue> is n less than for <kind> H1."  (c = H1 - n)
+    * decoy: "For <kind> H3, the <clue> is x more than for <kind> H2."  (never needed)
+
+    In the withheld control the near hop is about the stand-in, with n' (its clue c' =
+    H1 - n'); the other three sentences are the same. `order` is the display order."""
+
+    helpers: list[str]  # [H1 (near helper), H2 (anchor), H3 (decoy)]
+    anchor: int  # a
+    far: int  # f
+    near: int  # n
+    stand_in_near: int  # n'
+    decoy: int  # x
+    order: list[str]  # a permutation of CHAIN_KINDS
+
+    @property
+    def h1_value(self) -> int:
+        return self.anchor + self.far
+
+    @property
+    def decoy_value(self) -> int:
+        return self.anchor + self.decoy
+
+    @property
+    def numbers(self) -> list[int]:
+        """The seven numbers of the chain: the five printed atoms, H1's value and H3's."""
+        return [self.anchor, self.far, self.decoy, self.near, self.stand_in_near,
+                self.h1_value, self.decoy_value]
+
+
+def prefix_sums(values: list[int]) -> list[int]:
+    """Running totals of the clue values: c0, c0 + c1, ... (the last is the fact's value)."""
+    out, s = [], 0
+    for v in values:
+        s += v
+        out.append(s)
+    return out
+
+
 @lru_cache(maxsize=4096)
 def entity_token_length(name: str, enc: str = "o200k_base") -> int:
     """Tokens of an entity name as it appears in a binding (" NAME", after a word)."""
@@ -133,6 +204,7 @@ class Template:
     reserved_numbers: list[int] = field(default_factory=list)
     reserved_words: list[str] = field(default_factory=list)
     distractors: list[DistractorSpec] = field(default_factory=list)
+    chains: list[ChainSpec] = field(default_factory=list)  # chain form: one per clue
 
     @property
     def skin_obj(self) -> Skin:
@@ -263,6 +335,91 @@ def _substitute(r: random.Random, skin: Skin, entity: str, dist_entities: list[s
     raise RuntimeError("cannot sample withheld-control values outside the taken values")
 
 
+def _chain_helpers(r: random.Random, skin: Skin, exclude: list[str], n: int) -> list[str]:
+    """`n` helper entities for the chains (stream `chain-helpers`): the skin's entities that
+    overlap (`names_overlap`) none of `exclude` (the target, the stand-in, the distractors),
+    shuffled, then the first `n` that overlap none of the helpers taken before them."""
+    cands = [e for e in skin.entities if not any(names_overlap(e, x) for x in exclude)]
+    r.shuffle(cands)
+    out: list[str] = []
+    for e in cands:
+        if not any(names_overlap(e, h) for h in out):
+            out.append(e)
+            if len(out) == n:
+                return out
+    raise RuntimeError(f"skin {skin.name!r}: fewer than {n} helper entities for the chains")
+
+
+def _chains(seed: int, skin: Skin, exclude: list[str], clue_values: list[int],
+            sub: SubstituteSpec, taken: set[int], cfg: GeneratorConfig) -> list[ChainSpec]:
+    """The relay of each clue in chain form (PREREG §17.3), from streams `chain-helpers`,
+    `chains` and `chain-order`, drawn only in chain form.
+
+    For clue i with value c (the target's) and c' (the stand-in's), let cmax be the largest
+    value the slot can take for either: `minor_component_range[1]` for an addend, and
+    `value_range[1] - (m - 1) * minor_component_range[0]` for the base. Then
+    1. H1's value v1 ~ U[cmax + 109, 999], whatever c and c' are;
+    2. the near deltas n = v1 - c and n' = v1 - c';
+    3. the far delta f ~ U[109, min(990, v1 - 69)] and the anchor a = v1 - f;
+    4. the decoy delta x ~ U[109, min(990, 999 - a)] (H3's value a + x is never shown).
+    A draw is kept only if its seven numbers (`ChainSpec.numbers`) are distinct, f differs
+    from n, n' and x by at least `CHAIN_MIN_GAP`, and none of them is in `taken` (options,
+    the target's and the stand-in's clue values and running totals, the stand-in's value,
+    the distractor values) or among the numbers of the earlier chains. So n and n' lie in
+    [109, 938], a in [69, 890] and f, x in [109, 990]: every needed atom lies at least
+    `CHAIN_MARGIN` inside its declared range."""
+    m = len(clue_values)
+    helpers = _chain_helpers(rng(seed, "chain-helpers"), skin, exclude, 3 * m)
+    r, r_order = rng(seed, "chains"), rng(seed, "chain-order")
+    mlo, mhi = cfg.minor_component_range
+    taken = set(taken)
+    out = []
+    for i, (c, cs) in enumerate(zip(clue_values, sub.clue_values, strict=True)):
+        cmax = cfg.value_range[1] - (m - 1) * mlo if i == 0 else mhi
+        for _ in range(1000):
+            v1 = r.randint(cmax + _DELTA_LO, _TOP)
+            n, ns = v1 - c, v1 - cs
+            f = r.randint(_DELTA_LO, min(_DELTA_HI, v1 - _ANCHOR_LO))
+            a = v1 - f
+            x = r.randint(_DELTA_LO, min(_DELTA_HI, _TOP - a))
+            spec = ChainSpec(helpers[3 * i: 3 * i + 3], a, f, n, ns, x, [])
+            nums = spec.numbers
+            if (len(set(nums)) == len(nums) and abs(f - n) >= CHAIN_MIN_GAP
+                    and abs(f - ns) >= CHAIN_MIN_GAP and abs(x - f) >= CHAIN_MIN_GAP
+                    and not set(nums) & taken):
+                break
+        else:
+            raise RuntimeError("cannot sample a chain outside the taken values")
+        taken |= set(nums)
+        spec.order = list(CHAIN_KINDS)
+        r_order.shuffle(spec.order)
+        out.append(spec)
+    return out
+
+
+def hidden_values(t: Template) -> list[int]:
+    """Values an agent of the episode never sees before the need step (the audits and
+    `harnesses.reasoning_check`'s visible-carry count look for them).
+
+    * Chain form: the target, its resolved clue values and running totals, each chain's H1
+      and H3 values, and the stand-in's value, resolved clue values and running totals.
+    * Direct form: the target and the running totals of 2 or more clue values.
+
+    Less the distractor values, which every episode shows: they are drawn as in generator
+    0.3.0, avoiding options and clue values but not running totals, so a 3-clue running
+    total (the target's or the stand-in's) can equal one (6 of main templates 0-999 in
+    chain form). Every other value listed here avoids them by construction."""
+    if not t.chains:
+        out = {t.target_value, *prefix_sums(t.clue_values)[1:]}
+    else:
+        s = t.substitute
+        out = {t.target_value, *t.clue_values, *prefix_sums(t.clue_values), s.value,
+               *s.clue_values, *prefix_sums(s.clue_values)}
+        for ch in t.chains:
+            out |= {ch.h1_value, ch.decoy_value}
+    return sorted(out - {d.value for d in t.distractors})
+
+
 def _routine(r: random.Random, skin: Skin, reserved: Reserved, used_ids: set[str]) -> RoutineSpec:
     for _ in range(1000):
         kind = r.choice(("route", "threshold", "broadcast"))
@@ -345,6 +502,19 @@ def sample_template(split: str, index: int, cfg: GeneratorConfig) -> Template:
     reserved_numbers = sorted(set(values) | set(clue_values) | set(dist_values)
                               | {sub.value} | set(sub.clue_values))
     reserved_words = [entity, *dist_entities, sub.entity, skin.quantity, *skin.components]
+
+    # Chain form (PREREG §17.3): the relays, from their own streams, and their numbers,
+    # helper names and running totals as reserved strings. Drawn only in chain form, so the
+    # direct form's filler and routine events are those of generator 0.3.0.
+    chains: list[ChainSpec] = []
+    if cfg.clue_form == "chain":
+        totals = set(prefix_sums(clue_values)) | set(prefix_sums(sub.clue_values))
+        chains = _chains(seed, skin, [entity, sub.entity, *dist_entities], clue_values, sub,
+                         set(values) | set(clue_values) | set(sub.clue_values) | totals
+                         | {sub.value} | set(dist_values), cfg)
+        reserved_numbers = sorted(set(reserved_numbers) | totals
+                                  | {x for ch in chains for x in ch.numbers})
+        reserved_words += [h for ch in chains for h in ch.helpers]
     reserved = Reserved(reserved_numbers, reserved_words)
 
     used: set[str] = set()
@@ -376,4 +546,4 @@ def sample_template(split: str, index: int, cfg: GeneratorConfig) -> Template:
         clue_values=clue_values, record_ids=record_ids, substitute=sub,
         need_index=need_index, tail_steps=tail_steps, routine=routine, t0=t0.isoformat(),
         reserved_numbers=reserved_numbers, reserved_words=reserved_words,
-        distractors=distractors)
+        distractors=distractors, chains=chains)

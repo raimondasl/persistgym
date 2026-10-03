@@ -18,7 +18,7 @@ from common.tests.gitrepo import DRAFT_PREREG, git_in, push_main, write_decision
 from harnesses import blinding, cli, probes, runner
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
-from harnesses.tests.conftest import prereg_repo
+from harnesses.tests.conftest import SMALL_CHAIN_ARGS, prereg_repo
 
 
 class _Obj:
@@ -297,14 +297,13 @@ def test_probe_rows_keep_reasoning_tokens(paid_env):
     assert int(row["reasoning_tokens"]) > 0 and blinding.WITHHELD_NOTE not in row["notes"]
 
 
-def test_run_cli_d11_matrix(paid_env):
-    """D11: derived-far on T_d templates, observed-far on the first T_o of them."""
+def test_run_cli_d11_matrix(paid_env, small_variant):
+    """D11: derived-far on T_d templates, observed-far on the first T_o of them. A sol pilot
+    at high effort plays sol's variant config (PREREG §17.3; here at the small volume)."""
     tmp, costs_csv, _ = paid_env
-    small = ["--gen-set", "W_tokens=6400", "--gen-set", "v_tokens=400",
-             "--gen-set", "assumed_max_reply_tokens=200"]
     assert cli.main(["run", "--cell", "F-r", "--model", "gpt-6.1-sol", "--matrix", "d11",
-                     "--n", "3", *small, "--approved-block", "1-pilots", "--planned-usd", "5",
-                     "--run-id", "d11"]) == 0
+                     "--n", "3", *SMALL_CHAIN_ARGS, "--approved-block", "1-pilots",
+                     "--planned-usd", "5", "--run-id", "d11"]) == 0
     meta = json.loads((tmp / "results" / "persistgym_pilot" / "d11" / "meta.json")
                       .read_text(encoding="utf-8"))
     assert meta["config"]["run_matrix"] == {
@@ -320,6 +319,7 @@ def test_run_cli_d11_matrix(paid_env):
     n = int(row["n_calls"])
     assert meta["reasoning_effort"] == "high" and meta["reasoning_effort_echoed"] == {"high": n}
     assert "effort_mismatches=0;" in row["notes"]
+    assert meta["config"]["generator_config_hashes"] == [small_variant]
 
 
 def test_run_cli_refuses_bad_matrix_options(paid_env, capsys):

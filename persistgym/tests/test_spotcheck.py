@@ -18,9 +18,9 @@ import pytest
 from common.runmeta import REPO_ROOT, config_hash, prereg_version
 from persistgym import spotcheck, tokens
 from persistgym.cli import main
-from persistgym.config import GENERATOR_VERSION, GeneratorConfig
+from persistgym.config import GENERATOR_VERSION, PRESET_HASHES, PRESETS, GeneratorConfig
 from persistgym.episode import ALL_CELLS, VARIANTS, TaskCell
-from persistgym.render import generate
+from persistgym.render import generate, notice_text
 from persistgym.template import template_id
 
 PKG = "g1-test"
@@ -465,3 +465,65 @@ def test_page_csv_matches_python_csv(tmp_path):
     out = json.loads(res.stdout)
     assert out["text"] == spotcheck.findings_csv(rows)
     assert out["back"] == [list(spotcheck.FINDINGS_COLUMNS), *rows]
+
+
+# ---------------------------------------------------------------------------
+# Generator 0.4.0: luna's package, sol's variant (PREREG §17.3)
+# ---------------------------------------------------------------------------
+
+LUNA_PKG = "g1-validity-0-20-3d6bc648"
+
+
+def test_lunas_committed_manifest_is_accepted_under_0_4_0(tmp_path):
+    """luna's committed manifest (generator 0.3.0, no episodes_sha256) still describes the
+    episodes: a rebuild with its id keeps it, since the current episodes have its pinned
+    digest; with that digest changed, or other episodes, the rebuild refuses."""
+    committed = REPO_ROOT / "results" / "spotcheck" / LUNA_PKG / "manifest.json"
+    old = json.loads(committed.read_text(encoding="utf-8"))
+    assert old["generator_version"] == "0.3.0" and "episodes_sha256" not in old
+    res = tmp_path / "results"
+    (res / LUNA_PKG).mkdir(parents=True)
+    shutil.copyfile(committed, res / LUNA_PKG / "manifest.json")
+    kw = {"raw_root": tmp_path / "raw", "results_root": res, "audits": False}
+    m = spotcheck.build(LUNA_PKG, 20, **kw)
+    assert m["kept_committed_files"] is True and m["generator_version"] == "0.3.0"
+    new = {**old, "episodes_sha256": spotcheck.GOLDEN_0_3_0_SPOTCHECK_SHA256}
+    assert spotcheck._same_episodes(old, new)
+    assert not spotcheck._same_episodes(old, {**new, "episodes_sha256": "0" * 64})
+    assert not spotcheck._same_episodes({**old, "episodes_sha256": "1" * 64}, new)
+    with pytest.raises(spotcheck.SpotcheckError, match="describes other episodes"):
+        spotcheck.build(LUNA_PKG, 10, **kw)
+
+
+def test_the_sol_chain_package(tmp_path):
+    """`spotcheck --preset sol-chain`: sol's variant, pinned hash, the 4 far task cells (80
+    episodes at n = 20; here n = 10), the audits on all 8 cells and 3 variants, the notice
+    and the chain records allowed by the scan, and each clue's relay worked out in the
+    summary box."""
+    m = spotcheck.build("sol", 10, raw_root=tmp_path / "raw",
+                        results_root=tmp_path / "results", preset="sol-chain")
+    assert m["preset"] == "sol-chain" and m["config_hash"] == PRESET_HASHES["sol-chain"]
+    assert m["task_cells"] == [c.id for c in ALL_CELLS if c.distance == "far"]
+    assert m["n_episodes"] == 40 and m["validity_runs"] == []
+    assert m["audits"]["pass"] is True and m["audits"]["n_episodes"] == 10 * 8 * 3
+    assert len(m["episodes_sha256"]) == 64
+    index = (tmp_path / "raw" / "sol" / "index.html").read_text(encoding="utf-8")
+    assert "20 episodes per D11 task cell" in index and "--preset sol-chain" in index
+    readme = (tmp_path / "results" / "sol" / "README.md").read_text(encoding="utf-8")
+    assert "--preset sol-chain --out-id sol" in readme
+    page = (tmp_path / "raw" / "sol" / "derived-rec-far.html").read_text(encoding="utf-8")
+    assert page.count('class="scan ok"') == 10 and 'class="scan bad"' not in page
+    assert "are not shown in the episode" in page and "Evidence notice" in page
+    with pytest.raises(spotcheck.SpotcheckError, match="pinned"):
+        spotcheck.build("x", 10, cfg=PRESETS["sol-chain"].replace(v_tokens=400,
+                                                                 W_tokens=6_400),
+                        raw_root=tmp_path, results_root=tmp_path, preset="sol-chain")
+    for _, eps in generate("validity", range(2), PRESETS["sol-chain"], ALL_CELLS):
+        for ep in eps:
+            assert spotcheck.scan_episode(ep) == {"options_outside": [], "key_outside": []}
+            # the notice names the target: outside an evidence step it is a leak
+            st = next(s for s in ep.steps if s.kind == "routine")
+            bad = copy.deepcopy(ep)
+            bad.steps[st.index].observation += " " + notice_text(
+                ep.cell.fact, ep.kind, ep.quantity, ep.entity)
+            assert spotcheck.scan_episode(bad)["key_outside"]

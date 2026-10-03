@@ -38,17 +38,20 @@ H1 = "persistgym_sol_h1"
 VAL = "persistgym_validity"
 
 
+REQUEST = {"mode": "standard", "service_tier": "flex", "W": None}       # D13 (§6)
+
+
 def r4(experiment: str, model: str = SOL, effort: str = "medium", cell: str = "F-0",
        gen: str = DEFAULT, root=None, *, split: str | None = None, variant: str | None = None,
-       task_cells=OBSERVED) -> str | None:
+       task_cells=OBSERVED, request=REQUEST, templates=(0, 20)) -> str | None:
     """The guard on an R4 run: the validity run's split and variant in persistgym_validity,
-    the main runs' elsewhere, unless given."""
+    the main runs' elsewhere, unless given; D13's request settings and templates 0-19."""
     validity = experiment == VAL
     return registered.check_run_settings(
         experiment, model, effort, cell, gen, root if root is not None else RESULTS,
         split=split or ("validity" if validity else "main"),
         variant=variant or ("restated" if validity else "base"),
-        task_cells=task_cells)
+        task_cells=task_cells, request=request, templates=templates)
 
 
 def _stop_everything(root) -> None:
@@ -67,6 +70,9 @@ def test_the_replications_registered_settings():
     assert registered.H1_REPLICATION_RUN == {"cell": ("F-0", "W-0", "W-n-0"),
                                              "split": ("main",), "variant": ("base",)}
     assert registered.OBSERVED_TASK_CELLS == OBSERVED
+    assert registered.H1_REPLICATION_REQUEST == REQUEST
+    assert registered.H1_REPLICATION_VALIDITY_TEMPLATES == 20
+    assert registered.H1_REPLICATION_PILOT_CELLS == ("W-0", "W-n-0")
     assert registered.REPLICATION_G1_PASSED == {}                       # fails closed
     assert registered.G1_PASSED == {}                                   # R3's, unchanged
     # its own budget experiment: phase 1a, the PersistGym stream
@@ -160,6 +166,30 @@ def test_the_main_runs_cannot_run_h2s_contrast_or_anything_else(tmp_path, monkey
         assert part in why
 
 
+def test_the_replications_request_settings_and_validity_templates(tmp_path, monkeypatch):
+    """D13's other request settings as frozen (§6: --mode standard, Flex, the episode's own
+    W) in both kinds of run, and validity templates 0-19 in the validity run; a guard call
+    that does not give them refuses (fail closed)."""
+    monkeypatch.setitem(registered.REPLICATION_G1_PASSED, SOL, DEFAULT)
+    for experiment, part in ((VAL, "validity run only"), (H1, "main runs only")):
+        assert r4(experiment, root=tmp_path) is None
+        for request, got in (({**REQUEST, "mode": "pro"}, "--mode pro"),
+                             ({**REQUEST, "service_tier": "priority"},
+                              "--service-tier priority"),
+                             ({**REQUEST, "W": 4000}, "--W 4000"),
+                             (None, "(not given)")):
+            why = r4(experiment, root=tmp_path, request=request)
+            assert part in why and got in why, (experiment, request)
+    for templates in ((0, 20), (0, 1), (10, 20), (19, 20)):
+        assert r4(VAL, root=tmp_path, templates=templates) is None
+    for templates, got in (((0, 21), "templates 0-20"), ((20, 40), "templates 20-39"),
+                           ((30, 50), "templates 30-49"), (None, "(not given)")):
+        why = r4(VAL, root=tmp_path, templates=templates)
+        assert "validity run only" in why and got in why, templates
+    assert r4(H1, root=tmp_path, templates=(100, 200)) is None   # main templates: any (T)
+    assert r4(H1, root=tmp_path, templates=None) is None
+
+
 def test_the_replication_opens_nothing_of_h2(tmp_path, monkeypatch):
     """Recording the replication's G1 lets no H2 run of sol go: `persistgym` on the default
     config at medium or high, or on the variant without R3's own check and G1, refuses as
@@ -187,12 +217,16 @@ def test_the_replication_opens_nothing_of_h2(tmp_path, monkeypatch):
 
 
 def test_the_repositorys_own_state():
-    """With this checkout's results/ (R2's NOT_ENGAGED file on the default config): the
-    replication's validity run may go, its main runs wait for its G1, and R2's verdict still
-    refuses sol's H2 runs on the default config."""
+    """With this checkout's results/ (R2's NOT_ENGAGED file on the default config, and R3's
+    NOT_ENGAGED file on the variant: R3's hard stop): the replication's validity run may go,
+    its main runs wait for its G1, and sol's H2 runs stay refused on both configs."""
+    assert registered.HARD_STOP in registered.hard_stop(RESULTS)
     assert r4(VAL) is None
     assert "REPLICATION_G1_PASSED" in r4(H1)
     assert "does not engage" in registered.engagement_refusal(RESULTS, SOL, DEFAULT)
+    assert registered.HARD_STOP in r4(VAL, effort="high", gen=VARIANT)
+    assert registered.HARD_STOP in r4("persistgym", effort="high", gen=VARIANT, cell="F-r",
+                                      split="main", variant="base")
 
 
 # --- the run command ------------------------------------------------------------------------
@@ -230,6 +264,19 @@ def test_run_passes_the_matrix_task_cells_to_the_guard(armed, capsys, monkeypatc
     no_effort = [a for a in main if a not in ("--effort", "medium")]
     assert cli.main(no_effort) == 2
     assert "--effort high" in capsys.readouterr().err
+    # the request settings `run` sends, and the validity run's templates, reach the guard
+    for extra, got in ((["--mode", "pro"], "--mode pro"),
+                       (["--service-tier", "priority"], "--service-tier priority"),
+                       (["--W", "4000"], "--W 4000")):
+        assert cli.main([*main, *extra]) == 2
+        assert got in capsys.readouterr().err
+    validity = [*base, "--task-cell", *OBSERVED]
+    assert cli.main([*validity, "--n", "20"]) == 0
+    assert cli.main([*validity, "--start", "19", "--n", "1"]) == 0
+    for extra, got in ((["--n", "21"], "templates 0-20"),
+                       (["--start", "30", "--n", "20"], "templates 30-49")):
+        assert cli.main([*validity, *extra]) == 2
+        assert got in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(("args", "message"), [
@@ -287,9 +334,12 @@ def _check_r4_commands(commands: dict[str, list[list[str]]], monkeypatch) -> Non
             assert {e.config_hash for e in eps} == {DEFAULT}
             assert {e.cell.id for e in eps} == set(OBSERVED)
         assert matrix == RunMatrix.full(a.n, list(OBSERVED))
+        assert (a.mode, a.service_tier, a.W) == ("standard", "flex", None)
         why = registered.check_run_settings(
             a.experiment, a.model, a.effort, a.cell, DEFAULT, RESULTS, split=a.split,
-            variant=a.variant, task_cells=tuple(c for c, k in matrix.templates if k))
+            variant=a.variant, task_cells=tuple(c for c, k in matrix.templates if k),
+            request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
+            templates=(a.start, a.start + matrix.n_templates))
         if a.experiment == H1:
             assert "REPLICATION_G1_PASSED" in why
         else:
@@ -299,7 +349,7 @@ def _check_r4_commands(commands: dict[str, list[list[str]]], monkeypatch) -> Non
     a = cli.parse_args(main)
     assert registered.check_run_settings(
         a.experiment, a.model, a.effort, a.cell, DEFAULT, RESULTS, split=a.split,
-        variant=a.variant, task_cells=OBSERVED) is None
+        variant=a.variant, task_cells=OBSERVED, request=REQUEST) is None
 
 
 def test_the_cli_docstrings_r4_commands(monkeypatch):

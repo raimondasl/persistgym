@@ -34,14 +34,17 @@ as amended by R2, §17.2, and R3, §17.3).
   withheld; §4.4): a base-variant or F-r run there would be H2's contrast before G1.
 
 * R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
-  generator config, in F-0, W-0 and W-n-0 on the 4 observed task cells (`OBSERVED_TASK_CELLS`).
-  Its main runs are their own experiment, `H1_REPLICATION_EXPERIMENT` (`persistgym_sol_h1`),
-  exactly `H1_REPLICATION_RUN` (main split, base variant), and need
-  `REPLICATION_G1_PASSED`, which only the researcher's G1 decision PR for the replication
-  sets (fail closed). Its validity run is `persistgym_validity` on the default config at
-  medium: exactly `VALIDITY_RUN` on the observed task cells, and it needs no G1. The engagement
+  generator config, with D13's other request settings (`H1_REPLICATION_REQUEST`), in F-0,
+  W-0 and W-n-0 on the 4 observed task cells (`OBSERVED_TASK_CELLS`). Its main runs are their
+  own experiment, `H1_REPLICATION_EXPERIMENT` (`persistgym_sol_h1`), exactly
+  `H1_REPLICATION_RUN` (main split, base variant), and need `REPLICATION_G1_PASSED`, which
+  only the researcher's G1 decision PR for the replication sets (fail closed). Its validity
+  run is `persistgym_validity` on the default config at medium: exactly `VALIDITY_RUN` on
+  validity templates 0-19 and the observed task cells, and it needs no G1. The engagement
   checks and R3's hard stop concern H2 only and are not read for these runs, which can never
   run H2's contrast: no F-r, no `sol-chain`, no derived task cell, no effort above medium.
+  Its pilot (W-0 and W-n-0, `H1_REPLICATION_PILOT_CELLS`) runs as any sol pilot at medium
+  does, and the pooled pilot report leaves it out (`harnesses.blinding.is_left_out`).
 
 `check_run_settings` is the guard `harnesses run` applies before it takes the paid-run lock:
 pilots (`persistgym_pilot`) may use any settings, except that a sol pilot at high effort is
@@ -110,6 +113,15 @@ H1_REPLICATION_RUN = {"cell": ("F-0", "W-0", "W-n-0"), "split": ("main",),
                       "variant": ("base",)}
 """R4: the replication's main runs are luna's H1 rows (§3 H1): F-0, W-0 and W-n-0 on the
 main split, base episodes."""
+H1_REPLICATION_REQUEST = {"mode": "standard", "service_tier": "flex", "W": None}
+"""R4: D13's other request settings as frozen (§6), which `run` takes as --mode,
+--service-tier and --W: `reasoning.mode` standard, Flex, and the episode's own W (no --W)."""
+H1_REPLICATION_VALIDITY_TEMPLATES = 20
+"""R4: the replication's validity run plays validity templates 0-19 only (the templates of
+the spot-check package that covers it)."""
+H1_REPLICATION_PILOT_CELLS = ("W-0", "W-n-0")
+"""R4: the harness cells of the replication's pilot (sol at medium on the default config),
+which the pooled pilot report leaves out (`harnesses.blinding.is_left_out`)."""
 OBSERVED_TASK_CELLS = tuple(c.id for c in ALL_CELLS if c.fact == "observed")
 """R4: the 4 observed task cells, observed x {near, far} x {R, NR}: every H1 quantity."""
 REPLICATION_G1_PASSED: dict[str, str] = {}
@@ -298,14 +310,39 @@ def is_replication_run(experiment: str, model: str, effort: str,
             and generator_hash == H1_REPLICATION_GENERATOR_HASH)
 
 
+def _request_wrong(request: dict | None) -> list[str]:
+    """The request settings (`H1_REPLICATION_REQUEST`) a replication run gives otherwise;
+    None (not given) is wrong."""
+    if request is None:
+        return ["--mode, --service-tier and --W (not given)"]
+    flags = {"mode": "--mode", "service_tier": "--service-tier", "W": "--W"}
+    return [f"{flags[k]} {request.get(k)}" for k, want in H1_REPLICATION_REQUEST.items()
+            if request.get(k) != want]
+
+
+def _templates_wrong(templates: tuple[int, int] | None) -> list[str]:
+    """The replication's validity run plays validity templates 0-19 only: `templates` is the
+    run's (first index, last index + 1); None (not given) is wrong."""
+    if templates is None:
+        return ["validity templates (not given)"]
+    start, stop = templates
+    if 0 <= start < stop <= H1_REPLICATION_VALIDITY_TEMPLATES:
+        return []
+    return [f"validity templates {start}-{stop - 1}"]
+
+
 def replication_refusal(experiment: str, model: str, effort: str, cell: str,
                         generator_hash: str, *, split: str, variant: str,
-                        task_cells: tuple[str, ...] | None) -> str | None:
+                        task_cells: tuple[str, ...] | None, request: dict | None = None,
+                        templates: tuple[int, int] | None = None) -> str | None:
     """Why a run of R4's sol H1 replication must refuse, or None (§17.4). Its validity run
-    (`persistgym_validity`) is exactly `VALIDITY_RUN` and its main runs
+    (`persistgym_validity`) is exactly `VALIDITY_RUN` on validity templates 0-19
+    (`templates`, the run's first index and last index + 1) and its main runs
     (`H1_REPLICATION_EXPERIMENT`) exactly `H1_REPLICATION_RUN`; both play sol at medium
-    effort on the default generator config, on the observed task cells only (`task_cells`,
-    the run's task cells with at least one template; None refuses). The main runs also need
+    effort on the default generator config with D13's other request settings
+    (`H1_REPLICATION_REQUEST`, `request`), on the observed task cells only (`task_cells`,
+    the run's task cells with at least one template). Any of `task_cells`, `request` and,
+    for the validity run, `templates` left as None refuses. The main runs also need
     `REPLICATION_G1_PASSED` on that config. The engagement checks and R3's hard stop are
     not read: they concern H2's runs, and these runs cannot run H2's contrast."""
     validity = experiment == VALIDITY_EXPERIMENT
@@ -320,14 +357,19 @@ def replication_refusal(experiment: str, model: str, effort: str, cell: str,
           for k in ("cell", "split", "variant")),
         (f"task cells {', '.join(task_cells) if task_cells else '(none given)'}",
          not task_cells or not set(task_cells) <= set(OBSERVED_TASK_CELLS))) if bad]
+    wrong += _request_wrong(request)
+    if validity:
+        wrong += _templates_wrong(templates)
     if wrong:
         part = "validity run" if validity else "main runs"
         return (f"{experiment} runs sol's H1 replication's {part} only ({R4_REF}): "
                 f"{H1_REPLICATION_MODEL} at --effort {H1_REPLICATION_EFFORT} on the default "
                 f"generator config (--gen-preset default, config "
                 f"{H1_REPLICATION_GENERATOR_HASH[:12]}), cell {' or '.join(run['cell'])}, "
-                f"--split {' or '.join(run['split'])}, --variant {' or '.join(run['variant'])}, "
-                f"on the observed task cells only ({', '.join(OBSERVED_TASK_CELLS)}); got "
+                f"--split {' or '.join(run['split'])}, --variant {' or '.join(run['variant'])}"
+                f"{', templates 0-19' if validity else ''}, on the observed task cells only "
+                f"({', '.join(OBSERVED_TASK_CELLS)}), with --mode standard, --service-tier "
+                f"flex and no --W (D13); got "
                 + "; ".join(wrong))
     if not validity and REPLICATION_G1_PASSED.get(H1_REPLICATION_MODEL) != generator_hash:
         return (f"{experiment} runs only after the researcher has recorded the H1 "
@@ -340,7 +382,9 @@ def replication_refusal(experiment: str, model: str, effort: str, cell: str,
 
 def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        generator_hash: str, results_root: Path, *, split: str,
-                       variant: str, task_cells: tuple[str, ...] | None = None) -> str | None:
+                       variant: str, task_cells: tuple[str, ...] | None = None,
+                       request: dict | None = None,
+                       templates: tuple[int, int] | None = None) -> str | None:
     """Why `harnesses run` must refuse these settings before any paid call, or None. In
     order:
     1. pilots may use any settings, except a sol pilot at high effort (R3's engagement
@@ -348,8 +392,10 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        effort above medium after R3's hard stop;
     R4. a run of sol's H1 replication (`is_replication_run`: any `persistgym_sol_h1` run,
        and a sol `persistgym_validity` run at medium on the default config) must be exactly
-       what R4 registers on the observed task cells (`task_cells`), and its main runs need
-       `REPLICATION_G1_PASSED` (`replication_refusal`); steps 2-7 do not apply to it;
+       what R4 registers, on the observed task cells (`task_cells`), with D13's request
+       settings (`request`) and, for its validity run, on validity templates 0-19
+       (`templates`), and its main runs need `REPLICATION_G1_PASSED`
+       (`replication_refusal`); steps 2-7 do not apply to it;
     2. every other experiment sends the model's registered effort (a dated snapshot or alias
        counts as its model, `model_family`);
     3. a model in `REGISTERED_GENERATOR` uses its preset's config;
@@ -375,7 +421,8 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
         return hard_stop(results_root, family)
     if is_replication_run(experiment, model, effort, generator_hash):
         return replication_refusal(experiment, model, effort, cell, generator_hash,
-                                   split=split, variant=variant, task_cells=task_cells)
+                                   split=split, variant=variant, task_cells=task_cells,
+                                   request=request, templates=templates)
     replication = (f"; sol's H1 replication ({R4_REF}) runs at --effort "
                    f"{H1_REPLICATION_EFFORT} on the default config, as --experiment "
                    f"{H1_REPLICATION_EXPERIMENT} or its validity run"

@@ -40,11 +40,16 @@ PREREG §17.4 (amendment R4), sol's replication of H1, is judged apart from the 
 are not read). `run` refuses:
 * in persistgym_sol_h1 (its main runs), anything but gpt-6.1-sol at --effort medium on the
   default generator config, in F-0, W-0 or W-n-0, on --split main, --variant base, on the 4
-  observed task cells only, and every such run until `registered.REPLICATION_G1_PASSED`
-  records the replication's G1 on the default config;
+  observed task cells only, with --mode standard, --service-tier flex and no --W (D13), and
+  every such run until `registered.REPLICATION_G1_PASSED` records the replication's G1 on the
+  default config;
 * in persistgym_validity, a gpt-6.1-sol run at --effort medium on the default config other
   than the replication's validity run: F-0 on --split validity, --variant restated or
-  withheld, on the 4 observed task cells only (it needs no G1).
+  withheld, validity templates 0-19, on the 4 observed task cells only, with D13's request
+  settings as above (it needs no G1).
+R3's engagement check found NOT_ENGAGED on 2026-10-03 (results/decisions.md), so R3's hard
+stop refuses its check, validity and main-sweep commands below; they are kept as the record
+of what was registered.
 The probes keep their registered settings (medium on both models; PREREG §17.1).
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the
@@ -105,8 +110,8 @@ console program. The OpenAI SDK reads the key from the environment:
     # PREREG §17.4 (amendment R4): sol's H1 replication, at --effort medium (give it: sol's
     # registered effort is high) on the default config, on the 4 observed task cells.
     # 1. Its pilot (W-0 and W-n-0 are new on sol): this run, then the same with
-    #    --cell W-n-0; pilot templates 0 and 1, 8 episodes each; no pooled pilot report
-    #    between the two runs
+    #    --cell W-n-0; pilot templates 0 and 1, 8 episodes each; `pilot-report` leaves both
+    #    runs out (blinding.is_left_out), so read them from their costs rows and summary.json
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell W-0 \
         --model gpt-6.1-sol --effort medium --split pilot --start 0 --n 2 \
         --task-cell observed-nonrec-near observed-nonrec-far observed-rec-near \
@@ -121,7 +126,8 @@ console program. The OpenAI SDK reads the key from the environment:
         --approved-block "1-pilots" --planned-usd <usd>
     # 3. Its main runs, only once registered.REPLICATION_G1_PASSED records its G1: this run,
     #    then the same with --cell W-0 and --cell W-n-0; T templates from 0 (--n; T is
-    #    luna's main-sweep count, set at M1; 100 shown) x the 4 observed task cells
+    #    luna's main-sweep count, set at M1; 100 shown) x the 4 observed task cells, repeat
+    #    0 only: the §2.9 repeat-1 runs need a repeat option `run` does not have yet
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
         --model gpt-6.1-sol --effort medium --split main --start 0 --n 100 \
         --task-cell observed-nonrec-near observed-nonrec-far observed-rec-near \
@@ -345,12 +351,15 @@ def cmd_run(a) -> int:
     except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
-    # R4 (§17.4): sol's H1 replication runs on the observed task cells only, so the guard
-    # gets the task cells the matrix plays
-    why = registered.check_run_settings(a.experiment, a.model, a.effort, cell.cell_id,
-                                        runmeta.config_hash(gen.to_dict()), RESULTS,
-                                        split=a.split, variant=a.variant,
-                                        task_cells=tuple(c for c, n in matrix.templates if n))
+    # R4 (§17.4): sol's H1 replication runs on the observed task cells only, with D13's
+    # request settings, and its validity run on validity templates 0-19, so the guard gets
+    # the task cells and templates the matrix plays and the request settings
+    why = registered.check_run_settings(
+        a.experiment, a.model, a.effort, cell.cell_id, runmeta.config_hash(gen.to_dict()),
+        RESULTS, split=a.split, variant=a.variant,
+        task_cells=tuple(c for c, n in matrix.templates if n),
+        request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
+        templates=(a.start, a.start + matrix.n_templates))
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2

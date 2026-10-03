@@ -382,16 +382,21 @@ def test_the_check_decides_in_r2s_order(tmp_path):
     assert "so none was due on" in why()
 
 
-def test_the_repositorys_own_state_allows_r3s_check_and_nothing_else_of_sol():
-    """With this checkout's results/ (R2's NOT_ENGAGED file, no R3 check yet): R3's check
-    runs may go, sol's runs on the default config may not, and sol's validity run on the
-    variant waits for an ENGAGED check."""
-    assert guard("persistgym_pilot", SOL, "high", RESULTS, "F-r") is None
-    assert guard("persistgym_pilot", SOL, "high", RESULTS, "F-0") is None
+def test_the_repositorys_own_state_after_r3s_hard_stop():
+    """With this checkout's results/ (R2's NOT_ENGAGED file on the default config, and R3's
+    NOT_ENGAGED file on the variant, 2026-10-03: R3's hard stop): no further check run, no
+    sol pilot above medium and no H2 run of sol, on either config; sol pilots at medium and
+    luna's runs are unaffected."""
+    assert registered.HARD_STOP in registered.hard_stop(RESULTS)
+    for cell in ("F-r", "F-0"):
+        assert registered.HARD_STOP in guard("persistgym_pilot", SOL, "high", RESULTS, cell)
+    assert registered.HARD_STOP in guard("persistgym_pilot", SOL, "xhigh", RESULTS)
     assert "preset 'sol-chain' only" in guard("persistgym_pilot", SOL, "high", RESULTS,
                                               gen=DEFAULT)
-    assert "need an ENGAGED engagement check" in guard("persistgym_validity", SOL, "high",
-                                                       RESULTS)
+    assert guard("persistgym_pilot", SOL, "medium", RESULTS, gen=DEFAULT) is None
+    assert registered.HARD_STOP in guard("persistgym_validity", SOL, "high", RESULTS)
+    assert registered.HARD_STOP in guard("persistgym", SOL, "high", RESULTS, "F-r",
+                                         split="main", variant="base")
     assert "does not engage" in registered.engagement_refusal(RESULTS, SOL, DEFAULT)
     assert guard("persistgym_validity", LUNA, "medium", RESULTS, gen=DEFAULT) is None
 
@@ -538,10 +543,11 @@ def test_cli_docstring_examples_parse():
     for argv in commands:
         a = cli.parse_args(argv)
         assert a.cmd == argv[0]
-    # R3's engagement check run plays block 1's sol pilot templates, on sol-chain, at high
+    # R3's engagement check run plays block 1's sol pilot templates, on sol-chain, at high;
+    # it ran, found NOT_ENGAGED, and R3's hard stop refuses it now
     (check,) = [c for c in commands if c[0] == "run" and "gpt-6.1-sol" in c
                 and "persistgym_pilot" in c and "sol-chain" in c]
-    cell, ids = _check_run(check)
+    cell, ids = _check_run(check, allowed=False)
     assert cell == "F-r" and ids == _medium_pilot()[0]
     # sol's validity run (R3): F-0 on sol-chain, all 8 task cells, restated and withheld
     (validity,) = [c for c in commands if c[0] == "run" and "persistgym_validity" in c
@@ -583,12 +589,12 @@ def test_the_r2_check_commands_ran_the_default_config_and_r3_refuses_them_now():
 
 def test_the_r3_check_commands_run_block_1s_sol_pilot_templates_on_sol_chain():
     """PREREG §17.3's two check runs are R2's with --gen-preset sol-chain: F-r and F-0, sol at
-    high effort, the same 16 episode ids on sol-chain, under block 1 with $6 planned each,
-    and the guard lets them go; its reasoning-check command names R2's check runs as the
-    reference."""
+    high effort, the same 16 episode ids on sol-chain, under block 1 with $6 planned each;
+    its reasoning-check command names R2's check runs as the reference. They ran on
+    2026-10-03 and found NOT_ENGAGED, so R3's hard stop refuses them now."""
     commands = _commands(_prereg_section("### 17.3 Amendment R3"))
     runs = [c for c in commands if c[0] == "run" and "persistgym_pilot" in c]
-    assert sorted(_check_run(c)[0] for c in runs) == ["F-0", "F-r"]
+    assert sorted(_check_run(c, allowed=False)[0] for c in runs) == ["F-0", "F-r"]
     assert [c for c in runs if "F-r" in c] == [runs[0]]                 # F-r first
     (rc,) = [c for c in commands if c[0] == "reasoning-check"]
     a = cli.parse_args(rc)

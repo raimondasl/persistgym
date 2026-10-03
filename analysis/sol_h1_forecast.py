@@ -30,18 +30,20 @@ Two scenarios (`SCENARIOS`):
     the first run of those episodes: at medium effort sol reasoned almost not at all there
     (115 reasoning tokens over 360 calls, pooled over both arms; PREREG §17.2), so the F-r
     run's payloads stand in for a cold F-0 run's.
-  - *Price:* window cells lose most of their prompt caching, so their extra cost is mostly
-    cache writes in place of cached reads. sol's cached input costs 1/20 of its input price
-    and luna's 1/10 (`harnesses.pricing`), so luna's cost ratio understates sol's. The
-    central ratio prices luna's measured token counts of each W cell and of F-0 at sol's
-    prices (Flex, cache writes at 1.25).
+  - *Price:* window cells lose about half of their prompt caching (luna's pilot read about
+    half of the W cells' input from the cache, against 94% in F-0; `Run.cached_share`), so
+    their extra cost is mostly cache writes and uncached input in place of cached reads.
+    sol's cached input costs 1/20 of its input price and luna's 1/10 (`harnesses.pricing`),
+    so luna's cost ratio understates sol's. The central ratio prices luna's measured token
+    counts of each W cell and of F-0 at sol's prices (Flex, cache writes at 1.25).
   - *Validity:* restated and withheld episodes at luna's measured validity cost per episode
     over its base F-0 pilot cost per episode (`LUNA_VALIDITY`).
 
-The phase-1a picture adds the ledger's phase-1a spend, an allowance for R3's engagement
-check (not in this ledger when R4 was written) and, as rough context at measured
-block-1 costs, the other phase-1a rows: luna's main sweep and controls, and sol's H2 core and
-validity run on `sol-chain`, which run only if R3's check finds ENGAGED.
+The phase-1a picture adds the ledger's phase-1a spend (R3's engagement check included) and,
+as rough context at measured block-1 costs, the other phase-1a row that will run: luna's
+main sweep and controls. sol's H2 core and its validity run on `sol-chain` are not counted:
+R3's check found NOT_ENGAGED on 2026-10-03, and R3's hard stop ended H2 on sol
+(`results/decisions.md`).
 
 Blinding (PREREG §11): pilot rows are read for their cost and token counts. Their
 reasoning tokens are never read (pilot rows leave them empty). luna's output tokens per run
@@ -88,9 +90,6 @@ LUNA_PILOT = {"F-0": "20261002T081803Z-F-0-gpt-6-luna",
 """luna at medium, default config, pilot template 0 × the 8 task cells (8 episodes each)."""
 LUNA_VALIDITY = ("20261002T084243Z-F-0-gpt-6-luna", "20261002T095135Z-F-0-gpt-6-luna")
 """luna's validity runs, F-0, restated and withheld, validity templates 0-19 × 8 task cells."""
-SOL_HIGH_CHECK_FR = "20261002T173710Z-F-r-gpt-6.1-sol"
-"""R2's check, F-r at high on the default config, the first run of its 8 episodes: the
-cold basis of the context rows for sol's H2 runs on `sol-chain`."""
 
 # --- design (PREREG §17.4; §2.9, §4.2, §17.2, §17.3) --------------------------------------
 R4_CELLS = ("F-0", "W-0", "W-n-0")
@@ -102,10 +101,6 @@ LUNA_T = 100                    # context: luna's main sweep (§4.2: about 100)
 LUNA_SWEEP_CELLS = ("F-0", "W-n-0", "Σ-n-0", "W-0")   # §4.6, replay-off
 LUNA_TASK_CELLS = 8
 LUNA_NONREC_TASK_CELLS = 4      # single-turn control (D36)
-SOL_H2_EPISODES = 1_232         # §17.2: T_d = 210, T_o = 70, F-r and F-0, with repeats
-SOL_CHAIN_VALIDITY_EPISODES = 320   # §17.3: validity 0-19 × 8 task cells × 2 variants
-CHAIN_ALLOWANCE = 1.5           # §17.3: the chain derivations "may add up to about half again"
-R3_CHECK_ALLOWANCE_USD = 2.0    # §17.3: R3's check forecast "about $1-2 billed"
 
 
 def main_episodes(T: int) -> int:
@@ -133,6 +128,11 @@ class Run:
     def per_episode(self) -> float:
         return self.billed_usd / self.episodes
 
+    @property
+    def cached_share(self) -> float:
+        """The share of this run's input tokens read from the cache."""
+        return self.cached_input_tokens / self.input_tokens
+
     def billed_at(self, model: str) -> float:
         """This run's token counts priced at `model`'s prices on Flex
         (`harnesses.pricing.cost_usd`, the formula of every costs row)."""
@@ -146,8 +146,7 @@ def load_runs(costs_path: Path = costs.COSTS_CSV, results_root: Path = REPO_ROOT
               run_ids: tuple[str, ...] | None = None) -> dict[str, Run]:
     """The measured runs this forecast reads: their costs.csv rows and the episode counts
     of their committed meta.json (`n_episodes_run`)."""
-    wanted = run_ids or (SOL_F0_PILOT, SOL_FR_PILOT, *LUNA_PILOT.values(), *LUNA_VALIDITY,
-                         SOL_HIGH_CHECK_FR)
+    wanted = run_ids or (SOL_F0_PILOT, SOL_FR_PILOT, *LUNA_PILOT.values(), *LUNA_VALIDITY)
     rows = {r["run_id"]: r for r in costs.read_rows(costs_path)}
     out = {}
     for run_id in wanted:
@@ -247,56 +246,47 @@ def r4_total(rows: list[dict], scenario: str, T: int) -> float:
 
 
 def context_rows(runs: dict[str, Run]) -> dict[str, float]:
-    """Rough forecasts, at measured block-1 costs, of the other phase-1a rows (not R4's):
-    luna's main sweep at T = `LUNA_T`, its controls, and sol's H2 core and validity run on
-    `sol-chain` (which run only if R3's check finds ENGAGED)."""
+    """Rough forecasts, at measured block-1 costs, of the other phase-1a rows that will run
+    (not R4's): luna's main sweep at T = `LUNA_T` and its controls."""
     per = {c: runs[LUNA_PILOT[c]].per_episode for c in LUNA_SWEEP_CELLS}
     luna_n = LUNA_TASK_CELLS * (LUNA_T + LUNA_T // 10)
     single_n = LUNA_NONREC_TASK_CELLS * (LUNA_T + LUNA_T // 10)
-    sol_high = runs[SOL_HIGH_CHECK_FR].per_episode * CHAIN_ALLOWANCE
     return {
         "luna_main_sweep": luna_n * sum(per.values()),
         # restated-at-need as F-0 episodes; each single-turn prompt bounded by one F-0 episode
         "luna_controls": (luna_n * per["F-0"] * luna_validity_factor(runs)
                           + single_n * per["F-0"]),
-        "sol_h2_core": SOL_H2_EPISODES * sol_high,
-        "sol_chain_validity": (SOL_CHAIN_VALIDITY_EPISODES * sol_high
-                               * luna_validity_factor(runs)),
     }
 
 
 def phase_1a_rows(rows: list[dict], runs: dict[str, Run],
                   costs_path: Path = costs.COSTS_CSV) -> list[dict]:
-    """The phase-1a picture against the cap: spend to date, R3's check allowance, R4 (both
-    scenarios, each T) and the context rows, with totals if H2 on sol runs and if it stops."""
+    """The phase-1a picture against the cap: spend to date (R3's check included), the
+    context rows, R4 (both scenarios, each T) and the totals. sol's H2 runs are not counted:
+    R3's hard stop ended them."""
     ledger = costs.read_rows(costs_path)
     spent = costs.spend_by_phase(ledger)["1a"]
     n_rows = sum(costs.phase_of(r["experiment"]) == "1a" for r in ledger)
     ctx = context_rows(runs)
     luna = ctx["luna_main_sweep"] + ctx["luna_controls"]
-    h2 = ctx["sol_h2_core"] + ctx["sol_chain_validity"]
     out = [
         {"line": "spent", "usd": spent,
          "note": f"phase 1a in results/costs.csv ({n_rows} rows), billed (common.costs)"},
-        {"line": "r3_check_allowance", "usd": R3_CHECK_ALLOWANCE_USD,
-         "note": "R3's engagement check, not in this ledger: R3's forecast"},
         {"line": "luna_main_sweep_and_controls", "usd": luna,
          "note": f"context, rough: T = {LUNA_T}, luna's block-1 pilot costs per episode"},
-        {"line": "sol_h2_if_engaged", "usd": h2,
-         "note": "context, rough: H2 core T_d = 210 and sol-chain validity, R2's cold check "
-                 f"row at high x {CHAIN_ALLOWANCE}; only if R3 finds ENGAGED"},
+        {"line": "sol_h2", "usd": 0.0,
+         "note": "not run: R3's hard stop ended H2 on sol (results/decisions.md, 2026-10-03)"},
     ]
-    base = spent + R3_CHECK_ALLOWANCE_USD + luna
+    base = spent + luna
     for sc in ("central", "low"):
         for T in T_VALUES:
             r4 = r4_total(rows, sc, T)
             out.append({"line": f"r4_{sc}_T{T}", "usd": r4,
                         "note": "R4: pilot + validity + main runs"})
-            for h2_runs, extra in (("h2_runs", h2), ("h2_stops", 0.0)):
-                total = base + extra + r4
-                out.append({"line": f"total_{sc}_T{T}_{h2_runs}", "usd": total,
-                            "note": f"headroom under the 1a cap: "
-                                    f"{costs.PHASE_CAPS['1a'] - total:.2f}"})
+            total = base + r4
+            out.append({"line": f"total_{sc}_T{T}", "usd": total,
+                        "note": f"headroom under the 1a cap: "
+                                f"{costs.PHASE_CAPS['1a'] - total:.2f}"})
     out.append({"line": "cap_1a", "usd": costs.PHASE_CAPS["1a"], "note": "common.costs"})
     return out
 
@@ -313,6 +303,7 @@ def summary_lines(rows: list[dict], p1a: list[dict], scs: dict[str, Scenario],
 
     cap = costs.PHASE_CAPS["1a"]
     warm, cold = runs[SOL_F0_PILOT], runs[SOL_FR_PILOT]
+    luna_runs = {c: runs[LUNA_PILOT[c]] for c in R4_CELLS}
     lines = [
         "# sol H1 replication (PREREG §17.4, amendment R4): cost forecast",
         "",
@@ -352,42 +343,43 @@ def summary_lines(rows: list[dict], p1a: list[dict], scs: dict[str, Scenario],
          f"the F-r run's {cold.cache_write_tokens:,}). A main-sweep run plays episodes no "
          "other run has just played, so each call writes its new suffix to the cache, at 1.25 "
          "times the input price; at medium effort sol hardly reasons, so the F-r run's "
-         "payloads stand in for a cold F-0 run's. Window cells lose most of their caching, "
-         "and sol's cached input costs 1/20 of its input price against luna's 1/10, so luna's "
-         "W/F-0 token mix is priced at sol's prices."),
+         "payloads stand in for a cold F-0 run's. Window cells lose about half of their "
+         "prompt caching (luna's pilot read from the cache "
+         f"{luna_runs['F-0'].cached_share:.0%} of its input in F-0, "
+         f"{luna_runs['W-0'].cached_share:.0%} in W-0 and "
+         f"{luna_runs['W-n-0'].cached_share:.0%} in W-n-0), and sol's cached input costs "
+         "1/20 of its input price against luna's 1/10, so luna's W/F-0 token mix is priced "
+         "at sol's prices."),
         "",
         f"## Phase 1a against its ${cap:,.0f} cap",
         "",
         "| Line | USD |",
         "|---|---|",
-        f"| Spent in phase 1a (`results/costs.csv`) | {_fmt(p('spent'))} |",
-        (f"| R3's engagement check (not in this ledger when this was written): R3's forecast "
-         f"| {_fmt(p('r3_check_allowance'))} |"),
+        (f"| Spent in phase 1a (`results/costs.csv`, R3's engagement check included) | "
+         f"{_fmt(p('spent'))} |"),
         (f"| luna's main sweep (T = {LUNA_T}, 4 replay-off cells) and controls, rough | "
          f"{_fmt(p('luna_main_sweep_and_controls'))} |"),
-        (f"| sol's H2 core (T_d = 210) and validity on `sol-chain`, only if R3 finds "
-         f"ENGAGED, rough | {_fmt(p('sol_h2_if_engaged'))} |"),
+        (f"| sol's H2 core and validity on `sol-chain`: not run (R3's hard stop) | "
+         f"{_fmt(p('sol_h2'))} |"),
     ]
     for T in T_VALUES:
         lines.append(f"| R4 at T = {T}, central (low) | {_fmt(p(f'r4_central_T{T}'))} "
                      f"({_fmt(p(f'r4_low_T{T}'))}) |")
     for T in T_VALUES:
-        lines.append(
-            f"| **Total at T = {T}, central: if H2 on sol runs; if it stops** | "
-            f"**{_fmt(p(f'total_central_T{T}_h2_runs'))}; "
-            f"{_fmt(p(f'total_central_T{T}_h2_stops'))}** |")
+        lines.append(f"| **Total at T = {T}, central (low)** | "
+                     f"**{_fmt(p(f'total_central_T{T}'))}** "
+                     f"({_fmt(p(f'total_low_T{T}'))}) |")
     lines += [
         "",
-        (f"Headroom under the cap at T = 100, central: "
-         f"{_fmt(cap - p('total_central_T100_h2_runs'))} if H2 on sol runs, "
-         f"{_fmt(cap - p('total_central_T100_h2_stops'))} if it stops. Every main-run line "
-         "scales with T, which §4.2's rule sets at M1 for luna."),
+        (f"Headroom under the cap, central: {_fmt(cap - p('total_central_T100'))} at T = 100, "
+         f"{_fmt(cap - p('total_central_T50'))} at T = 50. Every main-run line scales with "
+         "T, which §4.2's rule sets at M1 for luna."),
         "",
-        ("Context rows (rough, not R4's forecast): luna's lines use its block-1 pilot cost "
+        ("Context row (rough, not R4's forecast): luna's lines use its block-1 pilot cost "
          "per episode per cell; its restated control as F-0 episodes at luna's validity/base "
-         "factor; each single-turn prompt bounded by one F-0 episode. sol's H2 lines use R2's "
-         f"F-r check row (high effort, the first run of its episodes) × {CHAIN_ALLOWANCE}, "
-         "R3's allowance for the chain derivations."),
+         "factor; each single-turn prompt bounded by one F-0 episode. sol's H2 runs are not "
+         "counted: R3's engagement check found NOT_ENGAGED on 2026-10-03, and R3's hard stop "
+         "ended H2 on sol (`results/decisions.md`)."),
         "",
         "## Limits",
         "",
@@ -440,15 +432,12 @@ def write(out_dir: Path, run_id: str, started: str, runs: dict[str, Run], rows: 
               "inputs": {"costs_csv": str(costs_path.relative_to(REPO_ROOT))
                          if costs_path.is_relative_to(REPO_ROOT) else str(costs_path),
                          "sol_f0_pilot": SOL_F0_PILOT, "sol_fr_pilot": SOL_FR_PILOT,
-                         "luna_pilot": LUNA_PILOT, "luna_validity": list(LUNA_VALIDITY),
-                         "sol_high_check_fr": SOL_HIGH_CHECK_FR},
+                         "luna_pilot": LUNA_PILOT, "luna_validity": list(LUNA_VALIDITY)},
               "design": {"cells": list(R4_CELLS), "observed_task_cells": OBSERVED_TASK_CELLS,
                          "pilot_episodes_per_run": PILOT_EPISODES,
                          "validity_episodes": VALIDITY_EPISODES, "T_values": list(T_VALUES)},
-              "context": {"luna_T": LUNA_T, "sol_h2_episodes": SOL_H2_EPISODES,
-                          "sol_chain_validity_episodes": SOL_CHAIN_VALIDITY_EPISODES,
-                          "chain_allowance": CHAIN_ALLOWANCE,
-                          "r3_check_allowance_usd": R3_CHECK_ALLOWANCE_USD},
+              "context": {"luna_T": LUNA_T,
+                          "sol_h2": "not counted: ended by R3's hard stop (2026-10-03)"},
               "price_source_date": pricing.PRICE_SOURCE_DATE,
               "scenarios": {k: sc.label for k, sc in scs.items()}}
     return runmeta.write_meta(

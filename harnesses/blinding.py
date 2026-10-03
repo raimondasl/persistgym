@@ -55,7 +55,9 @@ so they approximate the withheld column; n_calls approximates lookups. Only the 
 cell that joins a pool of the same model and effort which a report has already shown gives
 its own totals as the difference between that report and the next one. Splitting pools by
 effort keeps PREREG §17.2's check runs out of block 1's sol pool, and splitting them by
-generator config keeps PREREG §17.3's check runs out of §17.2's. For a parallel run,
+generator config keeps PREREG §17.3's check runs out of §17.2's. PREREG §17.4's pilot of
+sol's window cells (W-0 and W-n-0 at medium on the default config) would join block 1's sol
+pool, so the report leaves it out altogether (`is_left_out`). For a parallel run,
 `summary.json`'s count of RUN_STOPPED episodes (and the message a Ctrl+C or an error prints)
 says roughly how many episodes were in flight when the run stopped; under a spend plan that
 bounds the per-episode estimate, as the withheld peak does, though more loosely.
@@ -74,6 +76,7 @@ from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
+from harnesses import registered
 from persistgym.config import PRESET_HASHES
 
 BLINDED_EXPERIMENTS = frozenset({"persistgym_pilot"})
@@ -243,9 +246,25 @@ def pool_key(model: str, effort: str, generator_hash: str | None = None) -> str:
     return f"{model} ({', '.join(parts)})" if parts else model
 
 
+def is_left_out(e: dict) -> bool:
+    """Whether the pooled report leaves an episode record out: an episode of PREREG §17.4's
+    pilot of sol's H1 replication, sol (or a snapshot or alias of it) at medium effort on the
+    default generator config in W-0 or W-n-0 (`registered.H1_REPLICATION_PILOT_CELLS`).
+    Those runs would join block 1's sol pool (F-r and F-0 at medium on the default config),
+    which earlier reports have shown, so any report with them would show the window cells'
+    reasoning tokens as the difference: one arm's after one run, and the window cells' against
+    the full-history cells' after both. They are read from their costs rows and blinded
+    summary.json files only."""
+    return (registered.model_family(str(e.get("model"))) == registered.H1_REPLICATION_MODEL
+            and _effort(e) == registered.H1_REPLICATION_EFFORT
+            and e.get("generator_config_hash") in (None, PRESET_HASHES["default"])
+            and e.get("harness_cell") in registered.H1_REPLICATION_PILOT_CELLS)
+
+
 def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
     """Per model, requested reasoning effort and generator config (`pool_key`), pooled over
-    every run (harness cell) given.
+    every run (harness cell) given, except the episodes `is_left_out` leaves out (PREREG
+    §17.4), whose run ids are listed under `runs_left_out`.
     Reasoning tokens are reported only when at least 2 harness cells are pooled, so a pool
     can never equal one arm. Pools are split by effort (PREREG §17.2), so that runs at a new
     effort never join a pool that an earlier report has already shown: one check run at high
@@ -254,8 +273,12 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
     §17.3) for the same reason: R3's check runs (sol at high on `sol-chain`) never join R2's
     (sol at high on the default config)."""
     by_model: dict[str, list[dict]] = {}
-    for eps in runs.values():
+    left_out = set()
+    for run_id, eps in runs.items():
         for e in eps:
+            if is_left_out(e):
+                left_out.add(run_id)
+                continue
             key = pool_key(str(e.get("model")), _effort(e), e.get("generator_config_hash"))
             by_model.setdefault(key, []).append(e)
     models = {}
@@ -284,6 +307,11 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
             "cost_usd": _cost(eps),
             "echo_match": _echo_match(eps),
         }
-    return {"experiment": experiment, "run_ids": sorted(runs), "models": models,
+    return {"experiment": experiment, "run_ids": sorted(set(runs) - left_out),
+            "models": models,
+            "runs_left_out": {"run_ids": sorted(left_out),
+                              "why": ("PREREG §17.4: the pilot of sol's H1 replication (W-0 "
+                                      "and W-n-0, sol at medium on the default config) is "
+                                      "never pooled; read its costs rows and summary.json")},
             "rule": ("PREREG §11 pilot blinding: validity levels, pooled tokens, errors, "
                      "latency and cost only; no per-arm success or per-arm reasoning tokens")}

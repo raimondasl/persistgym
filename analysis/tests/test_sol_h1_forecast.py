@@ -105,22 +105,38 @@ def test_the_phase_1a_picture(built):
                 if costs.phase_of(r["experiment"]) == "1a")
     assert line["spent"] == pytest.approx(spent)
     assert line["cap_1a"] == costs.PHASE_CAPS["1a"] == 500
+    # R3's engagement check (2026-10-03) is in the ledger: its two rows are phase 1a
+    r3 = ("20261003T055240Z-F-r-gpt-6.1-sol", "20261003T060120Z-F-0-gpt-6.1-sol")
+    assert all(costs.phase_of(ROWS[r]["experiment"]) == "1a" for r in r3)
+    assert sum(_billed(r) for r in r3) == pytest.approx(0.890249, abs=1e-6)
+    assert line["spent"] == pytest.approx(3.87, abs=0.005)
     ctx = f.context_rows(runs)
+    assert set(ctx) == {"luna_main_sweep", "luna_controls"}
     assert line["luna_main_sweep_and_controls"] == pytest.approx(
         ctx["luna_main_sweep"] + ctx["luna_controls"])
     assert ctx["luna_main_sweep"] == pytest.approx(
         880 * sum(_billed(f.LUNA_PILOT[c]) / 8 for c in f.LUNA_SWEEP_CELLS))
-    assert ctx["sol_h2_core"] == pytest.approx(1_232 * _billed(f.SOL_HIGH_CHECK_FR) / 8 * 1.5)
+    assert line["sol_h2"] == 0.0                         # ended by R3's hard stop
     for sc in ("central", "low"):
         for T in (100, 50):
-            base = line["spent"] + 2.0 + line["luna_main_sweep_and_controls"]
+            base = line["spent"] + line["luna_main_sweep_and_controls"]
             r4 = f.r4_total(rows, sc, T)
             assert line[f"r4_{sc}_T{T}"] == pytest.approx(r4)
-            assert line[f"total_{sc}_T{T}_h2_stops"] == pytest.approx(base + r4)
-            assert line[f"total_{sc}_T{T}_h2_runs"] == pytest.approx(
-                base + r4 + line["sol_h2_if_engaged"])
-    # at T = 100, central, everything fits under the cap, with or without H2 on sol
-    assert line["total_central_T100_h2_runs"] < 500
+            assert line[f"total_{sc}_T{T}"] == pytest.approx(base + r4)
+    # the committed numbers (PREREG §17.4)
+    assert line["total_central_T100"] == pytest.approx(318.87, abs=0.005)
+    assert line["total_central_T50"] == pytest.approx(186.44, abs=0.005)
+    assert line["total_central_T100"] < 500
+
+
+def test_window_cells_lose_about_half_of_their_caching(built):
+    """The caching claim of the summary and PREREG §17.4, from luna's pilot rows."""
+    runs, _, _, _ = built
+    share = {c: runs[f.LUNA_PILOT[c]].cached_share for c in f.R4_CELLS}
+    for c in f.R4_CELLS:
+        r = ROWS[f.LUNA_PILOT[c]]
+        assert share[c] == pytest.approx(int(r["cached_input_tokens"]) / int(r["input_tokens"]))
+    assert share["F-0"] > 0.9 and 0.4 < share["W-0"] < 0.6 and 0.4 < share["W-n-0"] < 0.6
 
 
 def test_it_never_reads_reasoning_tokens():
@@ -142,6 +158,7 @@ def test_main_writes_the_forecast(tmp_path, capsys):
     assert {r["scenario"] for r in out} == {"low", "central"}
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
     assert "279.49" in summary and "264.87" in summary and "## Limits" in summary
+    assert "318.87" in summary and "181.13" in summary and "lose most" not in summary
     assert "reasoning tokens" not in summary
     meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
     assert meta["experiment"] == "cost_model" and meta["paid_calls"] == 0

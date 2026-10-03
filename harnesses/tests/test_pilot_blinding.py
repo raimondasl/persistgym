@@ -16,6 +16,7 @@ from harnesses.fake import FakeModel
 from harnesses.items import item_text
 from harnesses.runner import run_batch
 from harnesses.tests.conftest import SMALL
+from persistgym.config import PRESET_HASHES
 from persistgym.episode import TaskCell
 from persistgym.render import generate
 
@@ -378,3 +379,53 @@ def test_pilot_report_cli_writes_the_pooled_report(tmp_path, monkeypatch, capsys
 ])
 def test_latency_stats(values, expected):
     assert blinding._latency(values) == expected
+
+
+def test_pool_key_separates_generator_configs():
+    """PREREG §17.3: a pool on a config other than the default one gets ", generator
+    <hash8>"; records without the field (logged before it existed) pool as the default."""
+    variant, default = PRESET_HASHES["sol-chain"], PRESET_HASHES["default"]
+    assert blinding.pool_key("m", "medium") == blinding.pool_key("m", "medium", default) == "m"
+    assert blinding.pool_key("m", "high", None) == "m (effort high)"
+    assert blinding.pool_key("m", "high", variant) == f"m (effort high, generator {variant[:8]})"
+    assert blinding.pool_key("m", "medium", "f" * 64) == "m (generator ffffffff)"
+
+
+def test_r3s_first_check_run_never_joins_r2s_pool():
+    """PREREG §11, §17.3: R2's two check runs (sol at high, default config) have been
+    reported. A report made after R3's F-r run alone (sol at high, sol-chain) keeps it in a
+    pool of its own, one harness cell, with its reasoning tokens withheld; R2's pool is
+    unchanged."""
+    variant = PRESET_HASHES["sol-chain"]
+
+    def ep(cell, gen=None):
+        e = _ep(cell, "base", False, model="gpt-6.1-sol")
+        e["echo"] = {**e["echo"], "effort_requested": "high", "effort_echoed": {"high": 2}}
+        if gen:
+            e["generator_config_hash"] = gen
+        return e
+    r2 = {"r2-r": [ep("F-r")], "r2-0": [ep("F-0", PRESET_HASHES["default"])]}
+    old = blinding.pooled_report(r2, experiment=PILOT)["models"]
+    new = blinding.pooled_report({**r2, "r3-r": [ep("F-r", variant)]},
+                                 experiment=PILOT)["models"]
+    key = f"gpt-6.1-sol (effort high, generator {variant[:8]})"
+    assert set(new) == {"gpt-6.1-sol (effort high)", key}
+    assert new["gpt-6.1-sol (effort high)"] == old["gpt-6.1-sol (effort high)"]
+    assert old["gpt-6.1-sol (effort high)"]["tokens_pooled"]["reasoning_tokens"] == 6
+    assert new[key]["harness_cells_pooled"] == ["F-r"]
+    assert new[key]["tokens_pooled"]["reasoning_tokens"] is None
+    assert new[key]["generator_config_hash"] == variant
+
+
+def test_the_episode_logs_its_generator_config_out_of_committed_files(tmp_path):
+    """`EpisodeRun.generator_config_hash` is in the raw episodes.jsonl, and in no committed
+    file of a blinded run (summary.json and meta.json come from allowlists)."""
+    eps = _pilot_eps()
+    run_batch(eps, CELLS["F-0"], CFG, FakeModel(), experiment=PILOT, run_id="g",
+              results_root=tmp_path / "results", raw_root=tmp_path / "raw")
+    rows = [json.loads(x) for x in (tmp_path / "raw" / PILOT / "g" / "episodes.jsonl")
+            .read_text(encoding="utf-8").splitlines()]
+    assert [r["generator_config_hash"] for r in rows] == [e.config_hash for e in eps]
+    for path in _committed_files(tmp_path / "results"):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        assert not any(p[-1] == "generator_config_hash" for p, _ in _keys(doc)), path

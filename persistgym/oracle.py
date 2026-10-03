@@ -22,6 +22,11 @@ from persistgym.env import EpisodeEnv, EpisodeResult
 from persistgym.episode import Episode
 
 FACT_RE = re.compile(r"For ([a-z]+) ([A-Z][A-Z]+), the ([a-z ]+?) is (\d+)\.")
+RELATION_RE = re.compile(r"For ([a-z]+) ([A-Z][A-Z]+), the ([a-z ]+?) is (\d+) (more|less) "
+                         r"than for \1 ([A-Z][A-Z]+)\.")
+"""Chain form (PREREG §17.3; `render.relation_sentence`): entity's value is the other
+entity's value plus or minus a difference."""
+MAX_RELATION_DEPTH = 4
 RULE_RE = re.compile(r"Rule: for every ([a-z]+), ([a-z ]+?) = ([a-z ]+(?: \+ [a-z ]+)+)\.")
 NEED_RE = re.compile(r"([A-Z][a-z]+) ([A-Z][A-Z]+) needs its ([a-z ]+?) now\. Options:")
 OPTION_RE = re.compile(r"^([A-Z])\) (\d+)$", re.MULTILINE)
@@ -72,6 +77,8 @@ class TextOracle:
         self.lookup_allowed = "lookup(<" in system_prompt
         self.base_rules = self._rules(system_prompt)
         self.facts: dict[tuple[str, str], int] = {}
+        # chain form: (entity, quantity) -> (signed difference, other entity)
+        self.relations: dict[tuple[str, str], tuple[int, str]] = {}
         self.rules: dict[str, list[str]] = dict(self.base_rules)
         self.looked_up = False
 
@@ -79,24 +86,42 @@ class TextOracle:
     def _rules(text: str) -> dict[str, list[str]]:
         return {m.group(2): m.group(3).split(" + ") for m in RULE_RE.finditer(text)}
 
-    def _remember(self, text: str) -> None:
+    def remember(self, text: str) -> None:
+        """Parse the bindings, relations and rules in `text` into memory."""
         for m in FACT_RE.finditer(text):
             self.facts[(m.group(2), m.group(3))] = int(m.group(4))
+        for m in RELATION_RE.finditer(text):
+            sign = 1 if m.group(5) == "more" else -1
+            self.relations[(m.group(2), m.group(3))] = (sign * int(m.group(4)), m.group(6))
         self.rules.update(self._rules(text))
 
+    def _resolve(self, entity: str, name: str, seen: frozenset) -> int | None:
+        """A value given directly, or through relations at most `MAX_RELATION_DEPTH` hops
+        long; None for a cycle or a value that is not given."""
+        key = (entity, name)
+        if key in self.facts:
+            return self.facts[key]
+        if key not in self.relations or key in seen or len(seen) >= MAX_RELATION_DEPTH:
+            return None
+        delta, other = self.relations[key]
+        base = self._resolve(other, name, seen | {key})
+        return None if base is None else base + delta
+
     def value_of(self, entity: str, quantity: str) -> int | None:
-        if (entity, quantity) in self.facts:
-            return self.facts[(entity, quantity)]
+        direct = self._resolve(entity, quantity, frozenset())
+        if direct is not None:
+            return direct
         parts = self.rules.get(quantity)
-        if parts and all((entity, p) in self.facts for p in parts):
-            return sum(self.facts[(entity, p)] for p in parts)
-        return None
+        if not parts:
+            return None
+        vals = [self._resolve(entity, p, frozenset()) for p in parts]
+        return None if None in vals else sum(vals)
 
     def act(self, observation: str, info: dict) -> str:
         if not self.memory:
-            self.facts, self.rules = {}, dict(self.base_rules)
+            self.facts, self.relations, self.rules = {}, {}, dict(self.base_rules)
         event = observation.split(EVENT_MARK, 1)[1] if EVENT_MARK in observation else ""
-        self._remember(event)
+        self.remember(event)
         request = event.split(PENDING_MARK, 1)[1] if PENDING_MARK in event else event
 
         need = NEED_RE.search(request)

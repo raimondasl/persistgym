@@ -179,11 +179,12 @@ def _option(key: str) -> str:
 
 
 def run_arguments(plan: dict | None, given: dict, defaults: dict) -> dict:
-    """The run's `run` arguments: the run plan's, which arguments given on the command line
-    must equal, or, for a run without them, `defaults` (those of `run`) updated with the
-    arguments given, which must include --cell."""
+    """The run's `run` arguments: the run plan's, over `defaults` (those of `run`, so that a
+    plan written before an argument existed, such as --gen-preset, gets its default), which
+    arguments given on the command line must equal, or, for a run without them, `defaults`
+    updated with the arguments given, which must include --cell."""
     if plan is not None and plan.get("run_args") is not None:
-        args = dict(plan["run_args"])
+        args = {**defaults, **plan["run_args"]}
         differ = [_option(k) for k, v in given.items() if args.get(k) != v]
         if differ:
             raise Refused(f"{', '.join(differ)} differ from the run's run_plan.json; give no "

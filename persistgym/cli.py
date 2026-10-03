@@ -4,7 +4,13 @@
     uv run python -m persistgym render --split validity --n 10 --single-turn --gzip
     uv run python -m persistgym render --n 50 --W 24000 --v 1500 --out results/raw/persistgym/x
     uv run python -m persistgym partial-memory --n 2000
+    uv run python -m persistgym audit --n 1000       # every $0 check, in chunks of 50 templates
     uv run python -m persistgym spotcheck            # G1 spot-check pages (persistgym/spotcheck.py)
+    # gpt-6.1-sol's derived-fact variant (PREREG §17.3, amendment R3): chain clues and the
+    # evidence notice (config.PRESETS["sol-chain"]); --set still overrides single fields
+    uv run python -m persistgym render --preset sol-chain --split validity --n 20 --gzip
+    uv run python -m persistgym partial-memory --preset sol-chain --n 2000
+    uv run python -m persistgym spotcheck --preset sol-chain
 
 Template counts and start indices come in whole balance blocks of K templates (PREREG D7);
 `--partial-blocks` allows other counts for quick $0 checks. Splits: main [0, 50000),
@@ -18,6 +24,7 @@ summary.json and manifest.json. No API calls; nothing here costs money.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import gzip
 import json
 import statistics
@@ -29,17 +36,30 @@ from pathlib import Path
 
 from common.runmeta import REPO_ROOT, config_hash, git_state
 from persistgym import spotcheck
-from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, SEED_RANGES, GeneratorConfig
+from persistgym.config import (
+    GENERATOR_VERSION,
+    PRESETS,
+    SCHEMA_VERSION,
+    SEED_RANGES,
+    GeneratorConfig,
+)
 from persistgym.controls import single_turn_control
 from persistgym.episode import ALL_CELLS, VARIANTS, Episode
 from persistgym.render import generate
 from persistgym.template import sample_template
 from persistgym.validity import (
+    BALANCE_CHECKS,
+    _chain_items,
+    _derived_items,
+    balance_checks,
+    chain_partial_memory,
     heuristic_baselines,
     lookup_audit,
+    one_per_template,
     oracle_scores,
     partial_memory_diagnostic,
     partial_memory_from_episodes,
+    prior_label_baseline,
     shortcut_audit,
 )
 
@@ -106,11 +126,16 @@ def whole_blocks_error(start: int, n: int, K: int) -> str | None:
     return None
 
 
+def config_of(preset: str, overrides: dict) -> GeneratorConfig:
+    """The preset's config (`config.PRESETS`) with `overrides` (field -> value)."""
+    return GeneratorConfig.from_dict({**PRESETS[preset].to_dict(), **overrides})
+
+
 def run(args: argparse.Namespace) -> int:
     overrides = parse_overrides(args.set or [])
     overrides.update({k: v for k, v in (("W_tokens", args.W), ("v_tokens", args.v))
                       if v is not None})
-    cfg = GeneratorConfig.from_dict({**GeneratorConfig().to_dict(), **overrides})
+    cfg = config_of(args.preset, overrides)
     variants = [v.strip() for v in args.variants.split(",") if v.strip()]
     bad = [v for v in variants if v not in VARIANTS]
     if bad:
@@ -168,7 +193,8 @@ def run(args: argparse.Namespace) -> int:
     manifest = {
         "created_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "generator_version": GENERATOR_VERSION, "schema_version": SCHEMA_VERSION,
-        "config": cfg.to_dict(), "config_hash": chash, "seed_ranges": SEED_RANGES,
+        "preset": args.preset, "config": cfg.to_dict(), "config_hash": chash,
+        "seed_ranges": SEED_RANGES,
         "tiktoken": metadata.version("tiktoken"), "command": " ".join(sys.argv),
         **git_state(),
     }
@@ -205,6 +231,10 @@ def print_summary(summary: dict, out: Path) -> None:
             print(f"  baselines {view}: {accs} (threshold {hb['threshold']:.2f})")
         if "prior_label" in hb:
             print(f"  baselines prior_label: {hb['prior_label']['accuracy']:.2f}")
+        if "nearest_to_stand_in_value" in hb:
+            si = hb["nearest_to_stand_in_value"]["by_cell"]
+            print("  baselines nearest_to_stand_in_value (withheld): "
+                  + ", ".join(f"{cid}={c['accuracy']:.2f}" for cid, c in si.items()))
         orc = summary["oracles"]
         for name in ("key", "text", "lookup_no_memory"):
             accs = ", ".join(f"{k}={v['need_acc']:.2f}" for k, v in orc[name].items())
@@ -232,23 +262,175 @@ def print_partial_memory(pm: dict, indent: str = "") -> None:
     if bayes:
         print(f"{indent}  generator-aware Bayes by kept clues (reported): "
               + ", ".join(f"{k}={v:.3f}" for k, v in bayes.items()))
+    if pm.get("chain"):
+        print_chain_partial_memory(pm["chain"], indent)
+
+
+def print_chain_partial_memory(cm: dict, indent: str = "") -> None:
+    print(f"{indent}chain records (amendment R3; gated: atom narrowing = 0, each misreading "
+          f"<= {cm['threshold']:.2f}): {'pass' if cm['pass'] else 'FAIL'}")
+    for key, row in [*cm["by_n_clues"].items(), ("all", cm["all"])]:
+        label = f"{key} clues" if key != "all" else "all"
+        print(f"{indent}  {label:<8} n={row['n_templates']:<5} atom narrowing="
+              f"{row['atom_narrowing_templates']} | "
+              + " ".join(f"{k}={v:.3f}" for k, v in row["heuristics"].items()))
 
 
 def run_partial_memory(args: argparse.Namespace) -> int:
-    """Template-only (no rendering), so it is cheap for large N."""
-    cfg = GeneratorConfig.from_dict({**GeneratorConfig().to_dict(),
-                                     **parse_overrides(args.set or [])})
-    items = []
+    """Template-only (no rendering), so it is cheap for large N. In chain form it also
+    gives the atom-level and misreading figures, from `Template.chains` (the render summary
+    computes them from the episode text instead)."""
+    cfg = config_of(args.preset, parse_overrides(args.set or []))
+    items, chain_items = [], []
     for i in range(args.start, args.start + args.n):
         t = sample_template(args.split, i, cfg)
         items.append((t.n_clues, t.clue_values, t.option_values, t.target_value))
+        chain_items.append((t.n_clues, [(c.anchor, c.far, c.near, c.decoy) for c in t.chains],
+                            t.option_values, t.target_value))
     pm = partial_memory_diagnostic(items, cfg.to_dict())
-    pm.update(split=args.split, indices=[args.start, args.start + args.n],
+    if cfg.clue_form == "chain":
+        pm["chain"] = chain_partial_memory(chain_items, cfg.to_dict())
+        pm["pass"] = pm["pass"] and pm["chain"]["pass"]
+    pm.update(split=args.split, indices=[args.start, args.start + args.n], preset=args.preset,
               config_hash=config_hash(cfg.to_dict()), generator_version=GENERATOR_VERSION)
     if args.out:
         Path(args.out).write_text(json.dumps(pm, indent=2) + "\n", encoding="utf-8")
     print_partial_memory(pm)
     return 0 if pm["pass"] else 1
+
+
+def _add(acc: dict, key, value: float, n: int) -> None:
+    """Accumulate a mean over `n` units: acc[key] = [sum of value * n, sum of n]."""
+    total = acc.setdefault(key, [0.0, 0])
+    total[0] += value * n
+    total[1] += n
+
+
+def _mean(acc: dict) -> dict:
+    return {k: {"accuracy": round(v[0] / v[1], 4), "n": v[1]} for k, v in sorted(acc.items())}
+
+
+ORACLE_MUST_BE_ONE = ("lookup_no_memory/base/rec", "lookup_no_memory/restated/rec",
+                      "lookup_no_memory/restated/nonrec")
+
+
+def _oracles_pass(oracles: dict) -> bool:
+    """`validity.oracle_scores`'s rule on pooled means: the key and text oracles answer every
+    need step of base and restated episodes and every routine step; the no-memory lookup
+    oracle every need step where lookup is offered (base) or the records are restated."""
+    must = []
+    for k, v in oracles.items():
+        name, group = k.split("/", 1)
+        if k.endswith("/routine"):
+            if name in ("key", "text"):
+                must.append(v["accuracy"])
+        elif ((name in ("key", "text") and not group.startswith("withheld"))
+              or k in ORACLE_MUST_BE_ONE):
+            must.append(v["accuracy"])
+    return all(x == 1.0 for x in must)
+
+
+def run_audit(args: argparse.Namespace) -> int:
+    """Every $0 audit of `render` on many templates, rendered and audited in chunks of whole
+    balance blocks so that memory stays small: the shortcut and lookup audits per chunk; the
+    no-memory baselines pooled over the chunks (each chunk is whole blocks, and each
+    accuracy is a mean over templates, so the pooled mean is exact); the oracles (means
+    over episodes); the partial-memory gates on the items of every chunk (exact); and the
+    balance checks once, on all templates. Writes nothing but `--out`, if given."""
+    cfg = config_of(args.preset, parse_overrides(args.set or []))
+    K = cfg.K_options
+    if (err := whole_blocks_error(args.start, args.n, K)) or args.chunk % K or args.chunk <= 0:
+        print(err or f"--chunk must be a positive multiple of K={K}", file=sys.stderr)
+        return 2
+    checks: dict[str, dict] = {}
+    views: dict = {}
+    stand_in: dict = {}
+    oracles: dict = {}
+    pm_items: dict[str, list] = defaultdict(list)
+    chain_items: dict[str, list] = defaultdict(list)
+    one = []
+    n_eps = 0
+    for lo in range(args.start, args.start + args.n, args.chunk):
+        indices = range(lo, min(lo + args.chunk, args.start + args.n))
+        eps = [e for _, es in generate(args.split, indices, cfg, ALL_CELLS, VARIANTS)
+               for e in es]
+        n_eps += len(eps)
+        for c in shortcut_audit(eps) + lookup_audit(eps):
+            if c["check"] in BALANCE_CHECKS:
+                continue
+            row = checks.setdefault(c["check"], {"pass": True, "failed_chunks": []})
+            if not c["pass"]:
+                row["pass"] = False
+                row["failed_chunks"].append({"indices": [indices[0], indices[-1]],
+                                             "detail": c["detail"]})
+        hb = heuristic_baselines(eps)
+        for view, res in hb["views"].items():
+            for name, r in res.items():
+                _add(views, f"{view}/{name}", r["accuracy"], r["n_templates"])
+        for cid, r in hb.get("nearest_to_stand_in_value", {}).get("by_cell", {}).items():
+            _add(stand_in, cid, r["accuracy"], r["n_templates"])
+        orc = oracle_scores(eps)
+        for name in ("key", "text", "lookup_no_memory"):
+            for group, r in orc[name].items():
+                _add(oracles, f"{name}/{group}", r["need_acc"], r["n"])
+                _add(oracles, f"{name}/{group}/routine", r["routine_acc"], r["n"])
+        by_template: dict[str, list[Episode]] = defaultdict(list)
+        for e in eps:
+            by_template[e.template_id].append(e)
+            if e.variant == "base" and e.cell.fact == "derived":
+                pm_items[e.cell.id] += _derived_items([e])
+                if cfg.clue_form == "chain":
+                    chain_items[e.cell.id] += _chain_items([e])
+        one += [dataclasses.replace(one_per_template(es), steps=[], system_prompt="")
+                for es in by_template.values()]
+        del eps, by_template
+        if args.verbose:
+            print(f"audited templates {indices[0]}-{indices[-1]}", file=sys.stderr)
+    for c in balance_checks(one):
+        checks[c["check"]] = {"pass": c["pass"], "detail": c["detail"]}
+    threshold = 1 / K + cfg.validity_margin_pp / 100
+    other = "pilot" if args.split == "main" else "main"
+    prior = prior_label_baseline([sample_template(other, i, cfg).correct_label
+                                  for i in range(min(args.n, 1000))], one)
+    pm = {cid: partial_memory_diagnostic(items, cfg.to_dict())
+          for cid, items in sorted(pm_items.items())}
+    for cid, items in chain_items.items():
+        pm[cid]["chain"] = chain_partial_memory(items, cfg.to_dict())
+        pm[cid]["pass"] = pm[cid]["pass"] and pm[cid]["chain"]["pass"]
+    views_out, stand_in_out, oracles_out = _mean(views), _mean(stand_in), _mean(oracles)
+    summary = {
+        "preset": args.preset, "split": args.split,
+        "indices": [args.start, args.start + args.n], "n_templates": args.n,
+        "n_episodes": n_eps, "episodes_per_task_cell": n_eps // len(ALL_CELLS),
+        "generator_version": GENERATOR_VERSION, "config_hash": config_hash(cfg.to_dict()),
+        "threshold": threshold, "checks": checks, "baselines": views_out,
+        "prior_label": prior, "nearest_to_stand_in_value": stand_in_out,
+        "oracles": oracles_out, "partial_memory": pm,
+    }
+    summary["pass"] = (all(c["pass"] for c in checks.values())
+                       and all(v["accuracy"] <= threshold
+                               for v in [*views_out.values(), *stand_in_out.values()])
+                       and (prior["accuracy"] or 0) <= threshold
+                       and _oracles_pass(oracles_out)
+                       and all(p["pass"] for p in pm.values()))
+    if args.out:
+        Path(args.out).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    print(f"audited {n_eps} episodes ({summary['episodes_per_task_cell']} per task cell) from "
+          f"{args.n} templates, {args.split} {args.start}-{args.start + args.n - 1}, preset "
+          f"{args.preset}")
+    for name, c in checks.items():
+        print(f"  [{'ok' if c['pass'] else 'FAIL'}] {name}")
+    print("  baselines: " + ", ".join(f"{k}={v['accuracy']:.3f}"
+                                      for k, v in views_out.items()))
+    print(f"  baselines prior_label: {prior['accuracy']:.3f}; nearest_to_stand_in_value: "
+          + ", ".join(f"{k}={v['accuracy']:.3f}" for k, v in stand_in_out.items()))
+    print("  oracles: " + ", ".join(f"{k}={v['accuracy']:.2f}" for k, v in oracles_out.items()
+                                    if not k.endswith("/routine")))
+    for cid, p in pm.items():
+        print(f"  {cid}:")
+        print_partial_memory(p, indent="    ")
+    print(f"validity_pass={summary['pass']} (threshold {threshold:.2f})")
+    return 0 if summary["pass"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -265,6 +447,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="also write the position-matched single-turn controls")
     r.add_argument("--W", type=int, default=None, help="override W_tokens")
     r.add_argument("--v", type=int, default=None, help="override v_tokens")
+    r.add_argument("--preset", choices=sorted(PRESETS), default="default",
+                   help="generator config to start from (persistgym/config.py PRESETS; "
+                        "sol-chain: gpt-6.1-sol's variant, PREREG §17.3)")
     r.add_argument("--set", action="append", metavar="KEY=VALUE",
                    help="override any GeneratorConfig field (value parsed as JSON), repeatable")
     r.add_argument("--out", default=None, help="output folder")
@@ -279,12 +464,27 @@ def main(argv: list[str] | None = None) -> int:
     pm.add_argument("--n", type=int, default=2000, help="number of templates")
     pm.add_argument("--split", choices=sorted(SEED_RANGES), default="main")
     pm.add_argument("--start", type=int, default=0)
+    pm.add_argument("--preset", choices=sorted(PRESETS), default="default",
+                    help="generator config to start from (persistgym/config.py PRESETS)")
     pm.add_argument("--set", action="append", metavar="KEY=VALUE",
                     help="override any GeneratorConfig field (value parsed as JSON)")
     pm.add_argument("--out", default=None, help="optional JSON output file")
+    au = sub.add_parser("audit", help="every $0 audit on many templates, in chunks of whole "
+                                      "balance blocks (memory stays small)")
+    au.add_argument("--n", type=int, default=1000, help="number of templates")
+    au.add_argument("--split", choices=sorted(SEED_RANGES), default="main")
+    au.add_argument("--start", type=int, default=0)
+    au.add_argument("--chunk", type=int, default=50, help="templates per chunk (whole blocks)")
+    au.add_argument("--preset", choices=sorted(PRESETS), default="default",
+                    help="generator config to start from (persistgym/config.py PRESETS)")
+    au.add_argument("--set", action="append", metavar="KEY=VALUE",
+                    help="override any GeneratorConfig field (value parsed as JSON)")
+    au.add_argument("--out", default=None, help="optional JSON output file")
+    au.add_argument("--verbose", action="store_true")
     spotcheck.add_parsers(sub)
     args = p.parse_args(argv)
-    return {"partial-memory": run_partial_memory, "spotcheck": spotcheck.run,
+    return {"partial-memory": run_partial_memory, "audit": run_audit,
+            "spotcheck": spotcheck.run,
             "spotcheck-findings": spotcheck.run_findings}.get(args.cmd, run)(args)
 
 

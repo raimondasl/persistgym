@@ -1,10 +1,14 @@
-"""The engagement check of PREREG §17.2 (amendment R2): does sol's reasoning engage at high
-effort? $0; CLI `python -m harnesses reasoning-check <run_id> <run_id> [--reference ...]`.
+"""The engagement check of PREREG §17.2 (amendment R2), as amended by R3 (§17.3): does sol's
+reasoning engage at high effort on its derived-fact variant? $0; CLI
+`python -m harnesses reasoning-check <run_id> <run_id> [--reference ...]`.
 
 The check runs are two `persistgym_pilot` runs of gpt-6.1-sol at `reasoning.effort: high`,
 one in F-r and one in F-0, on the same generated episodes: pilot templates 0 and 1 (2 and 3
 for the one re-run after an unscorable check; `registered.CHECK_TEMPLATES`) x the 4 D11 far
-task cells (8 episodes per run). From their raw episodes and transcripts (the gitignored
+task cells (8 episodes per run), rendered with the generator preset `sol-chain` (R3): both
+runs' `meta.json` must give exactly the config hash `registered.rule()` records, so no
+other design is scored. Reference runs (such as R2's own check runs on the default config)
+may use any config. From their raw episodes and transcripts (the gitignored
 results/raw/persistgym_pilot/<run_id>/), this module computes the rule's statistic:
 
 * **evidence-step calls:** in each derived-far episode that is not excluded (an echo
@@ -21,10 +25,16 @@ results/raw/persistgym_pilot/<run_id>/), this module computes the rule's statist
   otherwise `ENGAGED` iff E >= 0.50, else `NOT_ENGAGED`.
 
 Next to it, descriptive only, it reports for the check runs (and for reference runs, such as
-block 1's medium-effort sol pilot) quantities pooled over both arms: the step calls before
-the need step with their reasoning tokens (mean, median, share with at least 1), E with its
-numerator and denominator, output tokens, billed cost per episode, errors and the echo-match
-counts of `reasoning.context` and `reasoning.effort`.
+R2's check runs) quantities pooled over both arms: the step calls before the need step with
+their reasoning tokens (mean, median, share with at least 1), E with its numerator and
+denominator, output tokens, billed cost per episode, errors, the echo-match counts of
+`reasoning.context` and `reasoning.effort`, and (R3) how many of the counted evidence-step
+calls wrote a value the episode never shows before its need step (`_hidden`: the template's
+`persistgym.template.hidden_values`, such as a clue's worked-out value, a running total, a
+helper's value or the target, less any number the episode shows) in their visible reply, as
+whole numbers matched as in D6: whether the notice's "do not write it" held. The list also
+holds the stand-in's values, which a base episode never derives (a reply can hold one only
+by chance). No threshold applies to it.
 
 Blinding (PREREG §11). The output is built from explicit allowlists (`OUTPUT_KEYS`,
 `POOL_KEYS`). Every number in it pools both arms of a pair: there is no per-arm value, no
@@ -48,6 +58,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 import statistics
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -56,12 +67,14 @@ from pathlib import Path
 
 from common import paidlock, runmeta
 from harnesses import blinding, registered
+from harnesses.items import output_text
 from harnesses.matrix import DERIVED_FAR, OBSERVED_FAR
 from harnesses.pricing import usage_numbers
 from harnesses.runner import ECHO_ABORTS
 from persistgym.config import GeneratorConfig
 from persistgym.episode import Episode, TaskCell
 from persistgym.render import generate
+from persistgym.template import hidden_values, sample_template
 
 PILOT_EXPERIMENT = registered.PILOT_EXPERIMENT
 CHECK_CELLS = ("F-r", "F-0")
@@ -84,7 +97,8 @@ POOL_KEYS = ("run_ids", "model", "effort", "n_episodes", "derived_far_episodes",
              "derived_far_ended_normally", "runs_stopped_on_echo_mismatch",
              "evidence_step_calls", "evidence_step_calls_at_floor", "E",
              "pre_need_step_calls", "n_calls", "output_tokens", "cost_usd_billed_est",
-             "cost_usd_billed_est_per_episode", "errors", "echo_match")
+             "cost_usd_billed_est_per_episode", "errors", "echo_match",
+             "evidence_step_replies_with_hidden_value")
 """The keys of each pool under `descriptive` (the check runs; the reference runs), exactly."""
 
 
@@ -104,6 +118,8 @@ class Call:
     output_tokens: int
     context_ok: bool
     effort_ok: bool
+    reply_numbers: frozenset[int] = frozenset()
+    """The whole numbers in the visible reply (`items.output_text`), matched as in D6."""
 
 
 @dataclass
@@ -113,6 +129,7 @@ class Run:
     episodes: list[dict]  # raw episode records, EPISODE_FIELDS and evidence_steps only
     calls: list[Call]
     design: dict[str, Episode]  # episode id -> the generated episode (need step, evidence)
+    hidden: dict[str, frozenset[int]]  # episode id -> what it never shows before need (`_hidden`)
 
     @property
     def cell(self) -> str:
@@ -133,12 +150,23 @@ def _echo_ok(echo: dict, kind: str) -> bool:
     return echo.get(f"{kind}_requested") == echo.get(f"{kind}_echoed")
 
 
+_WHOLE_NUMBER = re.compile(r"(?<![0-9A-Za-z])[1-9][0-9]*(?![0-9A-Za-z])")
+"""A whole number in a reply, by D6's rule (`survival.whole_word_regex`): not part of a
+longer run of digits or letters. A run with a leading zero ("064") is not the value 64
+under that rule, so it is not read as one."""
+_SHOWN_NUMBER = re.compile(r"(?<![0-9])[1-9][0-9]*(?![0-9])")
+"""A number an observation shows, by the reserved-string rule (`filler.Reserved`): not part
+of a longer run of digits, whatever letters stand next to it."""
+
+
 def _call(rec: dict) -> Call:
-    u = usage_numbers((rec.get("response") or {}).get("usage"))
+    response = rec.get("response") or {}
+    u = usage_numbers(response.get("usage"))
     echo = rec.get("echo") or {}
+    numbers = frozenset(int(x) for x in _WHOLE_NUMBER.findall(output_text(response)))
     return Call(rec["episode_id"], rec["kind"], int(rec["pending_step"]),
                 bool(rec["is_lookup_result"]), u["reasoning_tokens"], u["output_tokens"],
-                _echo_ok(echo, "context"), _echo_ok(echo, "effort"))
+                _echo_ok(echo, "context"), _echo_ok(echo, "effort"), numbers)
 
 
 def _episode(rec: dict) -> dict:
@@ -176,6 +204,28 @@ def _design(meta: dict, run_id: str) -> dict[str, Episode]:
     return {eid: out[eid] for eid in ids}
 
 
+def _hidden(meta: dict, design: dict[str, Episode]) -> dict[str, frozenset[int]]:
+    """Per episode, the values it never shows before its need step: its template's
+    `persistgym.template.hidden_values` (re-sampled with the run's generator config), less
+    any number the episode's system prompt or observations before the need step show. On
+    `sol-chain` that takes nothing away (the audit `chain_hidden_values_never_shown`); in
+    the direct form (a reference run on the default config) it drops a running total that
+    the log filler happens to show, since the direct form does not reserve them."""
+    cfg = GeneratorConfig.from_dict(meta["config"]["generator_config"])
+    by_template = {}
+    out = {}
+    for eid, ep in design.items():
+        if ep.template_id not in by_template:
+            split, _, index = ep.template_id.rpartition("-")
+            by_template[ep.template_id] = frozenset(
+                hidden_values(sample_template(split, int(index), cfg)))
+        shown = {int(x) for text in [ep.system_prompt, *(s.observation for s in
+                                                         ep.steps[: ep.need_step])]
+                 for x in _SHOWN_NUMBER.findall(text)}
+        out[eid] = by_template[ep.template_id] - shown
+    return out
+
+
 def load_run(run_id: str, *, results_root: Path, raw_root: Path) -> Run:
     """One pilot run: its meta.json, its raw episode records (allowlisted fields) and the
     calls of its transcript."""
@@ -192,7 +242,8 @@ def load_run(run_id: str, *, results_root: Path, raw_root: Path) -> Run:
     ids = [e["episode_id"] for e in episodes]
     if len(ids) != len(set(ids)):  # a run id reused: its raw files were appended to
         raise CheckError(f"{run_id}: episodes.jsonl holds an episode more than once")
-    run = Run(run_id, meta, episodes, calls, _design(meta, run_id))
+    design = _design(meta, run_id)
+    run = Run(run_id, meta, episodes, calls, design, _hidden(meta, design))
     for e in episodes:
         ep = run.design.get(e["episode_id"])
         if ep is None or e["evidence_steps"] != ep.reveal_steps:
@@ -222,6 +273,12 @@ def _pair(runs: list[Run], what: str) -> list[Run]:
 def _check_pair(runs: list[Run]) -> list[Run]:
     runs = _pair(runs, "check runs")
     meta = runs[0].meta
+    want = [registered.rule()["generator_config_hash"]]
+    got = [(r.meta.get("config") or {}).get("generator_config_hashes") for r in runs]
+    if any(g != want for g in got):
+        raise CheckError(f"check runs: the check scores runs on the generator preset "
+                         f"{registered.VARIANT_PRESET!r} only (config {want[0][:12]}; "
+                         f"{registered.PREREG_REF}); got configs {got}")
     if (meta.get("model_requested"), meta.get("reasoning_effort")) != (
             registered.ENGAGEMENT_MODEL, registered.ENGAGEMENT_EFFORT):
         raise CheckError(f"check runs: the check scores {registered.ENGAGEMENT_MODEL} at "
@@ -283,6 +340,8 @@ def _pool(runs: list[Run]) -> dict:
     normal = sum(e["task_cell"] in DERIVED_FAR and e["exit_reason"] == "DONE"
                  and not e["excluded"] for e in eps)
     evidence = [c for r in runs for c in _evidence_calls(r)]
+    carried = sum(bool(c.reply_numbers & r.hidden[c.episode_id])
+                  for r in runs for c in _evidence_calls(r))
     at_floor = sum(c.reasoning_tokens >= registered.REASONING_TOKEN_FLOOR for c in evidence)
     pre = [c.reasoning_tokens for r in runs for c in _pre_need_calls(r)]
     calls = [c for r in runs for c in r.calls]
@@ -314,6 +373,9 @@ def _pool(runs: list[Run]) -> dict:
         "echo_match": {"responses": len(calls),
                        "context_matched": sum(c.context_ok for c in calls),
                        "effort_matched": sum(c.effort_ok for c in calls)},
+        # R3 (§17.3), descriptive: did "do not write it" hold at the evidence steps?
+        "evidence_step_replies_with_hidden_value": {"calls": len(evidence),
+                                                    "with_hidden_value": carried},
     }
     assert tuple(out) == POOL_KEYS
     return out

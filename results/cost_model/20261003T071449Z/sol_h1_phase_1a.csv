@@ -1,0 +1,13 @@
+line,usd,note
+spent,3.86641,"phase 1a in results/costs.csv (12 rows), billed (common.costs)"
+luna_main_sweep_and_controls,35.5192,"context, rough: T = 100, luna's block-1 pilot costs per episode"
+sol_h2,0,"not run: R3's hard stop ended H2 on sol (results/decisions.md, 2026-10-03)"
+r4_central_T100,279.489,R4: pilot + validity + main runs
+total_central_T100,318.875,headroom under the 1a cap: 181.13
+r4_central_T50,147.055,R4: pilot + validity + main runs
+total_central_T50,186.441,headroom under the 1a cap: 313.56
+r4_low_T100,81.0584,R4: pilot + validity + main runs
+total_low_T100,120.444,headroom under the 1a cap: 379.56
+r4_low_T50,42.9006,R4: pilot + validity + main runs
+total_low_T50,82.2862,headroom under the 1a cap: 417.71
+cap_1a,500,common.costs

@@ -10,6 +10,8 @@ _**Amended 2026-10-02 (A3):** sol's reasoning effort and template count, after b
 
 _**Amended 2026-10-02 (A4):** a derived-fact variant for sol, with a hard stop, after sol's engagement check found no reasoning to replay. The amendment is §19, which points to `PREREG.md` §17.3 (amendment R3); passages it changes are marked **[A4]**._
 
+_**Amended 2026-10-03 (A5):** a pre-registered sol replication of H1, at the researcher's request, so that PersistGym has evidence on a second model, gpt-6.1-sol, after H2 on sol stopped under A4's hard stop. The amendment is §20, which points to `PREREG.md` §17.4 (amendment R4); passages it changes are marked **[A5]**._
+
 ## 1. Summary
 ARC-AGI-3 scores move by 25-45 points between ARC Prize's Standard harness and its Provider Adapter ([GPT-6 Astra](https://arcprize.org/results/openai-gpt-6-astra), [Gemini 3.8 Flash](https://arcprize.org/results/google-gemini-3-8-flash)). Coding-agent success moves by only a few points across harnesses ([HarnessTax](https://arena.ai/blog/coding-agents-harness-tax)). We test whether this is because ARC needs **derived, non-recoverable** state that the Standard harness throws away, while coding state can usually be re-read from disk. The plan has three parts:
 - **Measure it** in a small generated environment (PersistGym-lite).
@@ -77,7 +79,7 @@ Definitions to fix in `PREREG.md` (these need the researcher's judgment):
 Kill and equivalence rules below use 90% CIs from a template-level cluster bootstrap on the probability scale.
 
 ### H1: recoverability turns a success penalty into a cost penalty
-Model: gpt-6-luna (primary). Replication on gpt-6.1-sol if the budget allows (adds cells W-0 and W-n-0 on sol, about 640 episodes). **[A1]** Removed from the MVP: re-costed at about $430-610 at Flex with cache writes, not $30-230 (§16.1). Revisit as an extension.
+Model: gpt-6-luna (primary). Replication on gpt-6.1-sol if the budget allows (adds cells W-0 and W-n-0 on sol, about 640 episodes). **[A1]** Removed from the MVP: re-costed at about $430-610 at Flex with cache writes, not $30-230 (§16.1). Revisit as an extension. **[A5]** Re-instated as a pre-registered replication outside the Holm family: sol at medium effort on the default generator config, F-0, W-0 and W-n-0 on the 4 observed task cells (§20).
 
 Comparison: an observed fact at far distance, window harness **without** notes (W-0, so S=0 by construction), vs full history (F-0). W-n-0 is reported alongside it as the notes-rescue condition.
 
@@ -724,3 +726,11 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - **The check.** The same engagement check and rule as §18, on the variant: if reasoning engages, sol's validity run follows on the variant, and G1 applies to it.
 - **Hard stop.** If the check fails (or is unscorable twice), or G1 fails on the variant, H2 on sol stops for good and is reported as not testable in this task family; no further variant or effort is tried.
 - **What it does not show.** H2 on the variant tests the replay of state the model was told to compute and keep private, which is narrower than incidental state and less like ARC.
+
+## 20. Amendment A5 (2026-10-03): a pre-registered sol replication of H1
+**Why.** On 2026-10-03 the researcher asked for a small amendment that pre-registers H1's replication on sol now, before any H1 data exists, whatever happened to H2 (`results/decisions.md`). The same morning sol's engagement check on the variant found NOT_ENGAGED, so H2 on sol stopped under A4's hard stop (§19). Without this replication, PersistGym would have no evidence on gpt-6.1-sol. `PREREG.md` §17.4 (amendment R4) registers it, with its gate and the code that enforces them; this section only points there.
+- **The replication.** gpt-6.1-sol at medium effort on the default generator config (luna's episodes), in F-0, W-0 and W-n-0 on the 4 observed task cells, with luna's main-sweep template count (about 100; 1,320 episodes at T = 100 with the repeats). It re-instates §4's "Replication on gpt-6.1-sol if the budget allows", which A1 removed on cost (§16.1).
+- **Status.** Reported next to luna's primary H1 result, with the same estimands, predictions and thresholds, outside the Holm family. It neither confirms nor kills H1; luna stays primary. A2's, A3's and A4's rules for sol concern H2 and do not block it.
+- **Pilot and gate.** A pilot of W-0 and W-n-0 on sol (16 episodes), then its own validity gate (F-0, 160 episodes on the 4 observed task cells; restated ≥ 85%, withheld ≤ 20%). If sol fails the gate, the replication does not run.
+- **Cost.** About $279 billed at T = 100 on the central forecast from block 1's measured rows, of which window cells, which lose about half of their caching, are about $239; $81 on the lower basis first proposed. Phase 1a then comes to about $319 of its $500 cap (`results/cost_model/20261003T071449Z/`). The pilot and validity runs go in block 1 if they fit, the main runs in block 3 after the confirmatory rows; no new approval.
+- **What it does not show.** Two models of one provider's family, at medium effort only. It is not a model comparison: each model's results are effects against task properties.

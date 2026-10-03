@@ -54,6 +54,9 @@ EXPERIMENT_PHASE = {
     "persistgym_pilot": "1a",
     "persistgym_validity": "1a",
     "persistgym": "1a",
+    # PREREG §17.4 (amendment R4): sol's H1 replication, its main runs (its pilot and
+    # validity runs are persistgym_pilot and persistgym_validity)
+    "persistgym_sol_h1": "1a",
     "arc_path": "1b",
     "statecarry_persistgym": "2",
     "statecarry_arc_dev": "2",

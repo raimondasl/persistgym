@@ -417,6 +417,38 @@ def test_r3s_first_check_run_never_joins_r2s_pool():
     assert new[key]["generator_config_hash"] == variant
 
 
+def test_r4s_window_pilot_is_never_pooled():
+    """PREREG §11, §17.4: block 1's sol pool (F-r and F-0 at medium on the default config)
+    has been reported. R4's pilot runs (W-0 and W-n-0, sol at medium on the default config)
+    would join it, so a report after either or both would show their reasoning tokens as the
+    difference. The report leaves them out and lists their run ids; the sol pool, luna's
+    window cells and sol's runs at other efforts or configs are unchanged."""
+    def ep(cell, model="gpt-6.1-sol", effort=None, gen=None):
+        e = _ep(cell, "base", False, model=model)
+        if effort:
+            e["echo"] = {**e["echo"], "effort_requested": effort,
+                         "effort_echoed": {effort: 2}}
+        if gen:
+            e["generator_config_hash"] = gen
+        return e
+    block_1 = {"sol-r": [ep("F-r")], "sol-0": [ep("F-0", effort="medium")],
+               "luna-W-0": [ep("W-0", model="gpt-6-luna")]}
+    old = blinding.pooled_report(block_1, experiment=PILOT)
+    assert old["runs_left_out"]["run_ids"] == []
+    r4 = {"r4-W-0": [ep("W-0", effort="medium", gen=PRESET_HASHES["default"])],
+          "r4-W-n-0": [ep("W-n-0", "gpt-6.1-sol-2026-10-01")]}
+    for added in ({"r4-W-0": r4["r4-W-0"]}, r4):
+        new = blinding.pooled_report({**block_1, **added}, experiment=PILOT)
+        assert new["models"] == old["models"]
+        assert new["run_ids"] == old["run_ids"]
+        assert new["runs_left_out"]["run_ids"] == sorted(added)
+        assert "§17.4" in new["runs_left_out"]["why"]
+    assert all(blinding.is_left_out(e) for eps in r4.values() for e in eps)
+    for e in (ep("W-0", effort="high"), ep("W-0", gen=PRESET_HASHES["sol-chain"]),
+              ep("F-0"), ep("Σ-n-0"), ep("W-0", model="gpt-6-luna")):
+        assert not blinding.is_left_out(e)
+
+
 def test_the_episode_logs_its_generator_config_out_of_committed_files(tmp_path):
     """`EpisodeRun.generator_config_hash` is in the raw episodes.jsonl, and in no committed
     file of a blinded run (summary.json and meta.json come from allowlists)."""

@@ -35,6 +35,21 @@ each --gen-set FIELD=JSON applied. Before the paid-run lock, `run` refuses
 * a gpt-6.1-sol pilot at effort high (R3's engagement check) off sol-chain or in a harness
   cell other than F-r and F-0, and any gpt-6.1-sol pilot above medium effort after R3's hard
   stop (a NOT_ENGAGED check on sol-chain, or an UNSCORABLE one twice).
+PREREG §17.4 (amendment R4), sol's replication of H1, is judged apart from the rules above
+(`registered.replication_refusal`; the engagement checks and R3's hard stop concern H2 and
+are not read). `run` refuses:
+* in persistgym_sol_h1 (its main runs), anything but gpt-6.1-sol at --effort medium on the
+  default generator config, in F-0, W-0 or W-n-0, on --split main, --variant base, on the 4
+  observed task cells only, with --mode standard, --service-tier flex and no --W (D13), and
+  every such run until `registered.REPLICATION_G1_PASSED` records the replication's G1 on the
+  default config;
+* in persistgym_validity, a gpt-6.1-sol run at --effort medium on the default config other
+  than the replication's validity run: F-0 on --split validity, --variant restated or
+  withheld, validity templates 0-19, on the 4 observed task cells only, with D13's request
+  settings as above (it needs no G1).
+R3's engagement check found NOT_ENGAGED on 2026-10-03 (results/decisions.md), so R3's hard
+stop refuses its check, validity and main-sweep commands below; they are kept as the record
+of what was registered.
 The probes keep their registered settings (medium on both models; PREREG §17.1).
 
 Paid commands refuse unless PERSISTGYM_ALLOW_PAID=1, no other PersistGym paid run holds the
@@ -92,6 +107,32 @@ console program. The OpenAI SDK reads the key from the environment:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-r \
         --model gpt-6.1-sol --gen-preset sol-chain --split main --matrix d11 --n 210 \
         --experiment persistgym --approved-block "<block>" --planned-usd <usd> --parallel 16
+    # PREREG §17.4 (amendment R4): sol's H1 replication, at --effort medium (give it: sol's
+    # registered effort is high) on the default config, on the 4 observed task cells.
+    # 1. Its pilot (W-0 and W-n-0 are new on sol): this run, then the same with
+    #    --cell W-n-0; pilot templates 0 and 1, 8 episodes each; `pilot-report` leaves both
+    #    runs out (blinding.is_left_out), so read them from their costs rows and summary.json
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell W-0 \
+        --model gpt-6.1-sol --effort medium --split pilot --start 0 --n 2 \
+        --task-cell observed-nonrec-near observed-nonrec-far observed-rec-near \
+        observed-rec-far --experiment persistgym_pilot --approved-block "1-pilots" \
+        --planned-usd <usd>
+    # 2. Its validity run (the replication's G1): F-0 on validity templates 0-19 x the 4
+    #    observed task cells, restated, then the same with --variant withheld
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+        --model gpt-6.1-sol --effort medium --split validity --start 0 --n 20 \
+        --task-cell observed-nonrec-near observed-nonrec-far observed-rec-near \
+        observed-rec-far --variant restated --experiment persistgym_validity \
+        --approved-block "1-pilots" --planned-usd <usd>
+    # 3. Its main runs, only once registered.REPLICATION_G1_PASSED records its G1: this run,
+    #    then the same with --cell W-0 and --cell W-n-0; T templates from 0 (--n; T is
+    #    luna's main-sweep count, set at M1; 100 shown) x the 4 observed task cells, repeat
+    #    0 only: the §2.9 repeat-1 runs need a repeat option `run` does not have yet
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+        --model gpt-6.1-sol --effort medium --split main --start 0 --n 100 \
+        --task-cell observed-nonrec-near observed-nonrec-far observed-rec-near \
+        observed-rec-far --experiment persistgym_sol_h1 --approved-block "3-persistgym" \
+        --planned-usd <usd> --parallel 16
 """
 
 from __future__ import annotations
@@ -297,22 +338,30 @@ def cmd_run(a) -> int:
     # PREREG §6 as amended by R2 (§17.2) and R3 (§17.3): outside pilots, the model's
     # registered effort, generator preset and cells only, and sol only after an ENGAGED
     # engagement check on that config (and outside its validity run, after G1); a sol pilot
-    # at high effort is R3's check, on sol-chain only, and none runs after R3's hard stop
+    # at high effort is R3's check, on sol-chain only, and none runs after R3's hard stop.
+    # R4 (§17.4): sol's H1 replication, at medium on the default config, exactly as
+    # registered, its main runs after the replication's G1
     try:
         gen = _gen_config(a.gen_preset, a.gen_set)
     except (TypeError, ValueError) as e:
         print(f"refused: --gen-set: {e}", file=sys.stderr)
         return 2
-    why = registered.check_run_settings(a.experiment, a.model, a.effort, cell.cell_id,
-                                        runmeta.config_hash(gen.to_dict()), RESULTS,
-                                        split=a.split, variant=a.variant)
-    if why:
-        print(f"refused: {why}", file=sys.stderr)
-        return 2
     try:
         matrix = _run_matrix(a)
     except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
+        return 2
+    # R4 (§17.4): sol's H1 replication runs on the observed task cells only, with D13's
+    # request settings, and its validity run on validity templates 0-19, so the guard gets
+    # the task cells and templates the matrix plays and the request settings
+    why = registered.check_run_settings(
+        a.experiment, a.model, a.effort, cell.cell_id, runmeta.config_hash(gen.to_dict()),
+        RESULTS, split=a.split, variant=a.variant,
+        task_cells=tuple(c for c, n in matrix.templates if n),
+        request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
+        templates=(a.start, a.start + matrix.n_templates))
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
         return 2
     if a.split == "main":
         for w in matrix.block_warnings(a.start):

@@ -33,10 +33,21 @@ as amended by R2, §17.2, and R3, §17.3).
   it must be exactly a validity run (`VALIDITY_RUN`: F-0 on the validity split, restated or
   withheld; §4.4): a base-variant or F-r run there would be H2's contrast before G1.
 
+* R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
+  generator config, in F-0, W-0 and W-n-0 on the 4 observed task cells (`OBSERVED_TASK_CELLS`).
+  Its main runs are their own experiment, `H1_REPLICATION_EXPERIMENT` (`persistgym_sol_h1`),
+  exactly `H1_REPLICATION_RUN` (main split, base variant), and need
+  `REPLICATION_G1_PASSED`, which only the researcher's G1 decision PR for the replication
+  sets (fail closed). Its validity run is `persistgym_validity` on the default config at
+  medium: exactly `VALIDITY_RUN` on the observed task cells, and it needs no G1. The engagement
+  checks and R3's hard stop concern H2 only and are not read for these runs, which can never
+  run H2's contrast: no F-r, no `sol-chain`, no derived task cell, no effort above medium.
+
 `check_run_settings` is the guard `harnesses run` applies before it takes the paid-run lock:
 pilots (`persistgym_pilot`) may use any settings, except that a sol pilot at high effort is
 R3's engagement check and must play `sol-chain` in F-r or F-0, and a sol pilot above medium
-effort refuses after the hard stop; every other experiment must send the model's registered
+effort refuses after the hard stop; R4's replication runs must be exactly what R4
+registers (`replication_refusal`); every other experiment must send the model's registered
 effort, a model in `REGISTERED_GENERATOR` must use its preset and a model in
 `REGISTERED_CELLS` one of its cells, sol's validity run must be `VALIDITY_RUN`, a model in
 `ENGAGEMENT_REQUIRED` needs an ENGAGED check on that config in the order R2 registers
@@ -54,9 +65,11 @@ from pathlib import Path
 
 from harnesses.config import REASONING_EFFORTS
 from persistgym.config import PRESET_HASHES
+from persistgym.episode import ALL_CELLS
 
 PREREG_REF = "PREREG.md §17.3 (amendment R3)"
 R2_REF = "PREREG.md §17.2 (amendment R2)"
+R4_REF = "PREREG.md §17.4 (amendment R4)"
 PILOT_EXPERIMENT = "persistgym_pilot"
 VALIDITY_EXPERIMENT = "persistgym_validity"
 
@@ -85,6 +98,24 @@ ENGAGEMENT_EFFORT = "high"
 DEFAULT_GENERATOR_HASH = PRESET_HASHES["default"]
 VARIANT_PRESET = REGISTERED_GENERATOR[ENGAGEMENT_MODEL]
 VARIANT_GENERATOR_HASH = PRESET_HASHES[VARIANT_PRESET]
+
+H1_REPLICATION_EXPERIMENT = "persistgym_sol_h1"
+"""PREREG §17.4 (R4): the experiment of sol's H1 replication's main runs."""
+H1_REPLICATION_MODEL = "gpt-6.1-sol"
+H1_REPLICATION_EFFORT = "medium"
+"""R4: D13's frozen effort, luna's; H1 does not rely on reasoning."""
+H1_REPLICATION_GENERATOR_HASH = DEFAULT_GENERATOR_HASH
+"""R4: the default generator config, the one luna plays (not `sol-chain`)."""
+H1_REPLICATION_RUN = {"cell": ("F-0", "W-0", "W-n-0"), "split": ("main",),
+                      "variant": ("base",)}
+"""R4: the replication's main runs are luna's H1 rows (§3 H1): F-0, W-0 and W-n-0 on the
+main split, base episodes."""
+OBSERVED_TASK_CELLS = tuple(c.id for c in ALL_CELLS if c.fact == "observed")
+"""R4: the 4 observed task cells, observed x {near, far} x {R, NR}: every H1 quantity."""
+REPLICATION_G1_PASSED: dict[str, str] = {}
+"""Model -> the generator config hash on which the researcher recorded the replication's G1
+gate (§17.4: sol at medium on the default config, the 4 observed task cells) as passed. Set
+only by the researcher's G1 decision PR for the replication; empty, its main runs refuse."""
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
@@ -253,14 +284,72 @@ def hard_stop(results_root: Path, model: str = ENGAGEMENT_MODEL) -> str | None:
     return None
 
 
+def is_replication_run(experiment: str, model: str, effort: str,
+                       generator_hash: str) -> bool:
+    """Whether a non-pilot run belongs to R4's sol H1 replication (§17.4) and is judged by
+    `replication_refusal`: any run of `H1_REPLICATION_EXPERIMENT`, and a sol run of
+    `persistgym_validity` on the default config at medium effort (its validity run). Other
+    sol validity runs stay R3's (`sol-chain` at high)."""
+    if experiment == H1_REPLICATION_EXPERIMENT:
+        return True
+    return (experiment == VALIDITY_EXPERIMENT
+            and model_family(model) == H1_REPLICATION_MODEL
+            and effort == H1_REPLICATION_EFFORT
+            and generator_hash == H1_REPLICATION_GENERATOR_HASH)
+
+
+def replication_refusal(experiment: str, model: str, effort: str, cell: str,
+                        generator_hash: str, *, split: str, variant: str,
+                        task_cells: tuple[str, ...] | None) -> str | None:
+    """Why a run of R4's sol H1 replication must refuse, or None (§17.4). Its validity run
+    (`persistgym_validity`) is exactly `VALIDITY_RUN` and its main runs
+    (`H1_REPLICATION_EXPERIMENT`) exactly `H1_REPLICATION_RUN`; both play sol at medium
+    effort on the default generator config, on the observed task cells only (`task_cells`,
+    the run's task cells with at least one template; None refuses). The main runs also need
+    `REPLICATION_G1_PASSED` on that config. The engagement checks and R3's hard stop are
+    not read: they concern H2's runs, and these runs cannot run H2's contrast."""
+    validity = experiment == VALIDITY_EXPERIMENT
+    run = VALIDITY_RUN if validity else H1_REPLICATION_RUN
+    got = {"cell": cell, "split": split, "variant": variant}
+    wrong = [what for what, bad in (
+        (f"model {model}", model_family(model) != H1_REPLICATION_MODEL),
+        (f"--effort {effort}", effort != H1_REPLICATION_EFFORT),
+        (f"generator config {generator_hash[:12]}",
+         generator_hash != H1_REPLICATION_GENERATOR_HASH),
+        *((f"{'cell' if k == 'cell' else '--' + k} {got[k]}", got[k] not in run[k])
+          for k in ("cell", "split", "variant")),
+        (f"task cells {', '.join(task_cells) if task_cells else '(none given)'}",
+         not task_cells or not set(task_cells) <= set(OBSERVED_TASK_CELLS))) if bad]
+    if wrong:
+        part = "validity run" if validity else "main runs"
+        return (f"{experiment} runs sol's H1 replication's {part} only ({R4_REF}): "
+                f"{H1_REPLICATION_MODEL} at --effort {H1_REPLICATION_EFFORT} on the default "
+                f"generator config (--gen-preset default, config "
+                f"{H1_REPLICATION_GENERATOR_HASH[:12]}), cell {' or '.join(run['cell'])}, "
+                f"--split {' or '.join(run['split'])}, --variant {' or '.join(run['variant'])}, "
+                f"on the observed task cells only ({', '.join(OBSERVED_TASK_CELLS)}); got "
+                + "; ".join(wrong))
+    if not validity and REPLICATION_G1_PASSED.get(H1_REPLICATION_MODEL) != generator_hash:
+        return (f"{experiment} runs only after the researcher has recorded the H1 "
+                f"replication's G1 gate (sol at medium on the default config, the observed "
+                f"task cells) as passed on generator config {generator_hash[:12]} "
+                f"(harnesses/registered.py REPLICATION_G1_PASSED, set by its G1 decision PR; "
+                f"{R4_REF})")
+    return None
+
+
 def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        generator_hash: str, results_root: Path, *, split: str,
-                       variant: str) -> str | None:
+                       variant: str, task_cells: tuple[str, ...] | None = None) -> str | None:
     """Why `harnesses run` must refuse these settings before any paid call, or None. In
     order:
     1. pilots may use any settings, except a sol pilot at high effort (R3's engagement
        check), which must play the `sol-chain` config in F-r or F-0, and a sol pilot at any
        effort above medium after R3's hard stop;
+    R4. a run of sol's H1 replication (`is_replication_run`: any `persistgym_sol_h1` run,
+       and a sol `persistgym_validity` run at medium on the default config) must be exactly
+       what R4 registers on the observed task cells (`task_cells`), and its main runs need
+       `REPLICATION_G1_PASSED` (`replication_refusal`); steps 2-7 do not apply to it;
     2. every other experiment sends the model's registered effort (a dated snapshot or alias
        counts as its model, `model_family`);
     3. a model in `REGISTERED_GENERATOR` uses its preset's config;
@@ -284,16 +373,23 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                     f"engagement check: it runs in the harness cells "
                     f"{', '.join(REGISTERED_CELLS[ENGAGEMENT_MODEL])} only, got {cell}")
         return hard_stop(results_root, family)
+    if is_replication_run(experiment, model, effort, generator_hash):
+        return replication_refusal(experiment, model, effort, cell, generator_hash,
+                                   split=split, variant=variant, task_cells=task_cells)
+    replication = (f"; sol's H1 replication ({R4_REF}) runs at --effort "
+                   f"{H1_REPLICATION_EFFORT} on the default config, as --experiment "
+                   f"{H1_REPLICATION_EXPERIMENT} or its validity run"
+                   if family == H1_REPLICATION_MODEL else "")
     want = registered_effort(model)
     if effort != want:
         return (f"{experiment} runs {model} at its registered reasoning effort {want!r} only "
                 f"(PREREG §6 as amended by R2, §17.2), got {effort!r}; only "
-                f"{PILOT_EXPERIMENT} runs may use another effort")
+                f"{PILOT_EXPERIMENT} runs may use another effort{replication}")
     preset = REGISTERED_GENERATOR.get(family)
     if preset is not None and generator_hash != PRESET_HASHES[preset]:
         return (f"{experiment} runs {family} on the generator preset {preset!r} only "
                 f"({PREREG_REF}; --gen-preset {preset}, config {PRESET_HASHES[preset][:12]}), "
-                f"got config {generator_hash[:12]}")
+                f"got config {generator_hash[:12]}{replication}")
     cells = REGISTERED_CELLS.get(family)
     if cells is not None and cell not in cells:
         return (f"{experiment} runs {family} in the harness cells {', '.join(cells)} only "

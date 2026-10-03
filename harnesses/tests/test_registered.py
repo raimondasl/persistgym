@@ -423,8 +423,12 @@ VALIDITY = ["run", "--split", "validity", "--variant", "restated", "--experiment
      "generator preset 'sol-chain' only"),
     (["--cell", "W-n-r", "--model", SOL, "--gen-preset", "sol-chain"],
      "harness cells F-r, F-0 only"),
-    (["--cell", "F-0", "--model", SOL, "--effort", "medium"],
+    (["--cell", "F-0", "--model", SOL, "--gen-preset", "sol-chain", "--effort", "medium"],
      "registered reasoning effort 'high'"),
+    # R4 (§17.4): sol at medium on the default config in persistgym_validity is the H1
+    # replication's validity run, on the observed task cells only
+    (["--cell", "F-0", "--model", SOL, "--effort", "medium"],
+     "got task cells derived-rec-far"),
     (["--cell", "F-0", "--model", LUNA, "--effort", "high"],
      "registered reasoning effort 'medium'"),
     (["--cell", "F-r", "--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot",
@@ -536,11 +540,12 @@ def test_cli_docstring_examples_parse():
         assert a.cmd == argv[0]
     # R3's engagement check run plays block 1's sol pilot templates, on sol-chain, at high
     (check,) = [c for c in commands if c[0] == "run" and "gpt-6.1-sol" in c
-                and "persistgym_pilot" in c]
+                and "persistgym_pilot" in c and "sol-chain" in c]
     cell, ids = _check_run(check)
     assert cell == "F-r" and ids == _medium_pilot()[0]
     # sol's validity run (R3): F-0 on sol-chain, all 8 task cells, restated and withheld
-    (validity,) = [c for c in commands if c[0] == "run" and "persistgym_validity" in c]
+    (validity,) = [c for c in commands if c[0] == "run" and "persistgym_validity" in c
+                   and "sol-chain" in c]
     a = cli.parse_args(validity)
     assert (a.cell, a.model, a.effort, a.gen_preset, a.split, a.start, a.n) == (
         "F-0", SOL, "high", "sol-chain", "validity", 0, 20)

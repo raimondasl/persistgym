@@ -539,6 +539,11 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - `run` writes `run_plan.json` to the run's raw folder before its first call.
 - New $0 command `account-run`, which rebuilds the costs row, `summary.json` and `meta.json` of a run whose row could not be written, and releases its reservation and kept lock (`paidlock.release_kept`, `paidlock.holder_alive`).
 
+**Changed on 2026-10-03: PREREG amendment R4** (§12.6; the researcher's request of 2026-10-03 for a pre-registered sol replication of H1):
+- `harnesses/registered.py`: sol's H1 replication (sol at medium on the default config, F-0, W-0 and W-n-0 on the 4 observed task cells) is allowed, and only it: its validity run in `persistgym_validity`, needing no G1, and its main runs in the new experiment `persistgym_sol_h1` (phase 1a, PersistGym stream), after `REPLICATION_G1_PASSED`. The engagement checks and R3's hard stop are not read for it. Every R2 and R3 refusal of sol's other runs stays.
+- `run` builds its run matrix before the guard and passes the task cells it plays (`check_run_settings(..., task_cells=...)`); a matrix error now refuses before a settings error.
+- New $0 forecast `uv run python -m analysis.sol_h1_forecast` (`results/cost_model/<UTC>/`).
+
 **Technical choices made here** (not D-items; open to the researcher's review):
 - Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
 - The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells, and pools by model and requested effort (§7.4).
@@ -582,7 +587,7 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - **`account-run` rebuilds what the code would have written, not what the run's process held** (§8.1). The costs row's totals are checked against those the run kept in its lock, but its `latency_s` comes from the runner's per-call timings (to the millisecond) and its timestamp, like `meta.json`'s `finished_utc`, from the raw transcript's last write; a run without a run plan also takes its start time from the lock (a few seconds early), its PREREG version from its commit and the SDK versions from the environment that accounts for it. Arguments that leave no trace in the payloads, such as `--W` in a full-history cell, are taken as given, and so is a run's git state when it has no run plan: the ledger can show that `--git-dirty false` is wrong (an uncommitted costs row at the start), never that it is right. A run played in parallel, or one stopped by an error or an interruption mid-episode, is not supported.
 - **The registered-settings guard reads the working tree** (§12.1). It accepts any `reasoning_check.json` under `results/persistgym_pilot/` in this checkout, committed or not, as the paid guard's other checks catch mistakes rather than a hostile operator (§8). The check's report is meant to be committed with block 1's results before a sol validity run.
 
-## 12. Registered settings and the engagement check (PREREG §17.2, §17.3)
+## 12. Registered settings and the engagement check (PREREG §17.2, §17.3, §17.4)
 PREREG amendment R2 (2026-10-02) raises sol to `reasoning.effort: high` for H2, but only if a blinded check finds that sol's reasoning engages at high effort, and fixes sol's T_d at 210 (T_o = 70). R2's check found NOT_ENGAGED. Amendment R3 (2026-10-02) gives sol a derived-fact variant, generator preset `sol-chain` (persistgym/DESIGN.md §2, §3), runs the same check on it, and ends H2 on sol for good if that check, or G1 on the variant, fails. This section is the code that enforces both.
 
 ### 12.1 Registered efforts and the `run` guard (`registered.py`)
@@ -600,6 +605,8 @@ PREREG amendment R2 (2026-10-02) raises sol to `reasoning.effort: high` for H2, 
 7. refuses a sol run outside `persistgym_validity` unless `G1_PASSED["gpt-6.1-sol"]` equals the run's config hash. `G1_PASSED` is empty: only the researcher's G1 decision PR sets it, so the main sweep fails closed until then.
 
 luna is in neither `REGISTERED_GENERATOR` nor `REGISTERED_CELLS`, so its runs (M1's W and v tuning included) keep any config and cell.
+
+**R4 (§17.4).** After step 1 and before step 2, a run of sol's H1 replication (`is_replication_run`: any run of `persistgym_sol_h1`, and a sol run of `persistgym_validity` at medium effort on the default config) is judged by `replication_refusal` alone, and steps 2-7 do not apply to it (§12.6).
 
 Pilots (`persistgym_pilot`) may use any explicit effort; the engagement check's own runs are sol pilots at `high`, on `sol-chain` since R3. The probes are not covered: `probe-echo` and `probe-replay` keep `--effort medium` as their default on both models, and the fork design still refuses any setting other than its registered ones (PREREG §17.1; §9.3).
 
@@ -626,3 +633,13 @@ It writes `results/persistgym_pilot/reasoning-check-<time>/reasoning_check.json`
 
 ### 12.5 Pools by generator config (`blinding.pool_key`)
 Each episode record logs its `generator_config_hash` (`runner.EpisodeRun`; it is in no allowlist of a committed pilot file). The pooled pilot report pools by model, requested effort and generator config: a record on a config other than the default one (or without the field, recorded before it was logged, which played the default) gets ", generator <hash8>" in its pool key. Without this, a report made after R3's F-r run alone would pool it with R2's two check runs (sol at high on the default config), and that arm's totals would show as the difference from an earlier report; with it, the F-r run sits in a pool of one harness cell, whose reasoning tokens are withheld.
+
+### 12.6 Sol's H1 replication (`registered.replication_refusal`; PREREG §17.4)
+Amendment R4 (2026-10-03) pre-registers a replication of H1 on gpt-6.1-sol: medium effort, the default generator config (luna's, hash `3d6bc648…`), harness cells F-0, W-0 and W-n-0, the 4 observed task cells (`registered.OBSERVED_TASK_CELLS`). It is not an H2 run, so R2's and R3's rules for sol, which concern H2, do not cover it, and it can never run H2's contrast.
+- `is_replication_run(experiment, model, effort, generator_hash)` is true for any run of `H1_REPLICATION_EXPERIMENT` (`persistgym_sol_h1`), and for a sol run of `persistgym_validity` at `medium` on the default config. Other sol validity runs (on `sol-chain`, or at another effort) stay R3's, with R3's messages; those of a sol run on the default config at high effort, or at medium in `persistgym`, now name the replication.
+- `replication_refusal` refuses unless the run is exactly: sol (a dated snapshot or alias counts), `--effort medium`, the default config's hash (a `--gen-set` changes it), and either the validity run (`VALIDITY_RUN`: F-0, `--split validity`, `--variant restated` or `withheld`; no G1 needed) or a main run (`H1_REPLICATION_RUN`: F-0, W-0 or W-n-0, `--split main`, `--variant base`). Every task cell the run plays (`task_cells`, the cells of its run matrix with at least one template) must be an observed one; a run with none given refuses. The refusal lists every setting that differs.
+- A main run also needs `REPLICATION_G1_PASSED["gpt-6.1-sol"]` to equal the default config's hash. It is empty: only the researcher's G1 decision PR for the replication sets it, so the main runs fail closed until then. R3's `G1_PASSED` and this table never stand in for each other.
+- It reads no `reasoning_check.json`: R2's NOT_ENGAGED file, R3's hard stop and an unreadable check file do not block the replication (an unreadable file still refuses every H2 run of sol).
+- Pilots are not covered: the replication's pilot (W-0 and W-n-0 at medium, pilot templates 0 and 1 × the 4 observed task cells) passes as any sol pilot at medium does. Its committed files are blinded as every pilot's (§7.4); a pooled pilot report made after one of its two runs and before the other would show that arm's reasoning tokens as a difference from block 1's report, so none is made in between (PREREG §17.4).
+- `run` builds its run matrix before the guard, so it can pass the matrix's task cells; a matrix error now refuses before a settings error, both before the paid-run lock.
+- Tests: `tests/test_sol_h1_replication.py`.

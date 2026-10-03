@@ -1,0 +1,18 @@
+line,usd,note
+spent,2.97616,"phase 1a in results/costs.csv (10 rows), billed (common.costs)"
+r3_check_allowance,2,"R3's engagement check, not in this ledger: R3's forecast"
+luna_main_sweep_and_controls,35.5192,"context, rough: T = 100, luna's block-1 pilot costs per episode"
+sol_h2_if_engaged,137.152,"context, rough: H2 core T_d = 210 and sol-chain validity, R2's cold check row at high x 1.5; only if R3 finds ENGAGED"
+r4_central_T100,279.489,R4: pilot + validity + main runs
+total_central_T100_h2_runs,457.137,headroom under the 1a cap: 42.86
+total_central_T100_h2_stops,319.985,headroom under the 1a cap: 180.02
+r4_central_T50,147.055,R4: pilot + validity + main runs
+total_central_T50_h2_runs,324.703,headroom under the 1a cap: 175.30
+total_central_T50_h2_stops,187.55,headroom under the 1a cap: 312.45
+r4_low_T100,81.0584,R4: pilot + validity + main runs
+total_low_T100_h2_runs,258.706,headroom under the 1a cap: 241.29
+total_low_T100_h2_stops,121.554,headroom under the 1a cap: 378.45
+r4_low_T50,42.9006,R4: pilot + validity + main runs
+total_low_T50_h2_runs,220.548,headroom under the 1a cap: 279.45
+total_low_T50_h2_stops,83.396,headroom under the 1a cap: 416.60
+cap_1a,500,common.costs

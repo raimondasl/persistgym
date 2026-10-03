@@ -104,6 +104,7 @@ EXPERIMENT_STREAM = {
     "persistgym_pilot": PERSISTGYM,
     "persistgym_validity": PERSISTGYM,
     "persistgym": PERSISTGYM,
+    "persistgym_sol_h1": PERSISTGYM,
     "arc_path": ARC,
     "statecarry_persistgym": PERSISTGYM,
     "statecarry_arc_dev": ARC,

@@ -1,0 +1,80 @@
+{
+  "experiment": "cost_model",
+  "run_id": "20261003T061453Z",
+  "cell_or_config": "sol_h1_forecast",
+  "config": {
+    "prereg": "PREREG.md §17.4 (amendment R4)",
+    "inputs": {
+      "costs_csv": "results\\costs.csv",
+      "sol_f0_pilot": "20261002T083706Z-F-0-gpt-6.1-sol",
+      "sol_fr_pilot": "20261002T083238Z-F-r-gpt-6.1-sol",
+      "luna_pilot": {
+        "F-0": "20261002T081803Z-F-0-gpt-6-luna",
+        "W-0": "20261002T082913Z-W-0-gpt-6-luna",
+        "W-n-0": "20261002T082140Z-W-n-0-gpt-6-luna",
+        "Σ-n-0": "20261002T082532Z-sigma-n-0-gpt-6-luna"
+      },
+      "luna_validity": [
+        "20261002T084243Z-F-0-gpt-6-luna",
+        "20261002T095135Z-F-0-gpt-6-luna"
+      ],
+      "sol_high_check_fr": "20261002T173710Z-F-r-gpt-6.1-sol"
+    },
+    "design": {
+      "cells": [
+        "F-0",
+        "W-0",
+        "W-n-0"
+      ],
+      "observed_task_cells": 4,
+      "pilot_episodes_per_run": 8,
+      "validity_episodes": 160,
+      "T_values": [
+        100,
+        50
+      ]
+    },
+    "context": {
+      "luna_T": 100,
+      "sol_h2_episodes": 1232,
+      "sol_chain_validity_episodes": 320,
+      "chain_allowance": 1.5,
+      "r3_check_allowance_usd": 2.0
+    },
+    "price_source_date": "2026-09-30",
+    "scenarios": {
+      "low": "low: sol's F-0 pilot row (warm cache); luna's measured W/F-0 cost ratios",
+      "central": "central: sol's F-r pilot row (cold cache, the same episodes); luna's W/F-0 token mix priced at sol's prices; luna's validity/base factor"
+    }
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": null,
+  "started_utc": "2026-10-03T06:14:53+00:00",
+  "finished_utc": "2026-10-03T06:14:53+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "sol_h1_forecast.csv",
+    "sol_h1_phase_1a.csv",
+    "summary.md"
+  ],
+  "paid_calls": 0,
+  "config_hash": "8632bc9436733e20783cc4359ef67a2dc24e8e9c3b0c18d9caf735e4a932944e",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "4f5a60a2f0c6ca293effed0b69a6f3df42c2bc31",
+  "git_dirty": false
+}

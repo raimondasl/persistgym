@@ -1,0 +1,174 @@
+{
+  "experiment": "persistgym_pilot",
+  "run_id": "20261003T060120Z-F-0-gpt-6.1-sol",
+  "cell_or_config": "F-0",
+  "config": {
+    "harness_cell": "F-0",
+    "harness": {
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "high",
+      "reasoning_mode": "standard",
+      "reasoning_summary": null,
+      "service_tier": "flex",
+      "max_output_tokens": 32000,
+      "prompt_cache_key": null,
+      "W_tokens": null,
+      "window_counts_system_prompt": null,
+      "tokenizer": "o200k_base",
+      "notes_separator": "\n",
+      "summary_system_prompt": "You create concise conversation summaries for reliable continuation. Return only the requested summary.",
+      "summary_request_prompt": "Summarize the conversation so you can continue making progress on the task in a future context. The conversation history will be replaced by this summary and will no longer be available.\nUse your judgment about what matters for this task.",
+      "summary_bridge_template": "Earlier conversation history was compacted. Use the following summary as prior context. If it conflicts with newer input, prefer the newer input.\n\n{summary}",
+      "summary_max_output_tokens": 32000,
+      "summary_keep_recent_tokens": 0,
+      "summary_max_attempts": 4,
+      "stop_on_context_mismatch": true,
+      "stop_on_effort_mismatch": true,
+      "abort_after_mismatched_episodes": 2,
+      "max_turns": 200
+    },
+    "generator_config_hashes": [
+      "b0d0b020d5b9135bad3b4cb4c074a19bdbb8590e51dd04a690ba0fcaedbaaf97"
+    ],
+    "generator_config": {
+      "W_tokens": 24000,
+      "v_tokens": 1500,
+      "tokenizer": "o200k_base",
+      "token_tolerance": 0,
+      "near_gap_steps": 4,
+      "far_margin_tokens": 0,
+      "assumed_max_reply_tokens": 1000,
+      "window_counts_system_prompt": true,
+      "max_context_tokens": 64000,
+      "K_options": 10,
+      "k_targets": 1,
+      "need_index_range": [
+        20,
+        24
+      ],
+      "tail_steps_range": [
+        0,
+        2
+      ],
+      "lead_in_min_steps": 2,
+      "n_clues_choices": [
+        2,
+        3
+      ],
+      "clue_spacing_steps": 1,
+      "rule_placement": "with_first_clue",
+      "value_range": [
+        300,
+        899
+      ],
+      "minor_component_range": [
+        61,
+        98
+      ],
+      "option_spacing": 1,
+      "clue_form": "chain",
+      "n_distractors": 2,
+      "restate_mode": "as_revealed",
+      "single_turn_reply_mode": "oracle",
+      "warn_future_need": true,
+      "evidence_notice": true,
+      "lookup_max_per_episode": 3,
+      "lookup_scope": "revealed_so_far",
+      "accept_value_answers": true,
+      "strict_action_parse": false,
+      "validity_margin_pp": 10.0,
+      "skins": [
+        "warehouse",
+        "biobank",
+        "datacenter",
+        "archive",
+        "depot"
+      ],
+      "step_seconds": 75
+    },
+    "episode_ids": [
+      "pilot-000000/observed-nonrec-far/base",
+      "pilot-000000/observed-rec-far/base",
+      "pilot-000000/derived-nonrec-far/base",
+      "pilot-000000/derived-rec-far/base",
+      "pilot-000001/observed-nonrec-far/base",
+      "pilot-000001/observed-rec-far/base",
+      "pilot-000001/derived-nonrec-far/base",
+      "pilot-000001/derived-rec-far/base"
+    ],
+    "run_matrix": {
+      "name": "full",
+      "templates_per_task_cell": {
+        "observed-nonrec-far": 2,
+        "observed-rec-far": 2,
+        "derived-nonrec-far": 2,
+        "derived-rec-far": 2
+      },
+      "n_templates": 2,
+      "n_episodes": 8
+    }
+  },
+  "model_requested": "gpt-6.1-sol",
+  "model_returned": [
+    "gpt-6.1-sol"
+  ],
+  "reasoning_effort": "high",
+  "reasoning_effort_echoed": {
+    "high": 180
+  },
+  "reasoning_mode": "standard",
+  "reasoning_context_requested": "current_turn",
+  "reasoning_context_echoed": {
+    "current_turn": 180
+  },
+  "service_tier_requested": "flex",
+  "template_id": [
+    "pilot-000000",
+    "pilot-000001"
+  ],
+  "repeat_index": 0,
+  "seeds": {
+    "template_seeds": [
+      90000,
+      90001
+    ]
+  },
+  "started_utc": "2026-10-03T06:01:23+00:00",
+  "finished_utc": "2026-10-03T06:09:55+00:00",
+  "exit_reason": "COMPLETED",
+  "tokens": {
+    "input_tokens": 3243066,
+    "cached_input_tokens": 3049836,
+    "cache_write_tokens": 192690,
+    "output_tokens": 2749,
+    "reasoning_tokens": null
+  },
+  "cost_usd": {
+    "list": 0.8152786,
+    "billed_est": 0.4076393,
+    "costs_csv_row_appended": true
+  },
+  "raw_transcript_path": "results/raw/persistgym_pilot/20261003T060120Z-F-0-gpt-6.1-sol/transcript.jsonl.gz",
+  "paid": true,
+  "n_episodes_run": 8,
+  "n_excluded": 0,
+  "parallel": {
+    "max_episodes_in_flight": 1
+  },
+  "blinding": {
+    "rule": "reasoning_tokens withheld: pilot blinding (PREREG §11)",
+    "episodes_path": "results/raw/persistgym_pilot/20261003T060120Z-F-0-gpt-6.1-sol/episodes.jsonl",
+    "parallel_rule": "parallel: per-episode spend estimates, call-gate waits and the peaks in flight withheld: pilot blinding (PREREG §11)",
+    "parallel_path": "results/raw/persistgym_pilot/20261003T060120Z-F-0-gpt-6.1-sol/parallel.json"
+  },
+  "config_hash": "8094f0f7b726adfe7c7c59609fc6c751365e75a5316f63ad5355c604be36a6d3",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "4638fc02300c3b67f8e6e64171f1eaeaebca52bd",
+  "git_dirty": true
+}

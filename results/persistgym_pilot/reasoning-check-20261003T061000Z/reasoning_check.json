@@ -1,0 +1,127 @@
+{
+  "rule": {
+    "prereg": "PREREG.md §17.3 (amendment R3)",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "reasoning_token_floor": 32,
+    "e_threshold": 0.5,
+    "derived_far_episodes": 8,
+    "min_derived_far_ended_normally": 6,
+    "generator_config_hash": "b0d0b020d5b9135bad3b4cb4c074a19bdbb8590e51dd04a690ba0fcaedbaaf97"
+  },
+  "check_run_ids": [
+    "20261003T055240Z-F-r-gpt-6.1-sol",
+    "20261003T060120Z-F-0-gpt-6.1-sol"
+  ],
+  "check_templates": [
+    "pilot-000000",
+    "pilot-000001"
+  ],
+  "reference_run_ids": [
+    "20261002T173710Z-F-r-gpt-6.1-sol",
+    "20261002T180358Z-F-0-gpt-6.1-sol"
+  ],
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "derived_far_episodes": 8,
+  "derived_far_ended_normally": 8,
+  "runs_stopped_on_echo_mismatch": 0,
+  "evidence_step_calls": 20,
+  "evidence_step_calls_at_floor": 6,
+  "E": 0.3,
+  "verdict": "NOT_ENGAGED",
+  "verdict_reason": "E = 6/20 = 0.3000 (evidence-step calls with >= 32 reasoning tokens) < 0.50",
+  "descriptive": {
+    "check": {
+      "run_ids": [
+        "20261003T055240Z-F-r-gpt-6.1-sol",
+        "20261003T060120Z-F-0-gpt-6.1-sol"
+      ],
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "n_episodes": 16,
+      "derived_far_episodes": 8,
+      "derived_far_ended_normally": 8,
+      "runs_stopped_on_echo_mismatch": 0,
+      "evidence_step_calls": 20,
+      "evidence_step_calls_at_floor": 6,
+      "E": 0.3,
+      "pre_need_step_calls": {
+        "n_calls": 336,
+        "reasoning_tokens_mean": 2.652,
+        "reasoning_tokens_median": 0.0,
+        "share_with_reasoning": 0.122
+      },
+      "n_calls": 360,
+      "output_tokens": 5274,
+      "cost_usd_billed_est": 0.89025,
+      "cost_usd_billed_est_per_episode": 0.055641,
+      "errors": {
+        "exit_reasons": {
+          "DONE": 16
+        },
+        "n_excluded": 0,
+        "n_summary_failures": 0,
+        "n_unparsed_routine": 0,
+        "n_incomplete_routine": 0
+      },
+      "echo_match": {
+        "responses": 360,
+        "context_matched": 360,
+        "effort_matched": 360
+      },
+      "evidence_step_replies_with_hidden_value": {
+        "calls": 20,
+        "with_hidden_value": 0
+      }
+    },
+    "reference": {
+      "run_ids": [
+        "20261002T173710Z-F-r-gpt-6.1-sol",
+        "20261002T180358Z-F-0-gpt-6.1-sol"
+      ],
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "n_episodes": 16,
+      "derived_far_episodes": 8,
+      "derived_far_ended_normally": 8,
+      "runs_stopped_on_echo_mismatch": 0,
+      "evidence_step_calls": 20,
+      "evidence_step_calls_at_floor": 0,
+      "E": 0.0,
+      "pre_need_step_calls": {
+        "n_calls": 336,
+        "reasoning_tokens_mean": 0.432,
+        "reasoning_tokens_median": 0.0,
+        "share_with_reasoning": 0.0327
+      },
+      "n_calls": 360,
+      "output_tokens": 4398,
+      "cost_usd_billed_est": 0.699085,
+      "cost_usd_billed_est_per_episode": 0.043693,
+      "errors": {
+        "exit_reasons": {
+          "DONE": 16
+        },
+        "n_excluded": 0,
+        "n_summary_failures": 0,
+        "n_unparsed_routine": 0,
+        "n_incomplete_routine": 0
+      },
+      "echo_match": {
+        "responses": 360,
+        "context_matched": 360,
+        "effort_matched": 360
+      },
+      "evidence_step_replies_with_hidden_value": {
+        "calls": 20,
+        "with_hidden_value": 0
+      }
+    }
+  },
+  "blinding": "PREREG §11 pilot blinding: every quantity pools both arms (F-r and F-0); no per-arm value, need-step quantity or success measure",
+  "generated_utc": "2026-10-03T06:10:00+00:00",
+  "prereg_version": "1.0",
+  "git_commit": "4638fc02300c3b67f8e6e64171f1eaeaebca52bd",
+  "git_dirty": true
+}

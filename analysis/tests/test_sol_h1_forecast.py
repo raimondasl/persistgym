@@ -6,6 +6,7 @@ from __future__ import annotations
 import csv
 import dataclasses
 import json
+import re
 
 import pytest
 
@@ -109,7 +110,6 @@ def test_the_phase_1a_picture(built):
     r3 = ("20261003T055240Z-F-r-gpt-6.1-sol", "20261003T060120Z-F-0-gpt-6.1-sol")
     assert all(costs.phase_of(ROWS[r]["experiment"]) == "1a" for r in r3)
     assert sum(_billed(r) for r in r3) == pytest.approx(0.890249, abs=1e-6)
-    assert line["spent"] == pytest.approx(3.87, abs=0.005)
     ctx = f.context_rows(runs)
     assert set(ctx) == {"luna_main_sweep", "luna_controls"}
     assert line["luna_main_sweep_and_controls"] == pytest.approx(
@@ -123,10 +123,31 @@ def test_the_phase_1a_picture(built):
             r4 = f.r4_total(rows, sc, T)
             assert line[f"r4_{sc}_T{T}"] == pytest.approx(r4)
             assert line[f"total_{sc}_T{T}"] == pytest.approx(base + r4)
-    # the committed numbers (PREREG §17.4)
-    assert line["total_central_T100"] == pytest.approx(318.87, abs=0.005)
-    assert line["total_central_T50"] == pytest.approx(186.44, abs=0.005)
     assert line["total_central_T100"] < 500
+
+
+def test_the_committed_forecast_is_the_one_prereg_cites():
+    """PREREG §17.4 cites one forecast folder; its phase-1a lines add up and hold the numbers
+    the amendment states (from the ledger at its commit: R3's check included, 12 rows)."""
+    text = (f.REPO_ROOT / "PREREG.md").read_text(encoding="utf-8")
+    section = text[text.index("### 17.4 Amendment R4"):]
+    (folder,) = set(re.findall(r"results/cost_model/(\d{8}T\d{6}Z)/summary\.md", section))
+    out = f.REPO_ROOT / "results" / "cost_model" / folder
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["cell_or_config"] == "sol_h1_forecast" and meta["git_dirty"] is False
+    with (out / "sol_h1_phase_1a.csv").open(encoding="utf-8") as fh:
+        line = {r["line"]: float(r["usd"]) for r in csv.DictReader(fh)}
+    assert line["spent"] == pytest.approx(3.87, abs=0.005)
+    assert line["sol_h2"] == 0.0
+    for T, total in ((100, 318.87), (50, 186.44)):
+        assert line[f"total_central_T{T}"] == pytest.approx(
+            line["spent"] + line["luna_main_sweep_and_controls"] + line[f"r4_central_T{T}"],
+            abs=1e-3)
+        assert line[f"total_central_T{T}"] == pytest.approx(total, abs=0.005)
+    assert line["r4_central_T100"] == pytest.approx(279.49, abs=0.005)
+    summary = (out / "summary.md").read_text(encoding="utf-8")
+    for number in ("279.49", "318.87", "181.13", "186.44", "52%", "49%", "94%"):
+        assert number in summary and number in section, number
 
 
 def test_window_cells_lose_about_half_of_their_caching(built):
@@ -158,7 +179,7 @@ def test_main_writes_the_forecast(tmp_path, capsys):
     assert {r["scenario"] for r in out} == {"low", "central"}
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
     assert "279.49" in summary and "264.87" in summary and "## Limits" in summary
-    assert "318.87" in summary and "181.13" in summary and "lose most" not in summary
+    assert "lose about half" in summary and "lose most" not in summary
     assert "reasoning tokens" not in summary
     meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
     assert meta["experiment"] == "cost_model" and meta["paid_calls"] == 0

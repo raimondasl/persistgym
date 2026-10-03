@@ -18,24 +18,23 @@ Main runs per harness cell at T = 100 (central): F-0 26.17; W-0 115.55; W-n-0 12
 **Scenarios.**
 - low: sol's F-0 pilot row (warm cache); luna's measured W/F-0 cost ratios. Forecast per episode on sol (USD): F-0 0.0221; W-0 0.0735; W-n-0 0.0779; validity 0.0221.
 - central: sol's F-r pilot row (cold cache, the same episodes); luna's W/F-0 token mix priced at sol's prices; luna's validity/base factor. Forecast per episode on sol (USD): F-0 0.0595; W-0 0.2626; W-n-0 0.2799; validity 0.0643.
-- Why the central basis: sol's F-0 pilot run played its 8 episodes right after the F-r run had played the same 8 with nearly the same input, so almost all of its input came from the cache (3,030 cache-write tokens against the F-r run's 252,326). A main-sweep run plays episodes no other run has just played, so each call writes its new suffix to the cache, at 1.25 times the input price; at medium effort sol hardly reasons, so the F-r run's payloads stand in for a cold F-0 run's. Window cells lose most of their caching, and sol's cached input costs 1/20 of its input price against luna's 1/10, so luna's W/F-0 token mix is priced at sol's prices.
+- Why the central basis: sol's F-0 pilot run played its 8 episodes right after the F-r run had played the same 8 with nearly the same input, so almost all of its input came from the cache (3,030 cache-write tokens against the F-r run's 252,326). A main-sweep run plays episodes no other run has just played, so each call writes its new suffix to the cache, at 1.25 times the input price; at medium effort sol hardly reasons, so the F-r run's payloads stand in for a cold F-0 run's. Window cells lose about half of their prompt caching (luna's pilot read from the cache 94% of its input in F-0, 52% in W-0 and 49% in W-n-0), and sol's cached input costs 1/20 of its input price against luna's 1/10, so luna's W/F-0 token mix is priced at sol's prices.
 
 ## Phase 1a against its $500 cap
 
 | Line | USD |
 |---|---|
-| Spent in phase 1a (`results/costs.csv`) | 2.98 |
-| R3's engagement check (not in this ledger when this was written): R3's forecast | 2.00 |
+| Spent in phase 1a (`results/costs.csv`, R3's engagement check included) | 3.87 |
 | luna's main sweep (T = 100, 4 replay-off cells) and controls, rough | 35.52 |
-| sol's H2 core (T_d = 210) and validity on `sol-chain`, only if R3 finds ENGAGED, rough | 137.15 |
+| sol's H2 core and validity on `sol-chain`: not run (R3's hard stop) | 0.00 |
 | R4 at T = 100, central (low) | 279.49 (81.06) |
 | R4 at T = 50, central (low) | 147.06 (42.90) |
-| **Total at T = 100, central: if H2 on sol runs; if it stops** | **457.14; 319.98** |
-| **Total at T = 50, central: if H2 on sol runs; if it stops** | **324.70; 187.55** |
+| **Total at T = 100, central (low)** | **318.87** (120.44) |
+| **Total at T = 50, central (low)** | **186.44** (82.29) |
 
-Headroom under the cap at T = 100, central: 42.86 if H2 on sol runs, 180.02 if it stops. Every main-run line scales with T, which §4.2's rule sets at M1 for luna.
+Headroom under the cap, central: 181.13 at T = 100, 313.56 at T = 50. Every main-run line scales with T, which §4.2's rule sets at M1 for luna.
 
-Context rows (rough, not R4's forecast): luna's lines use its block-1 pilot cost per episode per cell; its restated control as F-0 episodes at luna's validity/base factor; each single-turn prompt bounded by one F-0 episode. sol's H2 lines use R2's F-r check row (high effort, the first run of its episodes) × 1.5, R3's allowance for the chain derivations.
+Context row (rough, not R4's forecast): luna's lines use its block-1 pilot cost per episode per cell; its restated control as F-0 episodes at luna's validity/base factor; each single-turn prompt bounded by one F-0 episode. sol's H2 runs are not counted: R3's engagement check found NOT_ENGAGED on 2026-10-03, and R3's hard stop ended H2 on sol (`results/decisions.md`).
 
 ## Limits
 

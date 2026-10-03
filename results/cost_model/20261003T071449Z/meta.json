@@ -1,6 +1,6 @@
 {
   "experiment": "cost_model",
-  "run_id": "20261003T061453Z",
+  "run_id": "20261003T071449Z",
   "cell_or_config": "sol_h1_forecast",
   "config": {
     "prereg": "PREREG.md §17.4 (amendment R4)",
@@ -17,8 +17,7 @@
       "luna_validity": [
         "20261002T084243Z-F-0-gpt-6-luna",
         "20261002T095135Z-F-0-gpt-6-luna"
-      ],
-      "sol_high_check_fr": "20261002T173710Z-F-r-gpt-6.1-sol"
+      ]
     },
     "design": {
       "cells": [
@@ -36,10 +35,7 @@
     },
     "context": {
       "luna_T": 100,
-      "sol_h2_episodes": 1232,
-      "sol_chain_validity_episodes": 320,
-      "chain_allowance": 1.5,
-      "r3_check_allowance_usd": 2.0
+      "sol_h2": "not counted: ended by R3's hard stop (2026-10-03)"
     },
     "price_source_date": "2026-09-30",
     "scenarios": {
@@ -55,8 +51,8 @@
   "template_id": null,
   "repeat_index": null,
   "seeds": null,
-  "started_utc": "2026-10-03T06:14:53+00:00",
-  "finished_utc": "2026-10-03T06:14:53+00:00",
+  "started_utc": "2026-10-03T07:14:49+00:00",
+  "finished_utc": "2026-10-03T07:14:49+00:00",
   "exit_reason": "completed",
   "tokens": null,
   "cost_usd": 0.0,
@@ -67,7 +63,7 @@
     "summary.md"
   ],
   "paid_calls": 0,
-  "config_hash": "8632bc9436733e20783cc4359ef67a2dc24e8e9c3b0c18d9caf735e4a932944e",
+  "config_hash": "3fe8ee66f528531c2028086bca0395d8f92db35a328c5a9804c16dfea56294c7",
   "prereg_version": "1.0",
   "sdk_versions": {
     "openai": "3.22.1",
@@ -75,6 +71,6 @@
     "arc-agi": null,
     "tiktoken": "0.14.0"
   },
-  "git_commit": "4f5a60a2f0c6ca293effed0b69a6f3df42c2bc31",
+  "git_commit": "68d32218a2c67c6ca9e641a10fcd2fc1d4f5303f",
   "git_dirty": false
 }

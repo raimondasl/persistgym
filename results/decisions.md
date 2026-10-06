@@ -292,3 +292,6 @@ Gate metrics from `uv run python -m analysis.g0` at commit `a255e05`, clean tree
 - **Proposal: GO.** G0 releases block 2: seed-1 S0 and S4 on the 4 path games in the beacon order, forecast $169.14 billed without the reserve and $202.97 with it (`results/cost_model/20261001T203318Z/`). Block 2 needs its own approval line, which Claude drafts only when the researcher asks. Before block 2, the Gemini project's provider spend limit ($100) must be raised above the block's limit.
 - **Spend to date:** $24.43 billed (phase 0 $20.57, phase 1a $3.87, phase 1b $0), 23 rows in `results/costs.csv`. Block 1: $24.43 of $70.
 - **The researcher makes the go/no-go call.**
+
+## 2026-10-06: G0: GO (researcher)
+The researcher's call on 2026-10-06, after the merge of PR #44 with the G0 metrics: **GO**. G0 releases block 2 (§12), which needs its own approval line.

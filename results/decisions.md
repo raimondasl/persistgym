@@ -271,3 +271,24 @@ approved_block: 1-pilots | experiments: toggle_pilot,replay_probe,gemini_probe,a
 **Next** (each paid run local, in a console of its own, after the merge and once no other PersistGym run holds the lock): the replication's pilot and validity runs, an entry here with the validity rates, the researcher's spot-check findings on `g1-validity-0-20-3d6bc648`, and the researcher's G1 decision for the replication.
 
 **Spend to date:** $24.43 billed of block 1's $70 ($45.57 left), R3's check included (this branch holds its commit, `d82898b`). This entry's pull request is $0.
+
+## 2026-10-06: Researcher decisions: R4's template count; the Holm family after H2's stop
+- **R4's template count (§17.4):** T = luna's main-sweep template count, as drafted (about 100). The researcher chose this over T = 50 on 2026-10-06.
+- **Holm family (§9.4, §17.3):** H2 on sol stopped under R3's hard stop (2026-10-03), so the confirmatory family becomes **H1 and H3, 2 one-sided tests**. The family-of-4 result, with H2's two tests counted as not rejected, is reported alongside as a sensitivity analysis. Decided by the researcher on 2026-10-06, before any H1 or H3 test is computed: no main-split episode of any model has run.
+
+## 2026-10-06: G0 gate (PREREG §10.1): Claude proposes GO
+Gate metrics from `uv run python -m analysis.g0` at commit `a255e05`, clean tree (`results/gates/g0-20261006T133152Z/`).
+- **Snapshot tests pass** at every commit block 1's paid runs used:
+  - PersistGym: `uv run pytest -q harnesses/tests/test_payload_snapshots.py` in a detached worktree of each commit, `b9f3d8e` (47 passed), `0ed61f0` (47 passed), `9c53512` (53 passed) and `4638fc0` (53 passed).
+  - ARC configs S0-S4: `uv run python arc/apply_patches.py` applied patches 0001-0017 to the pinned harness (series `14e25cc7…`, commit `67f6dd0d…`, tree `5206d039…`, equal to `arc/config_freeze.json`) and its unit tests, the payload snapshot tests of patches 0005, 0008 and 0013 included, passed. `arc/patches` and `arc/config_freeze.json` are unchanged since `b9f3d8e`.
+- **Toggle rule (D29 as amended by R1): sol verified** (forks agree 20/20 with `all_turns`, 0/20 with `current_turn`; every echo matched). luna not verified (13/20 and 6/20). Kill criterion 1 does not fire. H2 on sol later ended for another reason, R3's engagement hard stop (2026-10-03).
+- **Gemini S0-S2 run (D37):** in the truncated ARC pilot on R11L, S0 reached 50 actions, S1 its first compaction plus 5 turns, and S2 30 actions. All three ended `NORMAL_ENDING_BLINDED`, on the standard tier, at `thinking_level` high, returned model `gemini-3.8-flash`. Only exit status, compaction occurrence, tier and settings were read (§11).
+- **Cost rule (D27 rule 1, D28):** b(c), the billed/list ratio measured in the pilot, is S0 0.832, S1 0.790, S2 0.786 and S4 0.763. With the published list costs of the 4 path games, F = **$679.30** billed, and **$815.15** with the 20% reserve, against the $900 phase-1b cap (headroom $84.85): **met**.
+- **Scoop search** (2026-10-06):
+  - [ARC harness repo](https://github.com/arcprize/arc-agi-3-benchmarking): the branch `feature/continuous-conversation-carry-forward-ablation` has had no commit since `fecf46b` (2026-08-29). No PR is a per-component ablation. #48 (open) adds compaction diagnostics. #46 and #47 (merged 2026-10-02) add Gemini continuation handling upstream of our pin `4ca00e6`; our runs stay on the pinned fork.
+  - [ARC Prize blog](https://arcprize.org/blog): no post since Sep 3 (GPT-6 Astra).
+  - Web and arXiv search: no new per-component ablation. OpenAI's Jul 29 post and the Astra results are already in `docs/background.md` and report combined effects only.
+  - **D31's trigger does not fire.**
+- **Proposal: GO.** G0 releases block 2: seed-1 S0 and S4 on the 4 path games in the beacon order, forecast $169.14 billed without the reserve and $202.97 with it (`results/cost_model/20261001T203318Z/`). Block 2 needs its own approval line, which Claude drafts only when the researcher asks. Before block 2, the Gemini project's provider spend limit ($100) must be raised above the block's limit.
+- **Spend to date:** $24.43 billed (phase 0 $20.57, phase 1a $3.87, phase 1b $0), 23 rows in `results/costs.csv`. Block 1: $24.43 of $70.
+- **The researcher makes the go/no-go call.**

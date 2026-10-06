@@ -312,7 +312,7 @@ approved_block: 2-arc-seed1 | experiments: arc_path | max_usd: 330
 ## 2026-10-06: R4 step 1 (block 1): sol's window-cell pilots and default-config validity
 Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step"), under block `1-pilots`. Each run was launched as a process with a console of its own.
 - **OpenAI Flex outage:** from about 10:26 to 13:10 ET, sol's Flex requests returned 429 `flex_unavailable` ("Flex processing is temporarily unavailable"; status.openai.com listed no incident).
-  - Six W-0 attempts and one W-n-0 attempt aborted (`ABORTED_API_ERRORS`), costing $0.85 billed in all. Every one is in `results/costs.csv`, and its folder is committed.
+  - Five W-0 attempts and one W-n-0 attempt aborted (`ABORTED_API_ERRORS`), costing $0.85 billed in all. Every one is in `results/costs.csv`, and its folder is committed.
   - D13 keeps OpenAI on Flex, so a retry driver waited 30 min between attempts. Flex was available again from 13:40.
   - At the researcher's request (2026-10-06), a night fallback, from 23:00 with retries until 07:00, was armed in case the day failed. It was not needed.
 - **Pilots** (`persistgym_pilot`; allowed fields only, §11), sol at medium on the default config, pilot templates 0-1 × the 4 observed task cells:

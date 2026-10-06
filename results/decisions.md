@@ -295,3 +295,16 @@ Gate metrics from `uv run python -m analysis.g0` at commit `a255e05`, clean tree
 
 ## 2026-10-06: G0: GO (researcher)
 The researcher's call on 2026-10-06, after the merge of PR #44 with the G0 metrics: **GO**. G0 releases block 2 (§12), which needs its own approval line.
+
+## 2026-10-06: Block 2 (seed-1 S0+S4) — proposed by Claude, approved when the researcher merges the PR that adds this entry
+- **What it buys** (PREREG §12 block 2, §7.4): the 8 counted seed-1 runs, S0 (Standard) and S4 (Adapter) on the 4 path games, Gemini 3.8 Flash at `thinking_level` high on the standard tier (`arc_path`). They run one at a time, back to back, in the D18 order (SEED + 2): 1. CD82 S4, 2. FT09 S0, 3. SB26 S4, 4. SB26 S0, 5. CD82 S0, 6. R11L S0, 7. R11L S4, 8. FT09 S4. Each run is launched as a process with a console of its own. Error re-runs follow §7.5 (D19).
+- **Forecast:** **$171.46 billed**, or $205.75 with the 20% re-run reserve. This is the published list cost of each run × b(c) measured in the pilot (`results/gates/g0-20261006T133152Z/g0.json`). By run: CD82 S4 $22.13, FT09 S0 $23.90, SB26 S4 $12.98, SB26 S0 $24.39, CD82 S0 $9.71, R11L S0 $45.54, R11L S4 $26.69, FT09 S4 $6.11.
+- **Limit: $330 billed.** Every counted run needs $120 of room under the limit when it starts (§12). At the forecast, the last run starts at about $165 of block spend, so it needs a limit of at least $285. The rest leaves room for one re-run or a moderate overrun. If a run would pass the limit, it does not start, and Claude asks. Phase 1b: $0 spent of its $900 cap.
+- **Run guard and hold:** each run stops at $120 at list (D22). A run that reaches it places a hold: nothing paid starts in either stream until the researcher merges a `cleared_hold:` line (§12).
+- **12 h warning (D21):** checked before this block. No planned run's 1.5 × published actions × published seconds per action exceeds 12 h (Claude told the researcher in chat).
+- **Before the first run:** the researcher raises the Gemini project's provider spend limit from $100 to at least the block limit. It is the backstop.
+- **Stop rules:** Claude stops and reports before the next run on payload rejections, a hold, an error rate above PREREG §7.5's re-run rule, or a run whose billed cost passes 1.5× its forecast.
+- **Blinding:** none. These are counted runs, not pilots. Their level progress is the data H4 needs.
+- **Decides:** Checkpoint C (§10.3): the first fresh-seed gap, the real per-run cost and how runs end, then block 3.
+
+approved_block: 2-arc-seed1 | experiments: arc_path | max_usd: 330

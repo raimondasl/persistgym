@@ -1,0 +1,163 @@
+{
+  "generated_utc": "2026-10-06T13:31:52+00:00",
+  "git_commit": "a255e05e7bd4950dc4da11ac454b03ab7b4ff9c3",
+  "git_dirty": false,
+  "prereg_version": "1.0",
+  "cost": {
+    "rule": "PREREG §10.1 D27 rule 1 with D28's reserve; b(c) measured in the pilot",
+    "b": {
+      "S0": 0.8318279242933727,
+      "S1": 0.7895196907329943,
+      "S2": 0.7860908244579392,
+      "S4": 0.7630046662862956
+    },
+    "pilot_rows": {
+      "S0": "20261002T035726Z-S0-r11l-s1",
+      "S1": "20261002T065404Z-S1-r11l-s1",
+      "S2": "20261002T071734Z-S2-r11l-s1",
+      "S4": "20261002T061537Z-S4-r11l-s1"
+    },
+    "games": [
+      {
+        "game": "FT09",
+        "L_S0": 28.7316,
+        "L_S4": 8.0082,
+        "L_midpoint": 18.3699,
+        "F_game": 117.90769752237463
+      },
+      {
+        "game": "SB26",
+        "L_S0": 29.3232,
+        "L_S4": 17.0057,
+        "L_midpoint": 23.164450000000002,
+        "F_game": 147.73087208343782
+      },
+      {
+        "game": "R11L",
+        "L_S0": 54.749,
+        "L_S4": 34.9859,
+        "L_midpoint": 44.867450000000005,
+        "F_game": 285.8595559823341
+      },
+      {
+        "game": "CD82",
+        "L_S0": 11.6785,
+        "L_S4": 29.0067,
+        "L_midpoint": 20.342599999999997,
+        "F_game": 127.79752866749985
+      }
+    ],
+    "F_billed": 679.2956542556464,
+    "reserve": 0.2,
+    "F_with_reserve": 815.1547851067756,
+    "cap_1b": 900.0,
+    "headroom": 84.84521489322435,
+    "go": true
+  },
+  "toggle": {
+    "gpt-6.1-sol": {
+      "run_id": "20261002T060546Z-replay-fork-gpt-6.1-sol",
+      "all_turns_agreements": 20,
+      "current_turn_agreements": 0,
+      "scorable": [
+        20,
+        20
+      ],
+      "echo_ok": true,
+      "verified": true
+    },
+    "gpt-6-luna": {
+      "run_id": "20261002T061101Z-replay-fork-gpt-6-luna",
+      "all_turns_agreements": 13,
+      "current_turn_agreements": 6,
+      "scorable": [
+        20,
+        20
+      ],
+      "echo_ok": true,
+      "verified": false
+    }
+  },
+  "gemini": {
+    "configs": {
+      "S0": {
+        "run_id": "20261002T035726Z-S0-r11l-s1",
+        "exit_reason": "NORMAL_ENDING_BLINDED",
+        "truncation_limits": {
+          "max_actions": 50,
+          "after_summary_turns": null
+        },
+        "n_compactions": 0,
+        "service_tiers_served": {
+          "standard": 50
+        },
+        "model_returned": [
+          "gemini-3.8-flash"
+        ],
+        "reasoning_effort": {
+          "thinking_level": "high"
+        }
+      },
+      "S4": {
+        "run_id": "20261002T061537Z-S4-r11l-s1",
+        "exit_reason": "NORMAL_ENDING_BLINDED",
+        "truncation_limits": {
+          "max_actions": 50,
+          "after_summary_turns": null
+        },
+        "n_compactions": 10,
+        "service_tiers_served": {
+          "standard": 50
+        },
+        "model_returned": [
+          "gemini-3.8-flash"
+        ],
+        "reasoning_effort": {
+          "thinking_level": "high"
+        }
+      },
+      "S1": {
+        "run_id": "20261002T065404Z-S1-r11l-s1",
+        "exit_reason": "NORMAL_ENDING_BLINDED",
+        "truncation_limits": {
+          "max_actions": 60,
+          "after_summary_turns": 5
+        },
+        "n_compactions": 1,
+        "service_tiers_served": {
+          "standard": 13
+        },
+        "model_returned": [
+          "gemini-3.8-flash"
+        ],
+        "reasoning_effort": {
+          "thinking_level": "high"
+        }
+      },
+      "S2": {
+        "run_id": "20261002T071734Z-S2-r11l-s1",
+        "exit_reason": "NORMAL_ENDING_BLINDED",
+        "truncation_limits": {
+          "max_actions": 30,
+          "after_summary_turns": null
+        },
+        "n_compactions": 5,
+        "service_tiers_served": {
+          "standard": 30
+        },
+        "model_returned": [
+          "gemini-3.8-flash"
+        ],
+        "reasoning_effort": {
+          "thinking_level": "high"
+        }
+      }
+    },
+    "reached": {
+      "S0": true,
+      "S1": true,
+      "S2": true
+    },
+    "go": true
+  }
+}

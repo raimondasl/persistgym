@@ -308,3 +308,24 @@ The researcher's call on 2026-10-06, after the merge of PR #44 with the G0 metri
 - **Decides:** Checkpoint C (§10.3): the first fresh-seed gap, the real per-run cost and how runs end, then block 3.
 
 approved_block: 2-arc-seed1 | experiments: arc_path | max_usd: 330
+
+## 2026-10-06: R4 step 1 (block 1): sol's window-cell pilots and default-config validity
+Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step"), under block `1-pilots`. Each run was launched as a process with a console of its own.
+- **OpenAI Flex outage:** from about 10:26 to 13:10 ET, sol's Flex requests returned 429 `flex_unavailable` ("Flex processing is temporarily unavailable"; status.openai.com listed no incident).
+  - Six W-0 attempts and one W-n-0 attempt aborted (`ABORTED_API_ERRORS`), costing $0.85 billed in all. Every one is in `results/costs.csv`, and its folder is committed.
+  - D13 keeps OpenAI on Flex, so a retry driver waited 30 min between attempts. Flex was available again from 13:40.
+  - At the researcher's request (2026-10-06), a night fallback, from 23:00 with retries until 07:00, was armed in case the day failed. It was not needed.
+- **Pilots** (`persistgym_pilot`; allowed fields only, §11), sol at medium on the default config, pilot templates 0-1 × the 4 observed task cells:
+
+  | Run | Episodes | Exits | Echo match (context; effort) | Median latency | Billed |
+  |---|---|---|---|---|---|
+  | `20261006T174041Z-W-0-gpt-6.1-sol` | 8 | 7 `DONE`, 1 `API_ERROR` (Flex) | 161/161; 161/161 | 9.0 s | $1.28 |
+  | `20261006T181348Z-W-n-0-gpt-6.1-sol` | 8 | 8 `DONE` | 181/181; 181/181 | 5.1 s | $1.93 |
+
+  Per episode, $0.16 (W-0) and $0.24 (W-n-0) billed, below R4's central forecast for these cells ($0.263 and $0.280, `results/cost_model/20261003T071449Z/`). The block-3 forecast will be redone from these rows.
+- **sol's default-config validity** (`persistgym_validity`, F-0, validity templates 0-19 × the 4 observed task cells; §17.4):
+  - **restated-at-need 80/80 = 100%** (gate ≥ 85%), 20/20 in each cell (`20261006T182920Z-F-0-gpt-6.1-sol`);
+  - **fact-withheld 9/80 = 11.25%** (gate ≤ 20%), per cell 1-4 of 20 (`20261006T200237Z-F-0-gpt-6.1-sol`);
+  - all 160 episodes `DONE`, 0 excluded; $10.21 billed, $0.064 per episode.
+- **The replication's G1 waits for the researcher's spot-check** of package `g1-validity-0-20-3d6bc648` (§4.4, §17.4). The oracle and the $0 audits pass on the default config. `REPLICATION_G1_PASSED` stays empty until the researcher's G1 decision.
+- **Spend:** R4 step 1 cost $14.30 billed ($3.21 pilots, $0.85 aborted attempts, $10.21 validity), against the $14.62 central forecast. Block 1: $38.72 of $70. Block 2 so far: $16.87 (run 1, CD82 S4). All phases: $55.59.

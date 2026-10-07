@@ -12,6 +12,8 @@ _**Amended 2026-10-02 (A4):** a derived-fact variant for sol, with a hard stop, 
 
 _**Amended 2026-10-03 (A5):** a pre-registered sol replication of H1, at the researcher's request, so that PersistGym has evidence on a second model, gpt-6.1-sol, after H2 on sol stopped under A4's hard stop. The amendment is §20, which points to `PREREG.md` §17.4 (amendment R4); passages it changes are marked **[A5]**._
 
+_**Amended 2026-10-07 (A6):** action-matched secondary readings for the ARC path study, after block 2's first two runs, in which ARC's 12 h clock bound the Standard config's run but not the Adapter's. The amendment is §21, which points to `PREREG.md` §17.5 (amendment R5); passages it changes are marked **[A6]**._
+
 ## 1. Summary
 ARC-AGI-3 scores move by 25-45 points between ARC Prize's Standard harness and its Provider Adapter ([GPT-6 Astra](https://arcprize.org/results/openai-gpt-6-astra), [Gemini 3.8 Flash](https://arcprize.org/results/google-gemini-3-8-flash)). Coding-agent success moves by only a few points across harnesses ([HarnessTax](https://arena.ai/blog/coding-agents-harness-tax)). We test whether this is because ARC needs **derived, non-recoverable** state that the Standard harness throws away, while coding state can usually be re-read from disk. The plan has three parts:
 - **Measure it** in a small generated environment (PersistGym-lite).
@@ -113,7 +115,7 @@ Path: S0 → S1 → S2 → S4, defined in §8.2.
 
 **Prediction B (competing; prior-art check):** the replay step accounts for at least 1/2. This reading comes from the published gap growing with reasoning effort (+9, +20, +25pp at low, medium, high).
 
-We register both and report which one the data supports. With 4 games × 2 seeds this is **descriptive**. Shares get bootstrap intervals over game-seed units, and we make no significance claims.
+We register both and report which one the data supports. With 4 games × 2 seeds this is **descriptive**. Shares get bootstrap intervals over game-seed units, and we make no significance claims. **[A6]** Secondary readings at a matched 150 actions are added; the clock-based readings stay primary (§21).
 
 **Kill the ARC leg** if the measured S0→S4 gap, averaged over the 4 games, is below 10 RHAE points.
 
@@ -339,7 +341,7 @@ Our design uses 2 distance levels that bracket the eviction threshold and ~100 f
 **Action at M1:** re-run the power simulation with the variance measured in the validity runs, and adjust template counts before the M2 sweep. The simulation script was in a temporary folder and is not in this repo, so rewrite it from the description above.
 
 **ARC analysis:**
-- Per game and config: RHAE (mean over 2 seeds), levels cleared, actions relative to the human baseline, tokens and cost.
+- Per game and config: RHAE (mean over 2 seeds), levels cleared, actions relative to the human baseline, tokens and cost. **[A6]** Also, as secondary readings, the score and levels cleared within the first 150 actions, with a levels-by-action curve per run (§21).
 - Path shares are (step difference) / (S4 − S0), with a bootstrap over the 8 game-seed units, and the table is labelled descriptive.
 - H5 uses a per-level logistic model of P(clear | reached, depth, harness) with game fixed effects, on the published runs and on ours.
 - Always report exit reasons.
@@ -734,3 +736,11 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - **Pilot and gate.** A pilot of W-0 and W-n-0 on sol (16 episodes), then its own validity gate (F-0, 160 episodes on the 4 observed task cells; restated ≥ 85%, withheld ≤ 20%). If sol fails the gate, the replication does not run.
 - **Cost.** About $279 billed at T = 100 on the central forecast from block 1's measured rows, of which window cells, which lose about half of their caching, are about $239; $81 on the lower basis first proposed. Phase 1a then comes to about $319 of its $500 cap (`results/cost_model/20261003T071449Z/`). The pilot and validity runs go in block 1 if they fit, the main runs in block 3 after the confirmatory rows; no new approval.
 - **What it does not show.** Two models of one provider's family, at medium effort only. It is not a model comparison: each model's results are effects against task properties.
+
+## 21. Amendment A6 (2026-10-07): action-matched secondary readings for the ARC path study
+**Why.** In block 2's first two runs (`results/decisions.md`, 2026-10-07), ARC's 12 h clock bound the Standard config's run but not the Adapter's. Run 2 (FT09 S0) ended `TIME_BUDGET` at 236 actions, about 184 s per action, about twice as slow per action as ARC's published Standard run on FT09 and, under D20, a provider-latency incident; run 1 (CD82 S4) won in 206 actions at 44 s per action. A clock-based reading of H4 then mixes what each config does with each action and how fast its actions come. On 2026-10-07 the researcher decided to pre-register an action-matched secondary reading before any later block-2 result is seen. `PREREG.md` §17.5 (amendment R5) registers it, with the script that computes it; this section only points there.
+- **The reading.** For each counted run, ARC's game score and the levels cleared within its first K = 150 actions, with a curve at 50, 100, 150 and 200 actions. H4's path quantities (gap, step shares, Predictions A and B, bootstrap intervals) are computed again from these values as secondary readings, and Checkpoint C reports the seed-1 gap at K next to its own, descriptively. A run that stopped before K actions other than by a win or ARC's action budget is censored: reported as a lower bound and, in a sensitivity analysis, left out. A run whose scorecard the script cannot score or reproduce has no matched values, and its unit is left out.
+- **K = 150** is the largest multiple of 50 that every config should reach inside 12 h at run 2's pace, with S1 and S2 slowed by their pilot latency ratios. It is fixed by pace, not by outcomes.
+- **Unchanged.** H4's and H5's primary readings, predictions and thresholds, the kill rules, Checkpoint C's and G2's rules, the 12 h clock, the action budgets, the run plan and the re-run rules. No rule reads a matched value.
+- **Also decided on 2026-10-07, outside A6:** run 2 is a D20 latency incident and is re-run once, with seed 101, after block 2's last run (a logged deviation from D19's timing); phase 1b is sized at Checkpoint C.
+- **What it does not show.** Matching actions removes the effect of speed, not the effects of context length, and the clock-based readings remain what ARC's harness rewards.

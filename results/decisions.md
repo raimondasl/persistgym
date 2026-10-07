@@ -329,3 +329,38 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
   - all 160 episodes `DONE`, 0 excluded; $10.21 billed, $0.064 per episode.
 - **The replication's G1 waits for the researcher's spot-check** of package `g1-validity-0-20-3d6bc648` (§4.4, §17.4). The oracle and the $0 audits pass on the default config. `REPLICATION_G1_PASSED` stays empty until the researcher's G1 decision.
 - **Spend:** R4 step 1 cost $14.30 billed ($3.21 pilots, $0.85 aborted attempts, $10.21 validity), against the $14.62 central forecast. Block 1: $38.72 of $70. Block 2 so far: $16.87 (run 1, CD82 S4). All phases: $55.59.
+
+## 2026-10-07: Block 2 after run 2: a D20 latency incident, option (a); action-matched readings (PREREG amendment R5)
+**Block 2's first two runs** (`arc_path`, block `2-arc-seed1`, in the D18 order; each launched as a process with a console of its own):
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Run | `20261006T144656Z-S4-cd82-s1` | `20261006T171726Z-S0-ft09-s1` |
+| Game, config, seed | CD82, S4, 1 | FT09, S0, 1 |
+| Ending (`agent_exit_reason`) | `GAME_WIN` | `TIME_BUDGET` (the 12 h clock) |
+| Actions (resets); levels | 206 (4); 6 of 6 | 236 (4); 5 of 6 |
+| Score (ARC's scorecard) | 73.02 | 58.17 |
+| Wall clock; seconds per action | 2.49 h; 44 | about 12 h; about 184 |
+| Median seconds per model call | 17.36 | 181.25 |
+| Billed (forecast) | $16.87 ($22.13) | $50.15 ($23.90, 2.10×) |
+
+- **Run 2's pace:** about 132 s per action over its first 50 actions and about 290 s near the end. It reached action 126, where ARC's published FT09 Standard-high run ended, at 5.2 h against that run's 3.0 h, and action 150 at about 5.6 h. Over the run it averaged about 184 s per action against the published run's 86 s: our S0 is about twice as slow per action as ARC's published Standard run, and about 4 times as slow as run 1's S4. Run 1 averaged 44 s per action against 36 s in ARC's published CD82 Adapter run (`results/arc_public_ops/20261001T185155Z/recordings_per_action.csv`).
+- **Run 2's levels:** level actions 4, 7, 108, 33, 37 and 47 against human baselines 43, 12, 23, 28, 65 and 37; level scores 115, 115, 4.54, 71.99, 115 and 0.
+- Sources: run 1's committed `meta.json`, `scorecard.json` and `results/costs.csv` row. Run 2's figures are those Claude reported to the researcher from its files on 2026-10-07; run 2's folder and costs row are not yet on `main` as this entry is written.
+
+**Decisions (researcher):**
+- **(i) A cost overrun alone does not stop block 2 (2026-10-06).** Block 2's stop rules include a run whose billed cost passes 1.5× its forecast. The researcher decided on 2026-10-06 that block 2 resumes after a stop for a cost overrun alone. Run 2's cost, 2.10× its forecast, would therefore only have been reported; its `TIME_BUDGET` ending under D20 needed decision (ii).
+- **(ii) Run 2 is a D20 latency incident; option (a) (2026-10-07).** D20 makes a `TIME_BUDGET` ending final unless the run's median seconds per model call exceeds 2× the median of its config's earlier counted runs, or the pilot's median if there is none (PREREG §7.5; §0.3 line 3). Run 2 is S0's first counted run, so the yardstick is the S0 pilot's 73.30 s (`20261002T035726Z-S0-r11l-s1`, `results/costs.csv`). Run 2's 181.25 s is 2.47× that, so run 2 is a latency incident by the rule as written, and D19 re-runs it once. The researcher chose option (a): re-run it once, with seed 101 (`--seed 101 --rerun-of 20261006T171726Z-S0-ft09-s1`). The re-run replaces run 2 in every primary analysis; both are reported, and H4's sensitivity analysis scores the original (§7.5).
+  - **Deviation (PREREG §13): when the re-run starts.** D19 and §0.3 line 16 start a re-run right after the run it replaces. As Claude proposed, the researcher scheduled it after run 8, last in block 2, so runs 3-8 keep the D18 order. Recorded here as a deviation; R5 does not change D19.
+- **(iii) Block 2 resumes at run 3 (2026-10-07)**, in the D18 order: 3. SB26 S4, 4. SB26 S0, 5. CD82 S0, 6. R11L S0, 7. R11L S4, 8. FT09 S4, then the re-run of run 2 (FT09 S0, seed 101).
+- **(iv) Phase 1b is sized at Checkpoint C (2026-10-07).** How much of phase 1b to run, and any change to its cap, is decided at Checkpoint C (PREREG §10.3), from block 2's measured costs and endings.
+- **(v) Amendment R5 (PREREG §17.5), drafted at the researcher's request (2026-10-07).** The clock binds S0 (and probably S1 and S2, slower per call than S0 in the pilot: medians 104.1 s and 96.7 s against 73.3 s) but not S4, so the clock-based readings of H4 mix what a config does with each action and how fast its actions come. R5 adds secondary readings of H4 at a matched number of actions; nothing else changes (H4's and H5's primary readings, predictions and thresholds, every gate and kill rule, the clock, the budgets, the run plan, D19 and D20).
+  - **Readings:** for each counted run, ARC's game score and the levels cleared within its first K actions (RHAE_K), with a curve at 50, 100, 150 and 200 actions; H4's path quantities computed again from RHAE_K; at Checkpoint C, the seed-1 gap at K next to the frozen one, descriptively. No rule reads them.
+  - **K = 150:** the largest multiple of 50 that every config should reach inside 12 h at run 2's pace, with S1 and S2 slowed by their pilot latency ratios (150 actions take about 7.7 h for S0, 10.9 h for S1 and 10.1 h for S2).
+  - **Censoring:** a run that stopped before K actions other than by `GAME_WIN` or `ACTION_BUDGET` is censored: reported at its final values as lower bounds and, in a sensitivity analysis, left out with its unit.
+  - **Code:** `analysis/arc_action_matched.py`. Its committed run, `results/arc_action_matched/20261007T134853Z/`, covers run 1 only, since run 2's folder is not on `main` yet.
+  - **Later runs:** Claude will not read the scorecards, logs or `meta.json` files of run 3 or later until R5 is merged.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R5 and records decisions (i)-(iv) and the deviation. It adds no spending approval.
+
+**Spend** (billed): block 2 $67.02 of $330 (run 1 $16.87, run 2 $50.15). Every remaining counted run needs $120 of room under $330 when it starts (§12), so the re-run, scheduled last, starts only if block 2's spend is at most $210 by then; otherwise it does not start, and Claude asks. Phase 1b: $67.02 of $900. All phases: $105.74. This entry's pull request is $0.

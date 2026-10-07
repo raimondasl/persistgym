@@ -2,8 +2,10 @@
 ARC's score rule against block 2's runs 1 and 2, matching at K actions and censoring on
 synthetic scorecards, reset handling, re-run links, refusals and the output allowlist.
 
-Only block 2's runs 1 and 2 are read from the repository (both were seen before R5); every
-other run here is synthetic."""
+Of block 2's runs, only runs 1 and 2 are read from the repository (both were seen before
+R5); every other ARC path run here is synthetic. The checks of PREREG §17.5's numbers also
+read the ARC pilot rows of results/costs.csv (latency only) and the published recordings'
+per-action file."""
 
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ import itertools
 import json
 import math
 import random
+import re
 
 import pytest
 
@@ -413,3 +416,59 @@ def test_the_committed_outputs_agree_with_the_code():
             assert int(row["levels_cleared_at_K"]) == at["levels_cleared"]
             assert float(row["score_at_K"]) == at["score"]
             assert row["score_reproduced"] == "True"
+
+
+# --- the numbers PREREG §17.5 states ---------------------------------------------------------
+
+RUN2_SECONDS_PER_ACTION = 184           # stated for run 2 (about 12 h / 236 actions)
+
+
+def _r5_section() -> str:
+    text = (am.REPO_ROOT / "PREREG.md").read_text(encoding="utf-8")
+    return text[text.index("### 17.5 Amendment R5"):]
+
+
+def test_prereg_r5_cites_the_committed_run_of_the_script():
+    section = _r5_section()
+    (folder,) = set(re.findall(r"results/arc_action_matched/(\d{8}T\d{6}Z)/", section))
+    meta = json.loads((am.OUT_ROOT / folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["git_dirty"] is False and meta["config"]["K"] == am.REGISTERED_K == 150
+    assert meta["runs"] == [RUN1]                    # run 1 only, as §17.5 says
+    assert "73.02044380603104" in section and "2.49 h" in section
+
+
+def test_prereg_r5_k_follows_its_pace_rule():
+    """K is the largest multiple of 50 every config reaches inside 12 h at run 2's pace, with
+    S1 and S2 slowed by their pilot median seconds per call relative to S0's (costs.csv)."""
+    section = _r5_section()
+    latency = {r["cell_or_config"]: float(r["latency_s"])
+               for r in costs.read_rows() if r["experiment"] == "arc_pilot"}
+    for c in ("S0", "S1", "S2", "S4"):
+        assert f"{latency[c]:.1f} s" in section, c
+    pace = {c: RUN2_SECONDS_PER_ACTION * latency[c] / latency["S0"] for c in ("S0", "S1", "S2")}
+    assert f"{latency['S1'] / latency['S0']:.2f} times" in section
+    assert f"{latency['S2'] / latency['S0']:.2f} times" in section
+    for k in (150, 200):
+        for c in ("S0", "S1", "S2"):
+            assert f"{k * pace[c] / 3600:.1f} h" in section, (k, c)
+    clock = 12 * 3600
+    k = max(k for k in range(50, 1001, 50) if all(k * p <= clock for p in pace.values()))
+    assert k == am.REGISTERED_K
+
+
+def test_prereg_r5_published_pace_comparisons():
+    """ARC's published FT09 Standard-high run ended at action 126 after 3.0 h (86 s per
+    action); its CD82 Adapter run took 36 s per action (the operational slice's file)."""
+    path = (am.REPO_ROOT / "results" / "arc_public_ops" / "20261001T185155Z"
+            / "recordings_per_action.csv")
+    rows = {(r["game"], r["harness"]): r for r in csv.DictReader(path.open(encoding="utf-8"))}
+    ft09, cd82 = rows[("FT09", "standard")], rows[("CD82", "provider_adapter")]
+    section = _r5_section()
+    assert int(ft09["session_actions"]) == 126 and "action 126" in section
+    assert f"{float(ft09['duration_s']) / 3600:.1f} h" == "3.0 h" and "3.0 h" in section
+    per_action = float(ft09["duration_s"]) / int(ft09["session_actions"])
+    assert f"its {per_action:.0f} s" in section
+    cd82_pace = float(cd82["duration_s"]) / int(cd82["session_actions"])
+    assert f"against {cd82_pace:.0f} s in ARC's published CD82 Adapter run" in section
+    run1 = am.load_run(ARC_PATH / RUN1)
+    assert f"Run 1 averaged {run1.per_action(run1.wall_clock_s):.0f} s per action" in section

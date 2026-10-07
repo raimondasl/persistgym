@@ -4,10 +4,10 @@ For each counted ARC path run, this computes from its committed `scorecard.json`
 got within its first K actions, so that configs are compared at the same number of actions
 rather than inside the same 12 h clock. It is $0: it reads committed files only.
 
-**ARC's game score** (`game_score`), as ARC's toolkit computes it (arc-agi 0.9.8, the version
-the pinned harness's `uv.lock` resolves: `EnvironmentScoreCalculator.add_level` and
-`to_score` in `arc_agi/scorecard.py`, https://github.com/arcprize/ARC-AGI/blob/main/arc_agi/scorecard.py;
-the rule is stated at https://docs.arcprize.org/methodology, checked 2026-10-07):
+**ARC's game score** (`game_score`), as ARC's toolkit computes it (arc-agi 0.9.8,
+https://pypi.org/project/arc-agi/0.9.8/, the release the pinned harness's `uv.lock` resolves:
+`EnvironmentScoreCalculator.add_level` and `to_score` in `arc_agi/scorecard.py`; the rule is
+stated at https://docs.arcprize.org/methodology, checked 2026-10-07):
 
 * a cleared level ℓ with human baseline b and a > 0 actions scores min(100 (b / a)², 115); an
   uncleared level scores 0;
@@ -45,7 +45,15 @@ The registered matched count is K = 150 (`REGISTERED_K`); the curve adds K = 50,
 (`CURVE_K`). `--k` sets another K, which the outputs label exploratory.
 
 **Counted runs** (PREREG §7.5): a run named by another run's `rerun_of` is replaced by that
-re-run in every primary analysis; both are listed, the original with `counted` false.
+re-run in every primary analysis; both are listed, the original with `counted` false. The link
+is read from every folder's `meta.json`, so a re-run that is skipped below still replaces its
+original.
+
+**Runs without matched values** (PREREG §17.5): a run fails the checks (`checks_passed` false)
+when its recomputed score or level scores differ from its scorecard's, or its Σ
+`level_actions` differs from its `actions`. Such a run, and a counted run that is skipped (a
+second play, level lists that do not match the level count, no scorecard), has no matched
+values: the readings leave its unit out and list it.
 
 **Pace and cost** per run, from its `meta.json`: wall clock (`wall_clock_s`) / actions, and
 billed and list cost / actions. The billed and list costs are checked against the run's
@@ -59,7 +67,8 @@ never read. The outputs are built from allowlists (`RUN_FIELDS`, `CURVE_FIELDS`,
 Run: ``uv run python -m analysis.arc_action_matched [--k K] [run folders]`` (``--no-write``
 only prints). It writes ``results/arc_action_matched/<UTC>/runs.csv`` (one row per run, at
 K), ``curve.csv`` (one row per run and K), ``summary.md`` and ``meta.json``. The H4 path
-quantities at K (PREREG §17.5) are computed from ``runs.csv``, not here.
+quantities and Checkpoint C's gap at K (PREREG §17.5) are computed from ``runs.csv`` by the
+scripts of the primary readings, not here; neither exists yet.
 """
 
 from __future__ import annotations
@@ -96,12 +105,12 @@ META_FIELDS = ("experiment", "run_id", "cell_or_config", "game_requested", "seed
 RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "replaced_by",
               "counted", "agent_exit_reason", "exit_reason", "actions", "resets",
               "sum_level_actions", "levels_completed", "level_count", "score_scorecard",
-              "score_recomputed", "score_reproduced", "cleared_at_actions", "wall_clock_s",
-              "seconds_per_action", "cost_billed_usd", "cost_list_usd",
+              "score_recomputed", "score_reproduced", "checks_passed", "cleared_at_actions",
+              "wall_clock_s", "seconds_per_action", "cost_billed_usd", "cost_list_usd",
               "billed_usd_per_action", "list_usd_per_action", "costs_row", "K", "K_role",
               "status_at_K", "levels_cleared_at_K", "score_at_K")
-CURVE_FIELDS = ("run_id", "game", "config", "replicate", "counted", "K", "K_role", "status",
-                "levels_cleared", "score")
+CURVE_FIELDS = ("run_id", "game", "config", "replicate", "counted", "checks_passed", "K",
+                "K_role", "status", "levels_cleared", "score")
 OUTPUTS = ("runs.csv", "curve.csv", "summary.md")
 
 
@@ -218,6 +227,12 @@ class Run:
                         zip(self.recomputed_level_scores, self.level_scores, strict=True)))
 
     @property
+    def checks_passed(self) -> bool:
+        """Both checks pass: ARC's score is reproduced and Σ level_actions = actions. A run
+        that fails either has no matched values (PREREG §17.5)."""
+        return self.score_reproduced and self.sum_level_actions == self.actions
+
+    @property
     def cleared_at_actions(self) -> list[int]:
         """The action count at which each completed level was cleared (the curve)."""
         return cumulative(self.level_actions)[: self.levels_completed]
@@ -296,20 +311,24 @@ def run_folders(root: Path = ARC_PATH) -> list[Path]:
 
 
 def collect(folders: list[Path]) -> tuple[list[Run], list[tuple[str, str]]]:
-    """The runs in `folders`, linked to their re-runs, and the skipped folders with reasons."""
-    runs, skipped = [], []
+    """The runs in `folders`, linked to their re-runs, and the skipped folders with reasons.
+    The links come from every folder's meta.json, skipped folders included, so an original
+    whose re-run is skipped is still not counted (PREREG §7.5)."""
+    runs, skipped, links = [], [], []
     for folder in folders:
         got = load_run(folder)
+        meta = _meta(Path(folder))
+        links.append((meta["run_id"], meta["rerun_of"]))
         if isinstance(got, str):
             skipped.append((Path(folder).name, got))
         else:
             runs.append(got)
-    by_id = {r.run_id: r for r in runs}
-    if len(by_id) != len(runs):
+    if len({run_id for run_id, _ in links}) != len(links):
         raise ValueError("two folders hold the same run_id")
-    for r in runs:
-        if r.rerun_of in by_id:
-            by_id[r.rerun_of].replaced_by.append(r.run_id)
+    by_id = {r.run_id: r for r in runs}
+    for rerun_id, original in links:
+        if original in by_id:
+            by_id[original].replaced_by.append(rerun_id)
     return runs, skipped
 
 
@@ -352,7 +371,7 @@ def run_row(run: Run, k: int) -> dict:
            "sum_level_actions": run.sum_level_actions,
            "levels_completed": run.levels_completed, "level_count": run.level_count,
            "score_scorecard": run.score_scorecard, "score_recomputed": run.score_recomputed,
-           "score_reproduced": run.score_reproduced,
+           "score_reproduced": run.score_reproduced, "checks_passed": run.checks_passed,
            "cleared_at_actions": ";".join(str(x) for x in run.cleared_at_actions),
            "wall_clock_s": run.wall_clock_s,
            "seconds_per_action": run.per_action(run.wall_clock_s),
@@ -371,7 +390,8 @@ def curve_rows(run: Run, k: int) -> list[dict]:
     for kk in curve_ks(k):
         at = run.at_k(kk)
         row = {"run_id": run.run_id, "game": run.game, "config": run.config,
-               "replicate": run.replicate, "counted": run.counted, "K": kk,
+               "replicate": run.replicate, "counted": run.counted,
+               "checks_passed": run.checks_passed, "K": kk,
                "K_role": k_role(kk), "status": at["status"],
                "levels_cleared": at["levels_cleared"], "score": at["score"]}
         assert tuple(row) == CURVE_FIELDS
@@ -421,19 +441,21 @@ def summary_lines(runs: list[Run], skipped: list[tuple[str, str]], k: int,
           "ended GAME_WIN or ACTION_BUDGET; final values hold at K), CENSORED (fewer, ended "
           "any other way; values are lower bounds)."),
          ("- Only counted runs enter the H4 readings; a run replaced by its re-run is listed "
-          "with counted = False (PREREG §7.5)."), "",
+          "with counted = False (PREREG §7.5)."),
+         ("- A run that fails a check below, or a counted run that is skipped, has no matched "
+          "values: the readings leave its unit out and list it."), "",
          f"## Runs at K = {k}", "",
          ("| Run | Game | Config | Rep. | Counted | Ending (agent) | Actions (resets) | "
-          "Levels | Score: scorecard; recomputed | Status at K | Levels cleared within K | "
-          "RHAE_K |"),
-         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "Levels | Score: scorecard; recomputed | Checks | Status at K | "
+          "Levels cleared within K | RHAE_K |"),
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in runs:
         at = r.at_k(k)
         L.append(f"| `{r.run_id}` | {r.game} | {r.config} | {r.replicate} | {r.counted} | "
                  f"{r.agent_exit_reason} | {r.actions} ({r.resets}) | "
                  f"{r.levels_completed} of {r.level_count} | {r.score_scorecard:.2f}; "
-                 f"{r.score_recomputed:.2f} | {at['status']} | {at['levels_cleared']} | "
-                 f"{at['score']:.2f} |")
+                 f"{r.score_recomputed:.2f} | {'pass' if r.checks_passed else '**fail**'} | "
+                 f"{at['status']} | {at['levels_cleared']} | {at['score']:.2f} |")
     ks = curve_ks(k)
     L += ["", "## Levels cleared and RHAE_K by action count", "",
           "Each cell: levels cleared within K; RHAE_K; status. Descriptive.", "",
@@ -460,11 +482,13 @@ def summary_lines(runs: list[Run], skipped: list[tuple[str, str]], k: int,
     bad_costs = [r.run_id for r in runs if r.costs_row != "match"]
     L += ["", "## Checks", "",
           ("- ARC's score reproduced from the level lists: "
-           + ("every run." if not bad_score else
-              f"**not for {', '.join(bad_score)}**: their RHAE_K is not used until the "
-              "difference is explained (PREREG §17.5).")),
+           + ("every run." if not bad_score else f"**not for {', '.join(bad_score)}**.")),
           ("- Σ level_actions = actions: "
            + ("every run." if not bad_actions else f"**fails for {', '.join(bad_actions)}**.")),
+          ("- A run that fails either check has no matched values until the difference is "
+           "explained in `results/decisions.md`, and any change of rule it needs is made by "
+           "a dated amendment; until then its unit is left out of every matched reading "
+           "(PREREG §17.5)."),
           ("- costs.csv row matches meta.json: "
            + ("every run." if not bad_costs else
               "; ".join(f"{r.run_id}: {r.costs_row}" for r in runs if r.costs_row != "match")

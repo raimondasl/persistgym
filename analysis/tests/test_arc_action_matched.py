@@ -16,6 +16,7 @@ import json
 import math
 import random
 import re
+from fractions import Fraction
 
 import pytest
 
@@ -160,6 +161,9 @@ def test_run_2_committed_scorecard_reproduces_exactly():
     assert run.level_baseline_actions == s["level_baseline_actions"]
     assert round(run.score_scorecard, 2) == s["score_2dp"]
     assert run.agent_exit_reason == "TIME_BUDGET"
+    assert run.checks_passed
+    # the pace behind K (PREREG §17.5: "about 184 s per action")
+    assert abs(run.per_action(run.wall_clock_s) - RUN2_SECONDS_PER_ACTION) < 1
 
 
 def test_the_cap_at_the_weight_share_of_scored_levels_binds():
@@ -221,6 +225,26 @@ def test_rhae_k_is_the_score_of_the_play_cut_after_k_actions():
             _independent_score(baselines, level_actions, done), abs=1e-9)
 
 
+def test_run_1_curve_in_exact_fractions():
+    """Run 1's curve re-derived in exact arithmetic from its committed level lists, written
+    out level by level (cleared at 22, 28, 78, 104, 190 and 206 actions)."""
+    run = am.load_run(ARC_PATH / RUN1)
+    b, a = run.level_baseline_actions, run.level_actions
+    s = [min(100 * Fraction(bb, aa) ** 2, Fraction(115)) for bb, aa in zip(b, a, strict=True)]
+    weights = sum(range(1, 7))                                     # 21
+    expected = {
+        50: min((1 * s[0] + 2 * s[1]) / weights, Fraction(100 * 3, weights)),  # the cap binds
+        100: (1 * s[0] + 2 * s[1] + 3 * s[2]) / weights,
+        150: (1 * s[0] + 2 * s[1] + 3 * s[2] + 4 * s[3]) / weights,
+        200: (1 * s[0] + 2 * s[1] + 3 * s[2] + 4 * s[3] + 5 * s[4]) / weights,
+        206: sum((i + 1) * x for i, x in enumerate(s)) / weights}
+    assert expected[50] == Fraction(300, 21)
+    for k, value in expected.items():
+        assert run.at_k(k)["score"] == pytest.approx(float(value), abs=1e-12), k
+    assert [run.at_k(k)["levels_cleared"] for k in (21, 22, 27, 28, 150, 205, 206)] == [
+        0, 1, 1, 2, 4, 5, 6]
+
+
 def test_rhae_k_never_decreases_with_k():
     rng = random.Random(7)
     for _ in range(100):
@@ -279,9 +303,13 @@ def test_a_run_whose_actions_differ_from_its_level_actions_is_flagged(tmp_path):
     card = _scorecard([10, 20, 30], [10, 20, 30], 3, actions=61, resets=1)
     run = am.load_run(_folder(tmp_path, "odd", card=card))
     assert run.sum_level_actions == 60 and run.actions == 61
+    assert run.score_reproduced and not run.checks_passed
+    assert am.run_row(run, 150)["checks_passed"] is False
+    assert {r["checks_passed"] for r in am.curve_rows(run, 150)} == {False}
     text = "\n".join(am.summary_lines([run], [], 150, "now", {"git_commit": "0" * 40,
                                                                 "git_dirty": False}))
     assert "Σ level_actions = actions: **fails for odd**" in text
+    assert "| **fail** |" in text and "has no matched values" in text
 
 
 def test_a_scorecard_with_a_second_play_is_skipped(tmp_path):
@@ -294,10 +322,17 @@ def test_a_scorecard_with_a_second_play_is_skipped(tmp_path):
 def test_a_score_that_does_not_reproduce_is_flagged(tmp_path):
     card = _scorecard([10, 20, 30], [10, 20, 30], 3, score=99.0)
     run = am.load_run(_folder(tmp_path, "off", card=card))
-    assert not run.score_reproduced
+    assert not run.score_reproduced and not run.checks_passed
+    assert am.run_row(run, 150)["checks_passed"] is False
     text = "\n".join(am.summary_lines([run], [], 150, "now", {"git_commit": "0" * 40,
                                                                 "git_dirty": False}))
-    assert "**not for off**" in text
+    assert "**not for off**" in text and "| **fail** |" in text
+
+
+def test_runs_that_pass_both_checks_are_marked(tmp_path):
+    run = am.load_run(_folder(tmp_path, "ok"))
+    assert run.checks_passed and am.run_row(run, 150)["checks_passed"] is True
+    assert am.load_run(ARC_PATH / RUN1).checks_passed
 
 
 # --- runs, re-runs and refusals ------------------------------------------------------------
@@ -310,6 +345,25 @@ def test_a_rerun_replaces_its_original(tmp_path):
     assert not by["orig"].counted and by["orig"].replaced_by == ["re"]
     assert by["re"].counted and by["re"].replicate == 1 and by["re"].seed == 101
     assert am.run_row(by["orig"], 150)["replaced_by"] == "re"
+
+
+def test_a_skipped_rerun_still_replaces_its_original(tmp_path):
+    """The original stays out of the counted runs even when its re-run cannot be scored here
+    (PREREG §7.5, §17.5): the re-run's unit then has no matched values."""
+    _folder(tmp_path, "orig", ending="TIME_BUDGET", seed=1)
+    _folder(tmp_path, "re", ending="GAME_WIN", seed=101, rerun_of="orig",
+            card=_scorecard([10, 20, 30], [10, 20, 30], 3, plays=2))
+    runs, skipped = am.collect([tmp_path / "orig", tmp_path / "re"])
+    assert [r.run_id for r in runs] == ["orig"] and [n for n, _ in skipped] == ["re"]
+    assert not runs[0].counted and runs[0].replaced_by == ["re"]
+    assert am.run_row(runs[0], 150)["counted"] is False
+
+
+def test_two_folders_with_one_run_id_are_refused(tmp_path):
+    _folder(tmp_path, "a", meta_extra={"run_id": "same"})
+    _folder(tmp_path, "b", meta_extra={"run_id": "same"}, card=False)
+    with pytest.raises(ValueError, match="same run_id"):
+        am.collect([tmp_path / "a", tmp_path / "b"])
 
 
 def test_pilot_and_foreign_folders_are_refused(tmp_path):

@@ -307,7 +307,7 @@ The researcher's call on 2026-10-06, after the merge of PR #44 with the G0 metri
 - **Blinding:** none. These are counted runs, not pilots. Their level progress is the data H4 needs.
 - **Decides:** Checkpoint C (§10.3): the first fresh-seed gap, the real per-run cost and how runs end, then block 3.
 
-approved_block: 2-arc-seed1 | experiments: arc_path | max_usd: 330
+approved_block: 2-arc-seed1 | experiments: arc_path | max_usd: 400
 
 ## 2026-10-06: R4 step 1 (block 1): sol's window-cell pilots and default-config validity
 Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step"), under block `1-pilots`. Each run was launched as a process with a console of its own.
@@ -364,3 +364,26 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
 **Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R5 and records decisions (i)-(iv) and the deviation. It adds no spending approval.
 
 **Spend** (billed): block 2 $67.02 of $330 (run 1 $16.87, run 2 $50.15). Every remaining counted run needs $120 of room under $330 when it starts (§12), so the re-run, scheduled last, starts only if block 2's spend is at most $210 by then; otherwise it does not start, and Claude asks. Phase 1b: $67.02 of $900. All phases: $105.74. This entry's pull request is $0.
+
+## 2026-10-08: Block 2 limit raised from $330 to $400 (proposed by Claude; approved when the researcher merges the PR that changes the approval line)
+- **Why:** each counted ARC run needs $120 of room under the block limit when it starts (§12). Block 2 has spent $165.07 billed after 5 runs (runs 1-5 in the D18 order), against $106.70 forecast for them.
+- **Spend by run:**
+
+  | Run | Ending | Billed | Forecast |
+  |---|---|---|---|
+  | CD82 S4 | `GAME_WIN` | $16.87 | $22.13 |
+  | FT09 S0 | `TIME_BUDGET` | $50.15 | $23.90 |
+  | SB26 S4 | `GAME_WIN` | $13.81 | $12.98 |
+  | SB26 S0 | `ACTION_BUDGET` | $38.51 | $24.39 |
+  | CD82 S0 | `TIME_BUDGET` | $45.73 | $9.71 |
+
+  At today's Gemini pace, S0 runs reach the 12 h clock or a deep level's action budget, at about $40-50 billed each.
+- **What is left:**
+  - run 6 (R11L S0), in progress, likely about $50 (its published run took 6.7 h at ARC's faster pace);
+  - run 7 (R11L S4), about $25;
+  - run 8 (FT09 S4), about $6;
+  - the D20 re-run of FT09 S0 (option (a), last), about $50.
+- **The arithmetic:** after run 6 the block would stand at about $215, so run 7 could not start under $330 ($215 + $120 > $330). Before the re-run, at about $246, it needs a limit of at least $366. **$400** leaves a margin for one more overrun. Expected final block spend: about $300.
+- **D20 check for run 5** (CD82 S0, `TIME_BUDGET`): its median was 170.06 s per model call. The median of the earlier counted S0 runs' medians (181.25 s and 156.68 s) is 168.97 s, so the threshold is 337.9 s. Not a latency incident: the ending is final and flagged.
+- **Run 6's first launch** (2026-10-08 09:40 ET) was refused before any spend: `uv sync --locked` in the scratch harness worktree failed with "Access is denied" on a temporary uv helper `.exe` (Windows file lock). It was relaunched at 09:41.
+- **Phase 1b:** $165.07 spent of its $900 cap; this raise changes no cap. The phase-1b sizing (3 vs 4 games, or a cap raise) is decided at Checkpoint C, as agreed on 2026-10-07.

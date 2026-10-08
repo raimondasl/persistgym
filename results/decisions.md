@@ -366,7 +366,7 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
 **Spend** (billed): block 2 $67.02 of $330 (run 1 $16.87, run 2 $50.15). Every remaining counted run needs $120 of room under $330 when it starts (§12), so the re-run, scheduled last, starts only if block 2's spend is at most $210 by then; otherwise it does not start, and Claude asks. Phase 1b: $67.02 of $900. All phases: $105.74. This entry's pull request is $0.
 
 ## 2026-10-08: Block 2 limit raised from $330 to $400 (proposed by Claude; approved when the researcher merges the PR that changes the approval line)
-- **Why:** each counted ARC run needs $120 of room under the block limit when it starts (§12). Block 2 has spent $165.07 billed after 5 runs (runs 1-5 in the D18 order), against $106.70 forecast for them.
+- **Why:** each counted ARC run needs $120 of room under the block limit when it starts (§12). Block 2 has spent $165.07 billed after 5 runs (runs 1-5 in the D18 order), against $93.11 forecast for them.
 - **Spend by run:**
 
   | Run | Ending | Billed | Forecast |

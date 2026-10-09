@@ -6,6 +6,21 @@ Run: ``uv run python -m analysis.checkpoint_c [--results-root DIR] [--no-write]
 and prints the summary. Claude proposes; **the researcher makes the go/no-go call**
 (PREREG §10.3, CLAUDE.md).
 
+``--d20-run RUN_ID`` instead prints one JSON line for that one ``arc_path`` run and exits 0:
+``{"run_id", "config", "game", "agent_exit_reason", "median_s_per_call", "threshold_s",
+"incident", "rerun_eligible", "rerun_of", "replaced_by", "rerun_allowed"}`` (exit 2, with the
+reason on stderr, if no run folder with a ``meta.json`` holds that run, the run is truncated, or
+the folders are inconsistent; any other failure exits non-zero too). The block-3 driver calls it
+after every run and starts a re-run right away only on ``"rerun_allowed": true`` (PREREG §17.6
+changes 2 and 5); ``null``, a non-zero exit or output it cannot parse stops the block. It reads only ``costs.csv`` (the pilots' ``latency_s``) and
+the ``arc_path`` folders, so block 2's completeness, the G0 record and the draw do not matter.
+``threshold_s`` is 2 × the as-of-start yardstick below, whatever the ending; ``incident`` is
+D20's verdict, ``null`` unless the run ended ``TIME_BUDGET`` (D20 reads only those);
+``rerun_eligible`` is D19's verdict on the ending alone, and ``null`` means it cannot be computed
+(a ``TIME_BUDGET`` without a median or a yardstick). ``rerun_allowed`` adds D19's "no second
+re-run": it is ``rerun_eligible`` for an original that has no re-run yet, ``false`` for a
+re-run or an already replaced original, and ``null`` when ``rerun_eligible`` is.
+
 **Inputs**, all under the results root (default ``results/``):
 
 * every folder in ``arc_path/`` (its ``scorecard.json`` and allowlisted ``meta.json`` fields,
@@ -13,7 +28,8 @@ and prints the summary. Claude proposes; **the researcher makes the go/no-go cal
   pilot folder (blinded, PREREG §11) is never read;
 * ``costs.csv``: each run's row (billed and list cost, model calls, median seconds per call,
   the block tag ``approved_block=2-arc-seed1;``), the phase-1b spend, and the ARC pilot rows'
-  ``latency_s`` only (D20's fallback yardstick; latency is a field §11 allows);
+  ``latency_s`` only (D20's fallback yardstick and, for S1 and S2, R6's scaled one; latency is
+  a field §11 allows);
 * the latest ``gates/g0-*/g0.json`` (each run's G0 forecast: published list cost × b(c));
 * ``draw/*/draw.json`` (the path games and D32's dropped game, which must be perm[3] of the
   beacon order; otherwise the script refuses).
@@ -53,6 +69,15 @@ the same config's ``arc_path`` runs that started before it and had not been repl
 re-run started by then (a re-run's own original never counts in its yardstick). The reading
 on the final counted set (replaced runs left out) is reported next to it, flagged where the
 two disagree.
+
+**R6's yardstick for a config's first counted run** (PREREG §17.6 change 5): for S1 and S2
+only (`SCALED_CONFIGS`, whose first counted runs are in block 3), the fallback is the config's
+pilot median × S0's drift, where the drift is the median of the per-run medians of S0's
+block-2 counted runs (read the same two ways, as of the run's start and on the final counted
+set) divided by S0's pilot median. On this checkout's data: 163.37 s / 73.30 s = 2.229, so
+S2's yardstick is 215.54 s (threshold 431.09 s) and S1's 232.05 s (464.10 s). S0 and S4 keep
+the plain pilot fallback, so block 2's rulings are unchanged; a config's later runs use D20
+as frozen.
 
 **Gap rule.** Mean over the path games of RHAE(S4, s = 1) − RHAE(S0, s = 1) on counted runs,
 RHAE being the score on the run's scorecard (``analysis.arc_action_matched``). Fires if < 5.
@@ -121,6 +146,8 @@ GAP_MIN = 5.0                      # §10.3: fires if the mean gap is < 5
 MAX_ERRORS = 3                     # §10.3: fires if more than 3 runs end in an error
 D27_RAISE_USD = 170.0              # §10.1 D27: "up to about $170"
 D20_FACTOR = 2.0                   # §7.5 D20
+SCALED_CONFIGS = ("S1", "S2")      # §17.6 change 5: first counted run in block 3
+DRIFT_CONFIG = "S0"                # §17.6 change 5: the drift block 2 measured on S0
 CAP_1B_FROZEN = 900.0              # §10.3: "Remaining is $900 minus ..."
 RHAE_MAX = 100.0                   # ARC's game score is in [0, 100] (arc_action_matched)
 K = am.REGISTERED_K                # §17.5
@@ -339,7 +366,23 @@ def pilot_latency(rows: list[dict]) -> dict[str, dict]:
 
 # --- D20 and D19 ---------------------------------------------------------------------------
 
-def _yardstick(e: Entry, group: list[Entry], pilots: dict[str, dict]) -> dict:
+def _drift(group: list[Entry], pilots: dict[str, dict]) -> dict | None:
+    """S0's drift (§17.6 change 5): the median of its block-2 counted runs' per-run medians
+    over its pilot median; None without either."""
+    p = pilots.get(DRIFT_CONFIG) or {}
+    if not group or not p.get("latency_s"):
+        return None
+    m = statistics.median(x.median_s_per_call for x in group)
+    return {"s0_runs": [x.run_id for x in group], "s0_median_s": m,
+            "s0_pilot": p["run_id"], "s0_pilot_s": p["latency_s"],
+            "factor": m / p["latency_s"]}
+
+
+def _yardstick(e: Entry, group: list[Entry], pilots: dict[str, dict],
+               drift: dict | None = None) -> dict:
+    """D20's yardstick from the config's earlier counted runs `group`; without any, the
+    config's pilot median, scaled by S0's `drift` for S1 and S2 (§17.6 change 5)."""
+    used = None
     if group:
         y = statistics.median(x.median_s_per_call for x in group)
         source: str | list[str] = [x.run_id for x in group]
@@ -347,29 +390,53 @@ def _yardstick(e: Entry, group: list[Entry], pilots: dict[str, dict]) -> dict:
         p = pilots.get(e.config) or {}
         if p.get("latency_s") is None:
             return {"yardstick_s": None, "yardstick_from": "no earlier counted run and no "
-                    "pilot latency", "threshold_s": None, "ratio": None, "incident": None}
-        y, source = p["latency_s"], f"pilot {p['run_id']}"
+                    "pilot latency", "threshold_s": None, "ratio": None, "incident": None,
+                    "drift": None}
+        if e.config in SCALED_CONFIGS:
+            if drift is None:
+                return {"yardstick_s": None, "yardstick_from": "no earlier counted run, and no "
+                        f"{DRIFT_CONFIG} drift to scale the pilot median by (§17.6 change 5)",
+                        "threshold_s": None, "ratio": None, "incident": None, "drift": None}
+            used = drift
+            y = p["latency_s"] * drift["factor"]
+            source = (f"pilot {p['run_id']} × {DRIFT_CONFIG} drift {drift['factor']:.4f} "
+                      "(§17.6 change 5)")
+        else:
+            y, source = p["latency_s"], f"pilot {p['run_id']}"
     m = e.median_s_per_call
     return {"yardstick_s": y, "yardstick_from": source, "threshold_s": D20_FACTOR * y,
             "ratio": None if m is None or y <= 0 else m / y,
-            "incident": None if m is None else m > D20_FACTOR * y}
+            "incident": None if m is None else m > D20_FACTOR * y, "drift": used}
+
+
+def d20_readings(e: Entry, entries: list[Entry], pilots: dict[str, dict]) -> dict:
+    """D20's two readings for run `e`, whatever its ending (module docstring): the
+    as-of-start reading decides; the final-counted-set reading is reported next to it."""
+    starts = {x.run_id: x.started for x in entries}
+
+    def earlier(config: str, pool: list[Entry]) -> tuple[list[Entry], list[Entry]]:
+        same = [x for x in pool
+                if x is not e and not x.truncated and x.config == config
+                and x.started < e.started and x.median_s_per_call is not None]
+        return ([x for x in same if not any(starts[r] <= e.started for r in x.replaced_by)],
+                [x for x in same if not x.replaced_by])
+
+    as_of, final = earlier(e.config, entries)
+    drift_a = drift_f = None
+    if e.config in SCALED_CONFIGS:
+        s0_a, s0_f = earlier(DRIFT_CONFIG, [x for x in entries if x.block2])
+        drift_a, drift_f = _drift(s0_a, pilots), _drift(s0_f, pilots)
+    a = _yardstick(e, as_of, pilots, drift_a)
+    f = _yardstick(e, final, pilots, drift_f)
+    return {"median_s_per_call": e.median_s_per_call, "as_of_start": a, "final_counted_set": f,
+            "incident": a["incident"], "readings_agree": a["incident"] == f["incident"]}
 
 
 def d20_check(e: Entry, entries: list[Entry], pilots: dict[str, dict]) -> dict | None:
-    """D20 for a run that ended TIME_BUDGET (module docstring): the as-of-start reading
-    decides; the final-counted-set reading is reported next to it."""
+    """D20 for a run that ended TIME_BUDGET; None for any other ending."""
     if e.agent_exit_reason != TIME_BUDGET:
         return None
-    starts = {x.run_id: x.started for x in entries}
-    same = [x for x in entries
-            if x is not e and not x.truncated and x.config == e.config
-            and x.started < e.started and x.median_s_per_call is not None]
-    as_of = [x for x in same
-             if not any(starts[r] <= e.started for r in x.replaced_by)]
-    final = [x for x in same if not x.replaced_by]
-    a, f = _yardstick(e, as_of, pilots), _yardstick(e, final, pilots)
-    return {"median_s_per_call": e.median_s_per_call, "as_of_start": a, "final_counted_set": f,
-            "incident": a["incident"], "readings_agree": a["incident"] == f["incident"]}
+    return d20_readings(e, entries, pilots)
 
 
 def rerun_eligible(e: Entry, d20: dict | None) -> bool | None:
@@ -433,6 +500,25 @@ class Block:
         return self.units[(game, config)]
 
 
+def resolve_unit(entries: list[Entry], game: str, config: str,
+                 eligible: dict[str, bool | None], replicate: int = REPLICATE) -> Unit:
+    """The (game, config) unit at `replicate` (PREREG §7.5): its original, its re-run, which
+    replaces it, and whether a re-run is pending (the original is re-run-eligible and its
+    re-run has not landed). Refuses two originals. Call `check_links` first."""
+    mine = [e for e in entries if not e.truncated and e.replicate == replicate
+            and (e.game, e.config) == (game, config)]
+    originals = [e for e in mine if not e.rerun_of]
+    reruns = [e for e in mine if e.rerun_of]
+    if len(originals) > 1:
+        raise Refusal(f"{game} {config}: {len(originals)} seed-{replicate} runs that are not "
+                      f"re-runs ({', '.join(e.run_id for e in originals)}); exactly one may "
+                      "be counted")
+    u = Unit(game, config, originals[0] if originals else None, reruns[0] if reruns else None)
+    u.pending = bool(u.original is not None and u.rerun is None
+                     and eligible[u.original.run_id])
+    return u
+
+
 def build_block(entries: list[Entry], bare: list[tuple[str, str]], games: list[str],
                 drop: str, pilots: dict[str, dict]) -> Block:
     check_links(entries)
@@ -443,21 +529,13 @@ def build_block(entries: list[Entry], bare: list[tuple[str, str]], games: list[s
     units: dict[tuple[str, str], Unit] = {}
     for g in games:
         for c in BLOCK_CONFIGS:
-            mine = [e for e in entries if e.block2 and (e.game, e.config) == (g, c)]
-            originals = [e for e in mine if not e.rerun_of]
-            reruns = [e for e in mine if e.rerun_of]
-            if len(originals) > 1:
-                raise Refusal(f"{g} {c}: {len(originals)} seed-{REPLICATE} runs that are not "
-                              f"re-runs ({', '.join(e.run_id for e in originals)}); exactly "
-                              "one may be counted")
-            u = Unit(g, c, originals[0] if originals else None, reruns[0] if reruns else None)
+            u = resolve_unit(entries, g, c, eligible)
             units[(g, c)] = u
             if u.original is None:
                 incomplete.append(f"{g} {c}: no seed-{REPLICATE} run yet")
                 continue
             elig = eligible[u.original.run_id]
-            if u.rerun is None and elig:
-                u.pending = True
+            if u.pending:
                 incomplete.append(f"{g} {c}: {u.original.run_id} ended "
                                   f"{why_ending(u.original, d20[u.original.run_id], elig)}; "
                                   "its one re-run has not landed (it stands in, flagged)")
@@ -734,6 +812,49 @@ def the_draw(root: Path) -> Path:
     return found[0]
 
 
+def _incident_word(incident: bool | None) -> str:
+    return {True: "incident", False: "not an incident"}.get(incident, "undetermined")
+
+
+D20_RUN_FIELDS = ("run_id", "config", "game", "agent_exit_reason", "median_s_per_call",
+                  "threshold_s", "incident", "rerun_eligible", "rerun_of", "replaced_by",
+                  "rerun_allowed")
+
+
+def d20_run(root: Path, run_id: str) -> dict:
+    """D20 and D19 for one arc_path run (``--d20-run``; module docstring). Needs only
+    costs.csv and the arc_path folders. Raises Refusal or am.Refused."""
+    costs_csv = root / "costs.csv"
+    if not costs_csv.is_file():
+        raise Refusal(f"no costs.csv under {root} (the pilots' latency_s)")
+    try:
+        rows = costs.read_rows(costs_csv)
+    except ValueError as e:
+        raise Refusal(f"cannot read {costs_csv}: {e}") from None
+    entries, _ = discover(root / EXPERIMENT)
+    check_links(entries)
+    e = next((x for x in entries if run_id in (x.run_id, x.folder.name)), None)
+    if e is None:
+        raise Refusal(f"unknown run {run_id}: no folder in {root / EXPERIMENT} with a "
+                      "meta.json holds it")
+    if e.truncated:
+        raise Refusal(f"run {e.run_id} is truncated (not a counted run): D20 does not apply")
+    pilots = pilot_latency(rows)
+    d20 = d20_check(e, entries, pilots)
+    out = {"run_id": e.run_id, "config": e.config, "game": e.game,
+           "agent_exit_reason": e.agent_exit_reason, "median_s_per_call": e.median_s_per_call,
+           "threshold_s": d20_readings(e, entries, pilots)["as_of_start"]["threshold_s"],
+           "incident": None if d20 is None else d20["incident"],
+           "rerun_eligible": rerun_eligible(e, d20),
+           "rerun_of": e.rerun_of, "replaced_by": list(e.replaced_by)}
+    # D19 allows one re-run: never for a re-run, nor for an original that already has one
+    out["rerun_allowed"] = (None if out["rerun_eligible"] is None
+                            else bool(out["rerun_eligible"]) and not e.rerun_of
+                            and not e.replaced_by)
+    assert tuple(out) == D20_RUN_FIELDS
+    return out
+
+
 def compute(root: Path, generated: str, git: dict) -> tuple[dict, Block]:
     """Checkpoint C's numbers from the files under `root`. Raises Refusal or am.Refused."""
     draw_path = the_draw(root)
@@ -937,7 +1058,7 @@ def summary_lines(c: dict) -> list[str]:
             src = a["yardstick_from"]
             src = ", ".join(f"`{x}`" for x in src) if isinstance(src, list) else src
             d20 = (f"{_f(d['median_s_per_call'])} s vs 2 × {_f(a['yardstick_s'])} s "
-                   f"(from {src}): **{'incident' if a['incident'] else 'not an incident'}**"
+                   f"(from {src}): **{_incident_word(a['incident'])}**"
                    + ("" if d["readings_agree"] else
                       " (final-set reading disagrees: "
                       f"{d['final_counted_set']['incident']})"))
@@ -981,9 +1102,11 @@ def write(out_dir: Path, run_id: str, c: dict, text: str, git: dict) -> Path:
     (out_dir / "checkpoint_c.json").write_text(
         json.dumps(c, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     (out_dir / "summary.md").write_text(text, encoding="utf-8", newline="\n")
-    config = {"prereg": "PREREG.md §10.3 (with §7.5 D19/D20, §10.1 D27, §10.6 D32, §17.5)",
+    config = {"prereg": "PREREG.md §10.3 (with §7.5 D19/D20, §10.1 D27, §10.6 D32, §17.5, "
+                        "§17.6 change 5)",
               "gap_min": GAP_MIN, "max_errors": MAX_ERRORS, "d27_raise_usd": D27_RAISE_USD,
-              "d20_factor": D20_FACTOR, "K": K, "block": BLOCK,
+              "d20_factor": D20_FACTOR, "d20_scaled_configs": list(SCALED_CONFIGS),
+              "K": K, "block": BLOCK,
               "path_games": c["path_games"], "fallback_drop_game": c["fallback_drop_game"],
               "status": c["status"], "inputs": c["inputs"]}
     return runmeta.write_meta(
@@ -1006,10 +1129,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-write", action="store_true", help="print only")
     ap.add_argument("--allow-incomplete", action="store_true",
                     help="compute a PROVISIONAL reading while block 2 is incomplete")
+    ap.add_argument("--d20-run", metavar="RUN_ID", default=None,
+                    help="print one JSON line with D20's threshold and verdict and D19's "
+                         "re-run eligibility for this arc_path run, and exit (the block-3 "
+                         "driver's check; PREREG §17.6 change 5)")
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    if a.d20_run is not None:
+        try:
+            print(json.dumps(d20_run(a.results_root.resolve(), a.d20_run), ensure_ascii=False))
+        except (Refusal, am.Refused) as e:
+            print(f"D20 check refused: {e}", file=sys.stderr)
+            return 2
+        return 0
     now = datetime.now(UTC)
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     git = runmeta.git_state()

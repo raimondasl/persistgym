@@ -14,13 +14,15 @@ _**Amended 2026-10-03 (A5):** a pre-registered sol replication of H1, at the res
 
 _**Amended 2026-10-07 (A6):** action-matched secondary readings for the ARC path study, after block 2's first two runs, in which ARC's 12 h clock bound the Standard config's run but not the Adapter's. The amendment is §21, which points to `PREREG.md` §17.5 (amendment R5); passages it changes are marked **[A6]**._
 
+_**Amended 2026-10-09 (A7):** the minimal path after Checkpoint C's cost rule fired: ARC's S2 on seed 1 (S1 only if decided first) and luna's sweep, then a hard stop, for a project total of about $560; no seed 2, no phase 2, an arXiv preprint before Nov 2. The amendment is §22, which points to `PREREG.md` §17.6 (amendment R6); passages it changes are marked **[A7]**._
+
 ## 1. Summary
 ARC-AGI-3 scores move by 25-45 points between ARC Prize's Standard harness and its Provider Adapter ([GPT-6 Astra](https://arcprize.org/results/openai-gpt-6-astra), [Gemini 3.8 Flash](https://arcprize.org/results/google-gemini-3-8-flash)). Coding-agent success moves by only a few points across harnesses ([HarnessTax](https://arena.ai/blog/coding-agents-harness-tax)). We test whether this is because ARC needs **derived, non-recoverable** state that the Standard harness throws away, while coding state can usually be re-read from disk. The plan has three parts:
 - **Measure it** in a small generated environment (PersistGym-lite).
 - **Attribute** ARC's gap on Gemini 3.8 Flash to its components: loss policy, notes instruction, reasoning replay.
-- **Build** a provider-neutral state component (StateCarry) that should recover most of the Adapter's advantage inside the Standard harness.
+- **Build** a provider-neutral state component (StateCarry) that should recover most of the Adapter's advantage inside the Standard harness. **[A7]** Not built: phase 2 is not run (§22).
 
-The minimal version runs Oct 1-21. The builder phase runs Oct 22-Nov 4. The first paper target is AGENT 2027 (Nov 13 AoE).
+The minimal version runs Oct 1-21. The builder phase runs Oct 22-Nov 4. The first paper target is AGENT 2027 (Nov 13 AoE). **[A7]** There is no builder phase. The first target is an arXiv preprint before Nov 2, then TMLR or an AGENT 2027 short paper (§22).
 
 ## 2. Research question
 With the model fixed, when does the harness change task **success** rather than only **cost**?
@@ -59,13 +61,13 @@ Details and sources are in `docs/premise-check.md`.
 - A $0 observational analysis of ARC's published runs.
 - The StateCarry builder phase.
 
-**Reframed:** OpenAI already *named* the two mechanisms behind the ARC gap: retained reasoning, and compaction instead of rolling truncation ([OpenAI, Jul 29 2026](https://openai.com/index/how-two-settings-tripled-our-arc-agi-3-scores/)). It reported only their combined effect (13.3% to 38.3% for GPT-5.6 Sol on the public set). Our ARC contribution is therefore per-component numbers with seeds, the role of the notes instruction, a non-OpenAI replication, and a provider-neutral fix. It is not "explaining an unexplained gap".
+**Reframed:** OpenAI already *named* the two mechanisms behind the ARC gap: retained reasoning, and compaction instead of rolling truncation ([OpenAI, Jul 29 2026](https://openai.com/index/how-two-settings-tripled-our-arc-agi-3-scores/)). It reported only their combined effect (13.3% to 38.3% for GPT-5.6 Sol on the public set). Our ARC contribution is therefore per-component numbers with seeds, the role of the notes instruction, a non-OpenAI replication, and a provider-neutral fix. It is not "explaining an unexplained gap". **[A7]** Narrowed: one seed per game and config; the notes instruction's role is measured only if S1 runs (with S2 alone, the split is the provider-neutral steps together vs native replay); no provider-neutral fix (§22).
 
 ## 3. Deliverables
 - **PersistGym-lite:** generator, programmatic oracle, survival calculator, harness cells, and run data. MIT license, GitHub, plus an HF dataset.
-- **ARC path table:** Gemini 3.8 Flash, 4 public games, 4 configs, 2 seeds, plus a per-level analysis. Published as an early arXiv preprint and blog post (priority).
-- **StateCarry:** an opt-in state mode for ARC's Standard harness, evaluated on held-out public games. Offered upstream to `arcprize/arc-agi-3-benchmarking` if the researcher agrees.
-- **Paper:** AGENT 2027 (Nov 13). A fuller version goes to TMLR or an ICLR 2027 workshop.
+- **ARC path table:** Gemini 3.8 Flash, 4 public games, 4 configs, 2 seeds, plus a per-level analysis. Published as an early arXiv preprint and blog post (priority). **[A7]** S0, S2 and S4 (S1 only if decided before block 3's first ARC run) × 4 games × seed 1; the preprint goes out before Nov 2 (§22).
+- **StateCarry:** an opt-in state mode for ARC's Standard harness, evaluated on held-out public games. Offered upstream to `arcprize/arc-agi-3-benchmarking` if the researcher agrees. **[A7]** Dropped: phase 2 is not run (§22).
+- **Paper:** AGENT 2027 (Nov 13). A fuller version goes to TMLR or an ICLR 2027 workshop. **[A7]** After the arXiv preprint: TMLR or an AGENT 2027 short paper of 5 pages (§22).
 
 ## 4. Pre-registered hypotheses
 These are drafts. At M0, copy them into `PREREG.md` with exact definitions and commit before any paid run, including the M0 pilots. **[A1]** Target Oct 3, not the Oct 7 gate (§16.3). After that, change `PREREG.md` only through a dated amendment that says why.
@@ -81,7 +83,7 @@ Definitions to fix in `PREREG.md` (these need the researcher's judgment):
 Kill and equivalence rules below use 90% CIs from a template-level cluster bootstrap on the probability scale.
 
 ### H1: recoverability turns a success penalty into a cost penalty
-Model: gpt-6-luna (primary). Replication on gpt-6.1-sol if the budget allows (adds cells W-0 and W-n-0 on sol, about 640 episodes). **[A1]** Removed from the MVP: re-costed at about $430-610 at Flex with cache writes, not $30-230 (§16.1). Revisit as an extension. **[A5]** Re-instated as a pre-registered replication outside the Holm family: sol at medium effort on the default generator config, F-0, W-0 and W-n-0 on the 4 observed task cells (§20).
+Model: gpt-6-luna (primary). Replication on gpt-6.1-sol if the budget allows (adds cells W-0 and W-n-0 on sol, about 640 episodes). **[A1]** Removed from the MVP: re-costed at about $430-610 at Flex with cache writes, not $30-230 (§16.1). Revisit as an extension. **[A5]** Re-instated as a pre-registered replication outside the Holm family: sol at medium effort on the default generator config, F-0, W-0 and W-n-0 on the 4 observed task cells (§20). **[A7]** Its main runs are not run (budget); its pilot and validity runs are reported descriptively, and H1 rests on luna alone (§22).
 
 Comparison: an observed fact at far distance, window harness **without** notes (W-0, so S=0 by construction), vs full history (F-0). W-n-0 is reported alongside it as the notes-rescue condition.
 
@@ -115,14 +117,14 @@ Path: S0 → S1 → S2 → S4, defined in §8.2.
 
 **Prediction B (competing; prior-art check):** the replay step accounts for at least 1/2. This reading comes from the published gap growing with reasoning effort (+9, +20, +25pp at low, medium, high).
 
-We register both and report which one the data supports. With 4 games × 2 seeds this is **descriptive**. Shares get bootstrap intervals over game-seed units, and we make no significance claims. **[A6]** Secondary readings at a matched 150 actions are added; the clock-based readings stay primary (§21).
+We register both and report which one the data supports. With 4 games × 2 seeds this is **descriptive**. Shares get bootstrap intervals over game-seed units, and we make no significance claims. **[A6]** Secondary readings at a matched 150 actions are added; the clock-based readings stay primary (§21). **[A7]** 4 games × seed 1 (4 units), with S0, S2 and S4, plus S1 only if decided before block 3's first ARC run. Without S1, Prediction B is tested in full and Prediction A only in its replay clause (§22).
 
-**Kill the ARC leg** if the measured S0→S4 gap, averaged over the 4 games, is below 10 RHAE points.
+**Kill the ARC leg** if the measured S0→S4 gap, averaged over the 4 games, is below 10 RHAE points. **[A7]** Read on the 4 seed-1 units; the gap (62.59) was known when A7 was written, so this rule cannot fire (§22).
 
 ### H5: the Adapter advantage grows with level depth
 The Adapter's advantage in P(clear level ℓ | reached ℓ) is larger at levels ≥4 than at levels 1-2.
 - Tested first on ARC's published public-set runs (free; §8.1).
-- Then on our runs.
+- Then on our runs. **[A7]** Our 8 seed-1 S0 and S4 runs, which were seen before A7, so this is no longer a blind test (§22).
 
 ## 5. PersistGym-lite: task generator
 **One environment family.** Each episode is a sequence of about 20-32 steps.
@@ -186,7 +188,7 @@ The Adapter's advantage in P(clear level ℓ | reached ℓ) is larger at levels 
 | Model | Used for | Replay toggle | Status / check in pilot |
 |---|---|---|---|
 | gpt-6-luna (OpenAI Responses, Flex) | High-N runs: H1, H3, validity; ~100 templates per cell | `reasoning.context`, *if* supported | Docs don't list luna for `all_turns`; one search snippet says all GPT-6 models default to it. **Pilot checks the echoed `reasoning.context`.** If `all_turns` isn't honoured, run only the replay-off cells (F-0, W-n-0, Σ-n-0, W-0) on luna. |
-| gpt-6.1-sol (OpenAI Responses, Flex) | H2 replay toggle; optional H1 replication; ~40 templates per cell | `reasoning.context` = `all_turns` vs `current_turn`, with encrypted reasoning items sent (`store:false`, `include: reasoning.encrypted_content`). The payload stays identical and only rendering changes. | Docs: "GPT-6.1 Sol also supports `all_turns`", and the response echoes the effective mode. **Check the echo on every response**; log and drop mismatches. Core: F-r vs F-0 on all 8 task cells. The W/Σ replay pairs run only if H2 shows signal. **[A2]** Core is now F-r vs F-0 on the 4 far cells only: derived-far on T_d templates (planning value 120) and observed-far on T_d/3; no near cells (D11 option A, §17.1). **[A3]** T_d = 210 and T_o = 70, at `reasoning.effort: high` if a blinded engagement check passes (§18). **[A4]** sol plays a derived-fact variant whose clues take two 3-digit operations each, with a notice at each evidence step, and H2 on sol stops for good if its engagement check fails (§19). |
+| gpt-6.1-sol (OpenAI Responses, Flex) | H2 replay toggle; optional H1 replication; ~40 templates per cell | `reasoning.context` = `all_turns` vs `current_turn`, with encrypted reasoning items sent (`store:false`, `include: reasoning.encrypted_content`). The payload stays identical and only rendering changes. | Docs: "GPT-6.1 Sol also supports `all_turns`", and the response echoes the effective mode. **Check the echo on every response**; log and drop mismatches. Core: F-r vs F-0 on all 8 task cells. The W/Σ replay pairs run only if H2 shows signal. **[A2]** Core is now F-r vs F-0 on the 4 far cells only: derived-far on T_d templates (planning value 120) and observed-far on T_d/3; no near cells (D11 option A, §17.1). **[A3]** T_d = 210 and T_o = 70, at `reasoning.effort: high` if a blinded engagement check passes (§18). **[A4]** sol plays a derived-fact variant whose clues take two 3-digit operations each, with a notice at each evidence step, and H2 on sol stops for good if its engagement check fails (§19). **[A7]** The H1 replication's main runs are not run; only its pilot and validity runs exist (§22). |
 | Gemini 3.8 Flash (Interactions API) | ARC path study only | Built up from the Standard harness (no stripping) | Google's docs say thought blocks must be resent within continuous conversation. S0-S2 never send thoughts, which is what ARC's Standard harness already does. **Pilot confirms manual_rolling on Interactions at high thinking.** |
 | Qwen3.6-27B, self-hosted vLLM (extension E1) | Open-weights replay | `chat_template_kwargs: {preserve_thinking: true/false}` (off by default) | The model card says it was "additionally trained to preserve and leverage thinking traces from historical messages". This is the cleanest replay toggle with a visible template. It is also the model we would port if the Kaggle route is chosen. |
 | gpt-oss-120b (extension E1) | "Not trained for cross-turn CoT" contrast | Render the harmony template ourselves, with or without earlier CoT | Harmony guidance drops earlier CoT after a final message, so cross-turn replay is off-distribution. |
@@ -236,7 +238,7 @@ The premise check's scripts lived in a temporary folder and are **not** in this 
 - The published runs are one-seed screens. Our fresh seeds re-measure the gap, and claims are stated as conditional on "games where the Adapter helps".
 - The 2 undrawn games become StateCarry held-out games. **[A2]** The held-out games are SP80, VC33 and TN36 (§17.1).
 
-**Runs:** 4 games × 4 configs (S0, S1, S2, S4) × 2 seeds = 32 runs.
+**Runs:** 4 games × 4 configs (S0, S1, S2, S4) × 2 seeds = 32 runs. **[A7]** 12 counted runs (S0, S2 and S4 × 4 games × seed 1), or 16 if S1 runs, plus re-runs; S1 runs only if the researcher decides so before block 3's first ARC run, and seed 2 is not run (§22).
 
 **Log per run:** config hash, fork commit, model string, exit reason (`GAME_WIN`, `ACTION_BUDGET`, `TIME_BUDGET`, `API_ERROR`, `AGENT_ERROR`, …), per-level results, actions, tokens (input, cached, output, reasoning), cost (list and actually billed) and wall clock.
 
@@ -251,7 +253,7 @@ The premise check's scripts lived in a temporary folder and are **not** in this 
 ## 9. Phases
 
 ### Phase 0 + 1 = MVP (Oct 1-21)
-- PersistGym-lite (§5-6) on luna and sol.
+- PersistGym-lite (§5-6) on luna and sol. **[A7]** The main sweep runs on luna only (§22).
 - ARC free analysis (§8.1) and path study (§8.2-8.3).
 
 **Deliverables:**
@@ -260,7 +262,7 @@ The premise check's scripts lived in a temporary folder and are **not** in this 
 - the ARC path table plus the per-level figure.
 
 ### Phase 2: StateCarry builder (Oct 22-Nov 4)
-StateCarry is a provider-neutral state component for ARC's Standard harness (`manual_rolling`). Its design follows what the MVP shows: derived, non-recoverable state is what gets lost.
+StateCarry is a provider-neutral state component for ARC's Standard harness (`manual_rolling`). Its design follows what the MVP shows: derived, non-recoverable state is what gets lost. **[A7]** Phase 2 is not run (§22).
 
 **Components:**
 1. **Pre-eviction promotion.** Before the loss policy drops or summarizes a span, one call turns it into typed ledger entries:
@@ -286,10 +288,10 @@ StateCarry is a provider-neutral state component for ARC's Standard harness (`ma
 
 **Crowding on the Kaggle side (found 2026-09-30 while judging a related idea, I-20260929-22).** On the ARC-AGI-3 Kaggle track (offline open models), the common baseline agent "Duck" already turns on `preserve_thinking` with prefix caching. It stores each turn's reasoning, keeps a structured world/goal/action/open-questions block and runs a persistent REPL. At least four public teams are ablating reasoning replay, ledgers, world-model slices and compaction there, with results due before Nov 2. Leaderboard gains on that track come mostly from serving throughput, not memory design.
 
-StateCarry's niche is different: API models inside ARC's *Standard* harness, measured against the Provider Adapter, with a pre-registered mechanism story from PersistGym. Still, (a) cite Duck and the public Kaggle ablations as prior art for ledger- and replay-style state, (b) don't claim the ledger idea as new, and (c) re-check those teams' posts at G2 and G3 (see §15).
+StateCarry's niche is different: API models inside ARC's *Standard* harness, measured against the Provider Adapter, with a pre-registered mechanism story from PersistGym. Still, (a) cite Duck and the public Kaggle ablations as prior art for ledger- and replay-style state, (b) don't claim the ledger idea as new, and (c) re-check those teams' posts at G2 and G3 (see §15). **[A7]** With no builder, this crowding is a reason to post the arXiv preprint before Nov 2; the posts are re-checked at G2 and before the preprint goes out (§22).
 
 ### Extensions (after gates, mostly after Nov 13)
-- **E1, open-weights replay.**
+- **E1, open-weights replay.** **[A7]** No extension runs under A7's hard stop (§22).
   - Qwen3.6-27B with `preserve_thinking` on vs off, plus gpt-oss-120b as the untrained contrast, on PersistGym.
   - Runs on vLLM on a rented A100-80GB.
   - Tests whether replay needs training for it.
@@ -299,8 +301,8 @@ StateCarry's niche is different: API models inside ARC's *Standard* harness, mea
   - StateCarry vs the base harness on a 30-task Terminal-Bench 4.0 subset × 3 runs, on a cheap model.
   - Pre-registered win: success within ±3pp and at least 15% fewer tokens. This is the cost win the theory predicts for recoverable state.
 - **E4, second ARC model for StateCarry.** gpt-6.1-sol on 2-3 held-out games, only after a one-game cost pilot. This shows provider neutrality.
-- **E5, ARC Prize 2026 Paper Track.** Conditional; see §13. Default is **no**.
-- **E6, release and visibility.**
+- **E5, ARC Prize 2026 Paper Track.** Conditional; see §13. Default is **no**. **[A7]** Skipped (§22).
+- **E6, release and visibility.** **[A7]** Whether PersistGym's code and data go out with the preprint is the researcher's decision; there is no StateCarry mode to offer (§22).
   - HF dataset and HF Space for PersistGym. The Space plots effects against task properties, not models.
   - Upstream PR of the S1/S2 path configs and an opt-in StateCarry mode to ARC's harness, if the researcher agrees.
 
@@ -313,7 +315,7 @@ StateCarry's niche is different: API models inside ARC's *Standard* harness, mea
 
 **Not used:** max−min harness spread. Under the null it rises as success falls; a simulation with no true effect gave an expected 8.7pp at p=0.95 and 16.1pp at p=0.60. If a single "how much does the harness matter" summary is wanted, use a harness variance component with a permutation null.
 
-**Multiplicity:** Holm correction across the primary confirmatory contrasts (H1, H2, H3). H4 and H5 are descriptive.
+**Multiplicity:** Holm correction across the primary confirmatory contrasts (H1, H2, H3). H4 and H5 are descriptive. **[A7]** H2 stopped under A4, so the family is H1 and H3, 2 one-sided tests, as the researcher decided on 2026-10-06 before any H1 or H3 test; the family of 4 is a sensitivity analysis (§22).
 
 **Cost outcomes:** tokens, reasoning tokens, lookups and dollars per episode. Use log-linear models with template fixed effects, and report ratios.
 
@@ -325,7 +327,7 @@ StateCarry's niche is different: API models inside ARC's *Standard* harness, mea
 - misapplied,
 - re-derived wrongly.
 
-An LLM judge acts as second rater; report Cohen's κ.
+An LLM judge acts as second rater; report Cohen's κ. **[A7]** Dropped: no failure labels and no LLM judge (§22).
 
 **Power.** Simulation in the premise check, with template random-intercept SD 1.0 on the logit scale, success 0.9 → 0.8 across distance, clustered GLM with template fixed effects, 200 reps:
 
@@ -338,11 +340,11 @@ An LLM judge acts as second rater; report Cohen's κ.
 
 Our design uses 2 distance levels that bracket the eviction threshold and ~100 fully crossed templates on luna. Mechanical S=0 effects are tens of points and cheap to detect, so the budget goes to the subtle contrasts (H2, H3, rescue rates).
 
-**Action at M1:** re-run the power simulation with the variance measured in the validity runs, and adjust template counts before the M2 sweep. The simulation script was in a temporary folder and is not in this repo, so rewrite it from the description above.
+**Action at M1:** re-run the power simulation with the variance measured in the validity runs, and adjust template counts before the M2 sweep. The simulation script was in a temporary folder and is not in this repo, so rewrite it from the description above. **[A7]** luna's template count follows the frozen power rule, capped at 200 (§22).
 
 **ARC analysis:**
-- Per game and config: RHAE (mean over 2 seeds), levels cleared, actions relative to the human baseline, tokens and cost. **[A6]** Also, as secondary readings, the score and levels cleared within the first 150 actions, with a levels-by-action curve per run (§21).
-- Path shares are (step difference) / (S4 − S0), with a bootstrap over the 8 game-seed units, and the table is labelled descriptive.
+- Per game and config: RHAE (mean over 2 seeds), levels cleared, actions relative to the human baseline, tokens and cost. **[A6]** Also, as secondary readings, the score and levels cleared within the first 150 actions, with a levels-by-action curve per run (§21). **[A7]** One seed: each game and config has its counted seed-1 run, for S0, S2 and S4, plus S1 if it runs (§22).
+- Path shares are (step difference) / (S4 − S0), with a bootstrap over the 8 game-seed units, and the table is labelled descriptive. **[A7]** The bootstrap is over the 4 seed-1 game units; per-game step differences and the leave-one-game-out values of the replay share are reported too (§22).
 - H5 uses a per-level logistic model of P(clear | reached, depth, harness) with game fixed effects, on the published runs and on ours.
 - Always report exit reasons.
 
@@ -352,14 +354,14 @@ Weeks start on Thursday Oct 1. Gates are hard stops: record the decision in `res
 | Milestone | Dates | Work | Gate | Go / no-go rule |
 |---|---|---|---|---|
 | **M0** Setup, free data, pilots | Oct 1-7 | Repo scaffold. `PREREG.md` frozen. ARC fork pinned at 4ca00e6, S1/S2 patches, payload snapshot tests. Free ARC analysis (§8.1). Toggle pilots: sol and luna echo, Gemini manual_rolling at high. ARC cost pilot: FT09 under S0 and S4, 30-action smoke tests of S1 and S2, hard cap $60. Pilot runs are excluded from all analyses. **[A1]** Order and content changed: PREREG and the seeded draw first (target Oct 3); a truncated pilot on one drawn path game replaces the FT09 pilot; a $2 replay-use probe is added; the PersistGym build is pulled into M0 (§16.3). | **G0, Oct 7** | Go if: snapshot tests pass; sol's echoed `reasoning.context` matches the request; Gemini S0-S2 run; ARC pilot cost ≤ $30/run with Flex. **If ARC cost > $30/run:** cut to 3 games or medium thinking. **If the sol toggle fails:** H2 moves to open weights (E1 joins the MVP). **[A1]** The cost rule becomes "forecast billed 1b + re-run reserve ≤ $900 at the chosen tier"; the toggle rule adds the replay-use probe; G0 approves only the seed-1 S0+S4 block (§16.2). **[A2]** The tier is Gemini's standard tier (D21). The forecast prices S1 and S2 at the S0/S4 midpoint (D27 rule 1); Checkpoint C adds a conservative check (§17.1). |
-| **M1** PersistGym-lite build + validity | Oct 8-14 | Generator, oracle, survival calculator, 7-8 harness cells, validity runs on luna (then sol). Power re-simulation. ARC path runs start Oct 8. | **G1, Oct 14** | Validity gate (§5) passes. If it fails: one redesign pass until Oct 18. If it still fails: stop PersistGym and continue the ARC leg alone. |
-| **M2** Main runs + ARC table | Oct 15-21 | luna sweep; sol H2 core (640 episodes); 32 ARC runs finished; analysis. **[A2]** sol runs far cells only: 704 episodes with repeats at T_d = 120 (D11 option A, §17.1). **[A3]** 1,232 episodes with repeats at T_d = 210 (§18). | **P, Oct 19** (Paper Track) and **G2, Oct 21** | P: see §13. G2: kill the ARC leg if the S0→S4 gap is < 10 RHAE points. Overall kill if H1 *and* H2 are inside equivalence bounds *and* the ARC gap is dominated by a mechanism with no provider-neutral analogue: write a short note (survival accounting + ARC path table) and skip Phase 2. Scoop check: if a per-component ARC ablation has appeared, the ARC table stops being the headline. |
-| **M3** Preprint + StateCarry v0 | Oct 22-28 | Preprint and blog draft of the ARC path table plus survival accounting (researcher reviews; target post Oct 28). StateCarry v0: PersistGym cell on luna, then dev ARC games. | **G3, Oct 28** | Continue to held-out evaluation only if v0 closes ≥ 25% of the S0→S4 gap on dev games at ≤ S4 cost. Otherwise stop the builder and write the analysis paper. |
-| **M4** StateCarry held-out evaluation | Oct 29-Nov 4 | 18 held-out ARC runs; final figures. | **G4, Nov 4** | Claim wording follows the pre-registered win (≥ 50% of gap at ≤ Adapter cost). Otherwise report it as partial or negative. |
-| **M5** Paper | Nov 5-13 | AGENT 2027 paper (full 8 pages, or short 5; see §13). | Submit **Nov 13 AoE** | |
-| **M6** Extensions | Nov 14-Jan 2027 | E1-E4 as gated; full version for TMLR or an ICLR 2027 workshop. | Per extension | All Gemini ARC runs finish before Dec 31, 2026. |
+| **M1** PersistGym-lite build + validity | Oct 8-14 | Generator, oracle, survival calculator, 7-8 harness cells, validity runs on luna (then sol). Power re-simulation. ARC path runs start Oct 8. | **G1, Oct 14** | Validity gate (§5) passes. If it fails: one redesign pass until Oct 18. If it still fails: stop PersistGym and continue the ARC leg alone. **[A7]** No redesign pass: if luna fails G1, PersistGym stops at once and the paper reports the ARC leg alone (§22). |
+| **M2** Main runs + ARC table | Oct 15-21 | luna sweep; sol H2 core (640 episodes); 32 ARC runs finished; analysis. **[A2]** sol runs far cells only: 704 episodes with repeats at T_d = 120 (D11 option A, §17.1). **[A3]** 1,232 episodes with repeats at T_d = 210 (§18). **[A7]** luna's sweep and 4 ARC S2 runs (8 with S1), plus any re-run; no sol main runs (§22). | **P, Oct 19** (Paper Track) and **G2, Oct 21** | P: see §13. G2: kill the ARC leg if the S0→S4 gap is < 10 RHAE points. Overall kill if H1 *and* H2 are inside equivalence bounds *and* the ARC gap is dominated by a mechanism with no provider-neutral analogue: write a short note (survival accounting + ARC path table) and skip Phase 2. Scoop check: if a per-component ARC ablation has appeared, the ARC table stops being the headline. **[A7]** P is skipped. G2 records the gap, the S2 shares and the scoop check; its ARC kill cannot fire, since the gap (62.59) is already known, and the overall kill is moot (§22). |
+| **M3** Preprint + StateCarry v0 | Oct 22-28 | Preprint and blog draft of the ARC path table plus survival accounting (researcher reviews; target post Oct 28). StateCarry v0: PersistGym cell on luna, then dev ARC games. **[A7]** The preprint only, with the researcher's review, posted to arXiv before Nov 2; no StateCarry (§22). | **G3, Oct 28** | Continue to held-out evaluation only if v0 closes ≥ 25% of the S0→S4 gap on dev games at ≤ S4 cost. Otherwise stop the builder and write the analysis paper. **[A7]** G3 is removed (§22). |
+| **M4** StateCarry held-out evaluation | Oct 29-Nov 4 | 18 held-out ARC runs; final figures. | **G4, Nov 4** | Claim wording follows the pre-registered win (≥ 50% of gap at ≤ Adapter cost). Otherwise report it as partial or negative. **[A7]** M4 and G4 are removed (§22). |
+| **M5** Paper | Nov 5-13 | AGENT 2027 paper (full 8 pages, or short 5; see §13). **[A7]** TMLR, or an AGENT 2027 short paper of 5 pages (§22). | Submit **Nov 13 AoE** | |
+| **M6** Extensions | Nov 14-Jan 2027 | E1-E4 as gated; full version for TMLR or an ICLR 2027 workshop. **[A7]** Removed: no extensions (§22). | Per extension | All Gemini ARC runs finish before Dec 31, 2026. |
 
-Human time: about 30-40 h for the MVP and 40-55 h overall. It goes to definitions and pre-registration, shortcut audits, labelling about 100 transcripts, confirming toggles, choosing claims, and writing. Coding agents do the rest.
+Human time: about 30-40 h for the MVP and 40-55 h overall. It goes to definitions and pre-registration, shortcut audits, labelling about 100 transcripts, confirming toggles, choosing claims, and writing. Coding agents do the rest. **[A7]** No transcripts are labelled; the time goes to writing (§22).
 
 ## 12. Budget
 Prices were checked 2026-09-29/30 ([Gemini](https://ai.google.dev/gemini-api/docs/pricing), [OpenAI](https://developers.openai.com/api/docs/pricing), [OpenAI Flex](https://developers.openai.com/api/docs/guides/flex-processing), [RunPod](https://www.runpod.io/pricing)); more in `docs/background.md`. Reported runs use API keys only. Numbers below are USD.
@@ -376,21 +378,21 @@ Prices were checked 2026-09-29/30 ([Gemini](https://ai.google.dev/gemini-api/doc
 | Phase | What | Estimate | Hard cap (stop and ask the researcher) |
 |---|---|---|---|
 | 0 (Oct 1-7) | Free ARC analysis $0; toggle and payload pilots $5-20; ARC cost pilot ≤ $60 | $20-80 | $100 |
-| 1a PersistGym | luna: 3,200-6,400 episodes plus about 1,600 control prompts, at $0.005-0.02 each (Flex) = $25-160. sol core: 640 episodes at $0.05-0.35 = $30-230. Validity runs $10-20. The optional sol H1 replication (+640 episodes, +$30-230) runs only if it fits under the cap. | $65-410 | $450. **[A2]** $500 (§17.3) |
-| 1b ARC path | 32 runs. Eligible games average about $31 (S0) and $25 (S4) per run at ARC's no-cache list accounting, so about $900 at list or about $450 with Flex. | $450-900 | $900. **[A2]** Unchanged; Checkpoint C may ask for up to ~$170 more (§17.3) |
+| 1a PersistGym | luna: 3,200-6,400 episodes plus about 1,600 control prompts, at $0.005-0.02 each (Flex) = $25-160. sol core: 640 episodes at $0.05-0.35 = $30-230. Validity runs $10-20. The optional sol H1 replication (+640 episodes, +$30-230) runs only if it fits under the cap. | $65-410 | $450. **[A2]** $500 (§17.3). **[A7]** Cap unchanged; only luna's sweep remains, about $35-71, and the sol replication's main runs are dropped (§22) |
+| 1b ARC path | 32 runs. Eligible games average about $31 (S0) and $25 (S4) per run at ARC's no-cache list accounting, so about $900 at list or about $450 with Flex. | $450-900 | $900. **[A2]** Unchanged; Checkpoint C may ask for up to ~$170 more (§17.3). **[A7]** Not raised: 12 counted runs (16 with S1), S2 forecast at about $172-194 (§22) |
 | **MVP total** | | **~$0.55-1.4k** | |
-| 2 StateCarry | PersistGym cell $10-40; ARC dev ≤ $150; 18 held-out runs $350-750 (two cheap games at ~$30/run, plus VC33 or RE86 at ~$65/run, at list; Flex halves this). **[A2]** Held-out games SP80, VC33, TN36 on the standard tier (§17.1) | $510-940 | $950. **[A2]** $1,250 (§17.3) |
+| 2 StateCarry | PersistGym cell $10-40; ARC dev ≤ $150; 18 held-out runs $350-750 (two cheap games at ~$30/run, plus VC33 or RE86 at ~$65/run, at list; Flex halves this). **[A2]** Held-out games SP80, VC33, TN36 on the standard tier (§17.1) | $510-940 | $950. **[A2]** $1,250 (§17.3). **[A7]** Phase 2 is not run, so nothing is spent here (§22) |
 | **Through phase 2** | | **~$1.05-2.35k** | |
 | E1 open weights | 15-50 GPU-hours | $20-80 | |
 | E3 Terminal-Bench | cheap model, 90 trials; sandboxes (Modal's $30/month free credit or local Docker) | $100-300 | |
 | E4 second ARC model | gpt-6.1-sol, 2-3 games, after a one-game pilot | $200-1,000 | pilot first |
 | E5 Kaggle port | Kaggle GPUs free; dev GPU $100-300 | $100-300 | |
 
-This is above the profile's ~$1k flag and ~$200/month cash, and well below the ~$5-10k infeasibility line. **The researcher must approve the phase-1 ARC spend before M1.** **[A1]** Replaced by staged approvals (§16.2). The estimates above are corrected in §16.1. **[A2]** The forecasts in §17.2 replace these estimates, and §17.3 sets the caps. None of this money goes to ARC Prize: the ARC API is free, and the ARC rows are Gemini tokens billed by Google.
+This is above the profile's ~$1k flag and ~$200/month cash, and well below the ~$5-10k infeasibility line. **The researcher must approve the phase-1 ARC spend before M1.** **[A1]** Replaced by staged approvals (§16.2). The estimates above are corrected in §16.1. **[A2]** The forecasts in §17.2 replace these estimates, and §17.3 sets the caps. None of this money goes to ARC Prize: the ARC API is free, and the ARC rows are Gemini tokens billed by Google. **[A7]** The project target is about $560 in all, which may run over a little; it is kept through the block limits, and the caps in §17.3 stay as stop-and-ask ceilings (§22).
 
 Cheaper fallbacks, in order:
 1. Flex everywhere. **[A2]** No longer a fallback: OpenAI already runs on Flex (D13), and ARC stays on the standard tier (D21). The ARC fallbacks are 3 games, then medium thinking.
-2. 3 ARC games.
+2. 3 ARC games. **[A7]** Not used: when Checkpoint C's cost rule fired, the researcher chose seed 1 only, keeping all 4 games (§22).
 3. Medium thinking. The published medium gap is 20pp.
 4. Fewer sol templates (30). **[A2]** Under D11 option A this means a lower T_d (§17.1). **[A3]** T_d = 210 is not lowered without a further PREREG amendment (§18).
 
@@ -399,12 +401,12 @@ Dates were checked against the `ai-research` deadlines file (verified 2026-09-29
 
 | Venue | Deadline | Type | Use here |
 |---|---|---|---|
-| arXiv preprint + blog (dev.to, LinkedIn, Bluesky) | Target **Oct 28** (ARC path table + survival accounting); update Nov 13 | Preprint | Establishes priority. OpenAI, ARC Prize and several groups are active (see the scoop risks in `docs/premise-check.md`). The researcher reviews the exact text and posts it. |
-| [AGENT 2027 @ ICSE](https://conf.researchr.org/home/icse-2027/agent-2027) | **Nov 13 AoE**. The workshop page says Nov 27; ICSE says Nov 13 for all workshops. Plan for Nov 13. | Archival IEEE workshop; full 8 pages or short 5; single-anonymous; no AI policy stated | Main target. Archival: if a later ML main-track version is planned (ICML 2027, deadline TBA, last year late January), submit a **short 5-page** version or go non-archival instead. |
+| arXiv preprint + blog (dev.to, LinkedIn, Bluesky) | Target **Oct 28** (ARC path table + survival accounting); update Nov 13 | Preprint | Establishes priority. OpenAI, ARC Prize and several groups are active (see the scoop risks in `docs/premise-check.md`). The researcher reviews the exact text and posts it. **[A7]** Target: before Nov 2, ahead of the Kaggle ARC-AGI-3 teams' writeups (§22). |
+| [AGENT 2027 @ ICSE](https://conf.researchr.org/home/icse-2027/agent-2027) | **Nov 13 AoE**. The workshop page says Nov 27; ICSE says Nov 13 for all workshops. Plan for Nov 13. | Archival IEEE workshop; full 8 pages or short 5; single-anonymous; no AI policy stated | Main target. Archival: if a later ML main-track version is planned (ICML 2027, deadline TBA, last year late January), submit a **short 5-page** version or go non-archival instead. **[A7]** A short 5-page paper is one of the two targets after the preprint. AGENT is archival, so TMLR's prior-publication policy is checked before doing both (§22). |
 | [ICSE 2027 Industry Challenge](https://conf.researchr.org/track/icse-2027/icse-2027-industry-challenge) ("Agent Memory in the Wild: Reliability, Efficiency, and Evaluation") | Nov 13 AoE | 5-10 pages + 2 | Possible alternative to AGENT. Read the challenge statement first. It cannot take the same paper as AGENT. |
 | [ICLR 2027 workshops](https://iclr.cc/Conferences/2027/CallForWorkshops) | ~Feb 1, 2027 (CFPs after Nov 29) | Non-archival | Full version with extensions. ICLR 2027 requires an AI-use statement at the main conference; check each workshop CFP. |
-| [TMLR](https://www.jmlr.org/tmlr/) | Rolling | Journal | Full version. LLMs are allowed as assistive tools. |
-| [ARC Prize 2026 Paper Track](https://arcprize.org/competitions/2026/paper) | Papers **Nov 8** (arcprize.org) / Nov 9 23:59 UTC ([Kaggle](https://www.kaggle.com/competitions/arc-prize-2026-paper-track)); plan for Nov 8. Needs an [ARC-AGI-3 Kaggle](https://www.kaggle.com/competitions/arc-prize-2026-arc-agi-3) entry by **Oct 26** and a code submission by **Nov 2**. | Prize: $75K top-3 plus a $375K pool for papers scoring > 4.5/5 | **Conditional (E5).** See the eligibility note below. |
+| [TMLR](https://www.jmlr.org/tmlr/) | Rolling | Journal | Full version. LLMs are allowed as assistive tools. **[A7]** One of the two targets after the preprint (§22). |
+| [ARC Prize 2026 Paper Track](https://arcprize.org/competitions/2026/paper) | Papers **Nov 8** (arcprize.org) / Nov 9 23:59 UTC ([Kaggle](https://www.kaggle.com/competitions/arc-prize-2026-paper-track)); plan for Nov 8. Needs an [ARC-AGI-3 Kaggle](https://www.kaggle.com/competitions/arc-prize-2026-arc-agi-3) entry by **Oct 26** and a code submission by **Nov 2**. | Prize: $75K top-3 plus a $375K pool for papers scoring > 4.5/5 | **Conditional (E5).** See the eligibility note below. **[A7]** Skipped (§22). |
 
 **ARC Paper Track eligibility.** A paper "must be linked to a Kaggle code submission (ARC-AGI-2 or ARC-AGI-3 track)". The submission "need not achieve a high score". Kaggle evaluation is offline, with no API models. So the API-model analysis alone is **not eligible**. It becomes eligible only if we also submit an offline open-model agent, e.g. Qwen3.6-27B with `preserve_thinking`, or StateCarry on a Milestone-1 open harness, within Kaggle's GPU and ~9h notebook limits.
 
@@ -412,28 +414,28 @@ Other conditions:
 - Own code must be CC0 or MIT-0. The design review reports a CC-BY 4.0 winner licence.
 - The rubric scores Accuracy (from the Kaggle score), Universality, Progress, Theory, Completeness and Novelty. Accuracy would be weak here.
 
-**Decision P on Oct 19:**
+**Decision P on Oct 19:** **[A7]** Skipped: E1 does not run, so no offline open-model agent exists to make a paper eligible (§22).
 - **Go only if all of these hold:** the researcher accepts the licensing and employer-IP implications; the E1 Qwen pipeline works; and there is a clear result worth documenting.
 - **Otherwise skip.** The default is skip, because the Kaggle port competes with M4 and M5 for the same two weeks.
 - Joining the Kaggle competition, which means accepting its rules, is the researcher's own action and must happen by Oct 26.
 
 ## 14. Kill criteria (consolidated)
 1. **G0.** No verifiable replay toggle on any API model → H2 runs on open weights only (E1). If E1 also fails, drop H2 and state it as a limitation.
-2. **G0.** ARC pilot > $30/run with Flex → 3 games or medium thinking. If it is still > $30/run, drop the ARC runs and keep the free observational analysis. **[A1]** The trigger becomes "forecast billed 1b + re-run reserve > $900 at the chosen tier" (about $23.4/run with a 20% reserve), re-checked at Checkpoint C (§16.2). Medium thinking would need a PREREG amendment, since H4 and the eligibility rule are defined at high effort. **[A2]** The tier is the standard tier and the forecast follows D27 rule 1. A conservative check at Checkpoint C may lead to a request for up to ~$170 more in 1b (§17.1).
-3. **G1.** PersistGym fails the validity gate after one redesign → stop PersistGym and continue ARC alone.
-4. **G2.** S0→S4 gap on the 4 games < 10 RHAE points → kill the ARC path leg.
-5. **G2.** H1 and H2 both inside equivalence bounds, *and* the ARC gap is dominated by a mechanism with no provider-neutral analogue → publish a short note, no builder.
-6. **Any time.** A per-component ablation of ARC's gap appears (ARC Prize, OpenAI or others) → the ARC table becomes supporting material. Lead with PersistGym + StateCarry.
-7. **G3.** StateCarry v0 closes < 25% of the gap on dev games → stop the builder and write the analysis paper.
+2. **G0.** ARC pilot > $30/run with Flex → 3 games or medium thinking. If it is still > $30/run, drop the ARC runs and keep the free observational analysis. **[A1]** The trigger becomes "forecast billed 1b + re-run reserve > $900 at the chosen tier" (about $23.4/run with a 20% reserve), re-checked at Checkpoint C (§16.2). Medium thinking would need a PREREG amendment, since H4 and the eligibility rule are defined at high effort. **[A2]** The tier is the standard tier and the forecast follows D27 rule 1. A conservative check at Checkpoint C may lead to a request for up to ~$170 more in 1b (§17.1). **[A7]** Checkpoint C's cost check fired on 2026-10-09; the researcher chose seed 1 only, not the listed fallbacks or a 1b raise (§22).
+3. **G1.** PersistGym fails the validity gate after one redesign → stop PersistGym and continue ARC alone. **[A7]** No redesign pass: if luna fails G1, PersistGym stops at once (§22).
+4. **G2.** S0→S4 gap on the 4 games < 10 RHAE points → kill the ARC path leg. **[A7]** Read on the 4 seed-1 units; the gap (62.59) is already known, so it cannot fire (§22).
+5. **G2.** H1 and H2 both inside equivalence bounds, *and* the ARC gap is dominated by a mechanism with no provider-neutral analogue → publish a short note, no builder. **[A7]** Moot: phase 2 is not run, and H2 stopped under A4 (§22).
+6. **Any time.** A per-component ablation of ARC's gap appears (ARC Prize, OpenAI or others) → the ARC table becomes supporting material. Lead with PersistGym + StateCarry. **[A7]** Lead with PersistGym; there is no StateCarry (§22).
+7. **G3.** StateCarry v0 closes < 25% of the gap on dev games → stop the builder and write the analysis paper. **[A7]** Void: phase 2 is not run (§22).
 
 The card's old rule, "95% CI of the harness × d slope includes 0", is replaced by the equivalence bounds above. With the card's sample sizes, the old rule would have fired even when a true effect exists.
 
 ## 15. Risks
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Scooped on the ARC leg (ARC Prize adds adapters weekly; OpenAI's July post names the mechanisms) | High | Free analysis in week 1, preprint target Oct 28, ARC table framed as supporting evidence. |
+| Scooped on the ARC leg (ARC Prize adds adapters weekly; OpenAI's July post names the mechanisms) | High | Free analysis in week 1, preprint target Oct 28, ARC table framed as supporting evidence. **[A7]** Preprint before Nov 2 (§22). |
 | Scooped on the mechanism leg (TierFlow group: 2609.29875 and StateComp; LOCA-bench group; harness-design study authors) | Medium | Differentiate on recoverability × derivedness, within-template crossed design, survival accounting, and the builder. |
-| The StateCarry builder overlaps public ARC Kaggle work. The Duck baseline already has reasoning replay plus a structured world/goal/action block, and 4+ public teams are ablating replay, ledgers and compaction, with results due before Nov 2 | High | Position StateCarry as API-model, Standard-harness, mechanism-driven; cite Duck and the Kaggle ablations; re-check at G2 and G3. If a Kaggle team publishes a Standard-harness gap closure, drop the builder claim and keep the analysis. This also makes E5 (Paper Track) less attractive. |
+| The StateCarry builder overlaps public ARC Kaggle work. The Duck baseline already has reasoning replay plus a structured world/goal/action block, and 4+ public teams are ablating replay, ledgers and compaction, with results due before Nov 2 | High | Position StateCarry as API-model, Standard-harness, mechanism-driven; cite Duck and the Kaggle ablations; re-check at G2 and G3. If a Kaggle team publishes a Standard-harness gap closure, drop the builder claim and keep the analysis. This also makes E5 (Paper Track) less attractive. **[A7]** Moot: there is no builder (§22). |
 | The replay toggle is not what the model actually sees (opaque items; luna may ignore `all_turns`) | Medium | Echo check on every response, payload snapshot tests, open-weights replication with a visible template (E1). |
 | The published ARC gap partly reflects harness errors (early-ending Standard runs) | Medium | Log exit reasons, pre-registered re-run rule, report both. |
 | Standard-harness API surface for published Gemini runs unknown | Certain | Hold the Interactions API fixed across all our configs and re-measure S0 ourselves. |
@@ -442,9 +444,9 @@ The card's old rule, "95% CI of the harness × d slope includes 0", is replaced 
 | Flex latency, 429s and ARC's 12h wall clock | Medium | Retry with backoff (429s on Flex are not billed); fall back to standard tier for runs that time out, and record it. **[A1]** No per-run fallback: it would tie the tier to run length and config. One tier for all ARC configs, chosen by a pre-registered latency rule from the M0 probes (§16.4). **[A2]** The standard tier for all ARC runs; no Flex (D21, §17.1). |
 | **[A1]** Gemini Tier 1 spend cap ($250/month; service pauses for all linked projects until the 1st) | High unless Tier 2 is reached | Researcher moves the billing account to Tier 2 ($100 paid + 3 days) before the seed-1 ARC block; provider-side spend caps back up the stop-and-ask rule (§16.1). |
 | **[A1]** Published "gap" partly reflects Standard runs that crashed (e.g. LP85) | Medium | Operational free analysis infers how each published run ended before the draw; our own S0 re-measures the gap (§16.4). **[A2]** LP85 and SC25 are not used (D14 option A, §17.1). |
-| Results look like a model quirk, not a mechanism | Medium | Two API models plus open weights (E1); claims stated per component and per state type. |
+| Results look like a model quirk, not a mechanism | Medium | Two API models plus open weights (E1); claims stated per component and per state type. **[A7]** Weakened: PersistGym's main sweep runs on luna only, with no sol replication and no E1 (§22). |
 | Employer sensitivity (vendor comparisons) | Low | One-off study; no rankings or dashboard; neutral wording; figures by task property; the researcher reviews all public text. |
-| Human time is the bottleneck (labelling, definitions) | Medium | Labelling capped at ~100 transcripts; agents build everything else. |
+| Human time is the bottleneck (labelling, definitions) | Medium | Labelling capped at ~100 transcripts; agents build everything else. **[A7]** No labelling (§22). |
 
 ## 16. Amendment A1 (2026-09-30): staged low-spend approvals and cost corrections
 **Why.** On 2026-09-30 two reviews checked this plan: a fact-check of a plan summary against the files, and a low-spend review that verified provider pricing on the web and re-derived the budget with scripts. The researcher approved starting the $0 work and asked to decide at every major spending point. This amendment records what changed. It changes no hypothesis; `PREREG.md` does not exist yet.
@@ -731,7 +733,7 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 ## 20. Amendment A5 (2026-10-03): a pre-registered sol replication of H1
 **Why.** On 2026-10-03 the researcher asked for a small amendment that pre-registers H1's replication on sol now, before any H1 data exists, whatever happened to H2 (`results/decisions.md`). The same morning sol's engagement check on the variant found NOT_ENGAGED, so H2 on sol stopped under A4's hard stop (§19). Without this replication, PersistGym would have no evidence on gpt-6.1-sol. `PREREG.md` §17.4 (amendment R4) registers it, with its gate and the code that enforces them; this section only points there.
-- **The replication.** gpt-6.1-sol at medium effort on the default generator config (luna's episodes), in F-0, W-0 and W-n-0 on the 4 observed task cells, with luna's main-sweep template count (about 100; 1,320 episodes at T = 100 with the repeats). It re-instates §4's "Replication on gpt-6.1-sol if the budget allows", which A1 removed on cost (§16.1).
+- **The replication.** gpt-6.1-sol at medium effort on the default generator config (luna's episodes), in F-0, W-0 and W-n-0 on the 4 observed task cells, with luna's main-sweep template count (about 100; 1,320 episodes at T = 100 with the repeats). It re-instates §4's "Replication on gpt-6.1-sol if the budget allows", which A1 removed on cost (§16.1). **[A7]** Its main runs are dropped for budget, after its pilot and validity runs and before any main-split episode; it is reported as pre-registered, not run (§22).
 - **Status.** Reported next to luna's primary H1 result, with the same estimands, predictions and thresholds, outside the Holm family. It neither confirms nor kills H1; luna stays primary. A2's, A3's and A4's rules for sol concern H2 and do not block it.
 - **Pilot and gate.** A pilot of W-0 and W-n-0 on sol (16 episodes), then its own validity gate (F-0, 160 episodes on the 4 observed task cells; restated ≥ 85%, withheld ≤ 20%). If sol fails the gate, the replication does not run.
 - **Cost.** About $279 billed at T = 100 on the central forecast from block 1's measured rows, of which window cells, which lose about half of their caching, are about $239; $81 on the lower basis first proposed. Phase 1a then comes to about $319 of its $500 cap (`results/cost_model/20261003T071449Z/`). The pilot and validity runs go in block 1 if they fit, the main runs in block 3 after the confirmatory rows; no new approval.
@@ -739,8 +741,30 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 ## 21. Amendment A6 (2026-10-07): action-matched secondary readings for the ARC path study
 **Why.** In block 2's first two runs (`results/decisions.md`, 2026-10-07), ARC's 12 h clock bound the Standard config's run but not the Adapter's. Run 2 (FT09 S0) ended `TIME_BUDGET` at 236 actions, about 184 s per action, about twice as slow per action as ARC's published Standard run on FT09 and, under D20, a provider-latency incident; run 1 (CD82 S4) won in 206 actions at 44 s per action. A clock-based reading of H4 then mixes what each config does with each action and how fast its actions come. On 2026-10-07 the researcher decided to pre-register an action-matched secondary reading before any later block-2 result is seen. `PREREG.md` §17.5 (amendment R5) registers it, with the script that computes it; this section only points there.
-- **The reading.** For each counted run, ARC's game score and the levels cleared within its first K = 150 actions, with a curve at 50, 100, 150 and 200 actions. H4's path quantities (gap, step shares, Predictions A and B, bootstrap intervals) are computed again from these values as secondary readings, and Checkpoint C reports the seed-1 gap at K next to its own, descriptively. A run that stopped before K actions other than by a win or ARC's action budget is censored: reported as a lower bound and, in a sensitivity analysis, left out. A run whose scorecard the script cannot score or reproduce has no matched values, and its unit is left out.
+- **The reading.** For each counted run, ARC's game score and the levels cleared within its first K = 150 actions, with a curve at 50, 100, 150 and 200 actions. H4's path quantities (gap, step shares, Predictions A and B, bootstrap intervals) are computed again from these values as secondary readings, and Checkpoint C reports the seed-1 gap at K next to its own, descriptively. A run that stopped before K actions other than by a win or ARC's action budget is censored: reported as a lower bound and, in a sensitivity analysis, left out. A run whose scorecard the script cannot score or reproduce has no matched values, and its unit is left out. **[A7]** Over the 4 seed-1 units and the configs that run (§22).
 - **K = 150** is the largest multiple of 50 that every config should reach inside 12 h at run 2's pace, with S1 and S2 slowed by their pilot latency ratios. It is fixed by pace, not by outcomes.
-- **Unchanged.** H4's and H5's primary readings, predictions and thresholds, the kill rules, Checkpoint C's and G2's rules, the 12 h clock, the action budgets, the run plan and the re-run rules. No rule reads a matched value.
+- **Unchanged.** H4's and H5's primary readings, predictions and thresholds, the kill rules, Checkpoint C's and G2's rules, the 12 h clock, the action budgets, the run plan and the re-run rules. No rule reads a matched value. **[A7]** A7 changes the run plan, a config's first D20 yardstick and the H4 readings (§22).
 - **Also decided on 2026-10-07, outside A6:** run 2 is a D20 latency incident and is re-run once, with seed 101, after block 2's last run (a logged deviation from D19's timing); phase 1b is sized at Checkpoint C.
 - **What it does not show.** Matching actions removes the effect of speed, not the effects of context length, and the clock-based readings remain what ARC's harness rewards.
+
+## 22. Amendment A7 (2026-10-09): the minimal path
+**Why.** Checkpoint C's cost rule fired on 2026-10-09: the forecast for the remaining 24 ARC runs was $1,045.23 against $609.78 left under the 1b cap, or $804.55 on 3 games, so either design needed a 1b raise of $195-435, beyond the ~$170 that D27 allows (`results/checkpoint_c/20261009T151039Z/`). The same day the researcher chose a minimal path: luna's sweep and ARC's S2 on seed 1, possibly S1; an arXiv preprint ahead of the Kaggle ARC-AGI-3 writeups, then TMLR or an AGENT 2027 short paper; and a project total of about $560 that may run over a little (`results/decisions.md`). `PREREG.md` §17.6 (amendment R6) registers the changes to the runs and readings, with the code that enforces them; for those, this section only points there. The venues, milestones and budget target below are plan changes that A7 makes itself.
+- **What runs** (R6 change 1). These paid runs remain, and no others:
+  - **ARC, block `3-arc`:** S2 at replicate 1 on FT09, SB26, R11L and CD82, 4 counted runs plus any D19 or D20 re-run, back to back in the recorded SEED + 3 order with the dropped units deleted (FT09, R11L, SB26, CD82).
+  - **S1** at replicate 1 on the same games, only if the researcher records "S1: yes" in `results/decisions.md`, merged to `main`, before the first block-3 ARC run starts. Otherwise S1 is not run, and an S1 run made later is exploratory. S1 would cost about as much again as S2.
+  - **PersistGym, block `3-persistgym`:** luna's replay-off cells (F-0, W-0, W-n-0, Σ-n-0) on the 8 task cells, with the restated-at-need and single-turn controls, after G1. Its template count follows the frozen power rule, capped at 200.
+  - **Hard stop.** After these runs, no further paid run. A later paid run needs a new dated amendment, and its results are reported as outside the pre-registration.
+- **What is dropped.** Seed 2 of every ARC config; sol's H1 replication main runs (§20), whose pilot and validity runs are reported descriptively as pre-registered, not run (budget); phase 2 (StateCarry, §9), with G3, G4 and kill criterion 7; every extension run (E1-E6; whether PersistGym's code and data are released with the preprint, under E6, stays the researcher's decision); the failure labels and their LLM judge (§10); the ARC Paper Track (E5) and Decision P (§13); and luna's G1 redesign pass, so kill criterion 3 applies at once.
+- **The readings** (R6 changes 3-5 and 9). H4 is read on the 4 seed-1 units. Without S1, S2 splits the gap into the provider-neutral steps together (loss policy and notes removal) and the replay step; Prediction B is tested in full and Prediction A only in its replay clause. H5 on our runs uses the 8 seed-1 S0 and S4 runs, which were seen before A7, so it is no longer a blind test. A config's first counted run is judged under D20 against its pilot median scaled by the latency drift that block 2 measured on S0. The Holm family is H1 and H3, as the researcher decided on 2026-10-06, before any H1 or H3 test.
+- **Venues** (§13). An arXiv preprint before Nov 2, ahead of the Kaggle ARC-AGI-3 teams' writeups, after the researcher has reviewed the exact text. Then TMLR or an AGENT 2027 short paper of 5 pages (Nov 13 AoE). AGENT is archival, so TMLR's prior-publication policy is checked before doing both.
+- **Milestones** (§11). G1 (Oct 14) stays, with no redesign pass. G2 (Oct 21) records the gap, the S2 shares (and S1's, if it runs) and the scoop check; its ARC kill cannot fire. M3 is the preprint and M5 the TMLR submission or the AGENT short paper. G3, G4, M4, M6 and P are removed. All Gemini runs still finish before 2026-12-31.
+- **Budget** (§12). Spent: $328.94 billed (phase 0 $20.57, 1a $18.15, 1b $290.22; `results/costs.csv`). Forecasts: S2 about $172-194 at D27's rule (S0's billed cost per call × the larger of S0's and S4's actions, without and with block 2's re-run rate), and luna about $35-71 at T = 100-200. That puts the project at about $537-594 against the target of about $560; S1 or a D20 re-run would add to it. The phase caps in §17.3 are unchanged and stay stop-and-ask ceilings. The target is kept through the block limits (`max_usd`), which the researcher approves block by block. Phase 2 and the extensions spend nothing.
+- **Also decided on 2026-10-09, outside A7:** block `3-arc` (S2 on seed 1, up to $250 billed) is proposed in the same `results/decisions.md` entry and approved when the researcher merges it. `3-persistgym` is proposed later, after G1 and the power re-simulation.
+- **Parts of §16-§21 that A7 supersedes.** They stay as written, as §17.5 does for §16:
+  - §16.2, blocks 3 and 4 and Checkpoint C's "one wave" sentence: block 3 is S2 (and S1, if decided) on seed 1 plus luna's sweep, and there is no block 4.
+  - §17.1, D24 (phase 2), and D27's raise of up to ~$170 at Checkpoint C, which was not requested.
+  - §17.2, the Checkpoint C, held-out, G3 and phase 2 forecasts and the block 3 and 4 totals.
+  - §17.3, the 1b row's "Checkpoint C may ask for up to ~$170 more": not requested. The table and its caps are unchanged.
+  - §20, the replication's main runs and their cost; §21, "the run plan" among the unchanged items.
+- **Unchanged.** The hypotheses, and every prediction and threshold R6 does not name; the frozen ARC configs, the standard tier, the 12 h clock, the action budgets, the $120 guard and hold, D19 and the counted-run rule; K = 150 (§21); luna's cells, controls, repeats, effort and Flex tier; pilot blinding; the phase caps; and the rule that every paid block needs the researcher's approval line.
+- **What it does not show.** One seed per game and config: the FT09 S0 pair (58.17 vs 18.11) shows swings of about 40 RHAE, so shares from 4 units are descriptive and coarse. S0 and S4 ran on Oct 6-9 and S2 runs later, with no dated Gemini snapshot and a latency that has already drifted. Without S1, the notes instruction's own role is not measured. There is no StateCarry evidence, no sol replication of H1, no failure labels and no open-weights run; each is reported as planned, not run. The cut was made for cost after block 2's results had been seen; all 4 games are kept, so no game was chosen on its result.

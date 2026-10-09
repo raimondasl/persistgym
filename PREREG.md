@@ -9,6 +9,8 @@ Version: 1.0
 ## Summary in plain language
 A reading aid. Where it and the numbered sections differ, the numbered sections win.
 
+[Amended 2026-10-09, see §17.6: the project now runs a minimal path. Its ARC runs are seed 1 only, with S2 added to S0 and S4 (S1 only if decided first). The PersistGym sweep is luna's alone. There is no StateCarry, no seed 2 and no sol replication. The runs, counts and money below describe the plan before that cut.]
+
 **The question.** With the model fixed, when does the agent harness (what history it keeps, whether it asks for notes, whether it replays the model's earlier reasoning) change whether the agent *succeeds*, not only what it costs? Our bet: success suffers when the needed fact was worked out from several observations (*derived*), cannot be looked up again (*not recoverable*), and was thrown away by the harness (*evicted*). When the fact can be looked up again, the harness should change cost, not success.
 
 **What we run.**
@@ -111,8 +113,8 @@ The D items left these operational details open, and this draft had to fill them
 2. PREREG freeze, then the beacon-seeded draw (§7.3), which orders the 4 fixed path games.
 3. Block 1, pilots (§11), then gate G0 (§10.1).
 4. Block 2, seed-1 S0+S4 (8 counted runs), then Checkpoint C (§10.3).
-5. Block 3, approved as two blocks: the other 24 ARC runs (`3-arc`) and the PersistGym main sweep (`3-persistgym`), then G2 (§10.4). The PersistGym main sweep starts only after gate G1 (§10.2) has passed and been recorded (PLAN §11).
-6. Block 4, phase 2 (StateCarry), with gates G3 and G4 (§8).
+5. Block 3, approved as two blocks: the other 24 ARC runs (`3-arc`) and the PersistGym main sweep (`3-persistgym`), then G2 (§10.4). The PersistGym main sweep starts only after gate G1 (§10.2) has passed and been recorded (PLAN §11). [Amended 2026-10-09, see §17.6]
+6. Block 4, phase 2 (StateCarry), with gates G3 and G4 (§8). [Amended 2026-10-09, see §17.6]
 
 Each block needs the researcher's explicit approval (§12).
 
@@ -298,7 +300,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 > H1's non-recoverable arm reported as a manipulation check; the confirmatory test is the difference of penalties. (PLAN §16.5)
 
 **Operational.**
-- Model gpt-6-luna. Cells F-0 and W-0, with W-n-0 reported alongside. Task cells: observed × far × {not recoverable (NR), recoverable (R)}. [Amended 2026-10-03, see §17.4]
+- Model gpt-6-luna. Cells F-0 and W-0, with W-n-0 reported alongside. Task cells: observed × far × {not recoverable (NR), recoverable (R)}. [Amended 2026-10-03, see §17.4; amended 2026-10-09, see §17.6]
 - Penalty_NR = p(F-0, NR) − p(W-0, NR). Penalty_R = p(F-0, R) − p(W-0, R). **Δ_H1 = Penalty_NR − Penalty_R.**
 - **Manipulation check:** Penalty_NR ≥ 25pp (point estimate), reported with its CI.
 - **Confirmatory test:** Δ_H1 (Holm family, §9.4).
@@ -363,7 +365,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 >
 > **Kill the ARC leg** if the measured S0→S4 gap, averaged over the 4 games, is below 10 RHAE points. (PLAN §4)
 
-**Operational.** [Amended 2026-10-07, see §17.5]
+**Operational.** [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6]
 - RHAE per counted run is the per-game score on ARC's online scorecard (`rhae`). Counted runs are defined in §7.5.
 - A **unit** u = (game, replicate) over the 4 path games of §7.2; there are 8. For config c, R̄_c is the mean RHAE over the 8 units.
 - **Gap** G = R̄_S4 − R̄_S0. Step shares: σ_loss = (R̄_S1 − R̄_S0)/G, σ_notes = (R̄_S2 − R̄_S1)/G, σ_replay = (R̄_S4 − R̄_S2)/G. They sum to 1.
@@ -382,14 +384,14 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 > - Tested first on ARC's published public-set runs (free; §8.1).
 > - Then on our runs. (PLAN §4)
 
-**Operational.**
+**Operational.** [Amended 2026-10-09, see §17.6]
 - One observation per (run, level ℓ). **Reached(ℓ)**: the run took at least one action on ℓ (`level_actions[ℓ]` > 0). **Cleared(ℓ)**: the run completed ℓ. Analysis is conditional on reached.
 - Depth bands: early = levels 1-2, deep = levels ≥ 4. Level 3 is reported but left out of the contrast.
 - **Model** (PLAN §10): logistic regression, cleared ~ harness × band + game fixed effects, among reached levels. A_b is the Adapter-minus-Standard difference in P(clear | reached) in band b, on the probability scale (average marginal effect).
 - **H5 contrast:** A_deep − A_early > 0 (point estimate), with a 90% interval from a game-cluster bootstrap (10,000 resamples). Descriptive, like H4 (PLAN §10).
 - **Data:** (a) the published Gemini 3.8 Flash high-effort public-set runs, one per game and harness, 25 games, analysed in the hypothesis slice *after* the freeze commit (PLAN §16.3). Other efforts and models are exploratory. (b) Our runs, S0 vs S4 on the 4 path games.
 - **Sensitivity:** drop levels at which a run ended by an (inferred) error rather than by budget.
-- **Not a blind test on the published runs.** Per-game scores for both harnesses (`docs/background.md` §4) and at least one per-level ending (LP85, PLAN §16.4) were seen before this draft. The operational slice also inferred where each published run ended, which reveals the last level each run reached. H5 on published runs is therefore a pre-specified analysis of partly seen data. Only H5 on our own runs is a test on unseen data.
+- **Not a blind test on the published runs.** Per-game scores for both harnesses (`docs/background.md` §4) and at least one per-level ending (LP85, PLAN §16.4) were seen before this draft. The operational slice also inferred where each published run ended, which reveals the last level each run reached. H5 on published runs is therefore a pre-specified analysis of partly seen data. Only H5 on our own runs is a test on unseen data. [Amended 2026-10-09, see §17.6]
 
 **Decision.** Reached = at least one action on ℓ; two bands (1-2 and ≥ 4) with level 3 left out of the contrast; the probability-scale average marginal effect with a game-cluster bootstrap; high effort as the only registered published-data analysis. (decided 2026-10-01, D35)
 
@@ -421,7 +423,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 
   The chosen values are recorded in `results/decisions.md` before the M2 sweep. Because the rule is pre-registered, this is not an amendment.
 - **Template counts:** the M1 power re-simulation (§9.8) uses the variance measured in the validity runs.
-  - **luna:** about 100 templates per cell (PLAN §7). The count is the smallest multiple of 10 with simulated power ≥ 0.80 both for Δ_H1 = 10pp (H1) and for H3's 5pp non-inferiority bound when the true Δ_H3 = 0, within the phase-1a cap.
+  - **luna:** about 100 templates per cell (PLAN §7). The count is the smallest multiple of 10 with simulated power ≥ 0.80 both for Δ_H1 = 10pp (H1) and for H3's 5pp non-inferiority bound when the true Δ_H3 = 0, within the phase-1a cap. [Amended 2026-10-09, see §17.6]
   - **sol design:** F-r vs F-0 on the 2 derived-far task cells for T_d templates, and on the 2 observed-far task cells for the first T_o = T_d / 3 of them. There are no near cells on sol. T_d is always a multiple of 30, so T_o is a multiple of 10 and every balance block is whole (D7). The central case is T_d = 120 and T_o = 40: 640 episodes, plus 64 repeat episodes (§2.9), 704 in all.
   - **sol count:** T_d is the smallest such value with probability ≥ 0.80 that the 90% CI of Δ_der lies inside ±8pp when the true Δ_der = 0, within the phase-1a cap.
   - **sol ceiling: T_d ≤ 210** (T_o = 70). T_d may be raised above the central 120 only before the sol main sweep starts and before any H2 outcome has been computed. It never changes after that. A T_d that the 1a cap in force ($500, §12) does not afford also needs the researcher to raise the 1a cap first.
@@ -495,7 +497,7 @@ A literal "last-seen" or "most frequent in the episode" heuristic on the normal 
 >
 > Phase 1a stays under $450 by sizing (30 sol templates; luna's 4 replay-off cells first). (PLAN §16.1)
 
-**Operational.** Which harness cells run on which model in the main sweep. luna rows use all 8 task cells and the template count set by §4.2. sol rows use the D11 cells (§4.2), not all 8; this replaces PLAN §7's "Core: F-r vs F-0 on all 8 task cells". The phase-1a cap in force ($500, A2) bounds the sizes (§12); the "$450" in the quote above is the cap before A2. Within the 1a cap, the confirmatory rows (luna's replay-off cells with their controls, then sol's H2 core) come before the exploratory rows (§4.2; §0.3, line 9).
+**Operational.** [Amended 2026-10-09, see §17.6] Which harness cells run on which model in the main sweep. luna rows use all 8 task cells and the template count set by §4.2. sol rows use the D11 cells (§4.2), not all 8; this replaces PLAN §7's "Core: F-r vs F-0 on all 8 task cells". The phase-1a cap in force ($500, A2) bounds the sizes (§12); the "$450" in the quote above is the cap before A2. Within the 1a cap, the confirmatory rows (luna's replay-off cells with their controls, then sol's H2 core) come before the exploratory rows (§4.2; §0.3, line 9).
 
 | Model | Harness cells | Controls | Status |
 |---|---|---|---|
@@ -505,11 +507,11 @@ A literal "last-seen" or "most frequent in the episode" heuristic on the normal 
 | gpt-6.1-sol | W-n-r vs W-n-0, Σ-n-r vs Σ-n-0, on the D11 cells (§0.3, line 8) | none | Only if H2 shows "signal" (§3 H2) and the phase-1a cap allows. Exploratory |
 | either | Σ-0-r (optional) | none | Only on a verified toggle and if the cap allows. Exploratory |
 
-Validity runs (§4.4) use F-0 on each model that runs a main sweep. The sol H1 replication is not in the MVP (PLAN §4 [A1]). [Amended 2026-10-03, see §17.4]
+Validity runs (§4.4) use F-0 on each model that runs a main sweep. The sol H1 replication is not in the MVP (PLAN §4 [A1]). [Amended 2026-10-03, see §17.4; amended 2026-10-09, see §17.6]
 
 **How the main sweep runs** (§0.3, line 15, changed by the researcher on 2026-10-01; line 9 confirmed). The main sweep is approved as its own block, `3-persistgym`, apart from the ARC block `3-arc` (§12). Its runs go one at a time, and a run may play up to 16 episodes in parallel. Parallel play changes no payload, cell assignment or cost; the run reserves spend for the episodes in flight, so it never exceeds its planned spend. Once the per-stream locks have landed (before block 3), the main sweep may run while ARC runs are going. Within the block, the order of line 9 decides what gives way when the 1a cap runs short.
 
-**Decision.** [Amended 2026-10-02, see §17.3; amended 2026-10-03, see §17.4] This run matrix, with the two changed rows: restated-at-need on all 8 task cells as full F-0 episodes on luna, the single-turn control on the 4 non-recoverable task cells only, and sol's F-r vs F-0 on the D11 cells. (decided 2026-10-01, D36)
+**Decision.** [Amended 2026-10-02, see §17.3; amended 2026-10-03, see §17.4; amended 2026-10-09, see §17.6] This run matrix, with the two changed rows: restated-at-need on all 8 task cells as full F-0 episodes on luna, the single-turn control on the 4 non-recoverable task cells only, and sol's F-r vs F-0 on the D11 cells. (decided 2026-10-01, D36)
 
 *Why:* fixing the matrix now stops cells being added or dropped after results are seen. The generator cannot build single-turn controls for recoverable cells, and restated-at-need needs a stated harness cell.
 
@@ -695,12 +697,12 @@ fallback_drop = perm[3]   # D32
 >
 > If it continues, seed-1 S1+S2 and all of seed 2 run as one wave, so the four configs are compared over the same days (Gemini 3.8 Flash has no dated snapshot). (PLAN §16.2)
 
-**Operational.**
+**Operational.** [Amended 2026-10-09, see §17.6]
 - Replicates s ∈ {1, 2}. A re-run of replicate s gets seed s + 100. If the API exposes a sampling seed, it is set to the run's seed and recorded; otherwise the seed only labels the replicate.
 - Counted runs are played on ARC's online scorecard. Local or offline play is for testing only (PLAN §16.3).
 - The full exit-reason set is `GAME_WIN`, `ACTION_BUDGET`, `TIME_BUDGET`, `SCORECARD_CLOSED`, `API_ERROR`, `AGENT_ERROR`, `UNKNOWN` (`docs/background.md` §2), plus `COST_CAP` from the guard in §7.7. `run_meta.json` records both `exit_reason` and `agent_exit_reason` (§7.5).
 
-**Decision.** Block 2's 8 runs run in the order `random.Random(SEED + 2).sample(units, k=len(units))`. Block 3's 24 runs use `SEED + 3` the same way. In both cases `units` is the list of (game, config, replicate) tuples sorted lexicographically, and SEED is the beacon seed of D15. (decided 2026-10-01, D18)
+**Decision.** [Amended 2026-10-09, see §17.6] Block 2's 8 runs run in the order `random.Random(SEED + 2).sample(units, k=len(units))`. Block 3's 24 runs use `SEED + 3` the same way. In both cases `units` is the list of (game, config, replicate) tuples sorted lexicographically, and SEED is the beacon seed of D15. (decided 2026-10-01, D18)
 
 **Changed at sign-off** (§0.3, line 15; the researcher, 2026-10-01). Block 3's ARC runs go **back to back, one at a time, in the SEED + 3 order**. This replaces the last sentence of D18 as decided, "All block-3 runs start within 72 h of each other." The rest of D18 is unchanged: block 2 runs in the SEED + 2 order and block 3 in the SEED + 3 order, both as defined above. Block 3's ARC runs are approved as their own block, `3-arc`, and the PersistGym main sweep (`3-persistgym`) may run beside them once the per-stream locks have landed (§12).
 
@@ -730,7 +732,7 @@ In the pinned harness, `API_ERROR` means the ARC environment step failed, and a 
 
 *Confirmed at sign-off (§0.3, line 2):* if the scorecard result of a run that is final under this rule cannot be read, the run is re-run once, as `UNKNOWN`.
 
-**Decision.** A `TIME_BUDGET` ending is final: scored as is and flagged. The exception is a provider-latency incident: the run's median seconds per model call exceeds 2× the median of that config's earlier counted runs (or the pilot's median, if there is no earlier counted run). Such a run is re-run once under D19. (decided 2026-10-01, D20)
+**Decision.** [Amended 2026-10-09, see §17.6] A `TIME_BUDGET` ending is final: scored as is and flagged. The exception is a provider-latency incident: the run's median seconds per model call exceeds 2× the median of that config's earlier counted runs (or the pilot's median, if there is no earlier counted run). Such a run is re-run once under D19. (decided 2026-10-01, D20)
 
 Operational reading (§0.3, line 3, confirmed): "the median of that config's earlier counted runs" is the median of their per-run median seconds per model call, over all games. The launcher records each run's median seconds per successful model call in `meta.json` (`latency`) and in the `costs.csv` row (`latency_s`).
 
@@ -748,7 +750,7 @@ Operational reading (§0.3, line 3, confirmed): "the median of that config's ear
 ### 7.7 Per-run cost guard
 > **Extra harness patches,** kept as files in `arc/`: [...] an optional per-run cost guard (exit `COST_CAP`; the researcher decides whether it is an acceptable, reported deviation); [...] (PLAN §16.3)
 
-**Decision.** Adopt the guard (patch 0010) at **$120 per run** at ARC's no-cache list accounting, computed by the harness from its own configured prices. It applies to every counted ARC run, including S0+StateCarry, whose own calls count. A `COST_CAP` ending is scored as is, not re-run, flagged and reported as a deviation from ARC's protocol. H4 and the StateCarry win are also reported without the units that contain one. (decided 2026-10-01, D22)
+**Decision.** [Amended 2026-10-09, see §17.6] Adopt the guard (patch 0010) at **$120 per run** at ARC's no-cache list accounting, computed by the harness from its own configured prices. It applies to every counted ARC run, including S0+StateCarry, whose own calls count. A `COST_CAP` ending is scored as is, not re-run, flagged and reported as a deviation from ARC's protocol. H4 and the StateCarry win are also reported without the units that contain one. (decided 2026-10-01, D22)
 
 *Why, and when it binds:* at the published Standard pace, the 12 h clock caps an S0, S1, S2 or S0+StateCarry run at about $96-115 list on the path games (SB26 $96, R11L $98, CD82 $103, FT09 $115: 12 h × each run's list cost per second, `cost_total_usd` / `duration_s` in `results/arc_public_ops/20261001T185155Z/recordings_per_action.csv`). FT09 is closest to the guard (about $124 at its median pace of 80 s per action), so the clock usually binds first. The guard binds mainly Adapter-pace runs of more than about 800-1,250 calls ($120 / $0.150 and $120 / $0.096, the path games' published Adapter list cost per call, `cost_per_step_mean` in the same run's `summary.md`). A `COST_CAP` on S4 would shrink the gap and inflate StateCarry closure, which is why units with a `COST_CAP` are also reported without them.
 
@@ -793,17 +795,17 @@ Operational reading (§0.3, line 3, confirmed): "the median of that config's ear
 >
 > **Optional for phase 2:** run the held-out S0+S4 runs before the StateCarry held-out runs, and pre-register a minimum gap for the StateCarry runs to proceed. (PLAN §16.4)
 
-**Operational.**
+**Operational.** [Amended 2026-10-09, see §17.6]
 - **Games:** the dev set is the 4 path games (§7.2). The held-out set is SP80, VC33 and TN36 (D14), which replaces "the 2 undrawn eligible games plus VC33 or RE86".
 - **Closure** C = (R̄_SC − R̄_S0) / (R̄_S4 − R̄_S0). Each R̄ is a mean of RHAE over game-replicate units (a ratio of means, not a mean of per-game ratios). A 90% bootstrap interval over units is reported. As with H4, the claim rests on the point estimate and is descriptive.
 - **Cost per game** is the mean over games of the mean over replicates of counted-run cost on the primary basis (D23). S0+StateCarry includes every StateCarry call (promotion, digest). Re-run costs are reported separately and left out of the comparison.
 - **StateCarry freeze:** the code commit and config hash of the StateCarry version under test are recorded by a pre-declared amendment ("A-SC", §17) before any G3 evaluation run, and again before any held-out run.
 
-**Decision.** Cost basis: the primary basis is the **billed estimate**, from provider-reported cached tokens at the standard tier's prices. ARC's no-cache list cost is reported alongside. Re-run costs are excluded from the comparison and reported separately. (decided 2026-10-01, D23)
+**Decision.** [Amended 2026-10-09, see §17.6] Cost basis: the primary basis is the **billed estimate**, from provider-reported cached tokens at the standard tier's prices. ARC's no-cache list cost is reported alongside. Re-run costs are excluded from the comparison and reported separately. (decided 2026-10-01, D23)
 
 *Why:* billed is what a Standard-harness user actually pays, and the only basis on which StateCarry's cache-friendly layout can pay off. It is also the harder bar. In the 8 recorded games, a Standard call costs 2.6 times an Adapter call billed ($0.168 vs $0.064, medians) and 1.7 times at list ($0.191 vs $0.114) (`results/arc_public_ops/20261001T035436Z/summary.md`). The cost half of the win is therefore likely to fail on billed cost unless StateCarry cuts reasoning tokens or calls; the "partial" band (below) then applies.
 
-**Decision.** Gate and claim rules (option B):
+**Decision.** [Amended 2026-10-09, see §17.6] Gate and claim rules (option B):
 - **G3:** the frozen v0 runs once, with a fresh replicate, on each of the 4 dev games. These 4 runs are compared with the path-study counted S0 and S4 runs on the same games. Continue iff C_dev ≥ 0.25 **and** the cost per game of S0+SC ≤ that of S4. Development runs made before the v0 freeze do not enter G3.
 - **G3 budget:** the 4 G3 runs are their own phase-2 budget line, outside the $150 dev cap.
 - **Held-out set:** all 3 held-out games are committed; there is no conditional cut to 2 games.
@@ -845,7 +847,7 @@ Every primary contrast is reported on both the probability and the logit scale. 
 ### 9.4 Multiplicity
 > **Multiplicity:** Holm correction across the primary confirmatory contrasts (H1, H2, H3). H4 and H5 are descriptive. (PLAN §10)
 
-**Decision.** [Amended 2026-10-02, see §17.3] The Holm family has **4 one-sided tests** at a familywise α = 0.05:
+**Decision.** [Amended 2026-10-02, see §17.3; amended 2026-10-09, see §17.6] The Holm family has **4 one-sided tests** at a familywise α = 0.05:
 1. H1: H0 is Δ_H1 ≤ 0.
 2. H2 success: H0 is Δ_der ≤ 0 (sol).
 3. H2 tokens: H0 is TE ≤ 0 (sol).
@@ -870,7 +872,7 @@ Defined in §2.8.
 ### 9.7 Failure labels
 > **Failure labels.** The researcher labels about 100 failure transcripts, stratified by cell, as: never encoded, evicted, misapplied, re-derived wrongly. An LLM judge acts as second rater; report Cohen's κ. (PLAN §10)
 
-**Operational.** About 100 failures are drawn from the main sweep, stratified by harness × task cell, by a seeded sample (SEED + 20). Where the transcript allows, the harness cell is hidden from the labeller. The judge model and prompt are fixed by a pre-declared amendment ("A-judge", §17) before labelling starts. The judge's calls are paid and are logged to `results/costs.csv`.
+**Operational.** [Amended 2026-10-09, see §17.6] About 100 failures are drawn from the main sweep, stratified by harness × task cell, by a seeded sample (SEED + 20). Where the transcript allows, the harness cell is hidden from the labeller. The judge model and prompt are fixed by a pre-declared amendment ("A-judge", §17) before labelling starts. The judge's calls are paid and are logged to `results/costs.csv`.
 
 ### 9.8 Power
 > **Power.** Simulation in the premise check, with template random-intercept SD 1.0 on the logit scale, success 0.9 → 0.8 across distance, clustered GLM with template fixed effects, 200 reps:
@@ -894,10 +896,10 @@ The sizing rule is in §4.2. The current sol simulation is the table in §4.2.
 > - H5 uses a per-level logistic model of P(clear | reached, depth, harness) with game fixed effects, on the published runs and on ours.
 > - Always report exit reasons. (PLAN §10)
 
-The operational versions are in H4 and H5 (§3). Exit reasons (`exit_reason` and `agent_exit_reason`) are reported per run, including original runs that were replaced by re-runs. [Amended 2026-10-07, see §17.5]
+The operational versions are in H4 and H5 (§3). Exit reasons (`exit_reason` and `agent_exit_reason`) are reported per run, including original runs that were replaced by re-runs. [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6]
 
 ### 9.10 Exploratory analyses
-Everything not registered in §3, §8 or this section is labelled **exploratory**. That includes S3, H5 at other efforts or for other models, the event studies, luna's H2 replication, the W/Σ replay pairs, Σ-cell results, and the per-cell validity rates. [Amended 2026-10-03, see §17.4] [Amended 2026-10-07, see §17.5]
+Everything not registered in §3, §8 or this section is labelled **exploratory**. That includes S3, H5 at other efforts or for other models, the event studies, luna's H2 replication, the W/Σ replay pairs, Σ-cell results, and the per-cell validity rates. [Amended 2026-10-03, see §17.4] [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6]
 
 ## 10. Gates, kill and equivalence rules (PLAN §11, §14, §16.2, §16.3)
 > **Kill criteria in `PLAN.md` §14 are binding.** If one fires, stop that leg and propose the fallback in the plan. Don't quietly extend it. (CLAUDE.md)
@@ -919,7 +921,7 @@ The text elided from PLAN §11 above gives G0's cost and toggle fallbacks; they 
 
 *Why:* reaching the truncation point shows that the configs run, not that they run a full game within the 12 h clock. The $0 offline games with a stub model (PLAN §16.3) cover full-game mechanics without cost.
 
-**Decision.** Cost forecast, rule 1:
+**Decision.** [Amended 2026-10-09, see §17.6] Cost forecast, rule 1:
 - **At G0:** F = Σ over the 4 path games g and the configs c ∈ {S0, S1, S2, S4} of 2 × L(g, c) × b(c). L(g, c) is the published list cost of game g under the Standard harness for c = S0 and under the Adapter for c = S4; S1 and S2 are priced at the midpoint of the two (the rule PLAN §16.1 used). b(c) is the billed/list cost ratio measured for config c in the truncated pilot, from its provider-reported usage at standard-tier prices. **Go on cost iff F + reserve ≤ $900**, with the reserve of D28. The clean-run clause of v0.1 is moot, because no path game's published run ended early.
 - **At Checkpoint C (conservative check):** the remaining 24 runs are forecast with seed-2 S0 and S4 per game at their measured seed-1 costs, and S1 and S2 per game at the measured S0 cost per call × max(measured S0 actions, measured S4 actions), plus the re-run allowance of §10.3. If that exceeds the remaining 1b cap, a 1b cap increase of up to about $170 may be requested there, from measured costs.
 
@@ -944,7 +946,7 @@ A trial whose visible turn-1 reply contains any 3-digit number is excluded and r
 
 *Why:* chance is 1/1000, so 10/20 against 1/20 is an overwhelming separation; a stricter bar could reject a toggle that works when the model does not always commit to a number.
 
-**Fallbacks if the ARC cost rule fails** (PLAN §12, in order, as they apply after D21):
+**Fallbacks if the ARC cost rule fails** (PLAN §12, in order, as they apply after D21): [Amended 2026-10-09, see §17.6]
 1. "Flex everywhere" no longer applies to ARC: the tier is fixed at standard (D21). OpenAI already runs on Flex (D13).
 2. 3 ARC games (D32).
 3. Medium thinking. This needs a PREREG amendment, since H4 and the eligibility rule are defined at high effort (PLAN §14, item 2 [A1]).
@@ -953,7 +955,7 @@ A trial whose visible turn-1 reply contains any 3-digit number is excluded and r
 ### 10.2 G1 (Oct 14)
 > Validity gate (§5) passes. If it fails: one redesign pass until Oct 18. If it still fails: stop PersistGym and continue the ARC leg alone. (PLAN §11)
 
-The gate is defined in §4.4. [Amended 2026-10-02, see §17.3]
+The gate is defined in §4.4. [Amended 2026-10-02, see §17.3; amended 2026-10-09, see §17.6]
 
 ### 10.3 Checkpoint C (after block 2; ~Oct 12, latest Oct 14)
 > Propose stopping or re-scoping the ARC leg if any of these holds after block 2:
@@ -963,7 +965,7 @@ The gate is defined in §4.4. [Amended 2026-10-02, see §17.3]
 >
 > If it continues, seed-1 S1+S2 and all of seed 2 run as one wave, so the four configs are compared over the same days (Gemini 3.8 Flash has no dated snapshot). (PLAN §16.2)
 
-**Operational.** [Amended 2026-10-07, see §17.5]
+**Operational.** [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6]
 - **Gap:** the mean over the 4 path games of RHAE(S4, s=1) − RHAE(S0, s=1), using counted runs (§7.5). The rule fires if this is < 5.
 - **Errors:** the number of the 8 counted seed-1 runs whose final `agent_exit_reason` is re-run-eligible under D19, after their one re-run. The rule fires if this is > 3.
 - **Cost (D27, replacing PLAN's "measured cost per run × 24"):** ρ is the number of block-2 re-runs divided by 8. The forecast for the remaining 24 runs is [Σ over games of the measured seed-1 billed cost of S0 and of S4, for seed 2] + [Σ over games of 2 × 2 × (measured S0 billed cost per call) × max(measured S0 actions, measured S4 actions), for S1 and S2 in both seeds], times (1 + ρ). "Remaining" is $900 minus the billed phase-1b spend to date (pilot spend counts to phase 0). The rule fires if the forecast > remaining; the researcher may then raise the 1b cap by up to about $170 (D27) or re-scope.
@@ -972,37 +974,37 @@ The gate is defined in §4.4. [Amended 2026-10-02, see §17.3]
 ### 10.4 G2 (Oct 21)
 > G2: kill the ARC leg if the S0→S4 gap is < 10 RHAE points. Overall kill if H1 *and* H2 are inside equivalence bounds *and* the ARC gap is dominated by a mechanism with no provider-neutral analogue: write a short note (survival accounting + ARC path table) and skip Phase 2. Scoop check: if a per-component ARC ablation has appeared, the ARC table stops being the headline. (PLAN §11)
 
-**Operational.**
+**Operational.** [Amended 2026-10-09, see §17.6]
 - **Kill criterion 4:** G = R̄_S4 − R̄_S0 over the 8 counted units (H4) is < 10.
 - **Kill criterion 5** requires all three of the following:
   - "H1 inside equivalence bounds" means H1's kill condition holds (§3 H1). See D38.
   - "H2 inside equivalence bounds" means H2's equivalence condition holds (§3 H2). If H2 moved to open weights (kill criterion 1), the condition is read on that run.
   - "Dominated" is defined by D30.
 
-**Decision.** "H1 inside equivalence bounds" is read as H1's kill condition: Δ_H1 < 10pp and the upper bound of its 90% CI < 15pp. (decided 2026-10-01, D38)
+**Decision.** [Amended 2026-10-09, see §17.6] "H1 inside equivalence bounds" is read as H1's kill condition: Δ_H1 < 10pp and the upper bound of its 90% CI < 15pp. (decided 2026-10-01, D38)
 
 *Why:* PLAN gives H1 a kill rule but no separate equivalence rule, and the kill rule is the closest bound it states.
 
-**Decision.** "Dominated by a mechanism with no provider-neutral analogue" means **σ_replay ≥ 2/3** as a point estimate. σ_replay is the share of the S2→S4 step, which bundles native replay with the native item format and is the only step with no provider-neutral analogue. (decided 2026-10-01, D30)
+**Decision.** [Amended 2026-10-09, see §17.6] "Dominated by a mechanism with no provider-neutral analogue" means **σ_replay ≥ 2/3** as a point estimate. σ_replay is the share of the S2→S4 step, which bundles native replay with the native item format and is the only step with no provider-neutral analogue. (decided 2026-10-01, D30)
 
 *Why:* at 2/3, the provider-neutral steps (loss policy plus notes) carry at most a third of the gap. A bar of 1/2 would skip phase 2 on Prediction B alone, and a CI-based bar could not fire with 8 units.
 
 ### 10.5 Scoop rule (kill criterion 6)
 > **Any time.** A per-component ablation of ARC's gap appears (ARC Prize, OpenAI or others) → the ARC table becomes supporting material. Lead with PersistGym + StateCarry. (PLAN §14)
 
-**Decision.** "A per-component ablation" is a public document (paper, preprint, blog post, results page or merged PR) that reports ARC-AGI-3 scores, on any model, for at least two harness configurations differing in exactly **one** of {loss policy, notes instruction, reasoning replay}, under ARC's harness or a fork of it. OpenAI's Jul 29 post (combined effect only) does not qualify. The scoop search is re-run at each gate (CLAUDE.md). (decided 2026-10-01, D31)
+**Decision.** [Amended 2026-10-09, see §17.6] "A per-component ablation" is a public document (paper, preprint, blog post, results page or merged PR) that reports ARC-AGI-3 scores, on any model, for at least two harness configurations differing in exactly **one** of {loss policy, notes instruction, reasoning replay}, under ARC's harness or a fork of it. OpenAI's Jul 29 post (combined effect only) does not qualify. The scoop search is re-run at each gate (CLAUDE.md). (decided 2026-10-01, D31)
 
 *Why:* a narrow trigger fires only on work that actually decomposes the gap. Partial ablations are cited and positioned against, as PLAN §15 plans. One such signal is already logged: an unmerged ARC harness branch adding the notes sentence to the Adapter prompt, with no published scores (`results/decisions.md`, 2026-10-01).
 
 ### 10.6 3-game fallback
 > How a game is dropped under the 3-game fallback (seeded, not by cost). (PLAN §16.5)
 
-**Decision.** If the 3-game fallback is triggered, **drop `perm[3]`**, the last path game in the beacon-seeded order (§7.3). If it has already been run, its runs are reported as exploratory and it stays a dev game. Otherwise it is set aside (neither path nor held-out) unless the researcher decides otherwise at G2. H4, Checkpoint C and kill criterion 4 then use the 3 remaining path games (6 units instead of 8), with the same thresholds; Checkpoint C's cost rule then counts 18 remaining runs instead of 24, and its error rule 6 seed-1 runs instead of 8. (decided 2026-10-01, D32)
+**Decision.** [Amended 2026-10-09, see §17.6] If the 3-game fallback is triggered, **drop `perm[3]`**, the last path game in the beacon-seeded order (§7.3). If it has already been run, its runs are reported as exploratory and it stays a dev game. Otherwise it is set aside (neither path nor held-out) unless the researcher decides otherwise at G2. H4, Checkpoint C and kill criterion 4 then use the 3 remaining path games (6 units instead of 8), with the same thresholds; Checkpoint C's cost rule then counts 18 remaining runs instead of 24, and its error rule 6 seed-1 runs instead of 8. (decided 2026-10-01, D32)
 
 *Why:* a position-based drop is fixed by the beacon after the freeze and cannot be steered by results or costs, which meets PLAN §16.5's "seeded, not by cost".
 
 ### 10.7 G3 and G4
-Defined in §8 (D24).
+Defined in §8 (D24). [Amended 2026-10-09, see §17.6]
 
 ### 10.8 Kill criteria, consolidated (as written)
 > 1. **G0.** No verifiable replay toggle on any API model → H2 runs on open weights only (E1). If E1 also fails, drop H2 and state it as a limitation.
@@ -1013,7 +1015,7 @@ Defined in §8 (D24).
 > 6. **Any time.** A per-component ablation of ARC's gap appears (ARC Prize, OpenAI or others) → the ARC table becomes supporting material. Lead with PersistGym + StateCarry.
 > 7. **G3.** StateCarry v0 closes < 25% of the gap on dev games → stop the builder and write the analysis paper. (PLAN §14)
 
-For criterion 2, "the chosen tier" is the standard tier (D21), the forecast follows D27, and the Checkpoint C re-check follows §10.3.
+For criterion 2, "the chosen tier" is the standard tier (D21), the forecast follows D27, and the Checkpoint C re-check follows §10.3. [Amended 2026-10-09, see §17.6]
 
 ## 11. Pilots and pilot blinding (PLAN §16.3, §16.5)
 > **Pilot blinding:** pilots report only validity levels, pooled tokens, errors, latency and cost; never per-arm success, per-arm reasoning tokens (H2's token outcome) or per-config ARC level progress. Pilot templates use a disjoint seed range. (PLAN §16.5)
@@ -1044,7 +1046,7 @@ For criterion 2, "the chosen tier" is the standard tier (D21), the forecast foll
 > | 3. Commitment | Checkpoint C (~Oct 12; latest G1, Oct 14) | +$0.54-0.79k at Flex or +$0.76-1.15k on the standard tier (up to $1.37k at no-cache list) | Google, OpenAI | The other 24 ARC path runs plus reserve; the PersistGym main sweep | G2 (Oct 21) |
 > | 4. Phase 2 | G2 / G3 | ~$0.46-1.1k | Google, OpenAI | StateCarry dev and held-out runs | G3, G4 |
 
-**Forecasts at this draft** (billed; Gemini on the standard tier; OpenAI on Flex with cache writes; 1k output tokens per PersistGym call; `results/cost_model/20261001T203318Z/`, PLAN §17.2). These are forecasts from one published run per game and harness and from PLAN's token assumptions, not measured costs.
+**Forecasts at this draft** (billed; Gemini on the standard tier; OpenAI on Flex with cache writes; 1k output tokens per PersistGym call; `results/cost_model/20261001T203318Z/`, PLAN §17.2). These are forecasts from one published run per game and harness and from PLAN's token assumptions, not measured costs. [Amended 2026-10-09, see §17.6]
 
 | Item | USD | Source file |
 |---|---|---|
@@ -1087,9 +1089,9 @@ The luna control line replaces PLAN §12's 1,600 single prompts, which came to $
 **Paid-run procedure.**
 - **Paid runs, one at a time per stream** (§0.3, lines 14 and 15; line 15 changed by the researcher on 2026-10-01).
   - **Until the per-stream locks land** (before block 3), one paid run at a time overall: no paid run, ARC or PersistGym, starts while another is going. Both launchers enforce this with one lock shared by every checkout (`common/paidlock.py`; the ARC launcher since PR #21, the PersistGym launcher since PR #24; §0.3, line 14), taken before the spend checks so that two runs cannot both pass them.
-  - **ARC stream:** one run at a time, in the D18 order: SEED + 2 in block 2, and SEED + 3 in block 3, back to back (§7.4). For block 3, "back to back" replaces D18's 72 h start window. Back to back at the published durations of the path games, block 3's 24 ARC runs (S1 and S2 in both seeds, S0 and S4 in seed 2) take about 60 h with S1 and S2 at the S0/S4 midpoint and about 79 h with S1 and S2 at S0's duration: the four published S0 runs sum to 14.7 h and the four S4 runs to 5.3 h (`duration_s` in `results/arc_public_ops/20261001T185155Z/recordings_per_action.csv`). With S1 and S2 at S0's duration, the last run would start more than 72 h after the first in every order, even with no gaps between runs. These are published durations, not our configs' measured ones.
+  - **ARC stream:** one run at a time, in the D18 order: SEED + 2 in block 2, and SEED + 3 in block 3, back to back (§7.4). For block 3, "back to back" replaces D18's 72 h start window. Back to back at the published durations of the path games, block 3's 24 ARC runs (S1 and S2 in both seeds, S0 and S4 in seed 2) take about 60 h with S1 and S2 at the S0/S4 midpoint and about 79 h with S1 and S2 at S0's duration: the four published S0 runs sum to 14.7 h and the four S4 runs to 5.3 h (`duration_s` in `results/arc_public_ops/20261001T185155Z/recordings_per_action.csv`). With S1 and S2 at S0's duration, the last run would start more than 72 h after the first in every order, even with no gaps between runs. These are published durations, not our configs' measured ones. [Amended 2026-10-09, see §17.6]
   - **PersistGym stream:** one run at a time. A run may play up to 16 episodes in parallel; this changes no payload and no cost, and the run reserves spend for the episodes in flight, so it never exceeds its planned spend (§4.6).
-  - **Both streams at once.** Once the per-stream locks land (as $0 pull requests, before block 3, together with the parallel episodes), the ARC stream (Gemini) and the PersistGym stream (OpenAI) may run at the same time, each with its own paid-run lock and its own approval blocks. Block 3 is approved as two blocks: `3-arc` (the 24 ARC path runs and their reserve) and `3-persistgym` (the PersistGym main sweep). *Operational:* where both streams spend under one cap (phase 2), a run's planned spend counts against that cap from its start until its `costs.csv` row is written, so two overlapping runs cannot both use the same room.
+  - **Both streams at once.** Once the per-stream locks land (as $0 pull requests, before block 3, together with the parallel episodes), the ARC stream (Gemini) and the PersistGym stream (OpenAI) may run at the same time, each with its own paid-run lock and its own approval blocks. Block 3 is approved as two blocks: `3-arc` (the 24 ARC path runs and their reserve) and `3-persistgym` (the PersistGym main sweep). *Operational:* where both streams spend under one cap (phase 2), a run's planned spend counts against that cap from its start until its `costs.csv` row is written, so two overlapping runs cannot both use the same room. [Amended 2026-10-09, see §17.6]
 - **Hold after a `COST_CAP`** (§0.3, line 12, changed by the researcher on 2026-10-01; §7.7). Any paid run that reaches its $120 run guard ends `COST_CAP` and places a hold: no further paid run starts in either stream until the researcher merges a line into `results/decisions.md` that clears the hold and names the run. Both launchers are to refuse while a hold stands. The code, including the line's grammar, lands as a $0 pull request before block 2.
 - **ARC runs** go through `arc/run_path.py` only (PR #21), from a checkout of `origin/main`, with `PERSISTGYM_ALLOW_PAID=1` set for that one command. One invocation is one game × one config × one seed (experiments `arc_pilot` and `arc_path`), or one payload acceptance check of the four profiles (`gemini_probe`). It refuses, with exit code 2 and before anything is spent:
   - a game other than FT09, SB26, R11L and CD82 (so no pilot or path run on SP80, VC33 or TN36), a config other than S0, S1, S2 and S4, or a `statecarry_*` experiment (phase 2 is not supported yet);
@@ -1138,24 +1140,24 @@ The luna control line replaces PLAN §12's 1,600 single prompts, which came to $
 **Deviations** from this PREREG are logged in `results/decisions.md` with the date and reason, and are listed in every write-up.
 
 ## 14. Extensions (PLAN §9)
-Extensions are **not** pre-registered here, apart from the two rules carried over below. Each one needs a dated amendment fixing its settings before its first paid run.
+Extensions are **not** pre-registered here, apart from the two rules carried over below. Each one needs a dated amendment fixing its settings before its first paid run. [Amended 2026-10-09, see §17.6]
 - **E1** (open-weights replay): if it moves into the MVP under kill criterion 1, H2's predictions, falsification and equivalence rules apply unchanged to Qwen3.6-27B with `preserve_thinking` on vs off. The serving settings are fixed by amendment.
 - **E3** (Terminal-Bench cost win), as written: "Pre-registered win: success within ±3pp and at least 15% fewer tokens." (PLAN §9)
 - E2, E4, E5 and E6 have no pre-registered predictions.
 
 ## 15. What this pre-registration does NOT claim
 - **It is not a model comparison.** Nothing here ranks models or vendors, and no result is stated as "model X beats model Y". Figures plot effects against task properties.
-- **The ARC results are conditional and narrow.** They concern 4 public games chosen by a rule (published gap ≥ 20, both published runs ≤ $60, a normal Standard ending), so they are games where the Adapter is known to help. They cover Gemini 3.8 Flash at high thinking on the Interactions API and the standard tier, measured in a 2026 window with no dated snapshot. They say nothing about the Semi-Private or private sets, about other efforts or models, or about frontier models.
+- **The ARC results are conditional and narrow.** They concern 4 public games chosen by a rule (published gap ≥ 20, both published runs ≤ $60, a normal Standard ending), so they are games where the Adapter is known to help. They cover Gemini 3.8 Flash at high thinking on the Interactions API and the standard tier, measured in a 2026 window with no dated snapshot. They say nothing about the Semi-Private or private sets, about other efforts or models, or about frontier models. [Amended 2026-10-09, see §17.6]
 - **The held-out games are not a random sample.** They come from a separate rule that ranks by published cost, and each exceeds the $60 filter on at least one harness, so path and held-out games are not exchangeable.
-- **The path decomposition is order-dependent and descriptive.** The S2→S4 step bundles native replay with the native item format, so no share is attributed to replay alone. With 8 game-seed units, no significance is claimed. [Amended 2026-10-07, see §17.5]
+- **The path decomposition is order-dependent and descriptive.** The S2→S4 step bundles native replay with the native item format, so no share is attributed to replay alone. With 8 game-seed units, no significance is claimed. [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6]
 - **It does not explain ARC's published gap.** The published runs are one-seed screens, may have used a different API surface, and include early endings. Our runs re-measure the gap; they do not audit those runs. Our S1 and S2 have no published counterpart, and our S0 requests thought summaries that ARC's Standard run probably did not (§7.1).
 - **PersistGym is synthetic.** Its results are not claimed to transfer to coding agents, ARC or real tasks without separate evidence. Window effects at S = 0 are mechanical and are not findings in themselves.
 - **H2 is narrow.** It runs at medium effort (D13), which may understate the value of replay relative to the high-effort ARC leg, and its observed-fact check covers far distance only (D11). [Amended 2026-10-02, see §17.2 and §17.3]
 - **Opaque replay is not inspected.** What a model "sees" in encrypted reasoning items cannot be observed. Toggle validity rests on the echoed field and the replay-use probe.
 - **Equivalence is not absence.** "Inside equivalence bounds" means the effect is within the stated bounds at the stated confidence. It does not mean there is no effect, and an underpowered result is called inconclusive. At the central sol size, the H2 equivalence test has well under 0.80 power (§4.2). [Amended 2026-10-02, see §17.2]
-- **StateCarry is not claimed to be new as an idea.** Ledger-style state and reasoning replay already exist (Ledger 2608.00808, the Kaggle "Duck" baseline, public Kaggle ablations). The claim is limited to closing the Standard-to-Adapter gap under ARC's rules on held-out games. It is not a state-of-the-art claim, and a coding success win would not be new.
+- **StateCarry is not claimed to be new as an idea.** Ledger-style state and reasoning replay already exist (Ledger 2608.00808, the Kaggle "Duck" baseline, public Kaggle ablations). The claim is limited to closing the Standard-to-Adapter gap under ARC's rules on held-out games. It is not a state-of-the-art claim, and a coding success win would not be new. [Amended 2026-10-09, see §17.6]
 - **Costs are period-specific.** They are forecasts at the prices checked on 2026-09-29/30. Gemini 3.8 Flash prices double on 2027-01-01.
-- **H5 on published runs is observational and not blind.** It cannot separate depth from game difficulty beyond game fixed effects. Per-game scores were seen before this pre-registration, and the operational slice revealed where each published run ended (§3 H5). Only H5 on our own runs is a test on unseen data.
+- **H5 on published runs is observational and not blind.** It cannot separate depth from game difficulty beyond game fixed effects. Per-game scores were seen before this pre-registration, and the operational slice revealed where each published run ended (§3 H5). Only H5 on our own runs is a test on unseen data. [Amended 2026-10-09, see §17.6]
 
 ## 16. Decision register
 All 39 items were decided by the researcher on 2026-10-01. The text above carries each decision where it applies, marked "(decided 2026-10-01, D*n*)". The researcher answered the sign-off list the same day (§0.3); the rows below name the lines that concern them, and the two changed lines (12 and 15) follow their decisions in paragraphs headed "Changed at sign-off".
@@ -1179,34 +1181,34 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D15 | §7.3 | Draw seed | Changed: seed from the first NIST beacon pulse at least 10 minutes after the freeze commit, with a drand fallback; it orders the 4 path games (the drand fallback when NIST cannot be reached was confirmed at sign-off, §0.3 line 5) |
 | D16 | §7.3 | Third held-out game | Replaced by D14's held-out rule (VC33 is in; RE86 is out) |
 | D17 | §7.3 | Pilot game | Accepted: the first game of the beacon-seeded order; never a held-out game |
-| D18 | §7.4 | Run order | Accepted as drafted, with the beacon seed. Changed at sign-off (§0.3 line 15): the 72 h start window for block 3 is replaced by "back to back, one at a time, in the SEED + 3 order"; both run orders are unchanged |
+| D18 | §7.4 | Run order | Accepted as drafted, with the beacon seed. Changed at sign-off (§0.3 line 15): the 72 h start window for block 3 is replaced by "back to back, one at a time, in the SEED + 3 order"; both run orders are unchanged [Amended 2026-10-09, see §17.6] |
 | D19 | §7.5 | Error re-runs | Accepted; `TIME_BUDGET` follows D20 (reading `agent_exit_reason` rather than `exit_reason`, and re-running a run whose scorecard cannot be read, were confirmed at sign-off, §0.3 lines 1 and 2) |
-| D20 | §7.5 | `TIME_BUDGET` | Changed: final as is, unless a provider-latency incident (median seconds per call over 2× the config's earlier runs; how that median is taken was confirmed at sign-off, §0.3 line 3) |
+| D20 | §7.5 | `TIME_BUDGET` | Changed: final as is, unless a provider-latency incident (median seconds per call over 2× the config's earlier runs; how that median is taken was confirmed at sign-off, §0.3 line 3) [Amended 2026-10-09, see §17.6] |
 | D21 | §7.6 | Service tier | Changed: Gemini standard tier for all ARC runs, fixed now; Flex probe dropped; per-run 12 h warning rule |
-| D22 | §7.7 | Cost guard | Accepted: $120 per run at list; `COST_CAP` final and reported; trade-off text corrected. Changed at sign-off (§0.3 line 12): the guard stays in the launcher and the $120-of-room rule stays; a run that reaches the guard places a hold: no further paid run starts, in either stream, until the researcher clears it with a merged line in `results/decisions.md` |
-| D23 | §8 | Cost basis | Accepted: billed estimate primary, list reported alongside, re-runs excluded |
-| D24 | §8 | StateCarry gates and budget | Option B: G3 runs as their own budget line; all 3 held-out games committed, no 2-game cut; held-out S0+S4 first with a gap ≥ 10; phase-2 cap raised to $1,250 (the researcher's follow-up to A2; A2 first proposed $1,150); win/partial/negative bands |
+| D22 | §7.7 | Cost guard | Accepted: $120 per run at list; `COST_CAP` final and reported; trade-off text corrected. Changed at sign-off (§0.3 line 12): the guard stays in the launcher and the $120-of-room rule stays; a run that reaches the guard places a hold: no further paid run starts, in either stream, until the researcher clears it with a merged line in `results/decisions.md` [Amended 2026-10-09, see §17.6] |
+| D23 | §8 | Cost basis | Accepted: billed estimate primary, list reported alongside, re-runs excluded [Amended 2026-10-09, see §17.6] |
+| D24 | §8 | StateCarry gates and budget | Option B: G3 runs as their own budget line; all 3 held-out games committed, no 2-game cut; held-out S0+S4 first with a gap ≥ 10; phase-2 cap raised to $1,250 (the researcher's follow-up to A2; A2 first proposed $1,150); win/partial/negative bands [Amended 2026-10-09, see §17.6] |
 | D25 | §9.1 | Bootstrap and GLM details | Accepted, plus cluster-robust SEs with the G/(G − 1) factor only |
-| D26 | §9.4 | Holm family | Accepted: 4 one-sided tests; model estimate must agree; worst-step power quoted from the committed simulation |
-| D27 | §10.1 | Cost forecast | Rule 1: G0 prices S1/S2 at the S0/S4 midpoint; a conservative check at Checkpoint C; a 1b cap raise of up to about $170 may be requested there |
+| D26 | §9.4 | Holm family | Accepted: 4 one-sided tests; model estimate must agree; worst-step power quoted from the committed simulation [Amended 2026-10-09, see §17.6] |
+| D27 | §10.1 | Cost forecast | Rule 1: G0 prices S1/S2 at the S0/S4 midpoint; a conservative check at Checkpoint C; a 1b cap raise of up to about $170 may be requested there [Amended 2026-10-09, see §17.6] |
 | D28 | §10.1 | Re-run reserve | Accepted: 20% |
 | D29 | §10.1 | Replay toggle rule | Accepted as drafted [Amended 2026-10-02, see §17.1] |
-| D30 | §10.4 | "Dominated" | Accepted: replay share ≥ 2/3 |
-| D31 | §10.5 | Scoop trigger | Accepted: a public one-component ARC ablation; scoop search at every gate |
-| D32 | §10.6 | 3-game fallback | Accepted: drop the last game of the beacon-seeded order (what happens to the block-3 run order was confirmed at sign-off, §0.3 line 4) |
+| D30 | §10.4 | "Dominated" | Accepted: replay share ≥ 2/3 [Amended 2026-10-09, see §17.6] |
+| D31 | §10.5 | Scoop trigger | Accepted: a public one-component ARC ablation; scoop search at every gate [Amended 2026-10-09, see §17.6] |
+| D32 | §10.6 | 3-game fallback | Accepted: drop the last game of the beacon-seeded order (what happens to the block-3 run order was confirmed at sign-off, §0.3 line 4) [Amended 2026-10-09, see §17.6] |
 | D33 | §13 | PersistGym errors | Accepted as drafted |
-| D34 | §3 H4 | H4 readings | Accepted as drafted [Amended 2026-10-07, see §17.5] |
-| D35 | §3 H5 | H5 details | Accepted as drafted |
-| D36 | §4.6 | Run matrix | Changed: single-turn control on non-recoverable cells only; restated-at-need as full F-0 episodes; sol on the D11 cells (sol's optional replay pairs on the D11 cells were confirmed at sign-off, §0.3 line 8) [Amended 2026-10-02, see §17.3] [Amended 2026-10-03, see §17.4] |
+| D34 | §3 H4 | H4 readings | Accepted as drafted [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6] |
+| D35 | §3 H5 | H5 details | Accepted as drafted [Amended 2026-10-09, see §17.6] |
+| D36 | §4.6 | Run matrix | Changed: single-turn control on non-recoverable cells only; restated-at-need as full F-0 episodes; sol on the D11 cells (sol's optional replay pairs on the D11 cells were confirmed at sign-off, §0.3 line 8) [Amended 2026-10-02, see §17.3] [Amended 2026-10-03, see §17.4; amended 2026-10-09, see §17.6] |
 | D37 | §10.1 | Other G0 conditions | Accepted, on the standard tier, with the S1/S2 patches' snapshot tests required |
-| D38 | §10.4 | H1 in kill criterion 5 | Accepted: read as H1's kill condition |
+| D38 | §10.4 | H1 in kill criterion 5 | Accepted: read as H1's kill condition [Amended 2026-10-09, see §17.6] |
 | D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim [Amended 2026-10-02, see §17.3] |
 
 ## 17. Amendment log
-Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4) and R5 (2026-10-07, §17.5), at the end of this file. Pre-declared amendments, each merged by PR before the event it guards:
+Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5) and R6 (2026-10-09, §17.6), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void; A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
 - **A-cfg:** only if the block-1 pilot forces an ARC config change after the freeze record (§7.1) is filled; merged before the first block-2 run. It writes the new values into the §7.1 tables themselves and is merged together with the regenerated `arc/config_freeze.json`: the ARC launcher reads §7.1, so a table added only to this log would make every paid ARC run refuse (PR #23).
-- **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8).
-- **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7).
+- **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8). [Amended 2026-10-09, see §17.6]
+- **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7). [Amended 2026-10-09, see §17.6]
 
 Values set by a pre-registered rule (W, v, template counts including T_d and T_o, the draw output) are recorded in `results/decisions.md`. They are not amendments.
 
@@ -1415,7 +1417,7 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 
   then the same with `--variant withheld`.
 - **ENGAGED, but G1 fails on the variant:** H2 on sol stops the same way, with no redesign; this replaces §10.2's "one redesign pass" for sol. It does not touch luna's G1 or kill criterion 3 for PersistGym, since luna's cells are unaffected.
-- **Holm family (§9.4).** If H2 on sol stops, the family's tests 2 and 3 are not run, and no H2 replication on luna exists (luna's toggle is not verified, §17.1). Whether the remaining tests (H1 and H3) are then adjusted as a family of 4 (conservative) or of 2 is the researcher's decision, recorded before any H1 or H3 test is computed.
+- **Holm family (§9.4).** If H2 on sol stops, the family's tests 2 and 3 are not run, and no H2 replication on luna exists (luna's toggle is not verified, §17.1). Whether the remaining tests (H1 and H3) are then adjusted as a family of 4 (conservative) or of 2 is the researcher's decision, recorded before any H1 or H3 test is computed. [Amended 2026-10-09, see §17.6]
 
 **Spot-check (a choice this merge adopts).** Claude proposes that the researcher's G1 spot-check for sol's variant covers **20 episodes per D11 task cell, 80 episodes**, rather than 20 in each of the 8 task cells. sol runs no near cell in H2, and the variant's new text (chain records, notice) is the same in near and far cells; luna's package already covered near placement. The package is built by `uv run python -m persistgym spotcheck --preset sol-chain` (validity templates 0-19, the 4 far cells, with the $0 audits on all 8 cells and 3 variants), and it shows each clue's relay worked out, marked as not shown in the episode.
 
@@ -1454,9 +1456,9 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 - **Model and settings:** gpt-6.1-sol with D13's settings as frozen (§6): `reasoning.effort: medium`, `reasoning.mode: standard`, `reasoning.context` set explicitly (`current_turn` in all three cells), `store: false` with the encrypted reasoning items included, Flex, `max_output_tokens` 32,000. Medium is luna's effort too. R2 raised sol to high effort for H2, which needs reasoning that replay can carry; H1 does not. The echoed effort is checked on every response (§17.2, change 3).
 - **Generator:** the default config, the one luna plays: generator 0.4.0's default preset, config hash `3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b`, whose episodes are generator 0.3.0's (§17.3), not `sol-chain`. sol plays luna's episodes: the same templates, task cells and renderings. If §4.2's rule changes luna's W, v or episode length at M1, so that luna's main sweep plays another config, the replication plays that config instead: its validity run and G1 are then on that config (a validity run on `3d6bc648…` does not count for it), the spot-check is luna's on that config, and the pull request that records luna's values sets `H1_REPLICATION_GENERATOR_HASH` (below) to that config's hash. This is a value set by a pre-registered rule, not an amendment.
 - **Cells:** harness cells F-0, W-0 and W-n-0, luna's H1 rows (§3 H1, §5), on the 4 observed task cells, observed × {near, far} × {R, NR}. These give every H1 quantity: Penalty_NR, Penalty_R and Δ_H1 (far cells), the manipulation check, the recoverable-success prediction, the lookups prediction (observed-far-R), and R_need with its secondary readings R_tok and the literal ratio (observed-R, near and far).
-- **Templates:** T is luna's main-sweep template count for these cells, set by §4.2's rule at M1 (about 100) and recorded in `results/decisions.md`; the main split, seeds taken in order from 0 in complete blocks of 10 (§2.9); repeat 1 on the templates whose seed is divisible by 10 (§2.9), run as luna's are (`harnesses run` has no repeat option yet; it is needed for luna's sweep too, and lands as a $0 pull request before block 3). At T = 100 that is 400 episodes plus 40 repeat episodes per harness cell, 440, and 1,320 in all (1,200 at repeat 0). T is fixed before any replication episode runs and never changes after. If the 1a cap does not afford the replication at T after the confirmatory rows (§0.3, line 9), T is not lowered: Claude asks the researcher, who decides whether to raise the cap or to leave the replication out (then reported as not run).
+- **Templates:** T is luna's main-sweep template count for these cells, set by §4.2's rule at M1 (about 100) and recorded in `results/decisions.md`; the main split, seeds taken in order from 0 in complete blocks of 10 (§2.9); repeat 1 on the templates whose seed is divisible by 10 (§2.9), run as luna's are (`harnesses run` has no repeat option yet; it is needed for luna's sweep too, and lands as a $0 pull request before block 3). At T = 100 that is 400 episodes plus 40 repeat episodes per harness cell, 440, and 1,320 in all (1,200 at repeat 0). T is fixed before any replication episode runs and never changes after. If the 1a cap does not afford the replication at T after the confirmatory rows (§0.3, line 9), T is not lowered: Claude asks the researcher, who decides whether to raise the cap or to leave the replication out (then reported as not run). [Amended 2026-10-09, see §17.6]
 - **Pilot** (CLAUDE.md: a harness cell new on a model runs a pilot first). W-0 and W-n-0 have never run on sol. One pilot run of each, sol at medium on the default config, pilot templates 0 and 1 × the 4 observed task cells, 8 episodes per run, experiment `persistgym_pilot` (blinded and excluded from all analyses, §11). It checks errors, echoes and payloads, and it measures the window cells' cost per episode, which replaces the forecast's assumed ratios before block 3 is approved. sol's F-0 at medium on the default config ran in block 1. The pilot is read from its `costs.csv` rows and blinded `summary.json` files only. No pooled pilot report includes these two runs (the report leaves them out, below): in block 1's sol pool, which earlier reports have shown, they would show their reasoning tokens as the difference from those reports, one arm's after one run and the window cells' against the full-history cells' after both (§11).
-- **Order:** the pilot (W-0, then W-n-0); the validity run (restated, then withheld); the replication's G1 (below); then the main runs, one at a time, F-0, then W-0, then W-n-0, each playing up to 16 episodes in parallel (§4.6).
+- **Order:** the pilot (W-0, then W-n-0); the validity run (restated, then withheld); the replication's G1 (below); then the main runs, one at a time, F-0, then W-0, then W-n-0, each playing up to 16 episodes in parallel (§4.6). [Amended 2026-10-09, see §17.6]
 - **Commands** (`harnesses/cli.py`). `--effort medium` must be given, since sol's registered effort for H2 is high; `--mode`, `--service-tier` and `--W` keep their defaults (D13). The main commands play repeat 0 only, 400 episodes each at T = 100; the §2.9 repeat-1 runs (40 per harness cell) need the repeat option above, and the episode counts and the forecast include them. The commands:
 
   ```
@@ -1488,7 +1490,7 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 
   then the same with `--cell W-0` and with `--cell W-n-0` (`--n` is T; 100 is shown).
 
-**Status in the analysis.**
+**Status in the analysis.** [Amended 2026-10-09, see §17.6]
 - **A replication, reported next to luna's primary result.** Every H1 quantity of §3 H1 is computed on the replication's episodes exactly as on luna's, with the same thresholds: Penalty_NR, Penalty_R and Δ_H1 with its 90% CI; the manipulation check (Penalty_NR ≥ 25pp); the recoverable-success prediction (|Penalty_R| ≤ 5pp); the lookups prediction (≥ 1.30, with the zero-lookup rule); R_need ≥ 1.30, with R_tok and the literal ratio; and the kill reading (Δ_H1 < 10pp and the upper bound of its 90% CI < 15pp). As on luna: repeat 0 only, §13's exclusions, the template-cluster bootstrap and the confirmatory GLM of §9.1, both scales (§9.3), and W-n-0 reported alongside with §2.8's accounting.
 - **Outside the Holm family** (§9.4): it is not one of the family's tests and does not change its size (item 5 above). The replication's Δ_H1 test is reported with its unadjusted one-sided bootstrap p-value and is never called "supported". It neither confirms nor kills H1: luna stays primary, H1's confirmatory claim rests on luna alone, and H1's kill rule (§3 H1) and kill criterion 5's "H1 inside equivalence bounds" (D38, §10.4) read luna only.
 - **If the two models disagree,** both results are reported, side by side, with the disagreement stated. Neither overrides the other.
@@ -1499,7 +1501,7 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 - **Thresholds:** restated-at-need ≥ 85% and fact-withheld ≤ 20%, each pooled over the 4 observed task cells (§4.4 pools over the 8 task cells; these are the cells the replication runs). Per-cell rates are reported.
 - **$0 audits:** the default config's (§4.4), which pass (generator 0.3.0, PR #25; unchanged by R3, §17.3).
 - **Spot-check:** the researcher's spot-check of package `g1-validity-0-20-3d6bc648` (`results/spotcheck/`), built for luna's G1 from the default config's validity templates 0-19 in all 8 task cells, covers these templates and task cells, as it does for luna's G1. It reviews generated episodes without model output, so it does not depend on the model. No separate spot-check is done. The researcher's findings on that package are not yet recorded (only `findings_template.csv` is committed), so the replication's G1 waits for them as luna's does.
-- **Decision:** the rates go into `results/decisions.md`, and the researcher decides. Only the researcher's G1 decision pull request for the replication records a pass in code (`REPLICATION_G1_PASSED`, below). If sol fails, the replication does not run and is reported as not run, with its validity rates; there is no redesign pass. This gate is the replication's alone: it is not luna's G1, not R3's G1 on the variant and not kill criterion 3.
+- **Decision:** the rates go into `results/decisions.md`, and the researcher decides. Only the researcher's G1 decision pull request for the replication records a pass in code (`REPLICATION_G1_PASSED`, below). If sol fails, the replication does not run and is reported as not run, with its validity rates; there is no redesign pass. This gate is the replication's alone: it is not luna's G1, not R3's G1 on the variant and not kill criterion 3. [Amended 2026-10-09, see §17.6]
 
 **Cost and approval.** Forecast by `uv run python -m analysis.sol_h1_forecast` from block 1's measured `results/costs.csv` rows (`results/cost_model/20261003T071449Z/summary.md`; billed, Flex; forecasts, not measurements):
 
@@ -1514,7 +1516,7 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 - **Low** takes sol's F-0 pilot row (block 1, medium) per episode and luna's measured window to full-history cost ratios (3.33 for W-0, 3.53 for W-n-0). **Central** corrects two biases of those rows. sol's F-0 pilot run played its 8 episodes right after its F-r run had played the same 8 with nearly the same input, so almost all of its input was read from the cache (3,030 cache-write tokens against 252,326); a main-sweep run plays episodes no run has just played, so central takes the F-r row, the first run of those episodes, as the cold F-0 basis (at medium effort sol hardly reasons, so the two arms' payloads are nearly the same). And window cells lose about half of their caching, while sol's cached input costs 1/20 of its input price against luna's 1/10, so central prices luna's measured token counts of each cell at sol's prices (ratios 4.42 and 4.71). Central also prices validity episodes at luna's measured validity to base cost ratio (1.08).
 - **Limits:** sol's window cells are unmeasured (the pilot measures them); near and far episodes are assumed to cost the same (they share their skeleton, §2.7); each basis is one run of 8 episodes.
 - **Phase 1a** (cap $500): $3.87 spent (`results/costs.csv`, 12 rows, R3's engagement check at $0.89 included) and, roughly at block-1 costs, $35.52 for luna's main sweep at T = 100 with its controls. sol's H2 core and its validity run on `sol-chain` will not run (R3's hard stop). With the replication at T = 100, central, phase 1a comes to $318.87 ($181.13 under the cap); at T = 50, $186.44.
-- **Blocks.** The pilot and validity runs go under block 1 (`1-pilots`, whose approval line lists `persistgym_pilot` and `persistgym_validity`) if block 1's remaining limit covers them ($14.62 central; block 1 has $45.57 left after R3's check, $24.43 spent). Otherwise they go in block 3, whose approval line must then list those experiments. The main runs are their own experiment, `persistgym_sol_h1` (phase 1a), in block 3 (`3-persistgym`), after the confirmatory rows (luna's replay-off cells and controls; sol's H2 core will not run; §0.3, line 9); block 3's approval line must list it, and its forecast uses the pilot's measured costs. This amendment adds no spending approval, and the stop-and-ask rule applies before any cap.
+- **Blocks.** The pilot and validity runs go under block 1 (`1-pilots`, whose approval line lists `persistgym_pilot` and `persistgym_validity`) if block 1's remaining limit covers them ($14.62 central; block 1 has $45.57 left after R3's check, $24.43 spent). Otherwise they go in block 3, whose approval line must then list those experiments. The main runs are their own experiment, `persistgym_sol_h1` (phase 1a), in block 3 (`3-persistgym`), after the confirmatory rows (luna's replay-off cells and controls; sol's H2 core will not run; §0.3, line 9); block 3's approval line must list it, and its forecast uses the pilot's measured costs. This amendment adds no spending approval, and the stop-and-ask rule applies before any cap. [Amended 2026-10-09, see §17.6]
 
 **What it does not show.**
 - **Two models of one family.** luna and sol are two models of one provider's GPT-6 family. Agreement between them says nothing about other providers, other families or open-weights models, and a disagreement does not show which property of the models causes it.
@@ -1534,11 +1536,11 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 **Status.** Proposed by Claude at the researcher's request on 2026-10-07 (`results/decisions.md`): after block 2's second run ended on the 12 h clock of ARC's harness, pre-register a secondary reading of the ARC path study at a matched number of actions before any later block-2 result is seen, and resume block 2. It takes effect when the researcher merges the pull request that adds it, and that merge adopts the readings below, the matched count K = 150 and the censoring rule. The version line and the "Frozen" status line are unchanged. It adds no spending approval.
 
 **What it changes.**
-1. **Secondary readings of H4 at K actions** (§3 H4, §9.9). For each counted run (§7.5), RHAE_K is the score ARC would have given it had it stopped after its first K actions (defined below). H4's primary quantities are computed again with RHAE_K in place of `rhae`: R̄_c(K) per config over the 8 units; the gap G(K) = R̄_S4(K) − R̄_S0(K); the step shares σ_loss(K), σ_notes(K) and σ_replay(K); whether the conditions of Predictions A and B hold at K, on point estimates (reported only: the predictions are judged on the primary readings, change 5); the 10,000-resample bootstrap over units with percentile 90% intervals and the share of resamples with G(K) ≤ 0; the shares only if G(K) ≥ 10 (D34); and H4's two sensitivity analyses (the original runs in place of their re-runs; units with a `COST_CAP` ending left out). Next to them, descriptive: the mean number of levels cleared within K per config, and its S0→S4 difference.
+1. **Secondary readings of H4 at K actions** (§3 H4, §9.9). For each counted run (§7.5), RHAE_K is the score ARC would have given it had it stopped after its first K actions (defined below). H4's primary quantities are computed again with RHAE_K in place of `rhae`: R̄_c(K) per config over the 8 units; the gap G(K) = R̄_S4(K) − R̄_S0(K); the step shares σ_loss(K), σ_notes(K) and σ_replay(K); whether the conditions of Predictions A and B hold at K, on point estimates (reported only: the predictions are judged on the primary readings, change 5); the 10,000-resample bootstrap over units with percentile 90% intervals and the share of resamples with G(K) ≤ 0; the shares only if G(K) ≥ 10 (D34); and H4's two sensitivity analyses (the original runs in place of their re-runs; units with a `COST_CAP` ending left out). Next to them, descriptive: the mean number of levels cleared within K per config, and its S0→S4 difference. [Amended 2026-10-09, see §17.6]
 2. **A levels-cleared-by-action curve per run**, descriptive: the action count at which each level was cleared, and the levels cleared and RHAE_K at K = 50, 100, 150 and 200.
 3. **Checkpoint C (§10.3)** also reports, descriptively, the seed-1 gap at K: the mean over the 4 path games of RHAE_K(S4, s = 1) − RHAE_K(S0, s = 1), on counted runs, next to its own gap, with the number of censored runs. It fires no rule.
 4. **§9.10.** These readings are registered here, so they are not among §9.10's exploratory analyses. Readings at any other K are exploratory.
-5. **Nothing else changes.** H4's and H5's primary readings, predictions and thresholds stay as frozen and read the scorecard's `rhae`. They alone decide Predictions A and B, kill criteria 4 and 5, Checkpoint C's rules, G2 and StateCarry's closure (§8); no rule reads a matched value. The run plan (32 runs, the D18 orders, the seeds), the 12 h clock, the per-level action budgets, the $120 guard (D22), D19, D20 and the counted-run rule (§7.5) are unchanged. The re-run of block 2's run 2 after run 8 (D20, the researcher's option (a) of 2026-10-07) departs from D19's timing; it is recorded as a deviation in `results/decisions.md` (§13) and is not part of this amendment. The frozen text of §3 H4, §9.9, §9.10, §10.3, §15 and register row D34 stays, with a pointer here.
+5. **Nothing else changes.** H4's and H5's primary readings, predictions and thresholds stay as frozen and read the scorecard's `rhae`. They alone decide Predictions A and B, kill criteria 4 and 5, Checkpoint C's rules, G2 and StateCarry's closure (§8); no rule reads a matched value. The run plan (32 runs, the D18 orders, the seeds), the 12 h clock, the per-level action budgets, the $120 guard (D22), D19, D20 and the counted-run rule (§7.5) are unchanged. The re-run of block 2's run 2 after run 8 (D20, the researcher's option (a) of 2026-10-07) departs from D19's timing; it is recorded as a deviation in `results/decisions.md` (§13) and is not part of this amendment. The frozen text of §3 H4, §9.9, §9.10, §10.3, §15 and register row D34 stays, with a pointer here. [Amended 2026-10-09, see §17.6]
 
 **Definitions.**
 - **Actions** are counted as ARC's scorecard counts them: every command the harness submits after the play's opening RESET, a later RESET included. The opening RESET, which ARC's toolkit sends when the game is made, before the harness's first action, starts the play and is not counted. Every later RESET adds 1 to both `resets` and `actions`, and `level_actions` counts it on the level being played (arc-agi 0.9.8, the version the pinned harness's `uv.lock` resolves: `RemoteEnvironmentWrapper.__init__`, `Scorecard.update_scorecard` and `Card.inc_reset_count`, read 2026-10-07). So `actions` = Σ `level_actions`, resets included. Runs 1 and 2 agree: 206 and 236 actions, each with 4 resets and Σ `level_actions` equal to `actions`; and run 1's `action_counter` in its `meta.json`, which counts every action the harness submits, is also 206.
@@ -1580,3 +1582,99 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 - It refuses any folder that is not an `arc_path` run, so pilot folders (§11) are never read. It skips, and lists, a truncated run, a run without a scorecard, a scorecard with a second play (a full reset) and level lists that do not match the level count. It reads the re-run links from every folder's `meta.json`, skipped ones included, so an original whose re-run is skipped is still not counted. It marks a run that fails either check (`checks_passed`: the recomputed score or level scores differ from the scorecard's, or Σ `level_actions` differs from `actions`). A `--k` other than 150 labels the outputs exploratory.
 - It computes per-run values only. Neither the H4 path analysis nor Checkpoint C's metrics script exists yet; each, when written and committed, computes its matched reading (change 1 or 3) from `runs.csv` with the same code as its primary reading, RHAE_K in place of `rhae`, and leaves out the units of runs without matched values.
 - Tests (`analysis/tests/test_arc_action_matched.py`): the score rule reproduces run 1's score and level scores bit for bit, and its curve in exact fractions; run 2's reported values; and, once run 2's folder is committed, its score exactly and its pace of about 184 s per action; RHAE_K equals an independently written score of the play cut after K actions on 300 random synthetic plays, never decreases with K, and the cap binds where it should; the status at K for every ending, read from `agent_exit_reason`; the reset rule on run 1; re-run links, a skipped re-run's included; the checks; the refusals and skips; and the output allowlist.
+
+### 17.6 Amendment R6 (2026-10-09): the minimal path: ARC seed 1 with S2 (S1 only if decided first), luna's sweep, then a hard stop
+**Status.** Proposed by Claude after the researcher's decision of 2026-10-09 (`results/decisions.md`). Checkpoint C's cost rule had fired: forecast $1,045.23 for the remaining 24 ARC runs against $609.78 remaining (`results/checkpoint_c/20261009T151039Z/`). The researcher then cut the project to a minimal path, with a project total of about $560 that may run over a little. It takes effect when the researcher merges the pull request that adds it. That merge adopts the scope, the run order, the S2-only reading of H4, the D20 yardstick for a config's first counted run, luna's template cap and the stops below. The version line and the "Frozen" status line are unchanged. This amendment adds no spending approval; block approvals stay lines in `results/decisions.md` (§12).
+
+**What it changes.**
+1. **Scope** (§1 steps 5 and 6, §4.6, §7.4, §8, §12; D18, D36). These paid runs remain, and no others.
+   - **ARC, block `3-arc`:** S2 at replicate 1 on FT09, SB26, R11L and CD82: 4 counted runs, plus any re-run under D19 and D20 (change 5).
+   - **S1 at replicate 1** on the same 4 games runs only if the researcher records "S1: yes" in `results/decisions.md`, merged to `main`, before the first block-3 ARC run starts. Otherwise S1 is not run. An S1 run made after that point is exploratory (§9.10) and stays out of every registered reading.
+   - **PersistGym, block `3-persistgym`:** gpt-6-luna's replay-off cells F-0, W-0, W-n-0 and Σ-n-0 on the 8 task cells; the restated-at-need control; and the position-matched single-turn control. All three use the §2.9 repeat subset (§4.6 row 1, D36), and T follows change 6.
+   - **Not run:**
+     - replicate 2 (seed 2) of every ARC config;
+     - sol's H1 replication main runs (§17.4). Its pilot and validity runs are reported descriptively, as "pre-registered, not run (budget)";
+     - phase 2 (§8), with G3, G4, kill criterion 7, the pre-declared amendment A-SC and D22's StateCarry clauses;
+     - the failure labels and their LLM judge (§9.7, A-judge);
+     - every extension (§14).
+   - **Hard stop.** After these runs, no further paid run. Any later paid run needs a new dated amendment, and its results are reported as outside this pre-registration.
+2. **Run order** (D18, §7.4). Block 3's ARC runs follow the recorded SEED + 3 order (`results/draw/20261002T033145Z/draw.json`, `derived.block3_order`). Every unit not run is deleted, and the rest keep their order: this is §0.3 line 4's rule, applied to the units this amendment drops.
+   - **S2 only:** FT09 S2, R11L S2, SB26 S2, CD82 S2 (positions 3, 6, 7 and 19).
+   - **With S1:** SB26 S1, FT09 S2, FT09 S1, R11L S2, SB26 S2, CD82 S1, CD82 S2, R11L S1.
+   - The runs go back to back, one at a time. A D19 re-run starts right after the run it replaces, with seed 101 and `--rerun-of`.
+   - §10.3's "seed-1 S1+S2 and all of seed 2 run as one wave" is replaced. S2, and S1 if run, play after S0 and S4, in a later week.
+3. **H4** (§3 H4, D34, §9.9).
+   - **Units:** u = one path game at replicate 1, so 4 units. Each uses its counted run per §7.5; FT09's S0 is its seed-101 re-run. R̄_c is the mean `rhae` over the 4 units, for c in {S0, S2, S4}, plus S1 if it runs. G = R̄_S4 − R̄_S0, as frozen.
+   - **Shares without S1:** σ_pn = (R̄_S2 − R̄_S0)/G, the loss-policy change and the notes removal together, and σ_replay = (R̄_S4 − R̄_S2)/G, as frozen. They sum to 1. σ_loss and σ_notes are not identified.
+   - **Predictions without S1.** Prediction B holds iff σ_replay ≥ 1/2. Prediction A can be tested only in its replay clause:
+     - "A contradicted" iff σ_replay > 1/2;
+     - otherwise "A's replay clause holds; A is not tested in full".
+     - The report never says "A holds".
+   - **With S1:** the frozen shares and Predictions A and B, over the 4 units.
+   - **Intervals:** 10,000 bootstrap resamples of the 4 units, with replacement, keeping a unit's configs together; percentile 90% intervals; bootstrap RNG seed = SEED + 30 (SEED from D15). The fraction of resamples with G ≤ 0 is reported. With 4 units there are only 35 distinct resamples; the report says so. Descriptive only.
+   - **Also registered:**
+     - per-game step differences (RHAE_S2 − RHAE_S0 and RHAE_S4 − RHAE_S2, plus the S1 steps if S1 runs);
+     - the 4 leave-one-game-out values of σ_replay;
+     - D30's σ_replay ≥ 2/3, reported descriptively.
+   - **Sensitivity analyses**, as frozen, on the 4 units:
+     - the original runs instead of their re-runs. Block 2's FT09 S0 original is a D20 incident that scored 58.17; with it, G = 52.57;
+     - units with a `COST_CAP` ending left out;
+     - R5's readings at K = 150 (§17.5) over the same units and configs.
+   - **G ≥ 10:** G is 62.59, known before any S2 run, so the condition for reporting shares is met.
+4. **H5 on our runs** (§3 H5, §15; D35).
+   - The data are the 8 seed-1 counted S0 and S4 runs, with game fixed effects and a game-cluster bootstrap over the 4 games. S2 and S1 do not enter H5.
+   - These runs were seen before this amendment (block 2, Checkpoint C). So H5 on our runs is a pre-specified analysis of seen data, not a test on unseen data. §15's sentence "Only H5 on our own runs is a test on unseen data" is withdrawn.
+5. **D20 for a config's first counted run** (§7.5). D20 is otherwise as frozen. This change applies only when a config has no earlier counted run: S2 now, and S1 if it runs.
+   - **Yardstick:** the config's pilot median seconds per model call, scaled by the drift block 2 measured on S0. That drift is the median of S0's counted runs' medians divided by S0's pilot median: 163.37 s / 73.30 s = 2.229 (`results/costs.csv`, `latency_s`).
+   - **S2:** 96.70 s × 2.229 = 215.5 s, so the first counted S2 run is a latency incident iff its median exceeds 431.09 s (2 × 96.703 × 163.3705 / 73.296, computed unrounded).
+   - **S1:** 104.11 s × 2.229 = 232.1 s; the threshold is 464.10 s, computed the same way.
+   - **Later runs** of the same config use D20 as frozen: 2× the median of that config's earlier counted runs.
+   - Block 2's ruling on FT09 S0 stands.
+6. **luna's template count** (§4.2). T is set by the frozen rule (the smallest multiple of 10 with simulated power ≥ 0.80 for H1 and for H3), capped at 200.
+   - If no T ≤ 200 meets the rule, T = 200 and the achieved power is reported.
+   - The simulation's assumptions are written in `results/decisions.md` together with W, v and T, before any main-split episode.
+7. **G1** (§10.2; kill criterion 3). There is no redesign pass. If luna fails G1, PersistGym stops at once, and the paper reports the ARC leg alone (kill criterion 3's fallback).
+8. **Gates and kill criteria** (§10.1, §10.3-§10.8; D30, D31, D32, D38).
+   - **Checkpoint C** fired on cost. The re-scope in change 1, chosen by the researcher, replaces §10.1's fallback list. D32's 3-game fallback was not used, and all 4 games stay.
+   - **G2:** kill criterion 4 is read on the 4 seed-1 units. Its value, 62.59, is known, so it cannot fire. G2 records the gap, the S2 shares and the scoop check.
+   - **Kill criterion 5** is moot: phase 2 is not run, and H2 stopped under R3.
+   - **D31 and kill criterion 6:** "lead with PersistGym" (there is no StateCarry).
+   - **Void:** G3, G4 and kill criterion 7.
+9. **Holm family** (§9.4, D26). This registers the researcher's decision of 2026-10-06, made before any H1 or H3 test (`results/decisions.md`): H1 and H3, 2 one-sided tests, with the family of 4 reported as a sensitivity analysis. It records an earlier decision; it is not a new one.
+10. **Nothing else changes.** These stay as frozen:
+    - the hypotheses, and every prediction and threshold not named above;
+    - the configs (§7.1; no A-cfg), the tier, the 12 h clock, the per-level action budgets, the $120 guard and hold (D22), D19, the counted-run rule (§7.5), K = 150 (§17.5);
+    - luna's cells, controls, repeats, effort and Flex tier;
+    - pilot blinding (§11). The truncated S1 and S2 pilots stay excluded; only their `latency_s` is used, in change 5.
+
+    The frozen text of the sections named above, and the register rows D18, D20, D22, D23, D24, D26, D27, D30, D31, D32, D34, D35, D36 and D38, stays, with a pointer here.
+
+**Reason.**
+- **Cost.** Checkpoint C's forecast for the remaining 24 ARC runs was $1,045.23 against $609.78 remaining, or $804.55 on 3 games. Either needed a phase-1b raise of $195-435. S0's counted runs in block 2 cost $38.51-48.84 each, 0.95-4.71× their G0 forecasts (`results/checkpoint_c/20261009T151039Z/summary.md`). Claude's rough estimate in chat, not from a committed script, put phase 2 at $1.3-2.2k and the full plan at about $2.6-3.6k in all. The researcher chose a total of about $560: $328.94 spent, about $172-194 for S2 at D27's rule, and about $35-71 for luna at T = 100-200.
+- **Why S2.** S2 differs from S4 only in native replay and its item format, so S2 alone gives the replay step σ_replay, the quantity that separates Predictions A and B. S1 adds the notes step at about the same cost again.
+- **D20 (change 5).** Block 2's S0 counted runs ran at 2.2× S0's pilot pace on three of four games (156.7-176.0 s per call against 73.3 s). As frozen, D20 would therefore flag the first S2 run as a latency incident from that drift alone, and re-run it at the same pace for about $45 and 12 h. That is the case D20's own *Why* calls useless. The scaled yardstick uses S0's latency only, which is an operational field, not an outcome.
+- **sol's replication.** Dropped for budget. This is not R4's cap clause: phase 1a had $481.85 of room.
+- **The G1 redesign pass and the failure labels.** Dropped to keep the hard stop and to leave the researcher's time for writing. The paper targets an arXiv preprint before Nov 2, ahead of the Kaggle ARC-AGI-3 teams' writeups, then TMLR or an AGENT 2027 short paper.
+
+**Timing.** Written on 2026-10-09.
+- **Seen when it was written:**
+  - block 2's 8 counted runs and the FT09 S0 original: scores, levels, actions, endings, latency and cost;
+  - Checkpoint C's metrics, the K = 150 gap included;
+  - luna's validity rates (G1 is not yet decided);
+  - sol's R4 pilot and validity results.
+- **Not seen, because none exists:** any S1 or S2 counted run, and any main-split PersistGym episode of any model.
+- **The truncated S1 and S2 pilots** stay blinded. Only their costs rows' `latency_s` was read.
+- Changes 3 and 5 are written before any S2 result. What changes 3 and 4 fix on already-seen data (G, the S0 and S4 runs, H5's data) is listed above.
+- **Why the cut was made.** The cut followed the cost rule's firing and the researcher's budget choice, made with block 2's results known. All 4 games are kept, so no game was chosen on its result.
+
+**What it does not show.**
+- **One seed per game and config.** The FT09 S0 pair (58.17 vs 18.11) shows run-to-run swings of about 40 RHAE. Shares from 4 units are descriptive and coarse.
+- **A time confound.** S0 and S4 ran on Oct 6-9; S2 runs later. Gemini 3.8 Flash has no dated snapshot, and its latency already drifted (change 5). The report gives the returned model string and the latency for every run.
+- **Without S1,** σ_pn bundles the loss policy with the notes removal, and the notes instruction's own role is not measured.
+- **No StateCarry evidence,** no sol replication of H1, no failure labels and no open-weights run. Each is reported as "planned, not run".
+- **H5 on our runs is not blind** (change 4).
+
+**As implemented** (the pull request that adds this amendment).
+- `analysis/arc_h4.py`: the H4 reading of change 3, with tests on synthetic runs. It reads the same run folders as `analysis/checkpoint_c.py`, with R5's matched values from `analysis/arc_action_matched.py`. It writes `results/arc_h4/<UTC>/` and refuses to report shares from runs it cannot score.
+- The yardstick of change 5 in `analysis/checkpoint_c.py` (`_yardstick`), with tests. `uv run python -m analysis.checkpoint_c --no-write` prints each run's D20 verdict.
+- `uv run python -m analysis.checkpoint_c --d20-run RUN_ID` prints one JSON line for one run: its ending, median seconds per call, D20 threshold and verdict, D19's `rerun_eligible`, its re-run links, and `rerun_allowed`. `rerun_allowed` is false for a re-run and for an original that already has its re-run. The block-3 driver calls it after every run and starts a re-run right away only on `rerun_allowed: true`; anything else that is not `false` stops the block.

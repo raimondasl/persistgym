@@ -413,3 +413,53 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
 **Approval.** This entry's pull request is $0 and adds no spending approval. The researcher's choice, and any change to the 1b cap (`common/costs.py` `PHASE_CAPS`, PLAN §17.3, by dated amendment) and block 3's approval line, go in a follow-up pull request.
 
 **Spend** (billed): block 2 $290.22 of $400 (closed). Phase 1b: $290.22 of $900. Phase 0: $20.57. Phase 1a: $18.15. All phases: $328.94.
+
+## 2026-10-09: Researcher decision after Checkpoint C: the minimal path (PREREG amendment R6, PLAN A7); block 3-arc (S2 on seed 1) proposed by Claude, approved when the researcher merges the PR that adds this entry
+**Decision (researcher, 2026-10-09).** The researcher asked for a frank assessment first: what phase 2 is and whether it is needed; the odds of a NeurIPS or ICML paper; what the remaining runs cost and buy. Claude's answer in chat drew on three independent reviewer agents, a venue check and a scoop search. Then the researcher decided, in their words: "Go with the minimal path: luna plus S2 on seed 1, possibly S1, aim at arXiv ahead of Kaggle and TMLR or Agent 2027 short paper. Aim at $560 or so total costs (can overrun a bit)".
+
+**What the merge adopts:**
+- **Amendment R6** (`PREREG.md` §17.6) and **A7** (`PLAN.md` §22). They set:
+  - **Paid runs left:** gpt-6-luna's replay-off sweep with its controls (block `3-persistgym`, not yet approved), and ARC S2 at replicate 1 on the 4 path games (block `3-arc`, below).
+  - **S1** runs only if the researcher records "S1: yes" here, merged to `main`, before the first block-3 ARC run starts. Because the `3-arc` line approves `arc_path` by experiment, not by config, that record must come with a raised `3-arc` limit: about $172 more at D27's rule. The driver runs S1 only from the S1 run order of R6 change 2.
+  - **Dropped:** seed 2; sol's H1 replication main runs; phase 2 (StateCarry); the failure labels; the extensions; luna's G1 redesign pass.
+  - **H4** is read on the 4 seed-1 units, with S2 alone giving σ_replay.
+  - **D20** uses a scaled pilot yardstick for a config's first counted run. The first counted S2 run is an incident only above 431.1 s per call.
+  - **luna's T** follows the frozen power rule, capped at 200.
+  - **Hard stop** after these runs.
+- **Code:** `analysis/arc_h4.py` (H4 per R6) and `analysis/checkpoint_c.py` (R6's D20 yardstick, plus `--d20-run <run_id>`). The block-3 driver calls `--d20-run` after every run.
+- **Phase caps** stay as in PLAN §17.3: they remain stop-and-ask ceilings. The ~$560 target is kept through the block limits.
+
+**Block `3-arc`: S2 at replicate 1** (`arc_path`; PREREG §17.6 changes 1, 2 and 5).
+- **Order** (the SEED + 3 order with the dropped units deleted): 1. FT09 S2, 2. R11L S2, 3. SB26 S2, 4. CD82 S2. Each run is `--seed 1`, launched as a process with a console of its own, back to back.
+  - After every run the driver calls `uv run python -m analysis.checkpoint_c --d20-run <run_id>`. It starts the re-run right away (`--seed 101 --rerun-of <run_id>`), ahead of the next run, only on `"rerun_allowed": true`. That covers `API_ERROR`, `AGENT_ERROR`, `UNKNOWN`, a final ending whose scorecard cannot be read, and a `TIME_BUDGET` that D20 rules an incident; D19 allows no second re-run.
+  - It stops and reports on a hold, a refusal, a missing `meta.json`, too little room, or a `--d20-run` answer of `null`, a non-zero exit or output it cannot parse.
+- **Forecast** (D27's rule: S0's billed cost per call × the larger of the S0 and S4 action counts; `results/checkpoint_c/20261009T151039Z/checkpoint_c.json`): FT09 $47.08, R11L $43.70, SB26 $37.26, CD82 $44.22. That is **$172.25 billed**, or $193.79 with block 2's re-run rate (ρ = 0.125). S2 is likely to reach the 12 h clock, as S0 did on 3 of 4 games.
+- **Limit: $250 billed.** Every counted run needs $120 of room under the limit when it starts (§12). At the forecast, the fourth run starts at about $128 of block spend. Any re-run or overrun that leaves less room stops the block, and Claude asks.
+- **Run guard and hold** as in block 2: $120 at list per run (D22). A run that reaches the guard places a hold.
+- **Phase 1b:** $290.22 spent of its $900 cap; the cap is unchanged.
+- **Gemini spend limit:** the provider-side limit and the prepaid balance must cover about $250 more. The researcher checks this before the first run.
+- **Blinding:** none. These are counted runs.
+
+approved_block: 3-arc | experiments: arc_path | max_usd: 250
+
+**Block `3-persistgym`** is proposed in a later entry, after three things:
+- the researcher's G1 spot-check (`results/spotcheck/g1-validity-0-20-3d6bc648/`) and G1 decision;
+- the power re-simulation that sets T;
+- the $0 code that luna's sweep still needs: a repeat-1 option for `harnesses run`, a runner for the single-turn control with its payload snapshot test, a luna guard in `harnesses/registered.py`, and a G1 metrics script.
+
+Forecast: about $35.52 billed at T = 100 (`results/cost_model/20261003T071449Z/`), and about $71 at T = 200.
+
+**Scoop note** (search of 2026-10-09; done at a checkpoint, not at a gate). VISTA ([arXiv 2610.02200](https://arxiv.org/abs/2610.02200), submitted 2026-10-01, by Han, Hu, Qiu, Wu and He) reports a cumulative harness ladder on ARC-AGI-3 with GPT-5.6 Sol at max effort. Its Figure 5, checked by Claude on arxiv.org on 2026-10-09, gives RHAE:
+- sliding window, as in ARC's official harness, with raised action and time limits: 51.66;
+- continuous conversation with native compaction: 65.82;
+- plus notes files: 70.05.
+
+It reports one model and no seeds, and does not run in ARC's harness. Its compaction step also keeps the conversation, which we read as keeping reasoning, so it does not separate replay from compaction. That makes it a partial overlap, and D31 does not fire. The paper will position against it.
+
+Also new since the 2026-10-06 check:
+- [arcprize/arc-agi-3-benchmarking PR #50](https://github.com/arcprize/arc-agi-3-benchmarking/pull/50) (open), a generic Provider Adapter that replays readable reasoning for open models. It makes replay on/off ablations easy for ARC itself.
+- [arXiv 2610.12061](https://arxiv.org/abs/2610.12061) (RACE), which ties the value of past reasoning to whether later actions are recoverable. It is a training method, not a harness ablation.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts R6 and A7 and the code above, and approves block `3-arc` up to $250 billed. It approves nothing for `3-persistgym`.
+
+**Spend** (billed): $328.94 in all (phase 0 $20.57, 1a $18.15, 1b $290.22). Project target about $560: S2 at the forecast brings it to about $501-523, and luna to about $537-594. This entry's pull request is $0.

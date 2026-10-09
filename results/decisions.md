@@ -420,7 +420,7 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
 **What the merge adopts:**
 - **Amendment R6** (`PREREG.md` §17.6) and **A7** (`PLAN.md` §22). They set:
   - **Paid runs left:** gpt-6-luna's replay-off sweep with its controls (block `3-persistgym`, not yet approved), and ARC S2 at replicate 1 on the 4 path games (block `3-arc`, below).
-  - **S1** runs only if the researcher records "S1: yes" here, merged to `main`, before the first block-3 ARC run starts. Because the `3-arc` line approves `arc_path` by experiment, not by config, that record must come with a raised `3-arc` limit: about $172 more at D27's rule. The driver runs S1 only from the S1 run order of R6 change 2.
+  - **S1** runs only if the researcher records "S1: yes" here, merged to `main`, before the first block-3 ARC run starts. The researcher has recorded it: see "S1: yes" below.
   - **Dropped:** seed 2; sol's H1 replication main runs; phase 2 (StateCarry); the failure labels; the extensions; luna's G1 redesign pass.
   - **H4** is read on the 4 seed-1 units, with S2 alone giving σ_replay.
   - **D20** uses a scaled pilot yardstick for a config's first counted run. The first counted S2 run is an incident only above 431.1 s per call.
@@ -429,18 +429,20 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
 - **Code:** `analysis/arc_h4.py` (H4 per R6) and `analysis/checkpoint_c.py` (R6's D20 yardstick, plus `--d20-run <run_id>`). The block-3 driver calls `--d20-run` after every run.
 - **Phase caps** stay as in PLAN §17.3: they remain stop-and-ask ceilings. The ~$560 target is kept through the block limits.
 
-**Block `3-arc`: S2 at replicate 1** (`arc_path`; PREREG §17.6 changes 1, 2 and 5).
-- **Order** (the SEED + 3 order with the dropped units deleted): 1. FT09 S2, 2. R11L S2, 3. SB26 S2, 4. CD82 S2. Each run is `--seed 1`, launched as a process with a console of its own, back to back.
+**S1: yes.** In the researcher's words, 2026-10-09, after asking what S1 adds for publishing: "Yes, include S1 on all 4 games." This is recorded before any block-3 ARC run, so S1 at replicate 1 is in the registered readings (PREREG §17.6 changes 1 and 3), and `analysis.arc_h4` runs with `--with-s1`.
+
+**Block `3-arc`: S1 and S2 at replicate 1** (`arc_path`; PREREG §17.6 changes 1, 2 and 5).
+- **Order** (the SEED + 3 order with the dropped units deleted, R6 change 2): 1. SB26 S1, 2. FT09 S2, 3. FT09 S1, 4. R11L S2, 5. SB26 S2, 6. CD82 S1, 7. CD82 S2, 8. R11L S1. Each run is `--seed 1`, launched as a process with a console of its own, back to back.
   - After every run the driver calls `uv run python -m analysis.checkpoint_c --d20-run <run_id>`. It starts the re-run right away (`--seed 101 --rerun-of <run_id>`), ahead of the next run, only on `"rerun_allowed": true`. That covers `API_ERROR`, `AGENT_ERROR`, `UNKNOWN`, a final ending whose scorecard cannot be read, and a `TIME_BUDGET` that D20 rules an incident; D19 allows no second re-run.
   - It stops and reports on a hold, a refusal, a missing `meta.json`, too little room, or a `--d20-run` answer of `null`, a non-zero exit or output it cannot parse.
-- **Forecast** (D27's rule: S0's billed cost per call × the larger of the S0 and S4 action counts; `results/checkpoint_c/20261009T151039Z/checkpoint_c.json`): FT09 $47.08, R11L $43.70, SB26 $37.26, CD82 $44.22. That is **$172.25 billed**, or $193.79 with block 2's re-run rate (ρ = 0.125). S2 is likely to reach the 12 h clock, as S0 did on 3 of 4 games.
-- **Limit: $250 billed.** Every counted run needs $120 of room under the limit when it starts (§12). At the forecast, the fourth run starts at about $128 of block spend. Any re-run or overrun that leaves less room stops the block, and Claude asks.
+- **Forecast** (D27's rule, the same for S1 and S2: S0's billed cost per call × the larger of the S0 and S4 action counts; `results/checkpoint_c/20261009T151039Z/checkpoint_c.json`): per run, FT09 $47.08, R11L $43.70, SB26 $37.26 and CD82 $44.22. For the 8 runs that is **$344.51 billed**, or $387.57 with block 2's re-run rate (ρ = 0.125). S1 and S2 are likely to reach the 12 h clock, as S0 did on 3 of 4 games.
+- **Limit: $470 billed.** Every counted run needs $120 of room under the limit when it starts (§12). At the forecast, the eighth run starts at about $301 of block spend, so it needs at least $421. The rest leaves room for one re-run of about $45. If a run would start with less room, the block stops, and Claude asks.
 - **Run guard and hold** as in block 2: $120 at list per run (D22). A run that reaches the guard places a hold.
 - **Phase 1b:** $290.22 spent of its $900 cap; the cap is unchanged.
-- **Gemini spend limit:** the provider-side limit and the prepaid balance must cover about $250 more. The researcher checks this before the first run.
+- **Gemini spend limit:** the provider-side limit and the prepaid balance must cover about $470 more. The researcher checks this before the first run.
 - **Blinding:** none. These are counted runs.
 
-approved_block: 3-arc | experiments: arc_path | max_usd: 250
+approved_block: 3-arc | experiments: arc_path | max_usd: 470
 
 **Block `3-persistgym`** is proposed in a later entry, after three things:
 - the researcher's G1 spot-check (`results/spotcheck/g1-validity-0-20-3d6bc648/`) and G1 decision;
@@ -460,6 +462,6 @@ Also new since the 2026-10-06 check:
 - [arcprize/arc-agi-3-benchmarking PR #50](https://github.com/arcprize/arc-agi-3-benchmarking/pull/50) (open), a generic Provider Adapter that replays readable reasoning for open models. It makes replay on/off ablations easy for ARC itself.
 - [arXiv 2610.12061](https://arxiv.org/abs/2610.12061) (RACE), which ties the value of past reasoning to whether later actions are recoverable. It is a training method, not a harness ablation.
 
-**Approval.** The researcher's merge of the pull request that adds this entry adopts R6 and A7 and the code above, and approves block `3-arc` up to $250 billed. It approves nothing for `3-persistgym`.
+**Approval.** The researcher's merge of the pull request that adds this entry adopts R6 and A7 and the code above, records "S1: yes", and approves block `3-arc` up to $470 billed. It approves nothing for `3-persistgym`.
 
-**Spend** (billed): $328.94 in all (phase 0 $20.57, 1a $18.15, 1b $290.22). Project target about $560: S2 at the forecast brings it to about $501-523, and luna to about $537-594. This entry's pull request is $0.
+**Spend** (billed): $328.94 in all (phase 0 $20.57, 1a $18.15, 1b $290.22). The researcher's target was about $560. With S1 added (the researcher, 2026-10-09, told it adds about $172), S1 and S2 at the forecast bring the total to about $673-717, and luna to about $709-787. This entry's pull request is $0.

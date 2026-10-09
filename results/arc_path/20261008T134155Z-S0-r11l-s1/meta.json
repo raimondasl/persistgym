@@ -1,0 +1,180 @@
+{
+  "experiment": "arc_path",
+  "run_id": "20261008T134155Z-S0-r11l-s1",
+  "cell_or_config": "S0",
+  "config": {
+    "id": "google-gemini-3-8-flash-high",
+    "agent": {
+      "MAX_ACTIONS_BASELINE_MULTIPLIER": 5.0,
+      "MAX_CONTEXT_LENGTH": 175000
+    },
+    "runtime": {
+      "sdk": "google-genai",
+      "api": "interactions",
+      "state": "manual_rolling"
+    },
+    "client": {
+      "api_key_env": "GOOGLE_API_KEY",
+      "transport_retry": {
+        "status_codes": [
+          429,
+          503
+        ],
+        "initial_delay_seconds": 2.0,
+        "max_delay_seconds": 60.0,
+        "max_wait_seconds": 1800.0,
+        "jitter_ratio": 0.25
+      }
+    },
+    "request": {
+      "model": "gemini-3.8-flash",
+      "store": false,
+      "service_tier": "standard",
+      "generation_config": {
+        "max_output_tokens": 65536,
+        "thinking_level": "high",
+        "thinking_summaries": "auto"
+      }
+    },
+    "pricing": {
+      "input": 0.75,
+      "output": 3.75
+    }
+  },
+  "model_requested": "gemini-3.8-flash",
+  "model_returned": [
+    "gemini-3.8-flash"
+  ],
+  "reasoning_effort": {
+    "thinking_level": "high"
+  },
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": "r11l",
+  "repeat_index": 1,
+  "seeds": {
+    "replicate_seed": 1,
+    "note": "labels the replicate; not sent to the model"
+  },
+  "started_utc": "2026-10-08T13:42:30+00:00",
+  "finished_utc": "2026-10-08T21:28:00+00:00",
+  "exit_reason": "ACTION_BUDGET",
+  "agent_exit_reason": "ACTION_BUDGET",
+  "tokens": {
+    "input_tokens": 45901978,
+    "cached_input_tokens": 7999691,
+    "output_tokens": 3816293,
+    "reasoning_tokens": 1162359
+  },
+  "cost_usd": {
+    "list": 48.737582,
+    "billed_est": 43.337791,
+    "basis": "billed estimate primary (D23); list = ARC's no-cache accounting",
+    "price_source": "https://ai.google.dev/gemini-api/docs/pricing",
+    "price_source_date": "2026-09-30",
+    "costs_csv_row_appended": true
+  },
+  "raw_transcript_path": "results/raw/arc_path/20261008T134155Z-S0-r11l-s1",
+  "config_freeze": {
+    "labels": [
+      "S0"
+    ],
+    "sha256": {
+      "S0": "615ea035324fdcdb114b00cfcf7eab55c56ea97b5d8808c12ad9097e93992dda"
+    },
+    "patch_series_sha256": "14e25cc71411eaf5e3ca4cb87e78569061586e0a428477ce5e2fabfe02d631d6",
+    "patched_commit": "67f6dd0d37eccb8f77a7645f0e0e9fc2ea400359",
+    "patched_tree": "5206d039db6761c4f56c932fed716321113360f1",
+    "pinned_commit": "4ca00e607e3364a501fcbf7d1b7537dd2729cec3"
+  },
+  "service_tier": {
+    "requested": "standard",
+    "served": {
+      "standard": 361
+    }
+  },
+  "latency": {
+    "n_ok_calls": 362,
+    "median_s": 50.977,
+    "p90_s": 178.453,
+    "max_s": 477.828
+  },
+  "n_calls": 362,
+  "n_http_requests": 363,
+  "approved_block": "2-arc-seed1",
+  "planned_usd": 120.0,
+  "phase": "1b",
+  "cost_cap_usd": 120.0,
+  "hold_placed": false,
+  "rerun_of": null,
+  "paid": true,
+  "config_id": "google-gemini-3-8-flash-high",
+  "game_requested": "r11l",
+  "arc_environment": {
+    "kind": "remote",
+    "base_url": "https://three.arcprize.org"
+  },
+  "requested_service_tier": "standard",
+  "service_tiers_served": {
+    "standard": 361
+  },
+  "reported_models": [
+    "gemini-3.8-flash"
+  ],
+  "n_compactions": 0,
+  "context_trims": null,
+  "transport_retry": {
+    "policy": {
+      "status_codes": [
+        429,
+        503
+      ],
+      "initial_delay_seconds": 2.0,
+      "max_delay_seconds": 60.0,
+      "max_wait_seconds": 1800.0,
+      "jitter_ratio": 0.25
+    },
+    "throttled_responses": 1,
+    "retries": 1,
+    "wait_seconds": 1.889,
+    "longest_episode_seconds": 15.047,
+    "passed_through": 0,
+    "deadline_passthroughs": 0
+  },
+  "cost_guard": {
+    "max_usd": 120.0,
+    "estimated_cost_usd": 48.737582
+  },
+  "wall_clock_s": 27895.807,
+  "inner_error": null,
+  "interrupted": false,
+  "truncation_limits": {
+    "max_actions": null,
+    "after_summary_turns": null
+  },
+  "unrecorded_usage": null,
+  "outcome": {
+    "scorecard_id": "291ab28e-c8ad-4431-80e8-48f8c626f14d",
+    "game_id_served": "r11l-495a7899",
+    "n_steps": 365,
+    "action_counter": 365,
+    "truncation": {
+      "max_actions": null,
+      "after_summary_turns": null,
+      "first_summary_before_step": null,
+      "truncated": false,
+      "reason": null
+    },
+    "outcome": null
+  },
+  "config_hash": "615ea035324fdcdb114b00cfcf7eab55c56ea97b5d8808c12ad9097e93992dda",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "e45152aef23435204a2017018ca420cefbf91508",
+  "git_dirty": true
+}

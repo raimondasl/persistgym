@@ -387,3 +387,29 @@ Approved by the researcher in chat on 2026-10-06 ("Yes on R4's first paid step")
 - **D20 check for run 5** (CD82 S0, `TIME_BUDGET`): its median was 170.06 s per model call. The median of the earlier counted S0 runs' medians (181.25 s and 156.68 s) is 168.97 s, so the threshold is 337.9 s. Not a latency incident: the ending is final and flagged.
 - **Run 6's first launch** (2026-10-08 09:40 ET) was refused before any spend: `uv sync --locked` in the scratch harness worktree failed with "Access is denied" on a temporary uv helper `.exe` (Windows file lock). It was relaunched at 09:41.
 - **Phase 1b:** $165.07 spent of its $900 cap; this raise changes no cap. The phase-1b sizing (3 vs 4 games, or a cap raise) is decided at Checkpoint C, as agreed on 2026-10-07.
+
+## 2026-10-09: Checkpoint C (PREREG §10.3): the cost rule fires; Claude proposes the 3-game fallback with a phase-1b cap raise (the researcher decides)
+- **Block 2 is complete.** The FT09 S0 re-run (`20261009T030646Z-S0-ft09-s101`, seed 101) ended `TIME_BUDGET` at $48.84 billed. Its median was 175.95 s per model call against a threshold of 2 × 156.68 s (the median of the earlier counted S0 runs). It is not a latency incident, so the ending is final (D20). It replaces the original run 2 in every primary analysis. Block 2 spent **$290.22 of its $400 limit** across 9 runs; nothing is left running.
+- **Metrics:** `uv run python -m analysis.checkpoint_c` at `660bc56` (clean tree), in `results/checkpoint_c/20261009T151039Z/` (status FINAL).
+
+  | Rule | 4 games (FT09, SB26, R11L, CD82) | 3 games (D32 drops CD82) | Fires if |
+  |---|---|---|---|
+  | Gap, seed-1 mean S4 − S0 (RHAE) | 62.59 | 61.43 | < 5 |
+  | Gap at K = 150 (R5, descriptive) | 53.95 | 61.43 | no rule |
+  | Errors after re-runs | 0 of 8 | 0 of 6 | > 3 |
+  | Cost forecast for the remaining runs (D27) | $1,045.23 (24 runs, ρ = 0.125) | $804.55 (18 runs, ρ = 0.167) | > remaining $609.78 |
+  | Headroom with D27's ~$170 raise | −$265.46 | −$24.77 | |
+  | Phase-1b cap the forecast needs | $1,335.46 (+$435.46) | $1,094.77 (+$194.77) | |
+
+  Per-game gaps: FT09 81.89, SB26 94.56, R11L 7.83, CD82 66.08. The FT09 S0 original, a D20 incident, scored 58.17 against the re-run's 18.11; H4's sensitivity analysis scores the original (§7.5).
+- **The cost rule fires under both game sets**, so Claude proposes a re-scope and the researcher decides (§10.3). The options:
+  - **(A) 4 games, full design:** 24 runs; raise the 1b cap to about $1,340. This is $435 over $900, beyond the ~$170 D27 lets Claude request.
+  - **(B) 3-game fallback (D32, pre-registered):** drop CD82 (`perm[3]` of the draw); 18 runs; raise the 1b cap to about $1,100. That is $195 over $900, $25 beyond D27's ~$170.
+  - **(C) Seed 1 only:** S1 and S2 on seed 1, with no seed 2. This fits under $900 with no raise. It needs a PREREG amendment, since H4 and kill criterion 4 are defined over 8 units with 2 seeds. The FT09 S0 pair (58.17 vs 18.11 on two seeds) shows how noisy one seed is.
+  - **(D) Stop the ARC path leg after block 2:** report the seed-1 S0-vs-S4 gap and skip the decomposition (H4 untested).
+- **Claude's proposal: (B).** It keeps the pre-registered design (all four configs, two seeds) and uses the pre-registered fallback, so it involves no choice of game by us. It needs the smallest raise that keeps that design. At block 2's pace (S0, and likely S1 and S2, near the 12 h clock) it also finishes before G2 (Oct 21) with some margin, back to back in the SEED + 3 order. (A) buys a third game with a sizeable gap (CD82, 66.08) for the decomposition, at about $240 more and about 2.5 more days.
+- **What this does not show:** see the summary's own section. In short: one seed per config and game; games chosen for a large published gap; no decomposition yet; and the S1/S2 cost is priced from S0's cost per call, not measured.
+
+**Approval.** This entry's pull request is $0 and adds no spending approval. The researcher's choice, and any change to the 1b cap (`common/costs.py` `PHASE_CAPS`, PLAN §17.3, by dated amendment) and block 3's approval line, go in a follow-up pull request.
+
+**Spend** (billed): block 2 $290.22 of $400 (closed). Phase 1b: $290.22 of $900. Phase 0: $20.57. Phase 1a: $18.15. All phases: $328.94.

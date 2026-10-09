@@ -1,0 +1,72 @@
+{
+  "source_url": null,
+  "tags": [
+    "persistgym",
+    "arc_path",
+    "S0",
+    "seed-1",
+    "20261006T171726Z-S0-ft09-s1",
+    "agent",
+    "benchmarkingagent"
+  ],
+  "opaque": null,
+  "card_id": "f3dbc197-9332-4279-9e6a-3cf38834857f",
+  "score": 58.17031344388246,
+  "environments": [
+    {
+      "id": "ft09-0d8bbf25",
+      "runs": [
+        {
+          "id": null,
+          "guid": "1a7ed8c4-d04e-47ab-b20a-c2592df1ed58",
+          "score": 58.17031344388246,
+          "levels_completed": 5,
+          "actions": 236,
+          "resets": 4,
+          "state": "NOT_FINISHED",
+          "completed": false,
+          "level_scores": [
+            115.0,
+            115.0,
+            4.535322359396433,
+            71.99265381083563,
+            115.0,
+            0.0
+          ],
+          "level_actions": [
+            4,
+            7,
+            108,
+            33,
+            37,
+            47
+          ],
+          "level_baseline_actions": [
+            43,
+            12,
+            23,
+            28,
+            65,
+            37
+          ],
+          "number_of_levels": null,
+          "number_of_environments": 0,
+          "message": null
+        }
+      ],
+      "score": 58.17031344388246,
+      "actions": 236,
+      "levels_completed": 5,
+      "completed": false,
+      "level_count": 6,
+      "resets": 4
+    }
+  ],
+  "tags_scores": [],
+  "competition_mode": false,
+  "total_environments_completed": 0,
+  "total_environments": 1,
+  "total_levels_completed": 5,
+  "total_levels": 6,
+  "total_actions": 236
+}

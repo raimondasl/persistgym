@@ -15,7 +15,8 @@ and prints the summary. Claude proposes; **the researcher makes the go/no-go cal
   the block tag ``approved_block=2-arc-seed1;``), the phase-1b spend, and the ARC pilot rows'
   ``latency_s`` only (D20's fallback yardstick; latency is a field §11 allows);
 * the latest ``gates/g0-*/g0.json`` (each run's G0 forecast: published list cost × b(c));
-* ``draw/*/draw.json`` (the path games and D32's dropped game, perm[3]).
+* ``draw/*/draw.json`` (the path games and D32's dropped game, which must be perm[3] of the
+  beacon order; otherwise the script refuses).
 
 **Block 2** is the 8 seed-1 runs, S0 and S4 on each path game. Run IDs are not hard-coded:
 the runs are found from the folders, and each (game, config) must have exactly one counted
@@ -31,8 +32,12 @@ scorecard the script can score, no ``costs.csv`` row, no model-call count, or a 
 whose D20 check cannot be computed. With ``--allow-incomplete`` it marks every output
 **PROVISIONAL** and lists why; a run whose re-run is pending stands in for it (flagged), and the
 pending re-run counts in ρ. A rule whose inputs are partial (a unit without a run) reads
-"undetermined" unless the part present already fires it (a partial cost forecast is a lower
-bound; the error count is undetermined while missing or pending runs could take it past 3).
+"undetermined" unless the part present already decides it: a game without a gap could have any
+gap in [-100, 100], so the gap rule is decided only if the mean over all games would fall on
+the same side of 5 for every such value; a partial cost forecast is a lower bound; the error
+count is undetermined while missing or pending runs could take it past 3. A pending re-run
+is not yet in ``costs.csv``, so the spend to date leaves it out: a PROVISIONAL sensitivity
+reading prices it at its original's billed cost (not the rule).
 
 **Endings and D19/D20** (PREREG §7.5; §0.3 lines 1-3). The ending is ``agent_exit_reason``;
 a missing one is ``UNKNOWN``, and a run with no ``scorecard.json`` whose ending is final counts
@@ -54,7 +59,8 @@ RHAE being the score on the run's scorecard (``analysis.arc_action_matched``). F
 **At K = 150** (PREREG §17.5, change 3; descriptive, fires no rule): the same mean with RHAE_K,
 computed in process by ``analysis.arc_action_matched`` (`Run.at_k`, the code that writes its
 ``runs.csv``; §17.5 says "from runs.csv", and the values are that file's), with the number of
-censored counted runs per config. A game whose counted S0 or S4 run has
+censored counted runs per config and §17.5's sensitivity analysis (the games that contain a
+censored counted run left out). A game whose counted S0 or S4 run has
 no matched values (unscorable, or failing the score or action check) is left out and listed.
 
 **Error rule.** The number of the 8 counted seed-1 runs whose final ending is re-run-eligible
@@ -69,10 +75,11 @@ remaining 24 runs = [Σ over games of the counted seed-1 runs' billed cost of S0
 (seed 2) + [Σ over games of 2 × 2 × (S0 billed cost per model call) × max(S0 actions, S4
 actions)] (S1 and S2, both seeds), all × (1 + ρ). Billed cost: the run's ``costs.csv`` billed
 estimate; model calls: ``meta.json`` ``n_calls``; actions: the scorecard's. Remaining = the
-phase-1b cap (``common.costs.PHASE_CAPS``) − the phase-1b spend to date in ``costs.csv`` (every
-``arc_path`` row, re-runs included; ``common.costs.spend_by_phase``). Fires if forecast >
-remaining. Also reported: the headroom with D27's allowed raise of about $170, the cap the
-forecast needs (spend to date + forecast), and, **descriptive and not the pre-registered rule**,
+phase-1b cap (``common.costs.PHASE_CAPS``; a warning if it is not §10.3's $900) − the phase-1b
+spend to date in ``costs.csv`` (every ``arc_path`` row, re-runs included;
+``common.costs.spend_by_phase``). Fires if forecast > remaining. Also reported: the headroom
+with D27's allowed raise of about $170, the cap the forecast needs (spend to date +
+forecast), and, **descriptive and not the pre-registered rule**,
 a measured-cost reading that prices each S1 and S2 run at S0's measured billed cost per run.
 
 **3-game fallback (D32, PREREG §7.3, §10.6).** The game dropped is perm[3] of the beacon draw
@@ -114,6 +121,8 @@ GAP_MIN = 5.0                      # §10.3: fires if the mean gap is < 5
 MAX_ERRORS = 3                     # §10.3: fires if more than 3 runs end in an error
 D27_RAISE_USD = 170.0              # §10.1 D27: "up to about $170"
 D20_FACTOR = 2.0                   # §7.5 D20
+CAP_1B_FROZEN = 900.0              # §10.3: "Remaining is $900 minus ..."
+RHAE_MAX = 100.0                   # ARC's game score is in [0, 100] (arc_action_matched)
 K = am.REGISTERED_K                # §17.5
 ERROR_ENDINGS = ("API_ERROR", "AGENT_ERROR", "UNKNOWN", "SCORECARD_CLOSED")
 FINAL_ENDINGS = ("GAME_WIN", "ACTION_BUDGET", "COST_CAP")
@@ -124,10 +133,10 @@ META_FIELDS = (*am.META_FIELDS, "started_utc", "n_calls", "latency")
 """The only meta.json fields read (`latency`: only its `median_s`)."""
 
 RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "replaced_by",
-              "counted", "block2", "started_utc", "agent_exit_reason", "exit_reason",
-              "d19_ending", "rerun_eligible", "scorecard", "rhae", "levels_completed",
-              "level_count", "actions", "wall_clock_s", "seconds_per_action", "n_calls",
-              "median_s_per_call", "billed_usd", "list_usd", "g0_forecast_usd",
+              "counted", "rerun_pending", "block2", "started_utc", "agent_exit_reason",
+              "exit_reason", "d19_ending", "rerun_eligible", "scorecard", "rhae",
+              "levels_completed", "level_count", "actions", "wall_clock_s",
+              "seconds_per_action", "n_calls", "median_s_per_call", "billed_usd", "list_usd", "g0_forecast_usd",
               "billed_over_forecast", "costs_row", "costs_row_block_tag", "d20")
 TOP_FIELDS = ("generated_utc", "git_commit", "git_dirty", "prereg_version", "status",
               "provisional_reasons", "warnings", "inputs", "path_games", "fallback_drop_game",
@@ -512,10 +521,16 @@ def gap_reading(b: Block, games: list[str]) -> dict:
                      "stand_in": s0.pending or s4.pending})
     gaps = [r["gap"] for r in rows if r["gap"] is not None]
     mean = sum(gaps) / len(gaps) if gaps else None
+    # A game without a gap could still have any gap in [-RHAE_MAX, RHAE_MAX] (ARC's game score
+    # is in [0, 100]), so a partial mean decides the rule only if every such value would.
+    n_missing = len(games) - len(gaps)
+    low = (sum(gaps) - RHAE_MAX * n_missing) / len(games)
+    high = (sum(gaps) + RHAE_MAX * n_missing) / len(games)
+    fires = True if high < GAP_MIN else False if low >= GAP_MIN else None
     return {"rule": "mean over the path games of RHAE(S4, s=1) - RHAE(S0, s=1), counted runs; "
                     f"fires if < {GAP_MIN:g}", "threshold": GAP_MIN, "games": rows,
-            "n_games": len(gaps), "complete": len(gaps) == len(games), "mean_gap": mean,
-            "fires": None if mean is None else mean < GAP_MIN}
+            "n_games": len(gaps), "complete": n_missing == 0, "mean_gap": mean,
+            "mean_gap_bounds": None if n_missing == 0 else [low, high], "fires": fires}
 
 
 def gap_at_k_reading(b: Block, games: list[str], k: int = K) -> dict:
@@ -539,10 +554,16 @@ def gap_at_k_reading(b: Block, games: list[str], k: int = K) -> dict:
                      "gap": at["S4"]["score"] - at["S0"]["score"],
                      "stand_in": any(b.unit(g, c).pending for c in BLOCK_CONFIGS)})
     gaps = [r["gap"] for r in rows]
+    # §17.5's censoring sensitivity analysis: every game whose counted S0 or S4 run is
+    # censored at K left out, its two configs together
+    whole = [r["gap"] for r in rows
+             if am.CENSORED not in (r["status_S0"], r["status_S4"])]
     return {"rule": f"PREREG §17.5 change 3: the same mean with RHAE_K at K = {k}; "
                     "descriptive, fires no rule", "K": k, "K_role": am.k_role(k),
             "games": rows, "left_out": left_out, "n_games": len(rows),
-            "mean_gap": sum(gaps) / len(gaps) if gaps else None, "censored": censored}
+            "mean_gap": sum(gaps) / len(gaps) if gaps else None, "censored": censored,
+            "without_censored": {"n_games": len(whole),
+                                 "mean_gap": sum(whole) / len(whole) if whole else None}}
 
 
 def error_reading(b: Block, games: list[str]) -> dict:
@@ -615,6 +636,12 @@ def cost_reading(b: Block, games: list[str], spent: float, cap: float) -> dict:
     s12_measured = sum(r["s1_s2_measured"] or 0.0 for r in rows)
     forecast = (seed2 + s12) * (1 + rho)
     remaining = cap - spent
+    # A pending re-run (on any path game: phase-1b spend is not split by game) has not been
+    # paid yet, so the spend to date leaves it out. Priced at its original's billed cost, as a
+    # PROVISIONAL sensitivity reading only; the rule reads the spend in costs.csv.
+    stand_ins = [u.original for u in b.units.values() if u.pending]
+    pending_spend = sum(e.billed or 0.0 for e in stand_ins)
+    after = remaining - pending_spend
     return {"rule": "D27 at Checkpoint C: ([seed 2: S0 + S4 billed per game] + [S1, S2 in both "
                     "seeds: 2 x 2 x S0 billed per call x max(S0, S4 actions) per game]) x "
                     "(1 + rho); fires if > remaining",
@@ -629,6 +656,14 @@ def cost_reading(b: Block, games: list[str], spent: float, cap: float) -> dict:
             "fires_with_raise": _fires_at(forecast, remaining + D27_RAISE_USD, complete),
             "cap_needed_usd": spent + forecast,
             "raise_needed_usd": max(0.0, spent + forecast - cap),
+            "pending_spend": None if not stand_ins else {
+                "note": "PROVISIONAL sensitivity, not the rule: the pending re-runs are not yet "
+                        "in costs.csv; each priced at its original's billed cost",
+                "runs": [e.run_id for e in stand_ins], "est_usd": pending_spend,
+                "remaining_usd": after, "headroom_usd": after - forecast,
+                "fires": _fires_at(forecast, after, complete),
+                "headroom_with_raise_usd": after + D27_RAISE_USD - forecast,
+                "fires_with_raise": _fires_at(forecast, after + D27_RAISE_USD, complete)},
             "measured_cost_reading": {
                 "note": "descriptive, NOT the pre-registered rule: each S1 and S2 run priced "
                         "at S0's measured billed cost per run on its game",
@@ -662,7 +697,9 @@ def run_row(e: Entry, b: Block, forecasts: dict[tuple[str, str], float]) -> dict
     fc = forecasts.get((e.game, e.config))
     row = {"run_id": e.run_id, "game": e.game, "config": e.config, "replicate": e.replicate,
            "seed": e.seed, "rerun_of": e.rerun_of, "replaced_by": list(e.replaced_by),
-           "counted": not e.replaced_by and not e.truncated, "block2": e.block2,
+           "counted": not e.replaced_by and not e.truncated,
+           "rerun_pending": any(u.pending and u.original is e for u in b.units.values()),
+           "block2": e.block2,
            "started_utc": e.started_utc, "agent_exit_reason": e.agent_exit_reason,
            "exit_reason": e.exit_reason, "d19_ending": e.d19_ending,
            "rerun_eligible": b.eligible.get(e.run_id),
@@ -702,9 +739,11 @@ def compute(root: Path, generated: str, git: dict) -> tuple[dict, Block]:
     draw_path = the_draw(root)
     draw = json.loads(draw_path.read_text(encoding="utf-8"))
     games = [str(g).upper() for g in draw["games"]]
+    perm = [str(g).upper() for g in draw["derived"]["perm"]]
     drop = str(draw["derived"]["fallback_drop_game_d32"]).upper()
-    if drop not in games:
-        raise Refusal(f"D32's dropped game {drop} is not a path game {games}")
+    if sorted(perm) != sorted(games) or len(perm) != 4 or drop != perm[3]:
+        raise Refusal(f"draw.json: D32's dropped game {drop} is not perm[3] of the beacon "
+                      f"order {perm} of the path games {games} (PREREG §7.3, §10.6)")
     costs_csv = root / "costs.csv"
     if not costs_csv.is_file():
         raise Refusal(f"no costs.csv under {root}")
@@ -719,6 +758,11 @@ def compute(root: Path, generated: str, git: dict) -> tuple[dict, Block]:
     g0_path = latest_g0(root)
     forecasts = g0_forecasts(json.loads(g0_path.read_text(encoding="utf-8")))
     b = build_block(entries, bare, games, drop, pilot_latency(rows))
+    if cap != CAP_1B_FROZEN:
+        b.warnings.append(f"the phase-1b cap in common.costs.PHASE_CAPS is {_usd(cap)}, not "
+                          f"the {_usd(CAP_1B_FROZEN)} §10.3 names; remaining uses "
+                          f"{_usd(cap)}, and D27's raise of about {_usd(D27_RAISE_USD)} may "
+                          "already be in it")
     three = [g for g in games if g != drop]
     four_r, three_r = readings(b, games, spent, cap), readings(b, three, spent, cap)
     three_r["cost"]["rho_over_all_block2"] = {
@@ -778,7 +822,11 @@ def _section(r: dict, title: str) -> list[str]:
           for g in gap["games"]]
     L += ["", (f"Mean gap over {gap['n_games']} of {len(r['games'])} games: "
                f"**{_f(gap['mean_gap'])}** RHAE (fires if < {GAP_MIN:g}): "
-               f"{_fires(gap['fires'])}."), "",
+               f"{_fires(gap['fires'])}"
+               + ("" if gap["mean_gap_bounds"] is None else
+                  " (the mean over all {} games is between {} and {} whatever the missing "
+                  "games' gaps)".format(len(r["games"]), *map(_f, gap["mean_gap_bounds"])))
+               + "."), "",
           f"At K = {gk['K']} (PREREG §17.5, descriptive; fires no rule):", "",
           "| Game | RHAE_K S0 (status, levels) | RHAE_K S4 (status, levels) | Gap at K |",
           "|---|---|---|---|"]
@@ -787,7 +835,10 @@ def _section(r: dict, title: str) -> list[str]:
           f"{_f(g['gap'])}{' (stand-in)' if g['stand_in'] else ''} |" for g in gk["games"]]
     L += ["", (f"Mean gap at K = {gk['K']} over {gk['n_games']} games: "
                f"**{_f(gk['mean_gap'])}**; censored counted runs (their values are lower "
-               f"bounds): S0 {gk['censored']['S0']}, S4 {gk['censored']['S4']}.")]
+               f"bounds): S0 {gk['censored']['S0']}, S4 {gk['censored']['S4']}. Without the "
+               f"games that contain a censored run (§17.5's sensitivity analysis): "
+               f"{_f(gk['without_censored']['mean_gap'])} over "
+               f"{gk['without_censored']['n_games']} games.")]
     if gk["left_out"]:
         L.append("Left out (no matched values): "
                  + "; ".join(f"{x['game']} ({x['why']})" for x in gk["left_out"]) + ".")
@@ -823,6 +874,7 @@ def _section(r: dict, title: str) -> list[str]:
                cost["fires_with_raise"]] + ")."),
           (f"- Cap the forecast needs: {_usd(cost['cap_needed_usd'])} (a raise of "
            f"{_usd(cost['raise_needed_usd'])} over {_usd(cost['cap_1b_usd'])})."),
+          *_pending_spend_lines(cost),
           (f"- *Descriptive, not the pre-registered rule:* with S1 and S2 at S0's measured "
            f"billed cost per run, S1 + S2 = {_usd(m['s1_s2_usd'])}, forecast "
            f"{_usd(m['forecast_usd'])}, headroom {_usd(m['headroom_usd'])}, cap needed "
@@ -832,6 +884,20 @@ def _section(r: dict, title: str) -> list[str]:
         L.append(f"- With ρ over all {alt['n_block2_runs']} block-2 runs ({alt['rho']:.3f}) "
                  f"instead: forecast {_usd(alt['forecast_usd'])}.")
     return L
+
+
+def _pending_spend_lines(cost: dict) -> list[str]:
+    p = cost["pending_spend"]
+    if p is None:
+        return []
+    word = {True: "fires", False: "fits", None: "undetermined"}
+    return [(f"- *PROVISIONAL sensitivity, not the rule:* the spend to date leaves out "
+             f"{len(p['runs'])} pending re-run(s), not yet paid. If each costs what its "
+             f"original did ({_usd(p['est_usd'])} in all), remaining falls to "
+             f"{_usd(p['remaining_usd'])}: headroom {_usd(p['headroom_usd'])} "
+             f"({word[p['fires']]}), and {_usd(p['headroom_with_raise_usd'])} with the raise "
+             f"({word[p['fires_with_raise']]}). The re-run's own cost, calls and actions will "
+             "also replace its original's in the forecast.")]
 
 
 def summary_lines(c: dict) -> list[str]:
@@ -876,7 +942,8 @@ def summary_lines(c: dict) -> list[str]:
                       " (final-set reading disagrees: "
                       f"{d['final_counted_set']['incident']})"))
         L.append(f"| `{r['run_id']}` | {r['game']} | {r['config']} | {r['replicate']} | "
-                 f"{r['counted']} | {r['agent_exit_reason']}; {r['exit_reason']} | "
+                 f"{'stand-in, re-run pending' if r['rerun_pending'] else r['counted']} | "
+                 f"{r['agent_exit_reason']}; {r['exit_reason']} | "
                  f"{_f(r['rhae'])} | {r['actions']} | {_usd(r['billed_usd'])} "
                  f"({_usd(r['g0_forecast_usd'])}, {_f(r['billed_over_forecast'])}×) | "
                  f"{_f(r['seconds_per_action'], 1)} | {r['n_calls']} | "
@@ -891,9 +958,15 @@ def summary_lines(c: dict) -> list[str]:
     L += ["", "## What this does not show", "",
           ("- One seed per config and game: the gap is noisy, which is why its threshold (5) "
            "is looser than G2's kill at 10 (§10.3)."),
-          ("- The cost forecast prices S1 and S2 from S0's measured cost per call; S1 and S2 "
-           "replay no reasoning and may run slower or longer than S0, so their cost is not "
-           "measured here."),
+          ("- Four games (three under D32), chosen because ARC's published Standard-to-Adapter "
+           "gap on them was at least 20 (§7.2): the gap is conditional on games where the "
+           "Adapter helped, and says nothing about other games, models or efforts."),
+          ("- It does not decompose the gap: S1 and S2 have not run, so nothing here says which "
+           "step (loss policy, notes, replay) accounts for it (H4)."),
+          ("- The cost forecast prices S1 and S2 from S0's measured cost per call. S1 and S2 "
+           "keep their history until a summary at 175k tokens, where S0 drops its oldest "
+           "turns above 175k characters, and they were slower per call than S0 in the pilot, "
+           "so their cost per call may be higher; it is not measured here."),
           ("- The gap at K is descriptive (§17.5): it fires no rule, and its censored runs "
            "are lower bounds."),
           "- Nothing here compares models; it describes one model's runs under two configs.",

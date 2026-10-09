@@ -56,7 +56,8 @@ class Fixture:
             {"run_id": f"pilot-{c}", "experiment": "arc_pilot", "cell_or_config": c,
              "latency_s": str(v), "cost_usd_list": "1.0", "cost_usd_billed_est": "0.8",
              "notes": "approved_block=1-pilots;"} for c, v in PILOT.items()]
-        draw = {"games": games, "derived": {"perm": list(games), "fallback_drop_game_d32": drop}}
+        perm = [g for g in games if g != drop] + [drop]          # D32: drop = perm[3]
+        draw = {"games": games, "derived": {"perm": perm, "fallback_drop_game_d32": drop}}
         self._json(self.root / "draw" / "20261002T033145Z" / "draw.json", draw)
         g0 = {"cost": {"b": G0_B, "games": [{"game": g, **G0_L} for g in games]}}
         self._json(self.root / "gates" / "g0-20261006T133152Z" / "g0.json", g0)
@@ -165,6 +166,27 @@ def test_the_gap_rule_at_exactly_5_does_not_fire(tmp_path):
     assert gap["mean_gap"] == 5.0 and gap["fires"] is False
 
 
+@pytest.mark.parametrize("s0,s4,fires", [
+    (BUDGET, WIN, False),     # 3 gaps of 95.8: at least (287.5 - 100) / 4 = 46.9 >= 5
+    (WIN, WIN, None),         # 3 gaps of 0: anywhere in [-25, 25] with the missing game
+    (WIN, BUDGET, True),      # 3 gaps of -95.8: at most (-287.5 + 100) / 4 = -46.9 < 5
+])
+def test_a_partial_gap_decides_the_rule_only_if_every_missing_gap_would(tmp_path, s0, s4,
+                                                                        fires):
+    fx = Fixture(tmp_path)
+    fx.block(games=["FT09", "SB26", "R11L"], s0=s0, s4=s4)
+    fx.run("CD82", "S4", **s4)
+    gap = fx.compute()[0]["readings"]["four_games"]["gap"]
+    assert gap["complete"] is False and gap["n_games"] == 3 and gap["fires"] is fires
+    low, high = gap["mean_gap_bounds"]
+    assert low == pytest.approx((3 * gap["mean_gap"] - 100) / 4)
+    assert high == pytest.approx((3 * gap["mean_gap"] + 100) / 4)
+    # the 3-game fallback drops CD82, so its reading is complete and decided
+    three = fx.compute()[0]["readings"]["three_games_d32"]["gap"]
+    assert three["complete"] and three["mean_gap_bounds"] is None
+    assert three["fires"] is (three["mean_gap"] < 5)
+
+
 def test_the_gap_at_k_is_reported_with_censoring_and_fires_no_rule(tmp_path):
     """S0 ends TIME_BUDGET (not an incident) at 60 actions < 150: censored, its RHAE_K is
     its final value; S4 wins in 60: complete."""
@@ -180,6 +202,22 @@ def test_the_gap_at_k_is_reported_with_censoring_and_fires_no_rule(tmp_path):
     assert {x["status_S4"] for x in gk["games"]} == {am.COMPLETE}
     assert gk["mean_gap"] == pytest.approx(100 - 100 / 6)
     assert "fires" not in gk
+    # §17.5's sensitivity analysis leaves out every game with a censored counted run
+    assert gk["without_censored"] == {"n_games": 0, "mean_gap": None}
+
+
+def test_the_censoring_sensitivity_keeps_the_uncensored_games(tmp_path):
+    """Only FT09's S0 is censored at K = 150 (TIME_BUDGET, not an incident, at 60 actions):
+    the sensitivity reading is the mean over the other 3 games."""
+    fx = Fixture(tmp_path)
+    tb = {"ending": "TIME_BUDGET", "level_actions": (10, 20, 30), "levels_completed": 1}
+    for g in GAMES:
+        fx.run(g, "S4", **WIN)
+        fx.run(g, "S0", median=60.0, **(tb if g == "FT09" else BUDGET))
+    gk = fx.compute()[0]["readings"]["four_games"]["gap_at_k"]
+    assert gk["censored"] == {"S0": 1, "S4": 0}
+    assert gk["without_censored"]["n_games"] == 3
+    assert gk["without_censored"]["mean_gap"] == pytest.approx(RHAE_WIN - RHAE_BUDGET)
 
 
 def test_a_run_failing_the_score_check_is_left_out_of_the_gap_at_k(tmp_path):
@@ -250,7 +288,41 @@ def test_a_pending_rerun_refuses_unless_allowed(tmp_path, capsys):
     assert four["cost"]["pending_reruns"] == 1 and four["cost"]["rho"] == 1 / 8
     ft09 = next(g for g in four["gap"]["games"] if g["game"] == "FT09")
     assert ft09["S0_run"] == orig and ft09["stand_in"] is True
-    assert "**Status: PROVISIONAL.**" in (out_dir / "summary.md").read_text(encoding="utf-8")
+    summary = (out_dir / "summary.md").read_text(encoding="utf-8")
+    assert "**Status: PROVISIONAL.**" in summary
+    # the pending re-run is not yet paid: a sensitivity reading prices it at its original's
+    # billed cost, in both readings (phase-1b spend is not split by game)
+    for r in (four, c["readings"]["three_games_d32"]):
+        p = r["cost"]["pending_spend"]
+        assert p["runs"] == [orig] and p["est_usd"] == 30.0
+        assert p["remaining_usd"] == pytest.approx(r["cost"]["remaining_usd"] - 30.0)
+        assert p["headroom_with_raise_usd"] == pytest.approx(
+            r["cost"]["headroom_with_raise_usd"] - 30.0)
+    assert "PROVISIONAL sensitivity, not the rule" in summary
+    row = next(r for r in c["runs"] if r["run_id"] == orig)
+    assert row["rerun_pending"] is True and row["counted"] is True
+    assert "stand-in, re-run pending" in summary
+
+
+def test_a_pending_rerun_in_the_dropped_game_still_counts_in_the_3_game_spend(tmp_path):
+    fx = Fixture(tmp_path)
+    fx.block(games=["FT09", "SB26", "R11L"])
+    fx.run("CD82", "S4", **WIN)
+    orig = fx.run("CD82", "S0", ending="AGENT_ERROR", level_actions=(20, 40, 60),
+                  levels_completed=1, billed=7.0)
+    out, _ = fx.compute()
+    three = out["readings"]["three_games_d32"]["cost"]
+    assert three["pending_reruns"] == 0 and three["rho"] == 0.0     # ρ: the 3 games' runs
+    assert three["pending_spend"]["runs"] == [orig]                  # spend: the whole phase
+    assert three["pending_spend"]["est_usd"] == 7.0
+
+
+def test_no_pending_spend_reading_when_nothing_is_pending(tmp_path):
+    fx = Fixture(tmp_path)
+    fx.block()
+    out, _ = fx.compute()
+    assert out["readings"]["four_games"]["cost"]["pending_spend"] is None
+    assert not any(r["rerun_pending"] for r in out["runs"])
 
 
 def test_a_missing_unit_refuses_and_a_provisional_reading_survives_it(tmp_path, capsys):
@@ -263,6 +335,7 @@ def test_a_missing_unit_refuses_and_a_provisional_reading_survives_it(tmp_path, 
     out, _ = fx.compute()
     four = out["readings"]["four_games"]
     assert four["gap"]["n_games"] == 3 and four["gap"]["complete"] is False
+    assert four["gap"]["fires"] is False                    # decided whatever CD82's gap is
     # a partial forecast is a lower bound: undetermined unless it already exceeds the room
     assert four["cost"]["complete"] is False and four["cost"]["fires"] is None
     assert four["errors"]["undetermined"] == 1 and four["errors"]["fires"] is False
@@ -483,6 +556,26 @@ def test_the_three_game_fallback_can_fit_where_four_games_do_not(tmp_path):
 
 
 # --- refusals ------------------------------------------------------------------------------
+
+def test_a_drop_that_is_not_perm_3_is_refused(tmp_path, capsys):
+    fx = Fixture(tmp_path)
+    fx.block()
+    path = next((fx.root / "draw").glob("*/draw.json"))
+    draw = json.loads(path.read_text(encoding="utf-8"))
+    draw["derived"]["perm"] = ["CD82", "FT09", "SB26", "R11L"]      # perm[3] = R11L, not CD82
+    path.write_text(json.dumps(draw), encoding="utf-8")
+    assert fx.main("--no-write", "--allow-incomplete") == 2
+    assert "is not perm[3]" in capsys.readouterr().err
+
+
+def test_a_phase_cap_other_than_900_is_flagged(tmp_path, monkeypatch):
+    fx = Fixture(tmp_path)
+    fx.block()
+    monkeypatch.setitem(costs.PHASE_CAPS, "1b", 1070.0)
+    out, _ = fx.compute()
+    assert out["readings"]["four_games"]["cost"]["cap_1b_usd"] == 1070.0
+    assert any("not the $900.00 §10.3 names" in w for w in out["warnings"])
+
 
 def test_a_pilot_folder_is_refused(tmp_path, capsys):
     fx = Fixture(tmp_path)

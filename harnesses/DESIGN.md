@@ -545,6 +545,9 @@ Each item is a `HarnessConfig` field or a fixed behaviour, listed in `config.RES
 - `blinding.pooled_report` leaves the replication's pilot (sol at medium on the default config in W-0 or W-n-0, `is_left_out`) out of every pooled pilot report and lists its run ids under `runs_left_out`.
 - New $0 forecast `uv run python -m analysis.sol_h1_forecast` (`results/cost_model/<UTC>/`).
 
+**Changed on 2026-10-09: luna's guard** (PREREG §4.6 and §17.6; the researcher's G1 GO of 2026-10-09; $0 code due before block `3-persistgym`):
+- `harnesses/registered.py`: `G1_PASSED` records luna's G1 on the default config, and a luna run outside its pilots and validity runs is its main sweep or a control only (`luna_refusal`, §12.1). Before, a luna run in any experiment but a pilot was checked for its effort alone, so nothing enforced luna's G1, the ban on its replay-on cells or its config.
+
 **Technical choices made here** (not D-items; open to the researcher's review):
 - Summary calls fired while the need step is pending count in the need phase, and are also reported apart (§7.1).
 - The pooled pilot report shows reasoning tokens only for pools of at least 2 harness cells, and pools by model and requested effort (§7.4).
@@ -603,9 +606,11 @@ PREREG amendment R2 (2026-10-02) raises sol to `reasoning.effort: high` for H2, 
 4. refuses a sol run in a harness cell other than F-r and F-0 (`REGISTERED_CELLS`): its W-n and Σ-n replay pairs do not run on the variant, whose notice asks the agent not to write the value;
 5. refuses, in `persistgym_validity`, a sol run other than its validity run (`VALIDITY_RUN`: F-0 on `--split validity`, `--variant restated` or `withheld`; PREREG §4.4). That run needs no G1, so without this a base-variant F-r and F-0 pair there, or a run on the main split, would run H2's contrast before G1;
 6. applies `engagement_refusal(results_root, model, generator_hash)`: a check file's config is its `rule.generator_config_hash`, or the default config's when the key is missing (R2's file); a file on another config never decides; on the run's config, a NOT_ENGAGED file refuses for good (on `sol-chain`: R3's hard stop, "H2 on sol is not testable in this task family; no further variant or effort"), files count only under that config's rule (`rule()` on `sol-chain`, R2's rule on the default config) and decide in R2's order, and UNSCORABLE twice on `sol-chain` is the hard stop too. So R2's NOT_ENGAGED file binds the default config only;
-7. refuses a sol run outside `persistgym_validity` unless `G1_PASSED["gpt-6.1-sol"]` equals the run's config hash. `G1_PASSED` is empty: only the researcher's G1 decision PR sets it, so the main sweep fails closed until then.
+7. refuses a sol run outside `persistgym_validity` unless `G1_PASSED["gpt-6.1-sol"]` equals the run's config hash. `G1_PASSED` has no sol entry: only a researcher's G1 decision sets one, so sol's main sweep fails closed.
 
-luna is in neither `REGISTERED_GENERATOR` nor `REGISTERED_CELLS`, so its runs (M1's W and v tuning included) keep any config and cell.
+luna is in neither `REGISTERED_GENERATOR` nor `REGISTERED_CELLS`: its pilots and validity runs keep any config and cell.
+
+**luna's main sweep (§4.6; R6, §17.6 change 1).** After step 2, a luna run (a dated snapshot or alias counts) outside `persistgym_validity` is judged by `luna_refusal` alone, and steps 3-7 do not apply to it. It refuses unless the run is: experiment `persistgym`; a replay-off cell, F-0, W-0, W-n-0 or Σ-n-0 (`LUNA_CELLS`; G0 did not verify luna's replay toggle, so its replay-on cells and Σ-0-r never run), or `LUNA_SINGLE_TURN_CELL` (`single-turn`), the id that a command sending the single-turn control is to give (none exists yet); `--split main`; `--variant base`, or `restated` in F-0 (the restated-at-need control, as full F-0 episodes); and the default config's hash (`LUNA_GENERATOR_HASH`, `3d6bc648…`, the config of luna's validity runs and the G1 spot-check). The refusal lists every setting that differs. Then `G1_PASSED["gpt-6-luna"]` must equal that hash: it records the researcher's G1 GO of 2026-10-09 (`results/decisions.md`, PR #53), and without it the main sweep fails closed. The request settings (`--mode`, `--service-tier`, `--W`) are not checked for luna. Tests: `tests/test_registered.py`.
 
 **R4 (§17.4).** After step 1 and before step 2, a run of sol's H1 replication (`is_replication_run`: any run of `persistgym_sol_h1`, and a sol run of `persistgym_validity` at medium effort on the default config) is judged by `replication_refusal` alone, and steps 2-7 do not apply to it (§12.6).
 

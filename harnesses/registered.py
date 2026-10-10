@@ -1,5 +1,5 @@
 """Registered request settings, generator config and the engagement check's rule (PREREG §6
-as amended by R2, §17.2, and R3, §17.3).
+as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (§4.6, R6).
 
 * `REGISTERED_EFFORT`: the `reasoning.effort` every non-pilot run of a model must send. luna
   stays at `medium` (D13). sol runs at `high` (R2), and only once a blinded engagement check
@@ -7,7 +7,8 @@ as amended by R2, §17.2, and R3, §17.3).
 * `REGISTERED_GENERATOR` (R3): the generator preset (`persistgym.config.PRESETS`) every
   non-pilot run of a model must use. sol uses `sol-chain`, the derived-fact variant whose
   clues are given by chain records and whose evidence steps carry the evidence notice. luna
-  is not listed, so its runs (M1's W and v tuning included) keep any config.
+  is not listed: its pilots and validity runs keep any config, and its other runs play the
+  default config (`luna_refusal`).
 * `REGISTERED_CELLS` (R3): sol runs the H2 core only, F-r and F-0; its exploratory W-n and
   Σ-n replay pairs do not run on the variant, whose notice asks the agent not to write the
   value, which the notes instruction would contradict.
@@ -28,10 +29,18 @@ as amended by R2, §17.2, and R3, §17.3).
   at an effort above medium (high, and the higher ones: "no further variant or effort").
   So does a G1 failure on the variant: `G1_PASSED` stays empty.
 * `G1_PASSED`: model -> the generator config hash on which the researcher recorded G1 as
-  passed (§4.4). Only the researcher's G1 decision PR sets it; while it is empty, sol's main
-  sweep refuses (fail closed). sol's validity run (`persistgym_validity`) needs no entry, so
-  it must be exactly a validity run (`VALIDITY_RUN`: F-0 on the validity split, restated or
-  withheld; §4.4): a base-variant or F-r run there would be H2's contrast before G1.
+  passed (§4.4). Each entry is a G1 GO in results/decisions.md, added by a PR the
+  researcher merges; a model without one runs no main sweep (fail closed). luna's is the
+  default config (G1 GO, 2026-10-09). sol has none, so sol's main sweep refuses. sol's
+  validity run (`persistgym_validity`) needs no entry, so it must be exactly a validity run
+  (`VALIDITY_RUN`: F-0 on the validity split, restated or withheld; §4.4): a base-variant or
+  F-r run there would be H2's contrast before G1.
+* luna (§4.6, R6 change 1, §17.6): outside its pilots and validity runs it runs its main
+  sweep and controls only (`luna_refusal`): experiment `persistgym`, the replay-off cells
+  `LUNA_CELLS` (F-0, W-0, W-n-0, Σ-n-0; its replay toggle was not verified at G0) or the
+  single-turn control (`LUNA_SINGLE_TURN_CELL`), main templates, base episodes or the
+  restated-at-need control in F-0, on the default generator config, and only once
+  `G1_PASSED` records luna on that config.
 
 * R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
   generator config, with D13's other request settings (`H1_REPLICATION_REQUEST`), in F-0,
@@ -54,11 +63,13 @@ registers (`replication_refusal`); every other experiment must send the model's 
 effort, a model in `REGISTERED_GENERATOR` must use its preset and a model in
 `REGISTERED_CELLS` one of its cells, sol's validity run must be `VALIDITY_RUN`, a model in
 `ENGAGEMENT_REQUIRED` needs an ENGAGED check on that config in the order R2 registers
-(`engagement_refusal`), and sol's main sweep needs `G1_PASSED`. A model string counts as a
+(`engagement_refusal`), sol's main sweep needs `G1_PASSED`, and luna outside its validity
+runs is held to its main sweep and controls (`luna_refusal`). A model string counts as a
 registered model when it is that model or starts with it and a hyphen (`model_family`, as
-`harnesses.pricing.price_for` reads it), so a dated snapshot or alias of sol is sol. The
-probes keep their own registered settings (`harnesses.probes.ECHO_CONFIG`, `REPLAY_CONFIG`;
-PREREG §17.1: medium on both models) and are not covered here.
+`harnesses.pricing.price_for` reads it), so a dated snapshot or alias of sol is sol, and one
+of luna is luna. The probes keep their own registered settings
+(`harnesses.probes.ECHO_CONFIG`, `REPLAY_CONFIG`; PREREG §17.1: medium on both models) and
+are not covered here.
 """
 
 from __future__ import annotations
@@ -85,9 +96,16 @@ REGISTERED_GENERATOR: dict[str, str] = {"gpt-6.1-sol": "sol-chain"}
 """PREREG §17.3 (R3): the generator preset of every non-pilot run of these models."""
 REGISTERED_CELLS: dict[str, tuple[str, ...]] = {"gpt-6.1-sol": ("F-r", "F-0")}
 """PREREG §17.3 (R3): the only harness cells these models run outside pilots."""
-G1_PASSED: dict[str, str] = {}
+G1_PASSED: dict[str, str] = {
+    # The researcher's G1 GO for luna, 2026-10-09: results/decisions.md, "2026-10-09: G1: GO
+    # (researcher)", after "G1 gate for gpt-6-luna" (PR #53, branch m1/g1-gate). Its validity
+    # runs and spot-check played the default config, 3d6bc648... (PRESET_HASHES["default"]).
+    "gpt-6-luna": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+}
 """Model -> the generator config hash on which the researcher recorded G1 (§4.4) as passed.
-Set only by the researcher's G1 decision PR; empty, sol's main sweep refuses."""
+Each entry is a G1 GO in results/decisions.md, added by a PR the researcher merges. luna:
+the default config. sol: none (R3's hard stop), so sol's main sweep refuses (fail closed),
+and so does luna's on any other config (`luna_refusal`)."""
 VALIDITY_RUN = {"cell": ("F-0",), "split": ("validity",), "variant": ("restated", "withheld")}
 """PREREG §4.4 (§17.3 for sol): a validity run is F-0 on the validity split, restated or
 withheld. sol's `persistgym_validity` runs need no `G1_PASSED`, so they are held to exactly
@@ -128,6 +146,27 @@ REPLICATION_G1_PASSED: dict[str, str] = {}
 """Model -> the generator config hash on which the researcher recorded the replication's G1
 gate (§17.4: sol at medium on the default config, the 4 observed task cells) as passed. Set
 only by the researcher's G1 decision PR for the replication; empty, its main runs refuse."""
+
+LUNA_MODEL = "gpt-6-luna"
+LUNA_EXPERIMENT = "persistgym"
+"""PREREG §4.6, §17.6 change 1: outside its pilots and validity runs, luna runs its main sweep
+and controls only, in experiment `persistgym` (block `3-persistgym`)."""
+LUNA_CELLS = ("F-0", "W-0", "W-n-0", "Σ-n-0")
+"""PREREG §4.6 (row 1), §17.6 change 1: luna's replay-off cells (`Σ-n-0` is `sigma-n-0` on
+the command line). Its replay-on cells (F-r, W-n-r, Σ-n-r) and Σ-0-r never run: G0 did not
+verify luna's replay toggle (§4.6 row 2)."""
+LUNA_SINGLE_TURN_CELL = "single-turn"
+"""The cell id a command that sends the position-matched single-turn control (§3 H3, §4.3)
+gives this guard for it (no such command exists yet). It is not a harness cell: one prompt
+per template, built from base episodes (`persistgym.controls`)."""
+LUNA_RUN = {"split": ("main",), "variant": ("base", "restated")}
+"""luna's main sweep plays main templates, base episodes, and the restated-at-need control
+(§4.3) as full F-0 episodes (§4.6, D36): --variant restated in cell F-0 only."""
+LUNA_RESTATED_CELL = "F-0"
+LUNA_GENERATOR_HASH = DEFAULT_GENERATOR_HASH
+"""luna plays the default generator config: the one its validity runs and the G1 spot-check
+played (§4.4), on which `G1_PASSED` records its G1."""
+R6_REF = "PREREG.md §17.6 (amendment R6)"
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
@@ -380,6 +419,39 @@ def replication_refusal(experiment: str, model: str, effort: str, cell: str,
     return None
 
 
+def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
+                 variant: str) -> str | None:
+    """Why a luna run outside `persistgym_pilot` and `persistgym_validity` must refuse, or
+    None (§4.6, R6 change 1; fail closed). It is luna's main sweep or one of its controls
+    only: experiment `persistgym`, a replay-off cell (`LUNA_CELLS`) or the single-turn
+    control (`LUNA_SINGLE_TURN_CELL`), on main templates, base episodes or the restated-at-
+    need control in F-0 (`LUNA_RUN`), on the default generator config, and only once
+    `G1_PASSED` records luna's G1 on that config."""
+    wrong = [what for what, bad in (
+        (f"--experiment {experiment}", experiment != LUNA_EXPERIMENT),
+        (f"cell {cell}", cell not in (*LUNA_CELLS, LUNA_SINGLE_TURN_CELL)),
+        (f"--split {split}", split not in LUNA_RUN["split"]),
+        (f"--variant {variant}", variant not in LUNA_RUN["variant"]),
+        (f"--variant {variant} in cell {cell}",
+         variant == "restated" and cell != LUNA_RESTATED_CELL),
+        (f"generator config {generator_hash[:12]}", generator_hash != LUNA_GENERATOR_HASH))
+        if bad]
+    if wrong:
+        return (f"outside {PILOT_EXPERIMENT} and {VALIDITY_EXPERIMENT}, {LUNA_MODEL} runs its "
+                f"main sweep and controls only ({R6_REF} change 1; PREREG §4.6): --experiment "
+                f"{LUNA_EXPERIMENT}, a replay-off cell ({', '.join(LUNA_CELLS)}; luna's "
+                f"replay toggle was not verified at G0) or the single-turn control, "
+                f"--split main, --variant base, or restated in cell {LUNA_RESTATED_CELL} (the "
+                f"restated-at-need control), on the default generator config (--gen-preset "
+                f"default, config {LUNA_GENERATOR_HASH[:12]}); got " + "; ".join(wrong))
+    if G1_PASSED.get(LUNA_MODEL) != generator_hash:
+        return (f"{experiment} runs {LUNA_MODEL} only after the researcher has recorded G1 "
+                f"(PREREG §4.4, §10.2) as passed on generator config {generator_hash[:12]} "
+                f"(harnesses/registered.py G1_PASSED, set from the G1 decision in "
+                f"results/decisions.md)")
+    return None
+
+
 def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        generator_hash: str, results_root: Path, *, split: str,
                        variant: str, task_cells: tuple[str, ...] | None = None,
@@ -398,6 +470,9 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        (`replication_refusal`); steps 2-7 do not apply to it;
     2. every other experiment sends the model's registered effort (a dated snapshot or alias
        counts as its model, `model_family`);
+    R6. outside `persistgym_validity`, a luna run is its main sweep or a control, on the
+       default config, after `G1_PASSED` (`luna_refusal`; §4.6, R6 change 1); steps 3-7 do
+       not apply to it;
     3. a model in `REGISTERED_GENERATOR` uses its preset's config;
     4. a model in `REGISTERED_CELLS` runs one of its cells;
     5. in `persistgym_validity`, a model in `ENGAGEMENT_REQUIRED` runs exactly a validity
@@ -432,6 +507,8 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
         return (f"{experiment} runs {model} at its registered reasoning effort {want!r} only "
                 f"(PREREG §6 as amended by R2, §17.2), got {effort!r}; only "
                 f"{PILOT_EXPERIMENT} runs may use another effort{replication}")
+    if family == LUNA_MODEL and experiment != VALIDITY_EXPERIMENT:
+        return luna_refusal(experiment, cell, generator_hash, split=split, variant=variant)
     preset = REGISTERED_GENERATOR.get(family)
     if preset is not None and generator_hash != PRESET_HASHES[preset]:
         return (f"{experiment} runs {family} on the generator preset {preset!r} only "

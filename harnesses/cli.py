@@ -47,6 +47,12 @@ are not read). `run` refuses:
   than the replication's validity run: F-0 on --split validity, --variant restated or
   withheld, validity templates 0-19, on the 4 observed task cells only, with D13's request
   settings as above (it needs no G1).
+PREREG §4.6 and §17.6 (amendment R6), gpt-6-luna's main sweep (`registered.luna_refusal`):
+outside persistgym_pilot and persistgym_validity, `run` refuses a gpt-6-luna run other than
+experiment persistgym, in F-0, W-0, W-n-0 or Σ-n-0 (sigma-n-0), on --split main, --variant
+base (or restated in F-0: the restated-at-need control), on the default generator config,
+and any such run until `registered.G1_PASSED` records luna's G1 on that config (recorded:
+the researcher's G1 GO of 2026-10-09).
 R3's engagement check found NOT_ENGAGED on 2026-10-03 (results/decisions.md), so R3's hard
 stop refuses its check, validity and main-sweep commands below; they are kept as the record
 of what was registered.

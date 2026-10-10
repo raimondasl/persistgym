@@ -56,9 +56,10 @@ as category counts, which is exact and fast), one-sided bootstrap p-values, Holm
 P(supported) at the worst Holm step (one-sided 0.025), the most conservative; the real Holm
 procedure, the unadjusted level and the family of 4 are reported next to it. ``LunaSetup``
 explains how the penalties are set so that Delta_H1 is exactly 10pp. The run also writes the
-template SD measured in luna's validity runs, a one-at-a-time sensitivity table, the cost of
-each T from the committed forecast, and ``summary.md``. ``--part all`` still runs parts 1 and 2
-only.
+template SD measured in luna's validity runs, a one-at-a-time sensitivity table, a
+normal-approximation cross-check (``luna_normal_power``, which also gives the T the rule would
+need without the cap), the cost of each T from the committed forecast, and ``summary.md``.
+``--part all`` still runs parts 1 and 2 only.
 
 Cluster-robust small-sample factor (``--cluster-correction``). The default, ``statsmodels``, is
 statsmodels' G/(G-1) * (N-1)/(N-K) with the template dummies counted in K. With template fixed
@@ -880,6 +881,47 @@ def luna_sensitivity_setups(primary: LunaSetup, others: list[LunaSetup],
     return out
 
 
+def luna_normal_power(setup: LunaSetup, templates: int, alpha: float) -> tuple[float, float]:
+    """Cross-check by another route: normal-approximation power of the H1 and H3 tests
+    (one-sided at alpha) from the exact variance of one template's contribution, integrated
+    over the template intercept by Gauss-Hermite quadrature. It leaves out the model check and
+    the bootstrap's discreteness, so it should sit close to the simulated test-only power."""
+    lv = setup.levels()
+    p = {k: special.expit(intercept_for(v, setup.sd, setup.calibration) + setup.sd * _GH_X)
+         for k, v in lv.items()}
+
+    def var(mean_u, var_u):  # law of total variance over the intercept
+        return float(np.sum(_GH_W * var_u) + np.sum(_GH_W * mean_u ** 2)
+                     - np.sum(_GH_W * mean_u) ** 2)
+
+    m1 = p["f0_onr"] - p["w0_onr"] - p["f0_or"] + p["w0_or"]
+    v1 = var(m1, sum(p[k] * (1 - p[k]) for k in ("f0_onr", "w0_onr", "f0_or", "w0_or")))
+    m3 = (p["st_onr"] - p["f0_onr"] + p["st_dnr"] - p["f0_dnr"]) / 2
+    v3 = var(m3, sum(p[k] * (1 - p[k]) for k in ("st_onr", "f0_onr", "st_dnr", "f0_dnr")) / 4)
+    z = special.ndtri(1 - alpha)
+    return (float(special.ndtr(setup.delta_h1 / math.sqrt(v1 / templates) - z)),
+            float(special.ndtr((setup.h3_margin - setup.delta_h3) / math.sqrt(v3 / templates)
+                               - z)))
+
+
+def luna_normal_check(setups: list[LunaSetup], templates, max_templates: int = 1000
+                      ) -> pd.DataFrame:
+    """luna_normal_power at each simulated T, at the worst Holm step and unadjusted, plus the
+    smallest multiple of 10 (up to max_templates, past the cap) at which both tests reach the
+    target at the worst step by this approximation."""
+    rows = []
+    for s in setups:
+        uncapped = next((t for t in range(10, max_templates + 1, 10)
+                         if min(luna_normal_power(s, t, s.worst_step)) >= POWER_TARGET), None)
+        for t in templates:
+            h1w, h3w = luna_normal_power(s, t, s.worst_step)
+            h1u, h3u = luna_normal_power(s, t, ALPHA)
+            rows.append({"scenario": s.name, "templates": t, "normal_h1_worst_step": h1w,
+                         "normal_h3_worst_step": h3w, "normal_h1_unadjusted": h1u,
+                         "normal_h3_unadjusted": h3u, "normal_T_both_uncapped": uncapped})
+    return pd.DataFrame(rows)
+
+
 def validity_template_sd(paths: list[Path], grid_max: float = 4.0,
                          step: float = 0.01) -> pd.DataFrame:
     """The template variance measured in validity runs (§4.2, §9.8), per variant: the ML
@@ -1003,7 +1045,8 @@ LUNA_WHY = {
 
 def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame | None,
                  validity: pd.DataFrame | None, setups: list[LunaSetup], run_id: str,
-                 command: str, cost_per_t: float | None, spent_1a: float | None) -> str:
+                 command: str, cost_per_t: float | None, spent_1a: float | None,
+                 normal: pd.DataFrame | None = None) -> str:
     """summary.md of a luna power run: assumptions, the template count each scenario sets,
     power by T, sensitivity, cost and what the run does not show."""
     reps, boot = int(power.reps.iloc[0]), int(power.boot.iloc[0])
@@ -1075,6 +1118,23 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
              "(H2's tests counted as not rejected). P_h1_kill_fires: §3's kill reading at the "
              "true 10pp. Full columns in `luna_power.csv`."), "",
             _md_table(power[cols]), ""]
+    if normal is not None and len(normal):
+        both = power.merge(normal, on=["scenario", "templates"])
+        both = both[both.templates % 50 == 0]
+        cols = ["scenario", "templates", "P_h1_worst_step", "normal_h1_worst_step",
+                "P_h3_worst_step", "normal_h3_worst_step"]
+        out += ["## Cross-check: normal approximation",
+                ("`luna_normal_power` computes the test-only power at the worst step another "
+                 "way: a normal approximation with the exact variance of one template's "
+                 "contribution, integrated over the template intercept. It leaves out the model "
+                 "check and the bootstrap's discreteness. Full table in "
+                 "`luna_normal_check.csv`."), "", _md_table(both[cols]), ""]
+        for name, g in normal.groupby("scenario", sort=False):
+            t_unc = g.normal_T_both_uncapped.iloc[0]
+            out.append(f"- **{name}:** without R6's cap, this approximation reaches 0.80 for both "
+                       "tests at the worst step at "
+                       + (f"about T = {int(t_unc)}." if pd.notna(t_unc) else "no T <= 1000."))
+        out.append("")
     if sens is not None and len(sens):
         cols = ["scenario", "templates", "P_h1_supported_worst_step",
                 "P_h3_supported_worst_step", "P_h1_unadjusted", "P_h3_unadjusted"]
@@ -1240,6 +1300,7 @@ def main(argv: list[str] | None = None) -> int:
                            for s in luna_setups], ignore_index=True)
         tables["luna_power"] = power
         tables["luna_decision"] = decision = luna_decision(power)
+        tables["luna_normal_check"] = normal = luna_normal_check(luna_setups, counts)
         sens_counts = tuple(int(x) for x in args.luna_sensitivity_templates.split(",")
                             if x.strip())
         sens = None
@@ -1256,7 +1317,7 @@ def main(argv: list[str] | None = None) -> int:
         command = "uv run python -m analysis.power_sim " + " ".join(
             sys.argv[1:] if argv is None else argv)
         summary = luna_summary(power, decision, sens, validity, luna_setups, run_id, command,
-                               luna_cost_per_template(), _phase_1a_spent())
+                               luna_cost_per_template(), _phase_1a_spent(), normal)
     for name, df in tables.items():
         _print(name, df)
     elapsed = time.perf_counter() - t0

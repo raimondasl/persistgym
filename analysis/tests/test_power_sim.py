@@ -419,15 +419,15 @@ def test_main_luna_writes_tables_meta_and_summary(tmp_path):
     assert ps.main(args) == 0
     meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
     assert sorted(meta["outputs"]) == sorted(
-        ["luna_power.csv", "luna_decision.csv", "luna_sensitivity.csv", "luna_validity_sd.csv",
-         "summary.md"])
+        ["luna_power.csv", "luna_decision.csv", "luna_normal_check.csv", "luna_sensitivity.csv",
+         "luna_validity_sd.csv", "summary.md"])
     assert [s["name"] for s in meta["config"]["luna_setups"]] == ["primary", "pessimistic"]
     assert meta["config"]["luna_setups"][1]["sd"] == 0.0
     power = pd.read_csv(tmp_path / "luna_power.csv")
     assert len(power) == 4 and set(power.scenario) == {"primary", "pessimistic"}
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
     for heading in ("## Assumptions", "## Result: the template count", "## Power by T",
-                    "## What this does not show"):
+                    "## Cross-check: normal approximation", "## What this does not show"):
         assert heading in summary
 
 
@@ -448,3 +448,30 @@ def test_h2_holm_steps_option(tmp_path):
     meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
     assert meta["config"]["h2_setups"][0]["holm_steps"] == 2
     assert ps.H2Setup().holm_steps == 3  # the default is unchanged for part 2
+
+
+def test_luna_normal_power_closed_form_and_agreement_with_the_simulation():
+    # With SD 0 the cells are independent: the variance is a sum of Bernoulli variances.
+    setup = ps.replace(ps.LUNA_PRIMARY, sd=0.0)
+    lv = setup.levels()
+    v1 = sum(lv[k] * (1 - lv[k]) for k in ("f0_onr", "w0_onr", "f0_or", "w0_or"))
+    v3 = sum(lv[k] * (1 - lv[k]) for k in ("st_onr", "f0_onr", "st_dnr", "f0_dnr")) / 4
+    z = special.ndtri(1 - 0.025)
+    h1, h3 = ps.luna_normal_power(setup, 120, 0.025)
+    assert h1 == pytest.approx(special.ndtr(0.10 / np.sqrt(v1 / 120) - z), rel=1e-9)
+    assert h3 == pytest.approx(special.ndtr(0.05 / np.sqrt(v3 / 120) - z), rel=1e-9)
+    # more templates, more power; a looser level, more power
+    assert ps.luna_normal_power(ps.LUNA_PRIMARY, 200, 0.025)[0] > ps.luna_normal_power(
+        ps.LUNA_PRIMARY, 100, 0.025)[0]
+    assert ps.luna_normal_power(ps.LUNA_PRIMARY, 100, 0.05)[1] > ps.luna_normal_power(
+        ps.LUNA_PRIMARY, 100, 0.025)[1]
+    # close to the simulated test-only power
+    sim = ps.run_luna(400, 11, templates=(150,), boot=2000).iloc[0]
+    n1, n3 = ps.luna_normal_power(ps.LUNA_PRIMARY, 150, 0.025)
+    assert sim.P_h1_worst_step == pytest.approx(n1, abs=0.07)
+    assert sim.P_h3_worst_step == pytest.approx(n3, abs=0.07)
+    check = ps.luna_normal_check([ps.LUNA_PRIMARY], (150,))
+    assert check.normal_h1_worst_step.iloc[0] == pytest.approx(n1)
+    t_unc = int(check.normal_T_both_uncapped.iloc[0])
+    assert t_unc % 10 == 0 and min(ps.luna_normal_power(ps.LUNA_PRIMARY, t_unc, 0.025)) >= 0.8
+    assert min(ps.luna_normal_power(ps.LUNA_PRIMARY, t_unc - 10, 0.025)) < 0.8

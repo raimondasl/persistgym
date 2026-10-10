@@ -442,8 +442,9 @@ PILOT_RUN = ["single-turn", "--n", "1", *SMALL_ARGS, "--approved-block", "3-pers
     ([*PILOT_RUN, "--mode", "fast"], "reasoning_mode must be one of"),
     ([*MAIN, "--model", "gpt-6.1-sol"], "gpt-6-luna only"),
     ([*MAIN, "--model", "gpt-6.1-sol", "--effort", "medium"], "gpt-6-luna only"),
-    ([*MAIN, "--mode", "pro"], "--mode pro"),
-    ([*MAIN, "--service-tier", "default"], "--service-tier default"),
+    # D13's request settings, luna's guard's (registered.LUNA_REQUEST)
+    ([*MAIN, "--mode", "pro"], "got --mode pro"),
+    ([*MAIN, "--service-tier", "default"], "got --service-tier default"),
     ([*MAIN, "--effort", "high"], "registered reasoning effort 'medium'"),
     ([*MAIN, "--start", "1", "--n", "9", "--repeat-index", "1"], "would play nothing"),
     # luna's guard (registered.luna_refusal): its main sweep and controls only
@@ -512,11 +513,18 @@ def test_the_docstring_command_is_lunas_registered_control():
                                                            "flex")
     assert (a.split, a.start, a.n, a.experiment) == ("main", 0, 100, "persistgym")
     assert a.task_cell == ["all"] and a.repeat_index == 0 and a.parallel == 16
-    assert single_turn.settings_refusal(
-        experiment=a.experiment, model=a.model, mode=a.mode, service_tier=a.service_tier,
-        split=a.split, repeat_index=1) is None
+    assert single_turn.settings_refusal(experiment=a.experiment, model=a.model, split=a.split,
+                                        repeat_index=1) is None
     assert single_turn.task_cells(a.task_cell) == NONREC
     assert single_turn.template_indices(a.split, a.start, a.n, 1) == list(range(0, 100, 10))
+    # luna's guard lets it go: the default config, on which luna's G1 is recorded
+    gen = runmeta.config_hash(cli._gen_config(a.gen_preset, a.gen_set).to_dict())
+    assert gen == registered.LUNA_GENERATOR_HASH == registered.G1_PASSED["gpt-6-luna"]
+    assert registered.check_run_settings(
+        a.experiment, a.model, a.effort, registered.LUNA_SINGLE_TURN_CELL, gen, cli.RESULTS,
+        split=a.split, variant="base", task_cells=tuple(NONREC),
+        request={"mode": a.mode, "service_tier": a.service_tier, "W": None},
+        templates=(a.start, a.start + a.n)) is None
 
 
 def test_the_control_is_guarded_as_lunas_single_turn_cell(monkeypatch, capsys):

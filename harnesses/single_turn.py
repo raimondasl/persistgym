@@ -88,10 +88,9 @@ EXPERIMENTS = ("persistgym", PILOT_EXPERIMENT)
 """The control runs in luna's main sweep (`persistgym`, PREREG §4.6 row 1, §17.6) and in a
 pilot (≤ 10 prompts, CLAUDE.md), nowhere else."""
 REGISTERED_MODELS = ("gpt-6-luna",)
-"""PREREG §3 H3: H3 is luna's. Outside pilots no other model runs the control."""
-REGISTERED_REQUEST = {"mode": "standard", "service_tier": "flex"}
-"""D13 (§6): F-0's `reasoning.mode` and service tier. Outside pilots the control sends these
-(the effort is checked by `registered.check_run_settings`)."""
+"""PREREG §3 H3: H3 is luna's. Outside pilots no other model runs the control, and luna's
+guard (`registered.check_run_settings` with `registered.LUNA_SINGLE_TURN_CELL`) holds it to
+its registered effort and D13's request settings (`registered.LUNA_REQUEST`)."""
 REPEAT_INDICES = (0, 1)
 REPEAT_SPLIT = "main"
 REPEAT_EVERY = 10
@@ -511,12 +510,14 @@ def _write_meta(out_dir: Path, raw_path: Path, prompts: list[Prompt], runs: list
 
 # --- the guard -------------------------------------------------------------------------------
 
-def settings_refusal(*, experiment: str, model: str, mode: str, service_tier: str,
-                     split: str, repeat_index: int) -> str | None:
+def settings_refusal(*, experiment: str, model: str, split: str,
+                     repeat_index: int) -> str | None:
     """Why `single-turn` must refuse these settings before the paid-run lock, or None, on
-    top of `registered.check_run_settings` (the registered effort; F-0's guard). The control
-    runs only under `EXPERIMENTS`; repeat 1 only on main templates (§2.9); and outside pilots
-    only on `REGISTERED_MODELS` (H3 is luna's, §3 H3), with F-0's `REGISTERED_REQUEST`."""
+    top of `registered.check_run_settings` (the registered effort, and luna's guard: its G1,
+    the main split, the default config and D13's request settings). The control runs only
+    under `EXPERIMENTS`; repeat 1 only on main templates (§2.9); and outside pilots only on
+    `REGISTERED_MODELS` (H3 is luna's, §3 H3). --mode and --service-tier are checked by
+    luna's guard (`registered.LUNA_REQUEST`), as for luna's main runs."""
     if experiment not in EXPERIMENTS:
         return (f"the single-turn control runs under --experiment {' or '.join(EXPERIMENTS)} "
                 f"only (PREREG §4.6, D36), got {experiment!r}")
@@ -530,10 +531,4 @@ def settings_refusal(*, experiment: str, model: str, mode: str, service_tier: st
     if model_family(model) not in REGISTERED_MODELS:
         return (f"{experiment} runs the single-turn control on {', '.join(REGISTERED_MODELS)} "
                 f"only (PREREG §3 H3), got {model}")
-    wrong = [f"--{k.replace('_', '-')} {got}" for k, got in
-             (("mode", mode), ("service_tier", service_tier)) if got != REGISTERED_REQUEST[k]]
-    if wrong:
-        return (f"{experiment} sends F-0's request settings only (D13, PREREG §6): --mode "
-                f"{REGISTERED_REQUEST['mode']} and --service-tier "
-                f"{REGISTERED_REQUEST['service_tier']}; got {', '.join(wrong)}")
     return None

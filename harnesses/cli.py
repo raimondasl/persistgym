@@ -51,8 +51,9 @@ PREREG §4.6 and §17.6 (amendment R6), gpt-6-luna's main sweep (`registered.lun
 outside persistgym_pilot and persistgym_validity, `run` refuses a gpt-6-luna run other than
 experiment persistgym, in F-0, W-0, W-n-0 or Σ-n-0 (sigma-n-0), on --split main, --variant
 base (or restated in F-0: the restated-at-need control), on the default generator config,
-and any such run until `registered.G1_PASSED` records luna's G1 on that config (recorded:
-the researcher's G1 GO of 2026-10-09).
+with --mode standard, --service-tier flex and no --W (D13, `registered.LUNA_REQUEST`), and
+any such run until `registered.G1_PASSED` records luna's G1 on that config (recorded: the
+researcher's G1 GO of 2026-10-09).
 R3's engagement check found NOT_ENGAGED on 2026-10-03 (results/decisions.md), so R3's hard
 stop refuses its check, validity and main-sweep commands below; they are kept as the record
 of what was registered.
@@ -848,8 +849,7 @@ def cmd_single_turn(a) -> int:
         return refuse(f"--parallel is 1 to {MAX_PARALLEL} prompts at once (PREREG §4.6), got "
                       f"{a.parallel}")
     why = _split_refusal(a.experiment, a.split) or single_turn.settings_refusal(
-        experiment=a.experiment, model=a.model, mode=a.mode, service_tier=a.service_tier,
-        split=a.split, repeat_index=a.repeat_index)
+        experiment=a.experiment, model=a.model, split=a.split, repeat_index=a.repeat_index)
     if why:
         return refuse(why)
     try:

@@ -43,9 +43,9 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   `LUNA_CELLS` (F-0, W-0, W-n-0, Σ-n-0; its replay toggle was not verified at G0) or the
   single-turn control (`LUNA_SINGLE_TURN_CELL`), main templates 0 to `LUNA_T` - 1 (T =
   200, §4.2 capped by R6 change 6), base episodes or the restated-at-need control in F-0,
-  on the default generator config, with D13's request
-  settings (`LUNA_REQUEST`: --mode standard, --service-tier flex, no --W), and only once
-  `G1_PASSED` records luna on that config.
+  on the default generator config, with D13's request settings (`LUNA_REQUEST`: --mode
+  standard, --service-tier flex, no --W), and only once `G1_PASSED` records luna on that
+  config.
 
 * R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
   generator config, with D13's other request settings (`H1_REPLICATION_REQUEST`), in F-0,
@@ -487,8 +487,8 @@ def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
                 f"replay toggle was not verified at G0) or the single-turn control, "
                 f"--split main, main templates 0-{LUNA_T - 1} (T = {LUNA_T}: PREREG §4.2's "
                 f"rule, capped by R6 change 6), --variant base, or restated in cell "
-                f"{LUNA_RESTATED_CELL} (the "
-                f"restated-at-need control), on the default generator config (--gen-preset "
+                f"{LUNA_RESTATED_CELL} (the restated-at-need control), on the default "
+                f"generator config (--gen-preset "
                 f"default, config {LUNA_GENERATOR_HASH[:12]}), with --mode standard, "
                 f"--service-tier flex and no --W (D13); got " + "; ".join(wrong))
     if G1_PASSED.get(LUNA_MODEL) != generator_hash:

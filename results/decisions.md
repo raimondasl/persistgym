@@ -492,3 +492,12 @@ Gate metrics from `uv run python -m analysis.g1` at commit `aeb6d7c` on a clean 
     - the $0 code: the repeat-1 option, the single-turn control runner with its payload snapshot test, and a luna guard in `harnesses/registered.py`.
   - Under R6 change 7, a NO-GO would stop PersistGym, and the paper would report the ARC leg alone.
 - **The researcher makes the go/no-go call.**
+
+## 2026-10-09: G1: GO (researcher)
+In the researcher's words, 2026-10-09, after the G1 metrics above: "G1 - go". The researcher made the call after reviewing the 160 spot-check episodes themself and reading the metrics (PR #53).
+- **Released:** luna's main sweep (block `3-persistgym`), once these are in place:
+  - the power re-simulation sets T (R6 change 6), and W, v and T are recorded here;
+  - the $0 runner code is merged;
+  - the block's own approval line is merged.
+- **Not released:** sol's H1 replication main runs (R6). `REPLICATION_G1_PASSED` stays empty, so those runs still fail closed.
+

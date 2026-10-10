@@ -30,7 +30,13 @@ harnesses/tests/test_payload_snapshots.py asserts the whole body.
   kind of action the scorer reads in it by its verb alone (`controls.reply_action_class`:
   need verb, routine or lookup verb, other verb, none), and summary.json counts the classes
   (`blinding.reply_action_classes`), for a pilot too: the format check of
-  harnesses/DESIGN.md §7.7, which says nothing of the option chosen.
+  harnesses/DESIGN.md §7.7. The classes never name the option chosen, but the need-verb
+  count bounds the run's successes from above (the other classes scored 0), so a pilot's
+  summary.json bounds the single-turn arm's pilot success from above. It is committed for
+  pilots only as a technical choice the researcher approves in results/decisions.md
+  (2026-10-10 entry), because the pilot's purpose is to check the control's validity (does
+  luna answer the need EVENT of the flattened prompt); pilot data are excluded from all
+  analyses (PREREG §11).
 
 **A run** (`run_controls`) plays its prompts in order, one at a time or up to 16 at once
 (PREREG §4.6; `harnesses.parallel`, with spend reserved for the prompts in flight and every
@@ -279,8 +285,9 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
                 run.exit_reason = runner.ECHO_MISMATCH_EXITS[stop]
                 return run
         reply = output_text(response)
-        # the format diagnostic (summary.json): incomplete replies are classed on their
-        # partial text too, so the classes' total does not count them apart
+        # the format check (summary.json; its need-verb count bounds successes from above):
+        # incomplete replies are classed on their partial text too, so the classes' total
+        # does not count them apart
         run.reply_action_class = reply_action_class(c, reply)
         if response.get("status") == "incomplete":
             # PREREG §6, §13 (D13): an invalid answer, whatever the partial text says

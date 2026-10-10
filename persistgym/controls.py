@@ -38,8 +38,9 @@ serve (there is no next update), so its control would differ only by offering an
 that cannot work. `score_single_turn` scores a reply exactly as `EpisodeEnv` scores the
 need step, with the same known verbs for the non-strict parse. `reply_action_class` names
 the kind of action that parse reads in a reply (the need verb, a routine or lookup verb,
-another verb, or none) by its verb alone: a format diagnostic that says nothing of the option
-chosen.
+another verb, or none) by its verb alone: a format diagnostic that never names the option
+chosen. It is not free of success: only a need-verb reply can score, so the need-verb count
+bounds success from above (harnesses/DESIGN.md §7.7).
 """
 
 from __future__ import annotations
@@ -179,11 +180,13 @@ REPLY_ACTION_CLASSES = ("need_verb", "routine_verb", "other_verb", "none")
 
 def reply_action_class(control: dict, reply: str) -> str:
     """The kind of the action the scorer reads in a reply (`_parse`, as `score_single_turn`
-    reads it), by its verb alone, never its argument, so it says nothing of the option chosen
-    or whether it is right: `need_verb` (the episode's need verb, e.g. store), `routine_verb`
-    (a routine step's verb or lookup, `env.OTHER_VERBS`: e.g. a reply to an earlier EVENT of
-    the flattened prompt, which scores 0), `other_verb` (an `ACTION:` line with any other
-    verb) or `none` (no action read: `score_single_turn`'s `unparsed`)."""
+    reads it), by its verb alone, never its argument, so it never says which option a
+    need-verb reply chose or whether that option is right (every other class scores 0, so
+    the need-verb count bounds success from above): `need_verb` (the episode's need verb,
+    e.g. store), `routine_verb` (a routine step's verb or lookup, `env.OTHER_VERBS`: e.g. a
+    reply to an earlier EVENT of the flattened prompt, which scores 0), `other_verb` (an
+    `ACTION:` line with any other verb) or `none` (no action read: `score_single_turn`'s
+    `unparsed`)."""
     parsed = _parse(control, reply)
     if parsed is None or parsed.verb is None:
         return "none"

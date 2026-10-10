@@ -11,7 +11,9 @@ For an experiment in `BLINDED_EXPERIMENTS`:
   `reasoning_tokens`, and `summary.json` (`run_summary`): errors, latency, cost and the
   echo-match rates of `reasoning.context` and `reasoning.effort`, and for a run of H3's
   single-turn control the kinds of action its replies give (`reply_action_classes`: by the
-  verb alone, never the option), nothing else;
+  verb alone, never the option), nothing else. The classes bound that arm's pilot success
+  from above; a pilot commits them only as a technical choice the researcher approves in
+  results/decisions.md (2026-10-10 entry; `reply_action_classes`);
 * `meta.json`'s `parallel` (`harnesses.parallel.ParallelPlay.info`) is cut to
   `PARALLEL_FIELDS` (`blinded_parallel`), and the whole block goes to the gitignored
   `results/raw/<experiment>/<run_id>/parallel.json` (`runner.PARALLEL_INFO`), next to the
@@ -197,11 +199,17 @@ def reply_action_classes(eps: list[dict]) -> dict[str, int]:
     lookup verb, another verb, none), every class listed. A prompt with no reply read (an
     API error, the run's stop, a stop on an echo mismatch) is in no class; its exit reason is
     in `errors`. An incomplete reply is classed on its partial text, so the classes do not
-    count incomplete replies apart (an incomplete need step scores 0: an outcome). It says
-    nothing of which option a need-verb reply chose or whether it is right, so a pilot commits
-    it (PREREG §11): it is the pilot's format check (harnesses/DESIGN.md §7.7, §11). The
-    need-verb count bounds the run's successes from above; the other classes count replies
-    that score 0."""
+    count incomplete replies apart (an incomplete need step scores 0: an outcome).
+
+    It never says which option a need-verb reply chose or whether that option is right, but
+    it is not free of success: the need-verb count bounds the run's successes from above, and
+    the other classes count prompts that scored 0. For a pilot it therefore bounds the
+    single-turn arm's pilot success from above, which PREREG §11's list of what pilots report
+    does not include. A pilot commits it anyway, as a technical choice the researcher approves
+    in results/decisions.md (2026-10-10 entry), as PR #13's choice is recorded in PREREG §11
+    "As implemented": the pilot's purpose is to check the control's validity (does luna answer
+    the need EVENT of the flattened prompt; harnesses/DESIGN.md §7.7, §11), and that cannot
+    be checked blind. Pilot data are excluded from all analyses (PREREG §11)."""
     got = Counter(e.get("reply_action_class") for e in eps)
     return {c: got.get(c, 0) for c in REPLY_ACTION_CLASSES}
 

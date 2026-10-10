@@ -8,11 +8,12 @@ and prints the summary. Claude proposes; **the researcher makes the go/no-go cal
 
 ``--d20-run RUN_ID`` instead prints one JSON line for that one ``arc_path`` run and exits 0:
 ``{"run_id", "config", "game", "agent_exit_reason", "median_s_per_call", "threshold_s",
-"incident", "rerun_eligible", "rerun_of", "r7_replaces", "replaced_by", "rerun_allowed"}``
-(exit 2, with the reason on stderr, if no run folder with a ``meta.json`` holds that run, the
-run is truncated, or the folders are inconsistent; any other failure exits non-zero too). A
-re-run's seed label is the run's + 100 (101 for an original, 301 for an R7 replacement). The
-block-3 driver calls it after every run and starts a re-run right away only on
+"incident", "rerun_eligible", "rerun_of", "r7_replaces", "replaced_by", "rerun_allowed",
+"rerun_seed"}`` (exit 2, with the reason on stderr, if no run folder with a ``meta.json``
+holds that run, the run is truncated, or the folders are inconsistent; any other failure
+exits non-zero too). ``rerun_seed`` is the seed label of the re-run to start, the run's + 100
+(101 for an original, 301 for an R7 replacement), when ``rerun_allowed`` is true, else
+``null``. The block-3 driver calls it after every run and starts a re-run right away only on
 ``"rerun_allowed": true`` (PREREG §17.6 changes 2 and 5); ``null``, a non-zero exit or output
 it cannot parse stops the block. It reads only ``costs.csv`` (the pilots' ``latency_s``) and
 the ``arc_path`` folders, so block 2's completeness, the G0 record and the draw do not matter.
@@ -52,11 +53,15 @@ label replicate + 200 = 201). It becomes the unit's counted run, and its own one
 (seed label 201 + 100 = 301, ``rerun_of`` the R7 replacement) replaces it in turn. `check_links`
 accepts exactly the chains original → (D19 re-run) → (R7 replacement) → (its D19 re-run) and
 refuses anything else: two R7 replacements of one unit, an R7 replacement of a run that was
-not the unit's counted run when it started, one for S0 or S4, a run that is both a re-run and
-an R7 replacement, and a re-run of a re-run (the R7 replacement's re-run is a re-run of an R7
-replacement, not of a re-run). The replicate is the seed label mod 100 (1, 101, 201 and 301 are
-replicate 1); an original's seed label is its replicate (below 100). D20's yardsticks treat a
-run replaced by an R7 replacement as replaced from the R7 replacement's start, as for a re-run.
+not the unit's counted run when it started (or a D19 re-run, started later, of a run an R7
+replacement replaced: the refusal names that late re-run), one for S0 or S4, a run that is
+both a re-run and an R7 replacement, and a re-run of a re-run (the R7 replacement's re-run is
+a re-run of an R7 replacement, not of a re-run). The replicate is the seed label mod 100 (1,
+101, 201 and 301 are replicate 1); an original's seed label is its replicate (below 100).
+D20's yardsticks treat a run replaced by an R7 replacement as replaced from the R7
+replacement's start, as for a re-run. The per-run rows (`run_row`) of runs outside block 2
+also give ``r7_replaces`` (`RUN_FIELDS_R7`); block 2's rows keep `RUN_FIELDS`, so block 2's
+committed reading is reproduced exactly.
 
 **Incomplete block.** Without ``--allow-incomplete`` the script refuses (exit 2) while block 2
 is incomplete: a unit has no run; its run's ending is re-run-eligible under D19 and its one
@@ -134,8 +139,9 @@ The thresholds are unchanged.
 action, model calls, median seconds per call, and the D20 check where one applies, so that
 every D20 decision is documented.
 
-**What is written** is built from allowlists (`RUN_FIELDS`, `TOP_FIELDS`, `OUTPUTS`): no
-transcript path, key, note text, token count or other ``meta.json`` field is copied.
+**What is written** is built from allowlists (`RUN_FIELDS` for block 2's runs and
+`RUN_FIELDS_R7` for the others, `TOP_FIELDS`, `OUTPUTS`): no transcript path, key, note text,
+token count or other ``meta.json`` field is copied.
 """
 
 from __future__ import annotations
@@ -184,6 +190,10 @@ RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "repl
               "levels_completed", "level_count", "actions", "wall_clock_s",
               "seconds_per_action", "n_calls", "median_s_per_call", "billed_usd", "list_usd", "g0_forecast_usd",
               "billed_over_forecast", "costs_row", "costs_row_block_tag", "d20")
+"""A block-2 run's row, as block 2's committed reading wrote it."""
+RUN_FIELDS_R7 = (*RUN_FIELDS[:RUN_FIELDS.index("rerun_of") + 1], "r7_replaces",
+                 *RUN_FIELDS[RUN_FIELDS.index("rerun_of") + 1:])
+"""Any other run's row: `RUN_FIELDS` with R7's ``r7_replaces`` (amendment R7)."""
 TOP_FIELDS = ("generated_utc", "git_commit", "git_dirty", "prereg_version", "status",
               "provisional_reasons", "warnings", "inputs", "path_games", "fallback_drop_game",
               "phase_1b", "readings", "runs", "skipped")
@@ -404,10 +414,21 @@ def _check_r7(e: Entry, by_id: dict[str, Entry]) -> None:
         raise Refusal(f"R7 replacement {e.run_id} replaces {target.run_id}, a truncated run "
                       "(never a counted run)")
     if target.reruns:
-        raise Refusal(f"R7 replacement {e.run_id} replaces {target.run_id}, which is not the "
-                      f"unit's counted run: its D19 re-run {', '.join(target.reruns)} replaces "
-                      "it. R7 replaces the unit's counted run at its start, and a run it "
-                      "replaced is not re-run")
+        reruns = [by_id[r] for r in target.reruns]
+        late = [x for x in reruns if not x.started < e.started]
+        if late:
+            x = late[0]
+            raise Refusal(f"D19 re-run {x.run_id} of {target.run_id} started "
+                          f"{x.started.isoformat()}, after R7 replacement {e.run_id} of that "
+                          f"run ({e.started.isoformat()}): the late re-run is the run out of "
+                          "place. A run an R7 replacement replaced is not re-run (the R7 "
+                          "replacement is the unit's counted run, and only it can get a D19 "
+                          "re-run)")
+        x = reruns[0]
+        raise Refusal(f"R7 replacement {e.run_id} (started {e.started.isoformat()}) replaces "
+                      f"{target.run_id}, which was not the unit's counted run when it "
+                      f"started: its D19 re-run {x.run_id} (started {x.started.isoformat()}) "
+                      "had replaced it. R7 replaces the unit's counted run at its start")
     if target.seed is None or e.seed != target.replicate + R7_SEED_OFFSET:
         want = None if target.seed is None else target.replicate + R7_SEED_OFFSET
         raise Refusal(f"R7 replacement {e.run_id} has seed label {e.seed}; the run it "
@@ -895,7 +916,8 @@ def run_row(e: Entry, b: Block, forecasts: dict[tuple[str, str], float]) -> dict
     r = e.run
     fc = forecasts.get((e.game, e.config))
     row = {"run_id": e.run_id, "game": e.game, "config": e.config, "replicate": e.replicate,
-           "seed": e.seed, "rerun_of": e.rerun_of, "replaced_by": list(e.replaced_by),
+           "seed": e.seed, "rerun_of": e.rerun_of, "r7_replaces": e.r7_replaces,
+           "replaced_by": list(e.replaced_by),
            "counted": not e.replaced_by and not e.truncated,
            "rerun_pending": any(u.pending and u.head is e for u in b.units.values()),
            "block2": e.block2,
@@ -913,7 +935,9 @@ def run_row(e: Entry, b: Block, forecasts: dict[tuple[str, str], float]) -> dict
            "billed_over_forecast": None if fc is None or e.billed is None else e.billed / fc,
            "costs_row": e.costs_row, "costs_row_block_tag": e.costs_tagged,
            "d20": b.d20.get(e.run_id)}
-    assert tuple(row) == RUN_FIELDS
+    if e.block2:
+        del row["r7_replaces"]      # block 2's rows as committed (S0 and S4: never R7)
+    assert tuple(row) == (RUN_FIELDS if e.block2 else RUN_FIELDS_R7)
     return row
 
 
@@ -939,7 +963,7 @@ def _incident_word(incident: bool | None) -> str:
 
 D20_RUN_FIELDS = ("run_id", "config", "game", "agent_exit_reason", "median_s_per_call",
                   "threshold_s", "incident", "rerun_eligible", "rerun_of", "r7_replaces",
-                  "replaced_by", "rerun_allowed")
+                  "replaced_by", "rerun_allowed", "rerun_seed")
 
 
 def d20_run(root: Path, run_id: str) -> dict:
@@ -974,6 +998,10 @@ def d20_run(root: Path, run_id: str) -> dict:
     out["rerun_allowed"] = (None if out["rerun_eligible"] is None
                             else bool(out["rerun_eligible"]) and not e.rerun_of
                             and not e.replaced_by)
+    # the seed label the re-run gets (PREREG §7.4; R7): 101 for an original, 301 for an R7
+    # replacement
+    out["rerun_seed"] = (e.seed + RERUN_SEED_OFFSET
+                         if out["rerun_allowed"] is True and e.seed is not None else None)
     assert tuple(out) == D20_RUN_FIELDS
     return out
 

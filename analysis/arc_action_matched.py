@@ -75,6 +75,14 @@ only prints). It writes ``results/arc_action_matched/<UTC>/runs.csv`` (one row p
 K), ``curve.csv`` (one row per run and K), ``summary.md`` and ``meta.json``. The H4 path
 quantities and Checkpoint C's gap at K (PREREG §17.5) are computed from ``runs.csv`` by the
 scripts of the primary readings, not here; neither exists yet.
+
+**runs.csv schema change** (amendment R7, 2026-10-10): ``runs.csv`` gained the column
+``r7_replaces``, right after ``rerun_of`` (empty unless the run is an R7 replacement), and its
+``replicate`` became the seed label mod 100 (it was the seed label, minus 100 for a re-run:
+the same values for every run made before R7). Outputs written before it, such as
+``results/arc_action_matched/20261007T134853Z/runs.csv``, have the old columns (`RUN_FIELDS`
+without ``r7_replaces``); read them by column name. ``curve.csv`` keeps its columns (its
+``replicate`` follows the same rule).
 """
 
 from __future__ import annotations

@@ -246,6 +246,10 @@ def pool_key(model: str, effort: str, generator_hash: str | None = None) -> str:
     return f"{model} ({', '.join(parts)})" if parts else model
 
 
+SINGLE_TURN_CONTROL = "single_turn"
+"""The `control` of a prompt record of H3's single-turn control (harnesses/single_turn.py)."""
+
+
 def is_left_out(e: dict) -> bool:
     """Whether the pooled report leaves an episode record out: an episode of PREREG §17.4's
     pilot of sol's H1 replication, sol (or a snapshot or alias of it) at medium effort on the
@@ -254,7 +258,12 @@ def is_left_out(e: dict) -> bool:
     which earlier reports have shown, so any report with them would show the window cells'
     reasoning tokens as the difference: one arm's after one run, and the window cells' against
     the full-history cells' after both. They are read from their costs rows and blinded
-    summary.json files only."""
+    summary.json files only.
+    The same holds for a prompt of a pilot of H3's single-turn control (`control`
+    `single_turn`): it is one call, not an episode of a harness cell, and it would join luna's
+    reported pool, showing that arm's reasoning tokens as the difference."""
+    if e.get("control") == SINGLE_TURN_CONTROL:
+        return True
     return (registered.model_family(str(e.get("model"))) == registered.H1_REPLICATION_MODEL
             and _effort(e) == registered.H1_REPLICATION_EFFORT
             and e.get("generator_config_hash") in (None, PRESET_HASHES["default"])
@@ -312,6 +321,8 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
             "runs_left_out": {"run_ids": sorted(left_out),
                               "why": ("PREREG §17.4: the pilot of sol's H1 replication (W-0 "
                                       "and W-n-0, sol at medium on the default config) is "
-                                      "never pooled; read its costs rows and summary.json")},
+                                      "never pooled, nor is a pilot of H3's single-turn "
+                                      "control (PREREG §3 H3); read their costs rows and "
+                                      "summary.json")},
             "rule": ("PREREG §11 pilot blinding: validity levels, pooled tokens, errors, "
                      "latency and cost only; no per-arm success or per-arm reasoning tokens")}

@@ -160,6 +160,22 @@ console program. The OpenAI SDK reads the key from the environment:
         --model gpt-6-luna --split main --start 0 --n 100 --repeat-index 1 \
         --experiment persistgym --approved-block "3-persistgym" --planned-usd <usd> \
         --parallel 16 --milestone M2
+    # PREREG §3 H3, §4.3 (D36): luna's position-matched single-turn control, one prompt per
+    # template on the 4 non-recoverable task cells (the default --task-cell), sent with F-0's
+    # request settings (harnesses/single_turn.py), on T templates from 0 (--n; T is set at M1
+    # by §4.2's rule, at most 200 under R6; 100 shown); then the same with --repeat-index 1
+    # (§2.9: the templates whose seed is divisible by 10, under their own run id). Its pilot
+    # (CLAUDE.md: at most 10 prompts, blinded) is the same command with --experiment
+    # persistgym_pilot, --split pilot and --n 2 or fewer
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses single-turn \
+        --model gpt-6-luna --split main --start 0 --n 100 --experiment persistgym \
+        --approved-block "3-persistgym" --planned-usd <usd> --parallel 16 --milestone M2
+
+`single-turn` refuses, before the paid-run lock (`single_turn.settings_refusal` and
+`registered.check_run_settings`, as for F-0): any experiment but persistgym and
+persistgym_pilot; a recoverable task cell; repeat 1 off the main split; and outside
+persistgym_pilot, any model but gpt-6-luna and any request settings but its registered effort
+and D13's --mode standard and --service-tier flex.
 """
 
 from __future__ import annotations
@@ -177,7 +193,15 @@ from pathlib import Path
 import openai
 
 from common import costs, paidlock, runmeta
-from harnesses import account, blinding, diagnostics, probes, reasoning_check, registered
+from harnesses import (
+    account,
+    blinding,
+    diagnostics,
+    probes,
+    reasoning_check,
+    registered,
+    single_turn,
+)
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -789,6 +813,109 @@ def cmd_summary_timing(a) -> int:
     return 0
 
 
+SINGLE_TURN_ARGS = ("split", "start", "n", "task_cell", "gen_preset", "gen_set", "model",
+                    "effort", "mode", "service_tier", "milestone", "approved_block",
+                    "planned_usd", "experiment", "repeat_index", "parallel")
+"""The arguments of `single-turn` that decide what it runs and how it is accounted for (all
+but --run-id): its run plan records them."""
+
+
+def _split_refusal(experiment: str, split: str) -> str | None:
+    """`run`'s split rules (PLAN §16.5, PREREG §11): pilot templates run only under the
+    blinded pilot experiment, and the pilot experiment runs pilot templates only."""
+    if experiment == PILOT_EXPERIMENT and split != PILOT_SPLIT:
+        return f"{PILOT_EXPERIMENT} runs use --split {PILOT_SPLIT} only, got {split!r}"
+    if split == PILOT_SPLIT and experiment != PILOT_EXPERIMENT:
+        return (f"--split {PILOT_SPLIT} templates are pilot data and run only with "
+                f"--experiment {PILOT_EXPERIMENT} (blinded, PREREG §11), got {experiment!r}; "
+                "a main-sweep run needs --split main")
+    return None
+
+
+def cmd_single_turn(a) -> int:
+    """Paid run of H3's position-matched single-turn control (PREREG §3 H3, §4.3, D36;
+    `harnesses.single_turn`): one prompt per template on the non-recoverable task cells, sent
+    with F-0's request settings and scored as the need step. Guarded as `run` is: the
+    settings checks below before the paid-run lock, then the lock and the transport's checks
+    (`_with_paid_lock`, `_guarded_transport`), and the run stops before a call once its
+    spend reaches --planned-usd."""
+    def refuse(why: str) -> int:
+        print(f"refused: {why}", file=sys.stderr)
+        return 2
+
+    if not 1 <= a.parallel <= MAX_PARALLEL:
+        return refuse(f"--parallel is 1 to {MAX_PARALLEL} prompts at once (PREREG §4.6), got "
+                      f"{a.parallel}")
+    why = _split_refusal(a.experiment, a.split) or single_turn.settings_refusal(
+        experiment=a.experiment, model=a.model, mode=a.mode, service_tier=a.service_tier,
+        split=a.split, repeat_index=a.repeat_index)
+    if why:
+        return refuse(why)
+    try:
+        gen = _gen_config(a.gen_preset, a.gen_set)
+    except (TypeError, ValueError) as e:
+        return refuse(f"--gen-set: {e}")
+    try:
+        cells = single_turn.task_cells(a.task_cell)
+        indices = single_turn.template_indices(a.split, a.start, a.n, a.repeat_index)
+        cfg = HarnessConfig(model=a.model, reasoning_effort=a.effort, reasoning_mode=a.mode,
+                            service_tier=a.service_tier)
+    except ValueError as e:
+        return refuse(str(e))
+    # F-0's guard: the model's registered effort outside pilots (and sol's rules, which
+    # settings_refusal already refuses outside pilots)
+    why = registered.check_run_settings(
+        a.experiment, a.model, a.effort, single_turn.SETTINGS_CELL,
+        runmeta.config_hash(gen.to_dict()), RESULTS, split=a.split, variant="base",
+        task_cells=tuple(cells),
+        request={"mode": a.mode, "service_tier": a.service_tier, "W": None},
+        templates=(a.start, a.start + a.n))
+    if why:
+        return refuse(why)
+    if not indices:
+        return refuse(f"no template of {a.split} {a.start}-{a.start + a.n - 1} has a seed "
+                      f"divisible by {single_turn.REPEAT_EVERY}, so repeat 1 has nothing to "
+                      "play (PREREG §2.9)")
+    if a.split == "main":
+        for w in RunMatrix.full(a.n, cells).block_warnings(a.start):
+            print(f"note (D7, incomplete balance block): {w}", file=sys.stderr)
+    prompts = single_turn.build_prompts(a.split, indices, gen, cells)
+    if a.experiment == PILOT_EXPERIMENT and len(prompts) > PILOT_MAX_EPISODES:
+        return refuse(f"a pilot is at most {PILOT_MAX_EPISODES} prompts, got {len(prompts)}")
+    tag = single_turn.COMMAND + ("-rep1" if a.repeat_index else "")
+    run_id = a.run_id or _run_id(f"{tag}-{a.model}")
+    try:
+        require_plain_name("--run-id", run_id)
+    except ValueError as e:
+        return refuse(str(e))
+    notes = (f"{a.split} {a.start}-{a.start + a.n - 1} control={single_turn.CONTROL} "
+             f"repeat_index={a.repeat_index}"
+             + (f" parallel={a.parallel}" if a.parallel > 1 else ""))
+    templates = {"split": a.split, "start": a.start, "n": a.n,
+                 "repeat_index": a.repeat_index, "indices": indices}
+
+    def paid(held: paidlock.HeldLock) -> int:
+        transport = _guarded_transport(a, a.model, a.experiment, a.planned_usd, held)
+        if transport is None:
+            return 2
+        try:
+            meta = single_turn.run_controls(
+                prompts, cfg, transport, experiment=a.experiment, run_id=run_id,
+                milestone=a.milestone, results_root=RESULTS, raw_root=RAW,
+                repeat_index=a.repeat_index, notes=notes, parallel=a.parallel,
+                templates=templates, run_args={k: getattr(a, k) for k in SINGLE_TURN_ARGS})
+        finally:
+            _check_accounted(transport, run_id)
+        print(json.dumps({k: meta[k] for k in ("run_id", "exit_reason",
+                                               "reasoning_context_echoed", "model_returned",
+                                               "cost_usd")}, indent=2))
+        return 0
+
+    what = (f"{a.experiment}: single-turn control on {a.model}, {len(prompts)} prompts"
+            + (f", {a.parallel} at once" if a.parallel > 1 else ""))
+    return _with_paid_lock(run_id, what, paid)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m harnesses")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -969,16 +1096,39 @@ def build_parser() -> argparse.ArgumentParser:
                             help="--design fork: attempts per arm per model, scorable or not "
                                  "(default and at most 40)")
         sp.set_defaults(fn=lambda a, k=kind: _probe_run(a, k))
+
+    s1 = sub.add_parser("single-turn",
+                        help="paid run of H3's position-matched single-turn control (guarded)")
+    request_args(s1)
+    paid_args(s1)
+    s1.add_argument("--split", default="pilot")
+    s1.add_argument("--start", type=int, default=0)
+    s1.add_argument("--n", type=int, default=1, help="templates per task cell, from --start")
+    s1.add_argument("--task-cell", nargs="+", default=["all"],
+                    help="non-recoverable task cells only; all (default): the 4 of them")
+    s1.add_argument("--gen-preset", choices=sorted(PRESETS), default="default",
+                    help="generator config (persistgym/config.py PRESETS)")
+    s1.add_argument("--gen-set", action="append", default=[], metavar="FIELD=JSON",
+                    help="override one field of the --gen-preset config")
+    s1.add_argument("--experiment", default=PILOT_EXPERIMENT)
+    s1.add_argument("--repeat-index", type=int, choices=single_turn.REPEAT_INDICES, default=0,
+                    help="1: PREREG §2.9's repeat, on the main templates of [--start, --start "
+                         "+ --n) whose seed is divisible by 10 only")
+    s1.add_argument("--parallel", type=int, default=1, metavar="N",
+                    help=f"prompts sent at once, 1 to {MAX_PARALLEL} (PREREG §4.6), with spend "
+                         "reserved for the prompts in flight, as `run --parallel`")
+    s1.set_defaults(fn=cmd_single_turn)
     return p
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """The parsed command line, with the defaults that depend on other arguments filled in:
-    the probes' models, and the registered effort of `run` and `dry-run`'s --model."""
+    the probes' models, and the registered effort of `run`, `dry-run` and `single-turn`'s
+    --model."""
     a = build_parser().parse_args(argv)
     if a.cmd in ("probe-echo", "probe-replay") and not a.model:
         a.model = list(probes.ECHO_CHECK_MODELS)
-    if a.cmd in ("run", "dry-run") and a.effort is None:
+    if a.cmd in ("run", "dry-run", "single-turn") and a.effort is None:
         a.effort = registered.registered_effort(a.model)
     return a
 

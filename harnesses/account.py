@@ -172,6 +172,10 @@ def find_plan(raw_root: Path, run_id: str,
             or plan.get("plan_version") != runner.RUN_PLAN_VERSION):
         raise Refused(f"{found[0]} is not run {run_id}'s plan in the format this code reads "
                       f"(plan_version {runner.RUN_PLAN_VERSION})")
+    if plan.get("command", "run") != "run":
+        # harnesses/single_turn.py writes `command`; a `run` plan has none
+        raise Refused(f"run {run_id} is a `{plan['command']}` run: account-run rebuilds `run` "
+                      "runs only; add its row by hand from the totals in the paid-run lock")
     return found[0], plan
 
 

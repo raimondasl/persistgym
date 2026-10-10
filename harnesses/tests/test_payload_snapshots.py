@@ -11,13 +11,17 @@ Synthetic episode: observations of exactly 200 tokens, replies of exactly 50 tok
 * summary: the visible context first exceeds W at step 4 (200 + 4 x 250 = 1200).
 Labels: U<t> observation of turn t, R<t> its reasoning item, A<t> its reply, B<k> the bridge
 holding summary k, Q the summary request.
+
+The last section asserts the one request of H3's position-matched single-turn control
+(harnesses/single_turn.py; PREREG §3 H3, §4.3) on real episodes at the small volume: its whole
+body, and that it is F-0's request with the flattened prompt as its only input item.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from harnesses import registered
+from harnesses import registered, single_turn
 from harnesses.cells import CELLS, NOTES_INSTRUCTION
 from harnesses.config import (
     ARC_SUMMARY_BRIDGE_TEMPLATE,
@@ -26,6 +30,8 @@ from harnesses.config import (
     HarnessConfig,
 )
 from harnesses.fake import FakeModel
+from harnesses.items import item_text
+from harnesses.runner import run_episode
 from harnesses.tests.conftest import (
     SYSTEM,
     label_payload,
@@ -37,6 +43,7 @@ from harnesses.tests.conftest import (
     turns,
 )
 from persistgym import tokens
+from persistgym.controls import single_turn_control
 
 NOTES_SYSTEM = SYSTEM + "\n" + NOTES_INSTRUCTION
 
@@ -327,3 +334,74 @@ def test_session_state_after_summary():
     assert [c["compacted_turns"] for c in session.compactions] == [[0, 4], [4, 7]]
     assert session.bridge == ARC_SUMMARY_BRIDGE_TEMPLATE.format(summary=summary_text(2))
     assert session.start == 7 and session.bridge_no == 2
+
+
+# --- H3's single-turn control (PREREG §3 H3, §4.3, D36; harnesses/single_turn.py) -----------
+
+SINGLE_TURN_PREAMBLE = ("Console session transcript. Each earlier update is followed by the "
+                        "operator's reply. The last update is the current one and has no reply "
+                        "yet.\n")
+
+
+def _flattened(ep) -> str:
+    """The single-turn prompt rebuilt by hand from the episode (persistgym/DESIGN.md §3,
+    "Position-matched single-turn control"): the preamble, then observations 0..need, each
+    after an update mark, and each before the need step followed by the oracle's routine
+    action after a reply mark."""
+    text = SINGLE_TURN_PREAMBLE
+    for i in range(ep.need_step + 1):
+        text += "\n<<< update >>>\n" + ep.steps[i].observation
+        if i < ep.need_step:
+            text += f"\n<<< operator reply >>>\nACTION: {ep.steps[i].expected_action}"
+    return text
+
+
+def test_single_turn_full_request_literal(small_eps):
+    """The complete request body of one single-turn prompt (observed-nonrec-far, main
+    template 0): F-0's settings, the episode's system prompt unchanged, and the flattened
+    prompt as the only input item. No reasoning item and no earlier output is sent."""
+    ep = next(e for e in small_eps if e.cell.id == "observed-nonrec-far")
+    control = single_turn_control(ep)
+    req = single_turn.build_request(control, HarnessConfig(
+        reasoning_effort=registered.registered_effort("gpt-6-luna")))
+    assert req.kind == "step" and req.trace == ["U0"]
+    assert req.payload == {
+        "model": "gpt-6-luna",
+        "instructions": ep.system_prompt,
+        "input": [_user(_flattened(ep))],
+        "reasoning": {"effort": "medium", "mode": "standard", "context": "current_turn"},
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+        "service_tier": "flex",
+        "truncation": "disabled",
+        "max_output_tokens": 32000,
+    }
+
+
+def test_single_turn_request_is_f0s_with_the_flattened_prompt(small_eps):
+    """On every non-recoverable base episode (3 templates x 4 task cells): the single-turn
+    request equals F-0's first request as the harness sends it, every key but `input`, whose
+    one user message holds exactly the observations F-0 sends at the need step, in the same
+    order, with the oracle's routine actions between them."""
+    eps = [e for e in small_eps if not e.cell.recoverable]
+    assert len(eps) == 12 and {e.cell.id for e in eps} == set(single_turn.NONREC_TASK_CELLS)
+    for ep in eps:
+        fake = FakeModel()
+        run_episode(ep, CELLS["F-0"], HarnessConfig(), fake)
+        first, at_need = fake.calls[0], fake.calls[ep.need_step]
+        payload = single_turn.build_request(single_turn_control(ep), HarnessConfig()).payload
+        assert payload == {**first, "input": [_user(_flattened(ep))]}
+        assert [item_text(i) for i in at_need["input"] if i.get("role") == "user"] == (
+            ep.observations[:ep.need_step + 1])
+        assert at_need["instructions"] == payload["instructions"] == ep.system_prompt
+        assert NOTES_INSTRUCTION not in payload["instructions"]
+
+
+def test_single_turn_exists_for_nonrecoverable_cells_only(small_eps):
+    """D36: a single prompt cannot serve a lookup, so there is no control, and no request,
+    for a recoverable task cell."""
+    rec = next(e for e in small_eps if e.cell.recoverable)
+    with pytest.raises(ValueError, match="non-recoverable"):
+        single_turn_control(rec)
+    with pytest.raises(ValueError, match="non-recoverable"):
+        single_turn.task_cells([rec.cell.id])

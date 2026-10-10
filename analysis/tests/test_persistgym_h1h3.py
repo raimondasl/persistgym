@@ -591,6 +591,20 @@ def test_cost_outcomes_and_glms_in_the_toy_sweep(tmp_path, monkeypatch):
     assert "decides: no estimate (the Firth fit did not converge)." in text
     assert "no sign to compare with the model check" in text
     assert "the same sign as the model check" not in text
+    # H3 with one template with outcome variation (changed B): the summary says the check is
+    # saturated in it, that power_sim's own check gives no estimate, and that the quoted power
+    # did not simulate this case
+    one = hh.h3_glm_literal(_h3_one_failure())
+    h["glm_h3"] = {k: v for k, v in one.items() if not k.startswith("_")}
+    h["glm_h3_powersim"] = hh.h3_glm_powersim(_h3_one_failure())
+    h["h3"]["model_check"].update(ame=one["ame"], agrees=True,
+                                  ame_informative=one["ame_informative"],
+                                  n_pairs_informative=one["n_pairs_informative"])
+    text = "\n".join(hh.summary_lines(h))
+    assert "With one, the model is saturated in it, so its AME is the observed Δ_H3" in text
+    assert "`ps.h3_glm_ame`), which the simulation used, needs two templates" in text
+    assert "own H3 check gives no estimate" in text
+    assert "may overstate" not in text
 
 
 # --- keys, re-runs and exclusions (DESIGN §7.8, §13) ------------------------------------------
@@ -938,6 +952,7 @@ def test_main_writes_the_outputs(tmp_path, monkeypatch):
                    "§2.8 accounting check: passed on 160 window-cell episodes",
                    "W-n-0 as a third harness level", "Logit scale (§9.3): Penalty_NR",
                    "The rule in force is `firth`",
+                   "**Changed after the FINAL output of 2026-10-10 was read**",
                    "a Firth-penalized fit of the same model decides: ",
                    "- Sensitivity lines (the rules not in force, ruling of 2026-10-10",
                    "is read by the rule in force (`firth`)", "the arm coefficient",

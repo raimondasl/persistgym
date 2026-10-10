@@ -7,7 +7,9 @@ Run: ``uv run python -m analysis.persistgym_h1h3 --run RUN_ID [--run RUN_ID ...]
 ``<results root>/persistgym_h1h3/<UTC>/h1h3.json``, ``summary.md`` and ``meta.json``, and prints
 the summary. It was written and tested on synthetic data only, before any outcome of the sweep
 was read (the researcher's blinding rule of 2026-10-10), and revised after two reviews of the
-code (2026-10-10), still blind.
+code (2026-10-10), still blind. It was then changed after its FINAL output was read: items A-C
+at the end of the readings below (`CHANGED_AFTER_FINAL`), each reported with the output before
+it.
 
 **Inputs.**
 
@@ -213,8 +215,9 @@ power quoted with the results).
 * H3's model check. power_sim used template fixed effects, a derived-cell term and the arm
   (``ps.h3_glm_ame``). Here the decision uses §9.4's model as registered: template fixed
   effects and the arm. power_sim's model is reported as a sensitivity analysis (equal to
-  ``ps.h3_glm_ame`` on complete data, tested), and a disagreement about the 5pp bound between
-  the two is flagged.
+  ``ps.h3_glm_ame`` on complete data with two or more templates with outcome variation, tested;
+  with one, ``ps.h3_glm_ame`` gives no estimate and this one fits the model, item B below), and
+  a disagreement about the 5pp bound between the two is flagged.
 * So the achieved power quoted (P(supported) at T = 200: 0.647 and 0.781 in the primary
   scenario, 0.438 and 0.443 in the pessimistic one) was computed with power_sim's model checks
   and with F-0 at 0.95 (0.85) in the observed-far cells. If F-0 sits at its ceiling, H1's model
@@ -326,10 +329,13 @@ after it):
 
 A. **The Firth fit's step cap**, 100 to 1,000 (`firth_fe_logit`). On luna's sweep the fit's
    linearly converging steps needed 103, so H1's model check read "did not converge".
-B. **One template with outcome variation is enough** for a fixed-effects logit's point
-   estimates (`fe_logit_fit`, `h3_glm_powersim`); the cluster-robust Wald quantities still need
-   two. On luna's sweep H3's cells had one such template, so H3's model check returned no
-   estimate, which reads as "does not agree".
+B. **One template with outcome variation is enough to fit** a fixed-effects logit
+   (`fe_logit_fit`, `h3_glm_powersim`): its point estimates or, under quasi-separation,
+   statsmodels' stopping point, as with two or more. The cluster-robust Wald quantities still
+   need two, and so do the Firth fit (`glm_91_firth`) and the H1 stand-in (`h1_standin`). On
+   luna's sweep H3's cells had one such template, so H3's model check returned no estimate,
+   which reads as "does not agree". With one template the model is saturated in it, so its
+   average marginal effect is the observed Δ_H3 by construction (the summary says so).
 C. **The summary's wording**, with no number changed: the reason a fit gave no estimate, "no
    sign to compare" where a sign is missing, the route power_sim's emulation took (`emulate`),
    and the Bayesian GLMM's divergent transitions.
@@ -413,6 +419,11 @@ ECHO_SHARE_MAX = 0.05                                    # §13
 H2_TESTS_NOT_RUN = 2                                     # the family-of-4 sensitivity
 Z90, Z95 = 1.6448536269514722, 1.959963984540054
 
+CHANGED_AFTER_FINAL = (
+    "A: the Firth fit's step cap, 100 to 1,000 (H1's model check had read 'did not converge')",
+    ("B: one template with outcome variation is enough to fit a fixed-effects logit (H3's "
+     "model check had returned no estimate)"),
+    "C: the summary's wording, with no number changed")
 H1_SEPARATION_RULES = ("literal", "firth", "probability-scale")
 H1_SEPARATION_RULE = "firth"        # the researcher's ruling of 2026-10-10 (decisions.md)
 """How H1's model check reads the §9.1 GLM when the logit-scale Δ_H1 is not finite (ruled item
@@ -1303,7 +1314,7 @@ def emulate(y: np.ndarray, codes: np.ndarray, z: np.ndarray
                 return (alpha, beta), "newton"
         except (np.linalg.LinAlgError, ValueError, FloatingPointError):
             pass
-    fit = ps._fe_logit_mle(y, codes, z)
+    fit = ps._fe_logit_mle(y, codes, z, engine="statsmodels")
     return fit, None if fit is None else "statsmodels"
 
 
@@ -1814,8 +1825,8 @@ def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None
     sign = mc["sign"]
     st = standin.get("estimate")
     mc.update(standin_estimate=st, standin_agrees=st is not None and st > GLM_SIGN_EPS,
-              standin_sign_disagrees=(st is not None and sign is not None
-                                      and _sign(st) != sign))
+              standin_sign_disagrees=(st is not None and _has_sign(sign)
+                                      and _has_sign(_sign(st)) and _sign(st) != sign))
     out["model_check"] = mc
     out["model_check_sensitivity"] = h1_rule_sensitivity(glm, delta, mc["rule"], firth)
     out["scales_disagree_in_sign"] =(delta is not None and delta != 0 and sign not in (None, 0)
@@ -2308,7 +2319,8 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
                  {"status": "not run", "note": "--no-bayes"})
     model_sign = h1["model_check"]["sign"]
     if bayes_out.get("status") == "fitted":
-        bayes_out["sign_disagrees_with_glm"] = (model_sign not in (None, 0)
+        bayes_out["sign_disagrees_with_glm"] = (_has_sign(model_sign)
+                                                and _has_sign(_sign(bayes_out["median"]))
                                                 and _sign(bayes_out["median"]) != model_sign)
     out = {
         "generated_utc": generated, **git, "prereg_version": runmeta.prereg_version(),
@@ -2324,6 +2336,7 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
         "seed": seed, "bootstrap": {"seed": seed + BOOT_SEED_OFFSET, "resamples": boot,
                                     "method": "percentile", "levels": list(LEVELS)},
         "h1_separation_rule": H1_SEPARATION_RULE,
+        "changed_after_final": list(CHANGED_AFTER_FINAL),
         "primary_episodes": len(prim),
         "accounting_check": {k: v for k, v in check.items() if k != "bugs"},
         "h1": h1, "h1_lookups": lookups, "h1_tokens": tok,
@@ -2418,7 +2431,7 @@ def _bayes_line(b: dict, model_sign: int | None) -> str:
         return (f"- Bayesian GLMM sensitivity (§9.1): {b.get('status', 'not run')}"
                 f" ({b.get('note') or 'no note'}).")
     same = _same(bool(b.get("sign_disagrees_with_glm")), "the model check",
-                 _has_sign(model_sign))
+                 _has_sign(model_sign) and _has_sign(_sign(b["median"])))
     conv = ("" if b["converged"] else
             f", **not converged** (an R-hat above {RHAT_MAX})")
     return ("- Bayesian GLMM sensitivity (§9.1; bambi, template random intercepts, every "
@@ -2458,6 +2471,7 @@ def _h1_lines(h: dict) -> list[str]:
            f"{_logit_s(mc['estimate'], mc['logit_status'], g)}; agrees (> 0): "
            f"**{_yes(mc['agrees'])}**, read from {mc['basis']}. Templates without outcome "
            f"variation dropped from the GLM: {g.get('n_templates_dropped', 'n/a')}.")]
+    fz = h.get("glm_9_1_firth") or {}
     if mc["logit_status"] != FINITE:
         L.append("- **The logit-scale Δ_H1 is not finite:** among the GLM's templates, "
                  + "; ".join(mc["h1_cells_no_variation"]) + f". The rule in force is "
@@ -2466,11 +2480,11 @@ def _h1_lines(h: dict) -> list[str]:
                      "literal": ("the sign of the limit decides; −∞ (an interaction that flips "
                                  "sign between the scales near a ceiling, §9.3) and an "
                                  "undefined sign do not agree."),
-                     "firth": ("a Firth-penalized fit of the same model decides: "
-                               + (_num_s(mc.get("firth_estimate"))
-                                  if mc.get("firth_estimate") is not None else
-                                  f"no estimate ({(h.get('glm_9_1_firth') or {}).get('note')})")
-                               + "."),
+                     "firth": (("a Firth-penalized fit of the same model decides: "
+                                + (_num_s(fz["estimate"]) if fz.get("estimate") is not None
+                                   else f"no estimate ({fz.get('note') or 'no note'})") + ".")
+                               if mc["estimate"] is not None else
+                               "the §9.1 GLM was not fitted, so no rule applies."),
                      "probability-scale": ("the model check is not applicable, and the "
                                            "probability-scale sign is read.")}[mc["rule"]])
         sens, parts = fam["H1"].get("sensitivity_rules") or {}, []
@@ -2489,8 +2503,9 @@ def _h1_lines(h: dict) -> list[str]:
            else f"{_num_s(g.get('estimate_emulated'))} (its Newton steps failed and it fell "
            "back to statsmodels, so it is no independent check)" if route == "statsmodels"
            else "n/a")
+    st = mc["standin_estimate"]
     st_same = _same(mc["standin_sign_disagrees"], "the model check",
-                    _has_sign(mc["sign"]) and mc["standin_estimate"] is not None)
+                    _has_sign(mc["sign"]) and st is not None and _has_sign(_sign(st)))
     wn_same = _same(wn.get("sign_disagrees"), "the model check",
                     _has_sign(wn.get("sign")) and _has_sign(mc["sign"]))
     L += [(f"- Logit scale (§9.3): Penalty_NR {pen['penalty_nr_logit']}, Penalty_R "
@@ -2569,7 +2584,11 @@ def _h3_lines(h: dict) -> list[str]:
           f"{mc3.get('n_pairs_informative')} pairs of the templates with outcome variation "
           f"only: {_pp(mc3.get('ame_informative'))}. Templates with outcome variation: "
           f"{h['glm_h3'].get('n_templates_informative')}"
-          + (f" ({h['glm_h3']['note']})" if h["glm_h3"].get("note") else "") + "."),
+          + (". With one, the model is saturated in it, so its AME is the observed Δ_H3 by "
+             "construction and the check adds nothing beyond the bootstrap's point estimate; "
+             "the AME over that template's pairs is its own observed difference; no "
+             "cluster-robust SE" if h["glm_h3"].get("n_templates_informative") == 1 else
+             f" ({h['glm_h3']['note']})" if h["glm_h3"].get("note") else "") + "."),
          ("- Logit scale (§9.3): the arm coefficient "
           + _logit_s(mc3["arm_logit"], mc3["arm_logit_status"],
                      {"ci90": mc3.get("arm_logit_ci90")})
@@ -2579,6 +2598,9 @@ def _h3_lines(h: dict) -> list[str]:
           f"term + arm), AME {_pp(mc3['powersim_ame'])}"
           + (" (power_sim's Newton steps failed; statsmodels fitted it)"
              if h["glm_h3_powersim"].get("emulation_route") == "statsmodels" else "")
+          + ("; power_sim's own check (`ps.h3_glm_ame`), which the simulation used, needs two "
+             "templates with outcome variation and gives no estimate here"
+             if h["glm_h3_powersim"].get("n_templates_informative") == 1 else "")
           + "; below 5pp: "
           f"{_yes(mc3['powersim_agrees'])}"
           + ("; **it disagrees with the registered model about the 5pp bound**."
@@ -2626,9 +2648,8 @@ def _family_lines(h: dict) -> list[str]:
                    f"Simulated with F-0 observed-far success at {_f0_levels(power)} and with "
                    "power_sim's model checks (H1: a 4-cell stand-in read through the stopping "
                    "rule; H3: template fixed effects + derived term + arm), not the ones used "
-                   "here; with F-0 at its ceiling, H1's model check meets separation and is "
-                   f"read by the rule in force (`{h['h1_separation_rule']}`), which power_sim "
-                   "did not simulate, so P(supported) may differ from the values quoted.")]
+                   "here. They describe the design's scenarios, not this sweep, and P(supported) "
+                   "here may differ from them" + _power_gaps(h) + ".")]
     return L
 
 
@@ -2743,7 +2764,10 @@ def summary_lines(h: dict) -> list[str]:
           f"{h['bootstrap']['resamples']:,} template resamples, percentile intervals, RNG "
           f"seed SEED + {BOOT_SEED_OFFSET} = {h['bootstrap']['seed']}. H1's model-check rule "
           f"for a non-finite logit-scale Δ_H1: `{h['h1_separation_rule']}`."), "",
-         f"**Status: {h['status']}.**"]
+         f"**Status: {h['status']}.**", "",
+         ("**Changed after the FINAL output of 2026-10-10 was read** (the researcher's "
+          "decisions, `results/decisions.md`; the outputs before the changes are kept): "
+          + "; ".join(h.get("changed_after_final") or CHANGED_AFTER_FINAL) + ".")]
     if h["provisional_reasons"]:
         L += ["", "Not the registered analysis, so no confirmatory claim is made from it:"]
         L += [f"- {x}" for x in h["provisional_reasons"]]
@@ -2772,6 +2796,18 @@ def _dated(strings) -> bool:
     return any(s != MODEL and registered.model_family(s) == MODEL for s in strings)
 
 
+def _power_gaps(h: dict) -> str:
+    """The cases of this sweep that power_sim's scenarios did not simulate."""
+    gaps = []
+    if (h.get("glm_9_1") or {}).get("logit_status", FINITE) != FINITE:
+        gaps.append("H1's model check meets separation and is read by the rule in force "
+                    f"(`{h['h1_separation_rule']}`), which power_sim did not simulate")
+    if (h.get("glm_h3") or {}).get("n_templates_informative") == 1:
+        gaps.append("H3's cells have one template with outcome variation, where power_sim's "
+                    "own H3 check gives no estimate")
+    return (": " + "; ".join(gaps)) if gaps else ""
+
+
 def not_shown_lines(h: dict) -> list[str]:
     """"What it does not show", in substance from §15, with this reading's numbers."""
     power = h.get("achieved_power") or []
@@ -2783,8 +2819,9 @@ def not_shown_lines(h: dict) -> list[str]:
     if power:
         power_s = (f"; the achieved power at the worst Holm step was {_power_s(power)} (H1 at "
                    "Δ_H1 = 10pp, H3 at Δ_H3 = 0), simulated with F-0 observed-far success at "
-                   f"{_f0_levels(power)} and with power_sim's model checks, so it may overstate "
-                   "P(supported) if F-0 sits at its ceiling (H1's model check, above)")
+                   f"{_f0_levels(power)} and with power_sim's model checks; it describes the "
+                   "design's scenarios, not this sweep, and P(supported) here may differ from "
+                   "it" + _power_gaps(h))
     return [
         "## What it does not show", "",
         ("- **Not a model comparison.** One model, gpt-6-luna, at medium effort on Flex, with "

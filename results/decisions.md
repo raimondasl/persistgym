@@ -571,3 +571,50 @@ approved_block: 3-persistgym | experiments: persistgym,persistgym_pilot | max_us
 **Approval.** The researcher's merge of the pull request that adds this entry adopts W, v, T and the assumptions above, the near-loss result, the single-turn prompt, the technical choice and the pilot rule. It also approves block `3-persistgym` up to $100 billed.
 
 **Spend** (billed): $328.94 before block 3. Block `3-arc` so far: $16.60 (SB26 S1 $13.12, FT09 S2 $3.47), with the FT09 S2 re-run in progress. This entry's pull request is $0.
+
+## 2026-10-10: luna's sweep closed; the H1/H3 analysis and the researcher's rulings, made before any result is read
+**Block `3-persistgym` is complete.** All 13 runs ended `COMPLETED` with 0 excluded episodes or prompts. The block cost $73.71 billed of its $100 limit (`results/costs.csv`).
+- **The single-turn pilot** (`persistgym_pilot`): `20261010T055627Z-single-turn-gpt-6-luna`. 8 prompts, all 8 replies of the need-verb class, so the pilot rule passed.
+- **Repeat 0:** 1,600 episodes per harness run and 800 single-turn prompts.
+
+  | Run | Run ID |
+  |---|---|
+  | F-0 | `20261010T055742Z-F-0-gpt-6-luna` |
+  | W-0 | `20261010T073840Z-W-0-gpt-6-luna` |
+  | W-n-0 | `20261010T084438Z-W-n-0-gpt-6-luna` |
+  | Σ-n-0 | `20261010T100804Z-sigma-n-0-gpt-6-luna` |
+  | F-0 restated | `20261010T113553Z-F-0-gpt-6-luna` |
+  | Single-turn | `20261010T125241Z-single-turn-gpt-6-luna` |
+
+- **Repeat 1:** 160 episodes per harness run and 80 single-turn prompts.
+
+  | Run | Run ID |
+  |---|---|
+  | F-0 | `20261010T125444Z-F-0-gpt-6-luna-repeat1` |
+  | W-0 | `20261010T130303Z-W-0-gpt-6-luna-repeat1` |
+  | W-n-0 | `20261010T131136Z-W-n-0-gpt-6-luna-repeat1` |
+  | Σ-n-0 | `20261010T132132Z-sigma-n-0-gpt-6-luna-repeat1` |
+  | F-0 restated | `20261010T133022Z-F-0-gpt-6-luna-repeat1` |
+  | Single-turn | `20261010T133738Z-single-turn-gpt-6-luna-repeat1` |
+
+- **The sweep is closed.** No continuation (harnesses/DESIGN.md §7.9) and no §13 re-run is pending or will be made. This entry is the sweep's closing entry: the `--sweep-closed` reference of `analysis.persistgym_h1h3`.
+
+**The analysis:** `analysis/persistgym_h1h3.py` in this PR, the pre-registered H1/H3 analysis.
+- It was written and tested on synthetic data only.
+- Two independent reviews checked it, one for fidelity to PREREG and one for the statistics, and their findings were applied.
+- No one has read any result of the sweep. The luna driver logged only endings, counts and cost. The builders read only `meta.json` files and the field names of one record per run.
+- Its readings of points PREREG leaves open are listed in the module docstring ("As implemented").
+
+**The researcher's rulings** (2026-10-10, before any result is read):
+1. **H1's model check when the logit-scale Δ_H1 is not finite.** This happens when an H1 cell has no outcome variation, which is likely, since F-0 scored 160/160 on restated-at-need. The model check reads the W-0 × R coefficient of a **Firth-penalized fit** of the same §9.1 model on the same rows (`H1_SEPARATION_RULE = "firth"`). In the researcher's words: "Firth for H1".
+   - When the logit-scale Δ_H1 is finite, the ordinary fit decides as before.
+   - Not in force: "literal" (the sign of the limit) and "probability-scale". The summary reports what each would have said, labelled as sensitivity lines.
+2. **The §9.1 GLM's harness levels:** F-0 and W-0 on all 8 task cells, as H1 defines its comparison. The fit with W-n-0 as a third level is a sensitivity analysis. This was proposed by Claude, and the researcher's merge confirms it.
+
+**The Bayesian sensitivity model** (§9.1) runs with `bambi`, added to `pyproject.toml` and `uv.lock` in this PR: bambi's default priors, 4 chains × 1,000 draws after 1,000 tuning steps, seed SEED + 11.
+
+**Next:**
+- Once this PR is merged, Claude runs the analysis once on the sweep (FINAL: the 13 runs listed above, with this entry as the closing reference). It commits the output to `results/persistgym_h1h3/<UTC>/` and reports to the researcher.
+- The sweep's run folders and costs rows are committed after block `3-arc` ends. Committing them now would change files the live ARC runs read.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the rulings above and closes the sweep. It adds no spending approval. This entry's pull request is $0.

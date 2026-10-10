@@ -501,3 +501,73 @@ In the researcher's words, 2026-10-09, after the G1 metrics above: "G1 - go". Th
   - the block's own approval line is merged.
 - **Not released:** sol's H1 replication main runs (R6). `REPLICATION_G1_PASSED` stays empty, so those runs still fail closed.
 
+## 2026-10-10: luna's sweep: W, v and T (PREREG §4.2, R6 change 6); near losses (§2.8); the single-turn control's pilot; block 3-persistgym proposed by Claude, approved when the researcher merges the PR that adds this entry
+**Values set by the pre-registered rule** (§4.2, as capped by R6 change 6). They are recorded here before any main-split episode of any model.
+- **W, v and R_plan:** W = 24,000 tokens and v = 1,500 tokens, from the default generator config `3d6bc648…` (`persistgym/config.py`); R_plan = 1,000 (D5).
+- **T = 200.** The frozen rule asks for power ≥ 0.80 for H1 at Δ_H1 = 10pp and for H3 at Δ_H3 = 0, at the worst Holm step of the family of 2 (one-sided 0.025). No T ≤ 200 meets that under either scenario, so R6's cap sets T.
+  - Source: `results/power_sim/20261010T030442Z/` (`uv run python -m analysis.power_sim --part luna --reps 2000`). Each of the 2,000 simulated sweeps is analysed per T as §9.1 and §9.4 will analyse the real one, with 10,000 template-cluster bootstrap resamples.
+- **Achieved power at T = 200** (P(supported) at the worst Holm step):
+
+  | Scenario | H1 | H3 |
+  |---|---|---|
+  | Primary | 0.647 | 0.781 |
+  | Pessimistic | 0.438 | 0.443 |
+
+  Without the cap, the simulated rule would need T = 290 in the primary scenario. In the pessimistic one, no T up to 300 reaches it.
+- **Assumptions** (the researcher's merge approves them; none comes from a pilot outcome or a main-split episode):
+
+  | Parameter | Primary | Pessimistic | Basis |
+  |---|---|---|---|
+  | F-0 success, observed-far | 0.95 | 0.85 | luna's restated-at-need validity run: 160/160 |
+  | F-0 success, derived-NR-far | 0.90 | 0.80 | 5pp below observed |
+  | W-0 success, observed-far-NR | 0.12 | 0.18 | luna's withheld validity run: 19/160; 0.18 is its 95% Wilson upper end |
+  | Template SD, logit | 0.92 | 0 | ML estimate from luna's withheld validity run (95% interval 0-2.17) |
+  | Δ_H1 / Δ_H3 / Holm family | 10pp / 0 / 2 | same | §4.2; the decision of 2026-10-06 |
+
+- **What it means.** H1 has about 0.65 power at its 10pp kill boundary. H1's own prediction is much larger: a non-recoverable penalty ≥ 25pp against a recoverable one ≤ 5pp. The report gives the achieved power, and an H1 or H3 result that is neither supported nor killed is called inconclusive.
+
+**Expected near losses** (§2.8, before the main sweep). Computed with `uv run python -m analysis.near_loss`, committed in this PR. It reads only the survival flag `need_payload.S`, never correctness, and prints only the pooled count (pilot blinding, §11).
+- In luna's block-1 window pilots (W-0, W-n-0), 0 of the 8 near episodes lost their evidence.
+- So every near window cell is at 0%, under the 2% rule. R_plan and W are not re-tuned.
+
+**The single-turn control** (§3 H3, §4.3).
+- **Its prompt now follows §3 H3's frozen text:** each observation is followed by a plain "Agent: <action>" line, with no preamble or marks.
+  - The code written before the freeze used a different format. No single-turn prompt had ever been sent, so this brings the code into line with the registered text; it is not a deviation.
+  - The control's scorer now recognises the same action verbs as the multi-turn scorer (D4).
+- **Its pilot.** CLAUDE.md requires a pilot of at most 10 prompts before a new request type's sweep. R6 change 1 does not list it, so it runs under CLAUDE.md's pilot rule, and the approval line below lists `persistgym_pilot` for it.
+  - Shape: luna, pilot split, 2 pilot templates × the 4 non-recoverable task cells = 8 prompts.
+  - It sends exactly the sweep's request. About $0.05.
+- **Technical choice for the researcher** (§11, like PR #13's): the pilot's committed `summary.json` holds `reply_action_classes`, which says, per reply, whether its action uses the need verb, a routine verb, another verb or none.
+  - This bounds the arm's pilot success from above. For example, 0 need-verb replies would mean 0 correct.
+  - It is committed because the pilot's purpose is to check the control's validity: does luna answer the need EVENT in a prompt that holds about 24 EVENTs?
+  - If it answers an earlier one instead, the control scores 0 for a reason unrelated to memory, which would bias H3 toward "supported".
+  - Pilot data are excluded from all analyses.
+- **Rule after the pilot.** The single-turn main runs proceed only if all 8 replies are in the need-verb class. Otherwise Claude stops before them, and the researcher decides, for example by amending the control's format. The harness-cell runs do not depend on the pilot.
+
+**Block `3-persistgym`.**
+- **Runs** (PersistGym stream, one at a time, each launched as a process with a console of its own; OpenAI Flex; luna at medium effort; main split, templates 0-199, all 8 task cells):
+  1. the single-turn pilot (8 prompts);
+  2. F-0, W-0, W-n-0 and Σ-n-0, and F-0 restated: 1,600 episodes each;
+  3. the single-turn control: 800 prompts;
+  4. each of these again at repeat 1, on templates 0, 10, …, 190: 160 episodes each, or 80 prompts for the single-turn control.
+- **Forecast:** about **$71 billed**. These are the block-1 pilot costs per episode at Flex (`results/costs.csv`), scaled to T = 200:
+
+  | Run | Forecast |
+  |---|---|
+  | F-0 | $6.9 |
+  | W-0 | $22.9 |
+  | W-n-0 | $24.3 |
+  | Σ-n-0 | $6.1 |
+  | F-0 restated | $7.4 |
+  | Single-turn | ≤ $3.4 |
+
+  The window cells' pilot rows played warm caches, so cold runs may cost more.
+- **Limit: $100 billed.** Each run's `--planned-usd` is about 1.5× its forecast, and each run stops at it. The ARC stream runs alongside under its own lock.
+- **Flex:** when Flex is unavailable, the driver waits 30 min and retries, with a night fallback, as in block 1.
+- **Phase 1a:** $18.15 spent of its $500 cap.
+
+approved_block: 3-persistgym | experiments: persistgym,persistgym_pilot | max_usd: 100
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts W, v, T and the assumptions above, the near-loss result, the single-turn prompt, the technical choice and the pilot rule. It also approves block `3-persistgym` up to $100 billed.
+
+**Spend** (billed): $328.94 before block 3. Block `3-arc` so far: $16.60 (SB26 S1 $13.12, FT09 S2 $3.47), with the FT09 S2 re-run in progress. This entry's pull request is $0.

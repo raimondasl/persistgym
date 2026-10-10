@@ -516,8 +516,8 @@ def test_run_refuses_lunas_unregistered_main_runs_before_the_lock(armed, capsys,
 
 
 def test_run_passes_lunas_main_sweep_on_to_the_paid_path(armed, monkeypatch, capsys):
-    """Each replay-off cell (Σ-n-0 by its ASCII id too) and the restated-at-need control go
-    on to the paid path; without luna's G1 each refuses before the lock."""
+    """Each replay-off cell (Σ-n-0 by its ASCII id too), the restated-at-need control and the
+    repeat go on to the paid path; without luna's G1 each refuses before the lock."""
     reached = []
 
     def paid_path(run_id, what, body):
@@ -527,14 +527,18 @@ def test_run_passes_lunas_main_sweep_on_to_the_paid_path(armed, monkeypatch, cap
     for cell in ("F-0", "W-0", "W-n-0", "sigma-n-0", "Σ-n-0"):
         assert cli.main([*LUNA_MAIN, "--cell", cell]) == 0
     assert cli.main([*LUNA_MAIN, "--cell", "F-0", "--variant", "restated"]) == 0
+    assert cli.main([*LUNA_MAIN, "--cell", "F-0", "--repeat-index", "1"]) == 0
     assert [w for _, w in reached] == [
         f"persistgym: {c} on {LUNA}, 80 episodes" for c in ("F-0", "W-0", "W-n-0", "Σ-n-0",
-                                                             "Σ-n-0", "F-0")]
+                                                             "Σ-n-0", "F-0")] + [
+        f"persistgym: F-0 on {LUNA}, 8 episodes at repeat 1"]
     assert reached[3][0].endswith(f"-sigma-n-0-{LUNA}")
+    assert reached[-1][0].endswith(f"-F-0-{LUNA}-repeat1")
+    assert not reached[0][0].endswith("repeat1")
     monkeypatch.delitem(registered.G1_PASSED, LUNA)
     capsys.readouterr()
     assert cli.main([*LUNA_MAIN, "--cell", "F-0"]) == 2
-    assert "G1_PASSED" in capsys.readouterr().err and len(reached) == 6
+    assert "G1_PASSED" in capsys.readouterr().err and len(reached) == 7
 
 
 @pytest.fixture
@@ -700,6 +704,22 @@ def test_cli_docstring_examples_parse():
     assert m["templates_per_task_cell"] == {"observed-nonrec-far": 70, "observed-rec-far": 70,
                                             "derived-nonrec-far": 210, "derived-rec-far": 210}
     assert 2 * m["n_episodes"] == 1_120                     # F-r and F-0 (PREREG §17.2)
+    # luna's main sweep (PREREG §4.6, §17.6): F-0 at T = 100 on the 8 task cells, at its
+    # registered effort on the default config, and its repeat on templates 0, 10, ..., 90;
+    # the guard lets both go (G1 recorded)
+    luna_runs = [cli.parse_args(c) for c in commands
+                 if c[0] == "run" and "persistgym" in c and LUNA in c]
+    assert [a.repeat_index for a in luna_runs] == [0, 1]
+    for a in luna_runs:
+        assert (a.cell, a.effort, a.gen_preset, a.gen_set, a.split, a.start, a.n) == (
+            "F-0", "medium", "default", [], "main", 0, 100)
+        assert (a.task_cell, a.variant, a.parallel, a.approved_block, a.milestone) == (
+            ["all"], "base", 16, "3-persistgym", "M2")
+        assert (a.mode, a.service_tier, a.W) == ("standard", "flex", None)
+        gen = runmeta.config_hash(cli._gen_config(a.gen_preset, a.gen_set).to_dict())
+        assert luna(cell=a.cell, gen=gen) is None
+        assert cli._run_matrix(a).n_episodes == (800 if a.repeat_index == 0 else 80)
+    assert cli._run_matrix(luna_runs[1]).played == tuple(range(0, 100, 10))
 
 
 def _prereg_section(heading: str) -> str:

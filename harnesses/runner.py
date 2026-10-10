@@ -436,6 +436,18 @@ def _stop_reason(runs: list[EpisodeRun], last: EpisodeRun, cfg: HarnessConfig,
     return None
 
 
+def episode_record(run: EpisodeRun, repeat_index: int = 0) -> dict:
+    """An episode's line in episodes.jsonl: its `EpisodeRun` fields and, at repeat_index 1
+    (PREREG §2.9), `repeat_index` after them. A repeat replays its repeat-0 episode, with the
+    same episode_id, so the record says which play it is. A record without the field is
+    repeat 0: every record written before repeats existed, and every repeat-0 record since,
+    byte for byte."""
+    rec = asdict(run)
+    if repeat_index:
+        rec["repeat_index"] = repeat_index
+    return rec
+
+
 def run_plan(*, run_id: str, experiment: str, milestone: str, cell: CellSpec,
              cfg: HarnessConfig, episodes: list[Episode], run_matrix: dict | None,
              repeat_index: int, notes: str, abort_after_api_errors: int, parallel: int,
@@ -475,6 +487,9 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     whole block in results/raw/<experiment>/<run_id>/parallel.json (`PARALLEL_INFO`).
     Paid transports get their costs.csv row appended in `finally`, whatever happens.
     `run_matrix` (harnesses.matrix.RunMatrix.to_dict) is recorded in meta.json's config.
+    `repeat_index` (PREREG §2.9) goes into the run plan and meta.json, and at 1 into each
+    episode record too (`episode_record`); the episodes themselves are the caller's (a
+    repeat-1 run plays `RunMatrix.repeat`'s).
 
     `parallel` (1 to 16, PREREG §4.6): episodes played at once (`harnesses.parallel`). With
     more than 1, episodes.jsonl and the transcript are still written in the order of
@@ -490,6 +505,8 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     written the run raises before any call."""
     for what, name in (("experiment", experiment), ("run_id", run_id)):
         require_plain_name(what, name)
+    if repeat_index not in (0, 1):
+        raise ValueError(f"repeat_index is 0 or 1 (PREREG §2.9), got {repeat_index!r}")
     parallel = check_parallel(parallel)
     blinded = blinding.is_blinded(experiment)
     out_dir = results_root / experiment / run_id
@@ -524,7 +541,7 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
     try:
         with episodes_path.open("a", encoding="utf-8") as f:
             def write(r: EpisodeRun) -> None:
-                f.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")
+                f.write(json.dumps(episode_record(r, repeat_index), ensure_ascii=False) + "\n")
                 f.flush()
 
             if parallel == 1:

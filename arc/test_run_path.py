@@ -1658,10 +1658,128 @@ def test_refused_unless_the_replaced_run_ended_by_the_summarizer_failure(world, 
 
 
 def test_check_r7_files_leaves_other_runs_alone(world):
-    paths, _ = world          # no results at all: only R7 runs read them
+    paths, _ = world          # no results at all: only R7 runs and S1/S2 re-runs need them
     for argv in (GAME_ARGS, PILOT_ARGS, ACCEPT_ARGS,
-                 _game_args("S2", "ft09", 101, "--rerun-of", "20261010T020247Z-S2-ft09-s1")):
+                 _game_args("S0", "ft09", 101, "--rerun-of", "20261010T020247Z-S0-ft09-s1"),
+                 _game_args("S4", "ft09", 101, "--rerun-of", "20261010T020247Z-S4-ft09-s1"),
+                 _game_args("S2", "ft09", 101, "--rerun-of", "20261010T020247Z-S2-ft09-s1",
+                            "--max-actions", "50", experiment="arc_pilot")):
         rp.check_r7_files(_plan(argv), paths)
+
+
+# ── D19 re-runs under R7: a run already replaced; a pre-R7 S1/S2 run ──────
+
+S2_ORIGINAL = "20261010T084933Z-S2-r11l-s1"
+S2_RERUN_ARGS = _game_args("S2", "r11l", 101, "--rerun-of", S2_ORIGINAL)
+
+
+def _refused_with(paths, h, capsys, argv, message) -> str:
+    assert rp.main(argv, paths=paths) == 2
+    err = capsys.readouterr().err
+    assert re.search(message, err), err
+    assert h.calls == [] and not paths.lock.exists() and _rows(paths) == []
+    assert not paidlock.reservation_path(paths.lock, rp.STREAM).exists()
+    return err
+
+
+@pytest.mark.parametrize("setup, argv, message", [
+    # a plain D19 re-run of an S0 run that already has its re-run
+    (lambda p: [_past_run(p, "20261010T000000Z-S0-ft09-s1", agent_exit_reason="API_ERROR"),
+                _past_run(p, "20261010T010000Z-S0-ft09-s101",
+                          rerun_of="20261010T000000Z-S0-ft09-s1")],
+     _game_args("S0", "ft09", 101, "--rerun-of", "20261010T000000Z-S0-ft09-s1"),
+     "already replaced: 20261010T010000Z-S0-ft09-s101 re-runs it \\(D19 allows one"),
+    # a D19 re-run of a run an R7 replacement replaced (the late re-run R7 rules out)
+    (lambda p: [_past_run(p, S2_ORIGINAL),
+                _past_run(p, "20261011T000000Z-S2-r11l-s201", budget=rp.R7_SUMMARY_BUDGET,
+                          r7_replaces=S2_ORIGINAL)],
+     S2_RERUN_ARGS,
+     "already replaced: 20261011T000000Z-S2-r11l-s201 replaces it under R7"),
+    # a second D19 re-run of an R7 replacement: its one re-run is the unit's last run
+    (lambda p: [_past_run(p, R7_REPLACEMENT, budget=rp.R7_SUMMARY_BUDGET, log=None,
+                          r7_replaces=R7_REPLACED),
+                _past_run(p, "20261012T000000Z-S2-ft09-s301", budget=rp.R7_SUMMARY_BUDGET,
+                          log=None, rerun_of=R7_REPLACEMENT)],
+     R7_RERUN_ARGS,
+     "already replaced: 20261012T000000Z-S2-ft09-s301 re-runs it"),
+])
+def test_refused_when_the_rerun_target_is_already_replaced(world, capsys, setup, argv,
+                                                           message):
+    paths, h = world
+    setup(paths)
+    _refused_with(paths, h, capsys, argv, message)
+
+
+@pytest.mark.parametrize("config, budget, message", [
+    ("S2", rp.PRE_R7_SUMMARY_BUDGET, "it played under summary_max_output_tokens 8192"),
+    ("S1", rp.PRE_R7_SUMMARY_BUDGET, "it played under summary_max_output_tokens 8192"),
+    ("S2", None, "no meta.json of it in .*, so the summary budget it played under is unknown"),
+])
+def test_a_plain_d19_rerun_of_a_pre_r7_s1_or_s2_run_is_refused(world, capsys, config, budget,
+                                                               message):
+    """Under R7's frozen profile a D19 re-run of a run that played under 8,192 would play
+    under 65,536 without being marked as an R7 replacement: refused, with the R7 replacement
+    named as the way to go if the run ended by the summarizer failure."""
+    paths, h = world
+    original = f"20261010T084933Z-{config}-r11l-s1"
+    if budget is not None:
+        _past_run(paths, original, budget=budget)
+    argv = _game_args(config, "r11l", 101, "--rerun-of", original)
+    err = _refused_with(paths, h, capsys, argv, message)
+    assert "would play under R7's config without being an R7 replacement" in err
+    assert f"--r7-replaces {original} --seed 201" in err
+
+
+def test_a_plain_d19_rerun_of_an_s2_run_under_r7s_budget_is_recorded(world):
+    paths, h = world
+    _past_run(paths, S2_ORIGINAL, agent_exit_reason="API_ERROR", budget=rp.R7_SUMMARY_BUDGET,
+              log=None)
+    h.inner = lambda command, cwd: fake_game(cwd)
+
+    assert rp.main(S2_RERUN_ARGS, paths=paths) == 0
+
+    (row,) = _rows(paths)
+    assert f"rerun_of={S2_ORIGINAL}" in row["notes"] and row["run_id"].endswith("-s101")
+
+
+def test_a_plain_d19_rerun_of_s0_or_s4_needs_no_files(world):
+    """S0's and S4's profiles did not change under R7: a re-run of either reads only the other
+    runs' links (none here)."""
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd)
+    argv = _game_args("S4", "ft09", 101, "--rerun-of", "20261010T000000Z-S4-ft09-s1")
+    assert rp.main(argv, paths=paths) == 0
+
+
+@pytest.mark.parametrize("argv, before, landed, message", [
+    (_game_args("S0", "ft09", 101, "--rerun-of", "20261010T000000Z-S0-ft09-s1"),
+     lambda p: _past_run(p, "20261010T000000Z-S0-ft09-s1", agent_exit_reason="API_ERROR"),
+     lambda p: _past_run(p, "20261010T010000Z-S0-ft09-s101",
+                         rerun_of="20261010T000000Z-S0-ft09-s1"),
+     "already replaced: 20261010T010000Z-S0-ft09-s101 re-runs it"),
+    (R7_ARGS,
+     lambda p: _past_run(p, R7_REPLACED),
+     lambda p: _past_run(p, "20261010T235959Z-S2-ft09-s201", budget=rp.R7_SUMMARY_BUDGET,
+                         log=None, r7_replaces=R7_REPLACED),
+     "already has an R7 replacement, 20261010T235959Z-S2-ft09-s201"),
+])
+def test_the_file_checks_run_again_under_the_lock(world, monkeypatch, capsys, argv, before,
+                                                  landed, message):
+    """A run that lands between the first file check and the lock (here: while check_paid
+    runs) is seen by the second check, under the lock: refused before the harness is built,
+    and the lock and the spend reservation are released."""
+    paths, h = world
+    before(paths)
+    check_paid = rp.check_paid
+
+    def check_paid_then_a_run_lands(plan, paths_, lock, record):
+        granted = check_paid(plan, paths_, lock, record)
+        assert paidlock.reservation_path(paths.lock, rp.STREAM).exists()
+        landed(paths)
+        return granted
+    monkeypatch.setattr(rp, "check_paid", check_paid_then_a_run_lands)
+
+    _refused_with(paths, h, capsys, argv, message)
 
 
 # ── Pieces ─────────────────────────────────────────────────────────────

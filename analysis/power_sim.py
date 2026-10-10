@@ -1210,7 +1210,10 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
             ("- H1's model check uses a GLM on H1's 4 cells, not the full §9.1 model, and only "
              "its sign enters; H3's uses the average marginal effect with no-variation "
              "templates at 0. The H1/H3 analysis module is not written yet; it should make "
-             "the same choices, or the power stated here does not carry over exactly."),
+             "the same choices, or the power stated here does not carry over exactly. It "
+             "must also key episodes on (episode_id, repeat_index, 0 if absent) and "
+             "deduplicate §13's transport re-runs explicitly (harnesses/DESIGN.md §7.8): "
+             "one repeat-0 outcome per template and cell, as simulated here."),
             "- No exclusions are simulated (§13; luna's 320 validity episodes had none).",
             ("- The power is for the kill-boundary effect Delta_H1 = 10pp. It says nothing "
              "about the size of the real effect."), ""]

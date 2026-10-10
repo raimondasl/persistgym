@@ -171,11 +171,12 @@ console program. The OpenAI SDK reads the key from the environment:
         --model gpt-6-luna --split main --start 0 --n 100 --experiment persistgym \
         --approved-block "3-persistgym" --planned-usd <usd> --parallel 16 --milestone M2
 
-`single-turn` refuses, before the paid-run lock (`single_turn.settings_refusal` and
-`registered.check_run_settings`, as for F-0): any experiment but persistgym and
-persistgym_pilot; a recoverable task cell; repeat 1 off the main split; and outside
-persistgym_pilot, any model but gpt-6-luna and any request settings but its registered effort
-and D13's --mode standard and --service-tier flex.
+`single-turn` refuses, before the paid-run lock (`single_turn.settings_refusal`, then
+`registered.check_run_settings` with the control's cell, `registered.LUNA_SINGLE_TURN_CELL`):
+any experiment but persistgym and persistgym_pilot; a recoverable task cell; repeat 1 off the
+main split; and outside persistgym_pilot, any model but gpt-6-luna and any request settings
+but its registered effort and D13's --mode standard and --service-tier flex, and whatever
+luna's guard refuses for its main runs (above: the main split, the default config, G1).
 """
 
 from __future__ import annotations
@@ -864,10 +865,12 @@ def cmd_single_turn(a) -> int:
                             service_tier=a.service_tier)
     except ValueError as e:
         return refuse(str(e))
-    # F-0's guard: the model's registered effort outside pilots (and sol's rules, which
-    # settings_refusal already refuses outside pilots)
+    # `run`'s guard, given the control's cell (registered.LUNA_SINGLE_TURN_CELL, the prompts'
+    # harness_cell): outside pilots, the model's registered effort and luna's guard, so the
+    # control plays luna's main split on the config its G1 is recorded on (sol's rules too,
+    # which settings_refusal already refuses outside pilots)
     why = registered.check_run_settings(
-        a.experiment, a.model, a.effort, single_turn.SETTINGS_CELL,
+        a.experiment, a.model, a.effort, registered.LUNA_SINGLE_TURN_CELL,
         runmeta.config_hash(gen.to_dict()), RESULTS, split=a.split, variant="base",
         task_cells=tuple(cells),
         request={"mode": a.mode, "service_tier": a.service_tier, "W": None},

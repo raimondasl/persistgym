@@ -156,9 +156,11 @@ LUNA_CELLS = ("F-0", "W-0", "W-n-0", "Σ-n-0")
 the command line). Its replay-on cells (F-r, W-n-r, Σ-n-r) and Σ-0-r never run: G0 did not
 verify luna's replay toggle (§4.6 row 2)."""
 LUNA_SINGLE_TURN_CELL = "single-turn"
-"""The cell id a command that sends the position-matched single-turn control (§3 H3, §4.3)
-gives this guard for it (no such command exists yet). It is not a harness cell: one prompt
-per template, built from base episodes (`persistgym.controls`)."""
+"""The cell id `harnesses single-turn` (harnesses/single_turn.py), which sends the
+position-matched single-turn control (§3 H3, §4.3), gives this guard: its prompts'
+`harness_cell`, `single_turn.RECORD_CELL` (harnesses/tests/test_single_turn.py checks that the
+two are the same). It is not a harness cell: one prompt per template, built from base
+episodes (`persistgym.controls`)."""
 LUNA_RUN = {"split": ("main",), "variant": ("base", "restated")}
 """luna's main sweep plays main templates, base episodes, and the restated-at-need control
 (§4.3) as full F-0 episodes (§4.6, D36): --variant restated in cell F-0 only."""

@@ -517,3 +517,18 @@ def test_the_docstring_command_is_lunas_registered_control():
         split=a.split, repeat_index=1) is None
     assert single_turn.task_cells(a.task_cell) == NONREC
     assert single_turn.template_indices(a.split, a.start, a.n, 1) == list(range(0, 100, 10))
+
+
+def test_the_control_is_guarded_as_lunas_single_turn_cell(monkeypatch, capsys):
+    """The guard gets the control's own cell, registered.LUNA_SINGLE_TURN_CELL, which is the
+    prompts' harness_cell, so luna's guard (its G1, main split and config) applies to it."""
+    assert single_turn.RECORD_CELL == registered.LUNA_SINGLE_TURN_CELL == "single-turn"
+    seen = []
+
+    def spy(*a, **k):
+        seen.append(a[3])
+        return "stopped by the test"
+    monkeypatch.setattr(registered, "check_run_settings", spy)
+    assert cli.main(MAIN) == 2
+    assert seen == [registered.LUNA_SINGLE_TURN_CELL]
+    assert "refused: stopped by the test" in capsys.readouterr().err

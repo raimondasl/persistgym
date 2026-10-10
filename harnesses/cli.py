@@ -50,11 +50,13 @@ are not read). `run` refuses:
 PREREG §4.6 and §17.6 (amendment R6), gpt-6-luna's main sweep (`registered.luna_refusal`):
 outside persistgym_pilot, `run` refuses a gpt-6-luna run in persistgym_validity (luna's
 validity runs are finished: G1 is recorded on them, and R6 allows no other paid runs) and
-any other run than experiment persistgym, in F-0, W-0, W-n-0 or Σ-n-0 (sigma-n-0), on --split main, --variant
-base (or restated in F-0: the restated-at-need control), on the default generator config,
-with --mode standard, --service-tier flex and no --W (D13, `registered.LUNA_REQUEST`), and
-any such run until `registered.G1_PASSED` records luna's G1 on that config (recorded: the
-researcher's G1 GO of 2026-10-09).
+any other run than experiment persistgym, in F-0, W-0, W-n-0 or Σ-n-0 (sigma-n-0), on
+--split main, main templates 0-199 (--start + --n at most T = `registered.LUNA_T` = 200:
+§4.2's rule, capped by R6 change 6), --variant base (or restated in F-0: the
+restated-at-need control), on the default generator config, with --mode standard,
+--service-tier flex and no --W (D13, `registered.LUNA_REQUEST`), and any such run until
+`registered.G1_PASSED` records luna's G1 on that config (recorded: the researcher's G1 GO of
+2026-10-09).
 R3's engagement check found NOT_ENGAGED on 2026-10-03 (results/decisions.md), so R3's hard
 stop refuses its check, validity and main-sweep commands below; they are kept as the record
 of what was registered.
@@ -149,28 +151,28 @@ console program. The OpenAI SDK reads the key from the environment:
         observed-rec-far --experiment persistgym_sol_h1 --approved-block "3-persistgym" \
         --planned-usd <usd> --parallel 16
     # PREREG §4.6 and §17.6 (amendment R6): luna's main sweep, block 3-persistgym, after G1
-    # (registered.G1_PASSED) and once T is recorded in results/decisions.md (§4.2, at most
-    # 200; 100 shown): this run, then the same with --cell W-0, W-n-0 and sigma-n-0, and with
-    # --variant restated (the restated-at-need control, in F-0); at luna's registered effort
-    # (medium), on the default config and the 8 task cells
+    # (registered.G1_PASSED), on T = registered.LUNA_T = 200 templates from 0 (§4.2's rule,
+    # capped by R6 change 6): this run, then the same with --cell W-0, W-n-0 and sigma-n-0,
+    # and with --variant restated (the restated-at-need control, in F-0); at luna's
+    # registered effort (medium), on the default config and the 8 task cells
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
-        --model gpt-6-luna --split main --start 0 --n 100 --experiment persistgym \
+        --model gpt-6-luna --split main --start 0 --n 200 --experiment persistgym \
         --approved-block "3-persistgym" --planned-usd <usd> --parallel 16 --milestone M2
     # §2.9: each of those five runs again at repeat 1, on the templates whose seed is
-    # divisible by 10 (0, 10, ..., 90 at T = 100: 80 episodes a run)
+    # divisible by 10 (0, 10, ..., 190 at T = 200: 160 episodes a run)
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
-        --model gpt-6-luna --split main --start 0 --n 100 --repeat-index 1 \
+        --model gpt-6-luna --split main --start 0 --n 200 --repeat-index 1 \
         --experiment persistgym --approved-block "3-persistgym" --planned-usd <usd> \
         --parallel 16 --milestone M2
     # PREREG §3 H3, §4.3 (D36): luna's position-matched single-turn control, one prompt per
     # template on the 4 non-recoverable task cells (the default --task-cell), sent with F-0's
-    # request settings (harnesses/single_turn.py), on T templates from 0 (--n; T is set at M1
-    # by §4.2's rule, at most 200 under R6; 100 shown); then the same with --repeat-index 1
-    # (§2.9: the templates whose seed is divisible by 10, under their own run id). Its pilot
-    # (CLAUDE.md: at most 10 prompts, blinded) is the same command with --experiment
-    # persistgym_pilot, --split pilot and --n 2 or fewer
+    # request settings (harnesses/single_turn.py), on the T = 200 templates from 0 (--n,
+    # registered.LUNA_T); then the same with --repeat-index 1 (§2.9: the templates whose seed
+    # is divisible by 10, under their own run id). Its pilot (CLAUDE.md: at most 10 prompts,
+    # blinded) is the same command with --experiment persistgym_pilot, --split pilot and --n
+    # 2 or fewer
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses single-turn \
-        --model gpt-6-luna --split main --start 0 --n 100 --experiment persistgym \
+        --model gpt-6-luna --split main --start 0 --n 200 --experiment persistgym \
         --approved-block "3-persistgym" --planned-usd <usd> --parallel 16 --milestone M2
 
 `single-turn` refuses, before the paid-run lock (`single_turn.settings_refusal`, then
@@ -178,7 +180,8 @@ console program. The OpenAI SDK reads the key from the environment:
 any experiment but persistgym and persistgym_pilot; a recoverable task cell; repeat 1 off the
 main split; and outside persistgym_pilot, any model but gpt-6-luna and any request settings
 but its registered effort and D13's --mode standard and --service-tier flex, and whatever
-luna's guard refuses for its main runs (above: the main split, the default config, G1).
+luna's guard refuses for its main runs (above: the main split, main templates 0-199, the
+default config, G1).
 """
 
 from __future__ import annotations

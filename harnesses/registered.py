@@ -41,8 +41,9 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   open (the single-turn control's pilot of at most 10 prompts among them). The main sweep
   and controls are: experiment `persistgym`, the replay-off cells
   `LUNA_CELLS` (F-0, W-0, W-n-0, Σ-n-0; its replay toggle was not verified at G0) or the
-  single-turn control (`LUNA_SINGLE_TURN_CELL`), main templates, base episodes or the
-  restated-at-need control in F-0, on the default generator config, with D13's request
+  single-turn control (`LUNA_SINGLE_TURN_CELL`), main templates 0 to `LUNA_T` - 1 (T =
+  200, §4.2 capped by R6 change 6), base episodes or the restated-at-need control in F-0,
+  on the default generator config, with D13's request
   settings (`LUNA_REQUEST`: --mode standard, --service-tier flex, no --W), and only once
   `G1_PASSED` records luna on that config.
 
@@ -168,6 +169,12 @@ episodes (`persistgym.controls`)."""
 LUNA_RUN = {"split": ("main",), "variant": ("base", "restated")}
 """luna's main sweep plays main templates, base episodes, and the restated-at-need control
 (§4.3) as full F-0 episodes (§4.6, D36): --variant restated in cell F-0 only."""
+# PREREG §4.2 rule capped at 200 by R6 change 6; recorded in results/decisions.md in this PR
+LUNA_T = 200
+"""luna's template count T per task cell (§4.2's rule, capped at 200 by R6 change 6, §17.6;
+the power re-simulation in results/power_sim/ finds no T <= 200 that meets the rule). Its
+main runs and controls play main templates 0 to `LUNA_T` - 1 only: a run whose --start +
+--n passes `LUNA_T` refuses (its repeat-1 runs play a subset of that range)."""
 LUNA_RESTATED_CELL = "F-0"
 LUNA_REQUEST = {"mode": "standard", "service_tier": "flex", "W": None}
 """D13's other request settings as frozen (§6; R6 change 10 keeps luna's effort and Flex
@@ -432,16 +439,30 @@ def replication_refusal(experiment: str, model: str, effort: str, cell: str,
     return None
 
 
+def _luna_templates_wrong(templates: tuple[int, int] | None) -> list[str]:
+    """luna's main runs and controls play main templates 0 to `LUNA_T` - 1 only: `templates`
+    is the run's (first index, last index + 1); None (not given) is wrong."""
+    if templates is None:
+        return ["main templates (not given)"]
+    start, stop = templates
+    if 0 <= start < stop <= LUNA_T:
+        return []
+    return [f"main templates {start}-{stop - 1}"]
+
+
 def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
-                 variant: str, request: dict | None = None) -> str | None:
+                 variant: str, request: dict | None = None,
+                 templates: tuple[int, int] | None = None) -> str | None:
     """Why a luna run outside `persistgym_pilot` must refuse, or None (§4.6, R6 change 1;
     fail closed). Its validity runs (`persistgym_validity`) refuse: they are finished, G1 is
     recorded on them (`G1_PASSED`), and R6 change 1 allows no other paid runs. Otherwise it
     is luna's main sweep or one of its controls only: experiment `persistgym`, a replay-off
     cell (`LUNA_CELLS`) or the single-turn control (`LUNA_SINGLE_TURN_CELL`), on main
-    templates, base episodes or the restated-at-need control in F-0 (`LUNA_RUN`), on the
-    default generator config, with D13's request settings (`LUNA_REQUEST`; `request` left as
-    None refuses), and only once `G1_PASSED` records luna's G1 on that config."""
+    templates 0 to `LUNA_T` - 1 (`templates`, the run's first index and last index + 1),
+    base episodes or the restated-at-need control in F-0 (`LUNA_RUN`), on the default
+    generator config, with D13's request settings (`LUNA_REQUEST`), and only once
+    `G1_PASSED` records luna's G1 on that config. `request` or `templates` left as None
+    refuses."""
     if experiment == VALIDITY_EXPERIMENT:
         return (f"{VALIDITY_EXPERIMENT} runs no {LUNA_MODEL} run any more: luna's validity runs "
                 f"are finished and G1 is recorded on them (harnesses/registered.py G1_PASSED; "
@@ -457,13 +478,16 @@ def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
          variant == "restated" and cell != LUNA_RESTATED_CELL),
         (f"generator config {generator_hash[:12]}", generator_hash != LUNA_GENERATOR_HASH))
         if bad]
+    wrong += _luna_templates_wrong(templates)
     wrong += _request_wrong(request, LUNA_REQUEST)
     if wrong:
         return (f"outside {PILOT_EXPERIMENT}, {LUNA_MODEL} runs its main sweep and controls "
                 f"only ({R6_REF} change 1; PREREG §4.6): --experiment "
                 f"{LUNA_EXPERIMENT}, a replay-off cell ({', '.join(LUNA_CELLS)}; luna's "
                 f"replay toggle was not verified at G0) or the single-turn control, "
-                f"--split main, --variant base, or restated in cell {LUNA_RESTATED_CELL} (the "
+                f"--split main, main templates 0-{LUNA_T - 1} (T = {LUNA_T}: PREREG §4.2's "
+                f"rule, capped by R6 change 6), --variant base, or restated in cell "
+                f"{LUNA_RESTATED_CELL} (the "
                 f"restated-at-need control), on the default generator config (--gen-preset "
                 f"default, config {LUNA_GENERATOR_HASH[:12]}), with --mode standard, "
                 f"--service-tier flex and no --W (D13); got " + "; ".join(wrong))
@@ -493,10 +517,10 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        (`replication_refusal`); steps 2-7 do not apply to it;
     2. every other experiment sends the model's registered effort (a dated snapshot or alias
        counts as its model, `model_family`);
-    R6. a luna run is its main sweep or a control, on the default config, with D13's
-       request settings (`request`), after `G1_PASSED`, and its validity runs refuse (they
-       are finished: G1 is recorded) (`luna_refusal`; §4.6, R6 change 1); steps 3-7 do not
-       apply to it;
+    R6. a luna run is its main sweep or a control, on main templates 0 to `LUNA_T` - 1
+       (`templates`) of the default config, with D13's request settings (`request`), after
+       `G1_PASSED`, and its validity runs refuse (they are finished: G1 is recorded)
+       (`luna_refusal`; §4.6, R6 change 1); steps 3-7 do not apply to it;
     3. a model in `REGISTERED_GENERATOR` uses its preset's config;
     4. a model in `REGISTERED_CELLS` runs one of its cells;
     5. in `persistgym_validity`, a model in `ENGAGEMENT_REQUIRED` runs exactly a validity
@@ -533,7 +557,7 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                 f"{PILOT_EXPERIMENT} runs may use another effort{replication}")
     if family == LUNA_MODEL:
         return luna_refusal(experiment, cell, generator_hash, split=split, variant=variant,
-                            request=request)
+                            request=request, templates=templates)
     preset = REGISTERED_GENERATOR.get(family)
     if preset is not None and generator_hash != PRESET_HASHES[preset]:
         return (f"{experiment} runs {family} on the generator preset {preset!r} only "

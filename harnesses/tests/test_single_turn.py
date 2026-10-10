@@ -450,6 +450,9 @@ PILOT_RUN = ["single-turn", "--n", "1", *SMALL_ARGS, "--approved-block", "3-pers
     # luna's guard (registered.luna_refusal): its main sweep and controls only
     ([*MAIN, "--split", "validity"], "got --split validity"),
     ([*MAIN, "--gen-preset", "sol-chain"], "got generator config"),
+    ([*MAIN, "--start", "199", "--n", "2"], "got main templates 199-200"),
+    ([*MAIN, "--start", "190", "--n", "20", "--repeat-index", "1"],
+     "got main templates 190-209"),
     ([*MAIN, "--start", "49999", "--n", "2"], "outside the main range"),
 ])
 def test_single_turn_refuses_before_the_lock(paid_env, monkeypatch, capsys, args, says):
@@ -511,12 +514,13 @@ def test_the_docstring_command_is_lunas_registered_control():
     a = cli.parse_args(argv)
     assert (a.model, a.effort, a.mode, a.service_tier) == ("gpt-6-luna", "medium", "standard",
                                                            "flex")
-    assert (a.split, a.start, a.n, a.experiment) == ("main", 0, 100, "persistgym")
+    assert (a.split, a.start, a.n, a.experiment) == ("main", 0, registered.LUNA_T,
+                                                     "persistgym")
     assert a.task_cell == ["all"] and a.repeat_index == 0 and a.parallel == 16
     assert single_turn.settings_refusal(experiment=a.experiment, model=a.model, split=a.split,
                                         repeat_index=1) is None
     assert single_turn.task_cells(a.task_cell) == NONREC
-    assert single_turn.template_indices(a.split, a.start, a.n, 1) == list(range(0, 100, 10))
+    assert single_turn.template_indices(a.split, a.start, a.n, 1) == list(range(0, 200, 10))
     # luna's guard lets it go: the default config, on which luna's G1 is recorded
     gen = runmeta.config_hash(cli._gen_config(a.gen_preset, a.gen_set).to_dict())
     assert gen == registered.LUNA_GENERATOR_HASH == registered.G1_PASSED["gpt-6-luna"]

@@ -41,11 +41,13 @@ RESULTS = runmeta.REPO_ROOT / "results"
 
 def guard(experiment: str, model: str, effort: str, root: Path, cell: str = "F-0",
           gen: str = VARIANT, split: str = "validity", variant: str = "restated",
-          request: dict | None = None) -> str | None:
+          request: dict | None = None,
+          templates: tuple[int, int] | None = None) -> str | None:
     """The guard on these settings; the split and variant are a validity run's unless given,
-    and the request settings are not given unless given."""
+    and the request settings and templates are not given unless given."""
     return registered.check_run_settings(experiment, model, effort, cell, gen, root,
-                                         split=split, variant=variant, request=request)
+                                         split=split, variant=variant, request=request,
+                                         templates=templates)
 
 
 def test_the_registered_settings():
@@ -66,6 +68,7 @@ def test_the_registered_settings():
     # D13's request settings as frozen, as R4 registers them for sol's replication
     assert registered.LUNA_REQUEST == registered.H1_REPLICATION_REQUEST == {
         "mode": "standard", "service_tier": "flex", "W": None}
+    assert registered.LUNA_T == 200                     # §4.2's rule, capped by R6 change 6
     assert (registered.LUNA_MODEL, registered.LUNA_EXPERIMENT) == (LUNA, "persistgym")
     assert registered.VARIANT_GENERATOR_HASH == VARIANT
     assert registered.rule() == {
@@ -428,9 +431,11 @@ def test_the_repositorys_own_state_after_r3s_hard_stop():
 
 def luna(experiment: str = "persistgym", cell: str = "F-0", gen: str = DEFAULT,
          split: str = "main", variant: str = "base", model: str = LUNA,
-         root: Path = RESULTS, request: dict | None = registered.LUNA_REQUEST) -> str | None:
+         root: Path = RESULTS, request: dict | None = registered.LUNA_REQUEST,
+         templates: tuple[int, int] | None = (0, registered.LUNA_T)) -> str | None:
     """The guard on a luna run; its main sweep's settings unless given."""
-    return guard(experiment, model, "medium", root, cell, gen, split, variant, request)
+    return guard(experiment, model, "medium", root, cell, gen, split, variant, request,
+                 templates)
 
 
 def test_lunas_main_sweep_and_controls_go():
@@ -441,6 +446,9 @@ def test_lunas_main_sweep_and_controls_go():
         assert luna(cell=cell) is None
     assert luna(variant="restated") is None
     assert luna(model=f"{LUNA}-2026-10-01") is None
+    # any part of main templates 0-199 (T = registered.LUNA_T)
+    for templates in ((0, 1), (0, 100), (100, 200), (190, 200), (199, 200)):
+        assert luna(templates=templates) is None
 
 
 @pytest.mark.parametrize(("changes", "got"), [
@@ -466,6 +474,11 @@ def test_lunas_main_sweep_and_controls_go():
     ({"request": {**registered.LUNA_REQUEST, "mode": "pro"}}, "got --mode pro"),
     ({"request": {**registered.LUNA_REQUEST, "W": 30_000}}, "got --W 30000"),
     ({"request": None}, "got --mode, --service-tier and --W (not given)"),
+    # main templates 0 to LUNA_T - 1 only (T = 200); not given refuses (fail closed)
+    ({"templates": (0, 201)}, "got main templates 0-200"),
+    ({"templates": (195, 205)}, "got main templates 195-204"),
+    ({"templates": (200, 210)}, "got main templates 200-209"),
+    ({"templates": None}, "got main templates (not given)"),
     ({"cell": "W-0", "request": {"mode": "pro", "service_tier": "flex", "W": 1000}},
      "got --mode pro; --W 1000")])
 def test_lunas_main_sweep_refuses_anything_else(changes, got):
@@ -474,6 +487,7 @@ def test_lunas_main_sweep_refuses_anything_else(changes, got):
                           "controls only (PREREG.md §17.6 (amendment R6)")
     assert got in why and "3d6bc648eaa9" in why
     assert "with --mode standard, --service-tier flex and no --W (D13)" in why
+    assert "main templates 0-199 (T = 200: PREREG §4.2's rule, capped by R6 change 6)" in why
     assert luna(model=f"{LUNA}-2026-10-01", **changes) is not None
 
 
@@ -537,7 +551,10 @@ LUNA_MAIN = ["run", "--model", LUNA, "--split", "main", "--n", "10", "--experime
     (["--cell", "F-0", "--effort", "high"], "registered reasoning effort 'medium'"),
     (["--cell", "F-0", "--service-tier", "default"], "got --service-tier default"),
     (["--cell", "F-0", "--mode", "pro"], "got --mode pro"),
-    (["--cell", "W-0", "--W", "30000"], "got --W 30000")])
+    (["--cell", "W-0", "--W", "30000"], "got --W 30000"),
+    (["--cell", "F-0", "--start", "190", "--n", "20"], "got main templates 190-209"),
+    (["--cell", "F-0", "--start", "200"], "got main templates 200-209"),
+    (["--cell", "F-0", "--n", "210", "--repeat-index", "1"], "got main templates 0-209")])
 def test_run_refuses_lunas_unregistered_main_runs_before_the_lock(armed, capsys, args,
                                                                   message):
     assert cli.main([*LUNA_MAIN, *args]) == 2
@@ -735,23 +752,24 @@ def test_cli_docstring_examples_parse():
     assert m["templates_per_task_cell"] == {"observed-nonrec-far": 70, "observed-rec-far": 70,
                                             "derived-nonrec-far": 210, "derived-rec-far": 210}
     assert 2 * m["n_episodes"] == 1_120                     # F-r and F-0 (PREREG §17.2)
-    # luna's main sweep (PREREG §4.6, §17.6): F-0 at T = 100 on the 8 task cells, at its
-    # registered effort on the default config, and its repeat on templates 0, 10, ..., 90;
+    # luna's main sweep (PREREG §4.6, §17.6): F-0 at T = 200 on the 8 task cells, at its
+    # registered effort on the default config, and its repeat on templates 0, 10, ..., 190;
     # the guard lets both go (G1 recorded)
     luna_runs = [cli.parse_args(c) for c in commands
                  if c[0] == "run" and "persistgym" in c and LUNA in c]
     assert [a.repeat_index for a in luna_runs] == [0, 1]
     for a in luna_runs:
         assert (a.cell, a.effort, a.gen_preset, a.gen_set, a.split, a.start, a.n) == (
-            "F-0", "medium", "default", [], "main", 0, 100)
+            "F-0", "medium", "default", [], "main", 0, registered.LUNA_T)
         assert (a.task_cell, a.variant, a.parallel, a.approved_block, a.milestone) == (
             ["all"], "base", 16, "3-persistgym", "M2")
         assert (a.mode, a.service_tier, a.W) == ("standard", "flex", None)
         gen = runmeta.config_hash(cli._gen_config(a.gen_preset, a.gen_set).to_dict())
         assert luna(cell=a.cell, gen=gen, request={"mode": a.mode, "service_tier":
-                                                   a.service_tier, "W": a.W}) is None
-        assert cli._run_matrix(a).n_episodes == (800 if a.repeat_index == 0 else 80)
-    assert cli._run_matrix(luna_runs[1]).played == tuple(range(0, 100, 10))
+                                                   a.service_tier, "W": a.W},
+                    templates=(a.start, a.start + a.n)) is None
+        assert cli._run_matrix(a).n_episodes == (1600 if a.repeat_index == 0 else 160)
+    assert cli._run_matrix(luna_runs[1]).played == tuple(range(0, 200, 10))
 
 
 def _prereg_section(heading: str) -> str:

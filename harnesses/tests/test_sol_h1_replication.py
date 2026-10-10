@@ -74,7 +74,7 @@ def test_the_replications_registered_settings():
     assert registered.H1_REPLICATION_VALIDITY_TEMPLATES == 20
     assert registered.H1_REPLICATION_PILOT_CELLS == ("W-0", "W-n-0")
     assert registered.REPLICATION_G1_PASSED == {}                       # fails closed
-    assert registered.G1_PASSED == {}                                   # R3's, unchanged
+    assert SOL not in registered.G1_PASSED                              # R3's, unchanged
     # its own budget experiment: phase 1a, the PersistGym stream
     assert costs.EXPERIMENT_PHASE[H1] == "1a"
     assert paidlock.EXPERIMENT_STREAM[H1] == paidlock.PERSISTGYM

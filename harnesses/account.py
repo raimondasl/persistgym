@@ -14,8 +14,9 @@ the repo's own code paths, so that no number is typed by hand:
 * the run's settings come from its raw run_plan.json (`runner.RUN_PLAN`, written before the
   first call by runs started after this command existed), or, for a run without one, from
   the same arguments as `run` given on the command line with the git state the run read
-  (`--git-commit`, `--git-dirty`); its episodes are rebuilt as `run` builds them, and must be
-  those of episodes.jsonl, in order;
+  (`--git-commit`, `--git-dirty`); its episodes are rebuilt as `run` builds them (a repeat-1
+  run's, `--repeat-index 1`, as its repeat: PREREG §2.9), and must be those of
+  episodes.jsonl, in order;
 * the costs row: a `UsageLedger` fed with every recorded response in call order, and
   `build_costs_row`, as `finalize` builds it (blinded for a pilot), with a note that the row
   was added after the run, and why;
@@ -246,7 +247,7 @@ def _check_settings(run: Run, plan: dict | None) -> None:
                 "harness_cell": run.cell.cell_id, "harness_config": run.cfg.to_dict(),
                 "run_matrix": run.matrix.to_dict(),
                 "episode_ids": [e.episode_id for e in run.episodes], "notes": run.notes,
-                "parallel": a.parallel, "repeat_index": 0,
+                "parallel": a.parallel, "repeat_index": run.matrix.repeat_index,
                 "abort_after_api_errors": runner.ABORT_AFTER_API_ERRORS}
     differ = [k for k, v in expected.items() if plan.get(k) != v]
     if differ:
@@ -456,12 +457,16 @@ def _check_episodes(run: Run, records: list[dict], transcript: list[dict]) -> li
         raise Refused("episodes.jsonl holds no episode")
     latencies: list[float] = []
     k = 0
+    repeat = run.matrix.repeat_index
+    # `runner.episode_record`: a repeat-1 record ends with its repeat_index (PREREG §2.9)
+    want_fields = EPISODE_FIELDS + (("repeat_index",) if repeat else ())
     for i, (rec, ep) in enumerate(zip(records, run.episodes, strict=False)):
         where = f"episode {i + 1} of episodes.jsonl"
-        if tuple(rec) != EPISODE_FIELDS:
+        if tuple(rec) != want_fields:
             raise Refused(f"{where} does not have the fields this runner writes")
         static = {"template_id": ep.template_id, "task_cell": ep.cell.id,
-                  "variant": ep.variant, "harness_cell": cell.cell_id, "model": cfg.model}
+                  "variant": ep.variant, "harness_cell": cell.cell_id, "model": cfg.model,
+                  **({"repeat_index": repeat} if repeat else {})}
         differ = [f for f, v in static.items() if rec[f] != v]
         if differ:
             raise Refused(f"{where}: {', '.join(differ)} differ from the run's settings")
@@ -568,7 +573,8 @@ def prepare(run: Run, *, plan: dict | None, plan_path: Path | None, git: dict | 
     records = _read_jsonl(episodes_path, "episodes file")
     transcript = _read_jsonl(raw_path, "raw transcript")
     latencies = _check_episodes(run, records, transcript)
-    runs = [runner.EpisodeRun(**r) for r in records]
+    runs = [runner.EpisodeRun(**{k: v for k, v in r.items() if k != "repeat_index"})
+            for r in records]
     exit_reason = _exit_reason(run, runs)
 
     # The ledger as the transport kept it: every response in call order (a sequential run
@@ -751,7 +757,7 @@ def write(rec: Recovery) -> list[str]:
             rec.out_dir, rec.raw_path, run.episodes, rec.runs, run.cell, run.cfg,
             types.SimpleNamespace(paid=True), experiment=run.args.experiment,
             run_id=run.run_id, started=rec.started, exit_reason=rec.exit_reason,
-            repeat_index=0, cost_row=rec.row, blinded=blinded,
+            repeat_index=run.matrix.repeat_index, cost_row=rec.row, blinded=blinded,
             episodes_path=rec.episodes_path, run_matrix=run.matrix.to_dict(), parallel=info,
             parallel_path=parallel_path, git=rec.git, finished=rec.finished,
             recorded=rec.recorded)

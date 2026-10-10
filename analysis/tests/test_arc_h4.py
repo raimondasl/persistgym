@@ -1,8 +1,11 @@
 """H4 on the ARC path runs (analysis/arc_h4.py; PREREG §3 H4 as amended by §17.6 change 3):
 shares and predictions on hand-computed values, the wording without S1, D34's G ≥ 10, the
 bootstrap (its seed, its determinism and the 35 distinct resamples of 4 units), the refusal of
-incomplete units, the --with-s1 path, the sensitivity analyses, the readings at K = 150 with
-censoring, the context_trims check and the output allowlist.
+incomplete units, the --with-s1 path, the sensitivity analyses, R7's replacement chain (its
+counted runs, the originals analysis on each chain's first run and R7's on the run the R7
+replacement replaced, the config hash and summary budget per run, its flags, and σ_replay's
+note: computed from synthetic S4 compaction records, or quoted when they are missing), the
+readings at K = 150 with censoring, the context_trims check and the output allowlist.
 
 Every run here is synthetic, in a results root built under tmp_path (checkpoint_c's test
 fixture, whose RHAE values follow from its level lists), except the last two tests: one runs
@@ -309,7 +312,7 @@ def test_the_originals_and_cost_cap_sensitivity_analyses(tmp_path):
     assert o["runs"]["FT09"]["S0"] == orig and o["means"]["S0"] == pytest.approx(25.0)
     assert o["G"] == pytest.approx(75.0)
     assert o["substituted"] == [{"game": "FT09", "config": "S0", "original": orig,
-                                 "rhae_original": 50.0, "rerun": re, "rhae_rerun": 0.0}]
+                                 "rhae_original": 50.0, "counted": re, "rhae_counted": 0.0}]
     c = h["sensitivity"]["without_cost_cap"]
     assert c["units"] == ["FT09", "R11L", "CD82"]
     assert [x["game"] for x in c["left_out"]] == ["SB26"] and "COST_CAP" in c["left_out"][0]["why"]
@@ -317,7 +320,9 @@ def test_the_originals_and_cost_cap_sensitivity_analyses(tmp_path):
     assert c["means"] == pytest.approx({"S0": 50 / 3, "S2": 200 / 3, "S4": 100.0})
     assert c["shares"]["sigma_replay"] == pytest.approx((100 - 200 / 3) / (100 - 50 / 3))
     text = "\n".join(h4.summary_lines(h))
-    assert "Original runs instead of re-runs" in text and f"`{orig}` (RHAE 50.00)" in text
+    assert "Original runs instead of re-runs" in text
+    assert f"`{orig}` (RHAE 50.00) for the counted run `{re}` (0.00)" in text
+    assert h["sigma_replay_note"] is None and h4.SIGMA_REPLAY_R7_LABEL not in text
 
 
 def test_an_unscorable_original_is_left_out_of_the_originals_reading(tmp_path):
@@ -330,6 +335,240 @@ def test_an_unscorable_original_is_left_out_of_the_originals_reading(tmp_path):
     assert o["n_units"] == 3 and [x["game"] for x in o["left_out"]] == ["R11L"]
     assert "cannot be scored" in o["left_out"][0]["why"]
     assert h["primary"]["n_units"] == 4
+
+
+# --- R7 ------------------------------------------------------------------------------------
+
+OLD_HASH, NEW_HASH = "a" * 64, "b" * 64
+
+
+def budget(tokens: int, digest: str) -> dict:
+    """meta.json's config hash and the profile's summary budget (all R7 reads of `config`)."""
+    return {"config_hash": digest,
+            "config": {"runtime": {"compaction": {"summary_max_output_tokens": tokens}}}}
+
+
+OLD, NEW = budget(8192, OLD_HASH), budget(65536, NEW_HASH)
+
+
+def test_an_r7_replacement_is_counted_and_r7s_sensitivity_puts_back_the_run_it_replaced(
+        tmp_path):
+    """FT09 S2: the original (0 levels) and its re-run (1 level, RHAE 16.67) end AGENT_ERROR
+    under the 8,192 budget; the R7 replacement (65,536) clears 2 (RHAE 50), as in MIXED."""
+    fx = H4Fixture(tmp_path)
+    fx.grid(MIXED, skip={("FT09", "S2")})
+    orig = fx.run("FT09", "S2", meta_extra=OLD, **play(0, "AGENT_ERROR"))
+    re = fx.run("FT09", "S2", seed=101, rerun_of=orig, meta_extra=OLD, **play(1, "AGENT_ERROR"))
+    r7 = fx.run("FT09", "S2", seed=201, r7_replaces=re, meta_extra=NEW, **play(2))
+    h = fx.compute()
+    assert h["status"] == h4.FINAL
+    assert h["units"]["FT09 S2"] == {"counted": r7, "original": orig, "rerun": re,
+                                     "r7_replacement": r7, "r7_rerun": None, "pending": False}
+    p = h["primary"]
+    assert p["runs"]["FT09"]["S2"] == r7
+    assert p["shares"] == pytest.approx({"sigma_pn": 3 / 7, "sigma_replay": 4 / 7})
+    pre = h["sensitivity"]["pre_r7"]
+    s2 = (RHAE[1] + 0 + 50 + 100) / 4
+    assert pre["runs"]["FT09"]["S2"] == re and pre["n_units"] == 4
+    assert pre["means"]["S2"] == pytest.approx(s2) and pre["G"] == pytest.approx(87.5)
+    assert pre["shares"]["sigma_replay"] == pytest.approx((100 - s2) / 87.5)
+    assert pre["substituted"] == [{"game": "FT09", "config": "S2", "replaced": re,
+                                   "rhae_replaced": pytest.approx(RHAE[1]),
+                                   "summary_budget_replaced": 8192, "counted": r7,
+                                   "rhae_counted": 50.0, "summary_budget_counted": 65536}]
+    # the frozen originals reading uses each chain's first run (§17.7 change 4 (i)): FT09
+    # S2's seed-1 original, which cleared nothing
+    o = h["sensitivity"]["originals"]
+    assert o["runs"]["FT09"]["S2"] == orig and o["means"]["S2"] == pytest.approx(37.5)
+    assert o["substituted"] == [{"game": "FT09", "config": "S2", "original": orig,
+                                 "rhae_original": 0.0, "counted": r7, "rhae_counted": 50.0}]
+    assert h["at_k"]["pre_r7"]["runs"]["FT09"]["S2"] == re
+    assert h["at_k"]["originals"]["runs"]["FT09"]["S2"] == orig
+    # every replaced run is in one of the two sensitivity readings
+    assert {o["runs"]["FT09"]["S2"], pre["runs"]["FT09"]["S2"]} == {orig, re}
+    rows = {r["run_id"]: r for r in h["runs"]}
+    assert rows[r7]["r7_replaces"] == re and rows[r7]["counted"] and rows[r7]["in_reading"]
+    assert (rows[r7]["config_hash"], rows[r7]["summary_max_output_tokens"]) == (NEW_HASH, 65536)
+    assert (rows[re]["config_hash"], rows[re]["summary_max_output_tokens"]) == (OLD_HASH, 8192)
+    assert rows[re]["counted"] is False and rows[re]["replicate"] == rows[r7]["replicate"] == 1
+    assert f"R7 replacement of {re}" in rows[r7]["flags"]
+    assert any("(the R7 sensitivity analysis only)" in f for f in rows[re]["flags"])
+    assert not any("counted as is" in f for f in rows[re]["flags"])
+    assert (f"replaced by {re} (the originals sensitivity analysis only)"
+            in rows[orig]["flags"])
+    s0 = rows[h["units"]["FT09 S0"]["counted"]]
+    assert s0["config_hash"] is None and s0["summary_max_output_tokens"] is None
+    assert not any("R7" in w for w in h["warnings"])
+    text = "\n".join(h4.summary_lines(h))
+    assert h4.PRE_R7_LABEL in text
+    assert (f"FT09 S2: `{re}` (RHAE 16.67, summary budget 8,192) for `{r7}` (50.00, 65,536)"
+            in text)
+    assert f"`{NEW_HASH[:12]}` (65,536)" in text and f"`{OLD_HASH[:12]}` (8,192)" in text
+    assert "not recorded (none)" in text                     # the synthetic S0 runs
+    assert "**R7 changed S1's and S2's summary budget mid-block**" in text
+    assert ("of the 4 counted S2 runs, 1 played under 65,536 and 0 "
+            "under 8,192 (3 with no budget recorded)") in text
+    assert f"FT09 S2: `{orig}` (RHAE 0.00) for the counted run `{r7}` (50.00)" in text
+    assert ("**D20's yardsticks pool both versions** (§17.7 change 5): D20 judges each S2 "
+            "run's seconds per model call against its config's earlier counted runs, whether "
+            "they played under 8,192 or 65,536") in text
+    # σ_replay's note: no compaction records under this results root, so it is quoted
+    note = h["sigma_replay_note"]
+    assert note["s2_runs_at_r7_budget"] == [r7] and note["n_counted_s2"] == 4
+    assert note["computed"] is False and note["budget_bound"] is False
+    assert (note["summaries"], note["retries"], note["max_output_tokens_per_attempt"]) == (
+        132, 0, 3073)
+    assert h4.SIGMA_REPLAY_R7_LABEL in text and note["text"] in text
+    assert ("In every S4 run of block 2 the 8,192 budget never bound: 132 summaries, 0 "
+            "retries, at most 3,073 output tokens per attempt (as recorded in "
+            "results/decisions.md (2026-10-10, amendment R7)") in note["text"]
+    assert "quoted, not recomputed" in note["text"]
+
+
+def test_an_r7_replacements_own_re_run_is_pending_then_counted(tmp_path):
+    fx = H4Fixture(tmp_path)
+    fx.grid(MIXED, skip={("FT09", "S2")})
+    orig = fx.run("FT09", "S2", meta_extra=OLD, **play(0, "AGENT_ERROR"))
+    re = fx.run("FT09", "S2", seed=101, rerun_of=orig, meta_extra=OLD, **play(1, "AGENT_ERROR"))
+    r7 = fx.run("FT09", "S2", seed=201, r7_replaces=re, meta_extra=NEW, **play(0, "API_ERROR"))
+    h = fx.compute()
+    assert h["status"] == h4.PROVISIONAL and h["units"]["FT09 S2"]["pending"]
+    assert any(r7 in x and "re-run has not landed" in x for x in h["provisional_reasons"])
+    row = next(r for r in h["runs"] if r["run_id"] == r7)
+    assert "re-run-eligible; its re-run has not landed" in row["flags"]
+    r7_re = fx.run("FT09", "S2", seed=301, rerun_of=r7, meta_extra=NEW, **play(2))
+    h = fx.compute()
+    assert h["status"] == h4.FINAL
+    assert h["units"]["FT09 S2"]["counted"] == h["units"]["FT09 S2"]["r7_rerun"] == r7_re
+    assert h["primary"]["shares"] == pytest.approx({"sigma_pn": 3 / 7, "sigma_replay": 4 / 7})
+    o = h["sensitivity"]["originals"]
+    assert o["runs"]["FT09"]["S2"] == orig
+    assert o["substituted"] == [{"game": "FT09", "config": "S2", "original": orig,
+                                 "rhae_original": 0.0, "counted": r7_re, "rhae_counted": 50.0}]
+    assert h["sensitivity"]["pre_r7"]["runs"]["FT09"]["S2"] == re
+    rows = {r["run_id"]: r for r in h["runs"]}
+    # the R7 replacement replaced by its own re-run is the one replaced run in no reading
+    assert (f"replaced by {r7_re} (in no reading: the originals sensitivity analysis uses the "
+            f"chain's first run, {orig}, and R7's the run the R7 replacement replaced, {re})"
+            in rows[r7]["flags"])
+    assert [rows[x]["replicate"] for x in (orig, re, r7, r7_re)] == [1, 1, 1, 1]
+
+
+def test_an_r7_replacement_of_an_original_with_s1(tmp_path):
+    """CD82 S1's original ends AGENT_ERROR and is replaced by R7 directly (no D19 re-run):
+    not pending; R7's sensitivity puts the original back."""
+    fx = H4Fixture(tmp_path)
+    fx.grid(_same(0, 2, 3, s1=2), skip={("CD82", "S1")})
+    orig = fx.run("CD82", "S1", meta_extra=OLD, **play(1, "AGENT_ERROR"))
+    r7 = fx.run("CD82", "S1", seed=201, r7_replaces=orig, meta_extra=NEW, **play(2))
+    h = fx.compute(with_s1=True)
+    assert h["status"] == h4.FINAL and h["units"]["CD82 S1"]["counted"] == r7
+    assert h["primary"]["shares"]["sigma_loss"] == pytest.approx(0.5)
+    pre = h["sensitivity"]["pre_r7"]
+    assert pre["runs"]["CD82"]["S1"] == orig
+    assert pre["shares"]["sigma_loss"] == pytest.approx((3 * 50 + RHAE[1]) / 4 / 100)
+    row = next(r for r in h["runs"] if r["run_id"] == orig)
+    assert (f"replaced by its R7 replacement {r7} (the originals and R7 sensitivity analyses "
+            "only)" in row["flags"])
+    assert h["sensitivity"]["originals"]["runs"]["CD82"]["S1"] == orig
+
+
+@pytest.mark.parametrize("case,warning", [
+    ("r7_under_the_old_budget", "has summary budget 8,192, not R7's 65,536"),
+    ("r7_of_a_final_run", "which ended TIME_BUDGET, not AGENT_ERROR"),
+    ("no_r7_yet", "has no R7 replacement"),
+])
+def test_r7_is_checked_and_flagged_not_refused(tmp_path, case, warning):
+    fx = H4Fixture(tmp_path)
+    fx.grid(MIXED, skip={("SB26", "S2")})
+    if case == "r7_under_the_old_budget":
+        orig = fx.run("SB26", "S2", meta_extra=OLD, **play(0, "AGENT_ERROR"))
+        fx.run("SB26", "S2", seed=201, r7_replaces=orig, meta_extra=OLD, **play(0))
+    elif case == "r7_of_a_final_run":
+        orig = fx.run("SB26", "S2", meta_extra=OLD, **play(0, "TIME_BUDGET"))
+        fx.run("SB26", "S2", seed=201, r7_replaces=orig, meta_extra=NEW, **play(0))
+    else:
+        orig = fx.run("SB26", "S2", meta_extra=OLD, **play(0, "AGENT_ERROR"))
+        fx.run("SB26", "S2", seed=101, rerun_of=orig, meta_extra=OLD, **play(0, "AGENT_ERROR"))
+    h = fx.compute()
+    assert h["status"] == h4.FINAL
+    assert any(warning in w for w in h["warnings"])
+    assert any(warning in line for line in h4.summary_lines(h))
+
+
+def _compaction_records(root, run_id, records):
+    """A run's raw harness compaction records: (attempts, output tokens) each, plus a prompt
+    and a summary the script must not read."""
+    folder = root / "raw" / "arc_path" / run_id / "harness"
+    folder.mkdir(parents=True)
+    for i, (attempts, out) in enumerate(records, 1):
+        (folder / f"compaction_{i:03d}.json").write_text(json.dumps(
+            {"compaction": i, "mechanism": "harness_summary", "attempts": attempts,
+             "prompt": {"system_prompt": "SECRET-PROMPT"}, "summary": "SECRET-SUMMARY",
+             "usage": {"completion_tokens": out, "reasoning_tokens": out // 2}}),
+            encoding="utf-8")
+
+
+def _r7_grid(fx):
+    """MIXED with every S2 run under R7's budget (65,536)."""
+    ids = fx.grid(MIXED, skip={(g, "S2") for g in GAMES})
+    for g in GAMES:
+        ids[(g, "S2")] = fx.run(g, "S2", meta_extra=NEW, **play(MIXED[g]["S2"]))
+    return ids
+
+
+NEVER = {"FT09": [(1, 1508), (1, 3073)], "SB26": [(1, 900)], "R11L": [], "CD82": [(1, 2000)]}
+
+
+@pytest.mark.parametrize("records, bound, facts", [
+    (NEVER, False,
+     ("In every S4 run of block 2 the 8,192 budget never bound: 4 summaries, 0 retries, at "
+      "most 3,073 output tokens per attempt (from those runs' harness compaction records). So "
+      "for the counted S4 runs the step still differs only by native replay and its item "
+      "format.")),
+    ({**NEVER, "SB26": [(1, 900), (2, 9000)]}, True,
+     ("In block 2's S4 runs the 8,192 budget may have bound: 5 summaries, 1 retry, at most "
+      "3,073 output tokens per single-attempt summary (1 summary whose largest attempt is not "
+      "known) (from those runs' harness compaction records), so the step may also differ by "
+      "the summary budget.")),
+    ({**NEVER, "CD82": [(1, 8192)]}, True,
+     "may have bound: 4 summaries, 0 retries, at most 8,192 output tokens per attempt"),
+])
+def test_sigma_replays_note_is_computed_from_block_2s_s4_compaction_records(tmp_path, records,
+                                                                            bound, facts):
+    """Every counted S2 run under 65,536: σ_replay is labelled, and whether S4's 8,192 bound
+    is computed from block 2's S4 runs' compaction records (attempts and output tokens only)."""
+    fx = H4Fixture(tmp_path)
+    ids = _r7_grid(fx)
+    for g, recs in records.items():
+        _compaction_records(fx.root, ids[(g, "S4")], recs)
+    h = fx.compute()
+    note = h["sigma_replay_note"]
+    assert note["computed"] is True and note["budget_bound"] is bound
+    assert note["source"] == "harness compaction records"
+    assert sorted(note["s4_runs"]) == sorted(ids[(g, "S4")] for g in GAMES)
+    assert sorted(note["s2_runs_at_r7_budget"]) == sorted(ids[(g, "S2")] for g in GAMES)
+    assert facts in note["text"]
+    assert note["text"].startswith("S2→S4 also changes the summary budget, from S2's 65,536 to "
+                                   "S4's 8,192 output tokens (4 of the 4 counted S2 runs "
+                                   "played under 65,536). ")
+    text = "\n".join(h4.summary_lines(h))
+    assert h4.SIGMA_REPLAY_R7_LABEL in text and note["text"] in text
+    assert "σ_replay here: in a reading whose S2 runs include one under 65,536" in text
+    assert "SECRET" not in text and "SECRET" not in json.dumps(h)
+
+
+def test_sigma_replays_note_is_quoted_when_an_s4_runs_records_are_missing(tmp_path):
+    fx = H4Fixture(tmp_path)
+    ids = _r7_grid(fx)
+    for g in ("FT09", "SB26", "R11L"):                     # CD82 S4's are not here
+        _compaction_records(fx.root, ids[(g, "S4")], NEVER[g])
+    note = fx.compute()["sigma_replay_note"]
+    assert note["computed"] is False and note["s4_runs"] is None
+    assert note["source"] == h4.RECORDED_S4_SOURCE
+    assert (note["summaries"], note["retries"], note["max_output_tokens_per_attempt"]) == (
+        132, 0, 3073)
+    assert "quoted, not recomputed" in note["text"]
 
 
 # --- at K = 150 ----------------------------------------------------------------------------
@@ -406,7 +645,9 @@ def test_the_output_is_exactly_the_allowlist(tmp_path):
     secret = "SECRET-VALUE-123"
     extra = {"api_key": secret, "raw_transcript_path": f"results/raw/{secret}",
              "tokens": {"reasoning_tokens": 777_777_777}, "notes": secret,
-             "model_returned": ["gemini-3.8-flash"]}
+             "model_returned": ["gemini-3.8-flash"], "config_hash": "c" * 64,
+             "config": {"client": {"api_key_env": secret}, "pricing": {"input": 0.123456},
+                        "runtime": {"compaction": {"summary_max_output_tokens": 8192}}}}
     for g, per in MIXED.items():
         for c in ("S4", "S0", "S2"):
             fx.run(g, c, meta_extra=extra, card_extra={"opaque": secret}, **play(per[c]))
@@ -418,6 +659,9 @@ def test_the_output_is_exactly_the_allowlist(tmp_path):
     text = "\n".join(p.read_text(encoding="utf-8") for p in out.iterdir())
     assert secret not in text and "777777777" not in text and "results/raw" not in text
     assert "gemini-3.8-flash" in text                       # the returned model string
+    assert "0.123456" not in text                           # of config, only the budget
+    assert all((r["config_hash"], r["summary_max_output_tokens"]) == ("c" * 64, 8192)
+               for r in h["runs"])
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     assert meta["experiment"] == "arc_h4" and meta["paid_calls"] == 0
     assert meta["cost_usd"] == 0.0 and meta["outputs"] == list(h4.OUTPUTS)
@@ -428,6 +672,9 @@ def test_the_output_is_exactly_the_allowlist(tmp_path):
                  "**A time confound.**", "**Without S1,**", "**No StateCarry evidence,**",
                  "35 distinct", "Descriptive only"):
         assert line in summary
+    # every budget is 8,192: no R7 lines, and no note on σ_replay
+    assert "R7 changed" not in summary and "D20's yardsticks pool" not in summary
+    assert h["sigma_replay_note"] is None and "σ_replay under R7" not in summary
 
 
 def test_the_default_output_folder_is_under_the_results_root(tmp_path):

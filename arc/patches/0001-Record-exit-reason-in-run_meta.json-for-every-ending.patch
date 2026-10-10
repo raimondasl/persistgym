@@ -1,7 +1,7 @@
 From 0350a8164e1565121d57d30dd9c5c1657d7468ce Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 23:26:29 -0400
-Subject: [PATCH 01/17] Record exit reason in run_meta.json for every ending
+Subject: [PATCH 01/18] Record exit reason in run_meta.json for every ending
 
 ExitReason was only logged by Swarm, so run_meta.json could not tell a
 per-level action budget from an error or a timeout: `outcome` stays null

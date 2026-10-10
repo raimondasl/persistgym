@@ -1,7 +1,7 @@
 From 67f6dd0d37eccb8f77a7645f0e0e9fc2ea400359 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 16:33:00 -0400
-Subject: [PATCH 17/17] Request the standard service tier in the Gemini path
+Subject: [PATCH 17/18] Request the standard service tier in the Gemini path
  profiles
 
 The four Gemini 3.8 Flash high profiles (Standard, rolling summary,

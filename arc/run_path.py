@@ -12,7 +12,14 @@ It spends money only after every check below passes, in this order:
    S4), a path game (FT09, SB26, R11L, CD82; never a held-out game), truncation only for
    the pilot, the experiment's mode, the price table valid today, the frozen profile asks
    for the standard tier, and GOOGLE_API_KEY (plus ARC_API_KEY for a game) is set. Keys
-   are never printed.
+   are never printed. An R7 replacement (`--r7-replaces`, amendment R7) is a counted S1 or
+   S2 run with seed 201 or 202 under R7's summary budget, replacing its unit's counted run,
+   which ended AGENT_ERROR by the summarizer failure (its meta.json and harness log are
+   read, `check_r7_files`); its own D19 re-run is `--rerun-of` it with seed 301 or 302. A
+   counted run's `--rerun-of` names a run that no run has re-run or replaced yet, and a plain
+   D19 re-run of an S1 or S2 run that played under the pre-R7 budget is refused (it would
+   play under R7's config without being an R7 replacement). These file checks run again
+   under the lock, after steps 2-7 (`check_paid`).
 2. No other ARC run holds the ARC stream's lock (`common.paidlock`): one paid run at a time
    per stream, so one PersistGym run may go beside it (PREREG §0.3 line 15, §12). The lock
    is taken before the spend checks, so two ARC runs cannot both pass them. A run that
@@ -122,6 +129,22 @@ WORK_NAME = "paid"
 INTERRUPT_GRACE_S = 120.0
 ARC_KEY = "ARC_API_KEY"
 GAME_RE = re.compile(r"(?P<base>[a-z0-9]{4})(?:-(?P<version>[0-9a-f]{4,64}))?")
+# A game run's ID as make_plan builds it: <UTC>-<profile>-<game>-s<seed>.
+RUN_ID_RE = re.compile(r"\d{8}T\d{6}Z-(?P<label>S\d+)-(?P<game>[a-z0-9]{4})-s(?P<seed>\d+)")
+REPLICATES = (1, 2)                                # PREREG §7.4
+RERUN_SEED_OFFSET = 100                            # PREREG §7.4: a re-run of seed s is s + 100
+# Amendment R7 (the researcher's decision of 2026-10-10, option B): a unit whose counted S1 or
+# S2 run ended by the summarizer failure gets ONE replacement under R7's summary budget
+# (patch 0018), with seed replicate + 200; its own D19 re-run has that seed + 100.
+R7_CONFIGS = ("S1", "S2")
+R7_SEED_OFFSET = 200
+R7_SEEDS = frozenset(r + R7_SEED_OFFSET for r in REPLICATES)                  # 201, 202
+R7_RERUN_SEEDS = frozenset(s + RERUN_SEED_OFFSET for s in R7_SEEDS)           # 301, 302
+R7_SUMMARY_BUDGET = 65_536          # runtime.compaction.summary_max_output_tokens under R7
+PRE_R7_SUMMARY_BUDGET = 8_192       # ... before R7 (patches 0007-0017)
+# The harness's CompactionFailureError (benchmarking/compaction.py), in harness.log.
+SUMMARIZER_FAILURE = ("Harness summary compaction failed to produce a completed, non-empty "
+                      "summary")
 RESULTS = runmeta.REPO_ROOT / "results"
 PREREG_GIT_PATH = "PREREG.md"
 FREEZE_GIT_PATH = "arc/config_freeze.json"       # freeze.FREEZE_PATH, as git names it
@@ -156,6 +179,7 @@ class Plan:
     game: str | None = None
     seed: int | None = None
     rerun_of: str | None = None
+    r7_replaces: str | None = None       # amendment R7: the counted run this one replaces
     max_actions: int | None = None
     after_summary_turns: int | None = None
     cost_cap_usd: float = 0.0            # the harness guard (list accounting)
@@ -204,6 +228,9 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--game", help="path game, e.g. ft09 or ft09-<version>")
     p.add_argument("--seed", type=int, help="replicate label (not sent to the model)")
     p.add_argument("--rerun-of", help="run_id this run re-runs (PREREG §7.5)")
+    p.add_argument("--r7-replaces", metavar="RUN_ID",
+                   help="arc_path S1 or S2 with seed 201 or 202 only: the unit's counted run, "
+                        "ended by the summarizer failure, that this R7 replacement replaces")
     p.add_argument("--max-actions", type=int, help="arc_pilot only: stop after N actions")
     p.add_argument("--after-summary-turns", type=int,
                    help="arc_pilot only: stop M turns after the first harness summary")
@@ -241,9 +268,10 @@ def make_plan(args: argparse.Namespace, record: Mapping[str, Any], *,
         raise Refused("--acceptance-check goes with --experiment gemini_probe, and "
                       "gemini_probe only with --acceptance-check")
     if args.acceptance_check:
-        if args.config or args.game or args.seed is not None or truncating or args.rerun_of:
+        if (args.config or args.game or args.seed is not None or truncating or args.rerun_of
+                or args.r7_replaces):
             raise Refused("--acceptance-check plays no game: drop --config, --game, --seed, "
-                          "--rerun-of and the truncation options")
+                          "--rerun-of, --r7-replaces and the truncation options")
         labels = tuple(dict.fromkeys(_label(x) for x in args.configs.split(",") if x.strip()))
         if not labels:
             raise Refused("--configs names no profile")
@@ -289,10 +317,17 @@ def make_plan(args: argparse.Namespace, record: Mapping[str, Any], *,
             plain_name(args.rerun_of)
         except Refused:
             raise Refused("--rerun-of must be a run_id") from None
+    if args.r7_replaces is not None:
+        try:
+            plain_name(args.r7_replaces)
+        except Refused:
+            raise Refused("--r7-replaces must be a run_id") from None
     profiles = record.get("profiles") or {}
     missing = [lb for lb in labels if lb not in profiles]
     if missing:
         raise Refused(f"the freeze record has no profile {missing}")
+    if not args.acceptance_check:
+        r7_rules(args, label=labels[0], game=game, seed=seed, profile=profiles[labels[0]])
     models = {profiles[lb]["config"]["request"]["model"] for lb in labels}
     if len(models) != 1:
         raise Refused(f"the profiles request different models: {sorted(models)}")
@@ -321,7 +356,8 @@ def make_plan(args: argparse.Namespace, record: Mapping[str, Any], *,
     return Plan(experiment=exp, approved_block=args.approved_block,
                 planned_usd=float(args.planned_usd), milestone=milestone, run_id=run_id,
                 labels=labels, acceptance=args.acceptance_check, game=game, seed=seed,
-                rerun_of=args.rerun_of, max_actions=args.max_actions,
+                rerun_of=args.rerun_of, r7_replaces=args.r7_replaces,
+                max_actions=args.max_actions,
                 after_summary_turns=args.after_summary_turns, cost_cap_usd=cap, model=model,
                 key_names=tuple(key_names), profiles={lb: profiles[lb] for lb in labels})
 
@@ -332,6 +368,203 @@ def plain_name(name: str) -> str:
             or any(ch in name for ch in '/\\:\0')):
         raise Refused(f"{name!r} is not a plain folder name")
     return name
+
+
+# ── Amendment R7: the replacement of a run ended by the summarizer failure ──
+
+
+def run_id_parts(run_id: str | None) -> tuple[str, str, int] | None:
+    """(profile, game, seed) of a game run's ID as `make_plan` builds it, else None."""
+    m = RUN_ID_RE.fullmatch(run_id or "")
+    return None if m is None else (m["label"], m["game"], int(m["seed"]))
+
+
+def _summary_budget(config: Any) -> Any:
+    """runtime.compaction.summary_max_output_tokens of a profile's config, or None."""
+    runtime = config.get("runtime") if isinstance(config, dict) else None
+    compaction = runtime.get("compaction") if isinstance(runtime, dict) else None
+    return compaction.get("summary_max_output_tokens") if isinstance(compaction, dict) else None
+
+
+def r7_rules(args: argparse.Namespace, *, label: str, game: str, seed: int,
+             profile: Mapping[str, Any]) -> None:
+    """The argument rules of amendment R7 for a game run (no I/O). An R7 replacement
+    (`--r7-replaces`) is a counted (arc_path) S1 or S2 run with seed replicate + 200 (201,
+    202), never also a re-run; the run it names is a run of the same profile and game with
+    seed replicate or replicate + 100 (the unit's counted run: an original or its D19 re-run);
+    and the frozen profile has R7's summary budget. Seeds 201 and 202 of arc_path are only for
+    R7 replacements. An R7 replacement's own D19 re-run has seed 301 or 302 and `--rerun-of`
+    that replacement; nothing re-runs it ("there is no further run")."""
+    base = (GAME_RE.fullmatch(game) or {"base": game})["base"]
+    replaced = args.r7_replaces
+    if replaced is not None:
+        if args.rerun_of is not None:
+            raise Refused("--r7-replaces and --rerun-of do not go together: an R7 replacement "
+                          "replaces a counted run (--r7-replaces, seed 201 or 202), and its "
+                          "own D19 re-run is --rerun-of <the replacement> with seed 301 or 302")
+        if args.experiment != "arc_path":
+            raise Refused("--r7-replaces is for counted arc_path runs only (amendment R7)")
+        if label not in R7_CONFIGS:
+            raise Refused(f"--r7-replaces is for S1 and S2 only, whose summary budget R7 "
+                          f"raised; not {label}")
+        if seed not in R7_SEEDS:
+            raise Refused(f"an R7 replacement of replicate r has seed r + {R7_SEED_OFFSET} "
+                          f"({' or '.join(map(str, sorted(R7_SEEDS)))}), not {seed}")
+        replicate = seed - R7_SEED_OFFSET
+        allowed = (replicate, replicate + RERUN_SEED_OFFSET)
+        parts = run_id_parts(replaced)
+        if parts is None or parts[:2] != (label, base) or parts[2] not in allowed:
+            raise Refused(f"--r7-replaces {replaced} is not a run of this unit: an R7 "
+                          f"replacement of {label} on {base}, replicate {replicate}, replaces "
+                          f"the unit's counted run, a run ID ending -{label}-{base}-s{allowed[0]} "
+                          f"(the original) or -s{allowed[1]} (its D19 re-run)")
+        budget = _summary_budget(profile.get("config"))
+        if budget != R7_SUMMARY_BUDGET:
+            raise Refused(f"{label}'s frozen profile has summary_max_output_tokens {budget}, "
+                          f"not R7's {R7_SUMMARY_BUDGET}: an R7 replacement runs only once "
+                          f"patch 0018 and its freeze record are merged and in PREREG §7.1")
+    elif args.experiment == "arc_path" and seed in R7_SEEDS:
+        raise Refused(f"seed {seed} labels an R7 replacement: add --r7-replaces <the counted "
+                      f"run it replaces>")
+    if args.experiment != "arc_path":
+        return
+    target = run_id_parts(args.rerun_of)
+    if target is not None and target[2] in R7_RERUN_SEEDS:
+        raise Refused(f"--rerun-of {args.rerun_of} is the D19 re-run of an R7 replacement; "
+                      f"there is no further run (amendment R7)")
+    reruns_r7 = target is not None and target[2] in R7_SEEDS
+    if (seed in R7_RERUN_SEEDS or reruns_r7) and not (
+            reruns_r7 and target[:2] == (label, base)
+            and seed == target[2] + RERUN_SEED_OFFSET):
+        raise Refused(f"seed {seed} with --rerun-of {args.rerun_of}: the D19 re-run of an R7 "
+                      f"replacement (seed 201 or 202) has that seed + {RERUN_SEED_OFFSET} and "
+                      f"--rerun-of that replacement, of the same profile and game")
+
+
+def _run_meta(paths: Paths, experiment: str, run_id: str) -> dict | None:
+    meta = _read_json(paths.results / experiment / run_id / "meta.json")
+    return meta if isinstance(meta, dict) and meta.get("run_id") == run_id else None
+
+
+def _unit(meta: Mapping[str, Any]) -> tuple[str, str, int | None]:
+    """(profile, game, replicate) of a run's meta.json."""
+    m = GAME_RE.fullmatch(str(meta.get("game_requested") or "").lower())
+    seed = (meta.get("seeds") or {}).get("replicate_seed")
+    replicate = seed % RERUN_SEED_OFFSET if isinstance(seed, int) else None
+    return str(meta.get("cell_or_config")), m["base"] if m else "", replicate
+
+
+def _metas(paths: Paths, experiment: str) -> list[dict]:
+    """Every run's meta.json in results/<experiment>/ (unreadable ones left out)."""
+    found = (_read_json(p) for p in sorted((paths.results / experiment).glob("*/meta.json")))
+    return [m for m in found if isinstance(m, dict)]
+
+
+def check_r7_files(plan: Plan, paths: Paths) -> None:
+    """Amendment R7's checks and D19's re-run checks on this checkout's files (`r7_rules` has
+    checked the arguments), for counted (arc_path) runs. `main` runs them before the lock and
+    again under it, after `check_paid`, so a run that landed in between is seen.
+
+    For a re-run (`--rerun-of T`), no run in results/arc_path/ already names T as its
+    `rerun_of` or `r7_replaces`: D19 allows one re-run, an R7 replacement's re-run is the
+    last run of its unit, and a run R7 replaced is not re-run. For the D19 re-run of an R7
+    replacement (seed 301 or 302), T has its meta.json there and is an R7 replacement. A
+    plain D19 re-run of an S1 or S2 run while the frozen profile has R7's summary budget
+    needs T's meta.json there with that budget: a re-run of a pre-R7 run (8,192) would play
+    under R7's config without being an R7 replacement (if T ended by the summarizer failure,
+    `--r7-replaces` it instead).
+
+    For an R7 replacement, the run it replaces has its meta.json in results/arc_path/: the
+    same profile and game, ended AGENT_ERROR (`agent_exit_reason`), under the pre-R7 summary
+    budget of 8,192; its harness log (results/raw/arc_path/<run_id>/harness.log) shows the
+    summarizer failure; no run there re-runs it (a D19 re-run would be the unit's counted run
+    instead); and its unit has no R7 replacement yet. Raises Refused."""
+    if plan.acceptance or plan.experiment != "arc_path":
+        return
+    metas = _metas(paths, plan.experiment)
+    if plan.rerun_of is not None:
+        _check_rerun_files(plan, paths, metas)
+    replaced = plan.r7_replaces
+    if replaced is None:
+        return
+    folder = paths.results / plan.experiment / replaced
+    meta = _run_meta(paths, plan.experiment, replaced)
+    if meta is None:
+        raise Refused(f"--r7-replaces {replaced}: no meta.json of that run in {folder}")
+    (label,) = plan.labels
+    unit = (label, (GAME_RE.fullmatch(plan.game or "") or {"base": ""})["base"],
+            plan.seed - R7_SEED_OFFSET if plan.seed is not None else None)
+    problems = []
+    if meta.get("experiment") != plan.experiment or _unit(meta) != unit:
+        problems.append(f"it is {meta.get('experiment')} {_unit(meta)}, not this unit "
+                        f"{plan.experiment} {unit}")
+    if meta.get("agent_exit_reason") != "AGENT_ERROR":
+        problems.append(f"its agent_exit_reason is {meta.get('agent_exit_reason')}, not "
+                        f"AGENT_ERROR")
+    budget = _summary_budget(meta.get("config"))
+    if budget != PRE_R7_SUMMARY_BUDGET:
+        problems.append(f"it ran with summary_max_output_tokens {budget}, not the pre-R7 "
+                        f"{PRE_R7_SUMMARY_BUDGET}")
+    log = paths.raw / plan.experiment / replaced / "harness.log"
+    try:
+        failed = SUMMARIZER_FAILURE in log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        problems.append(f"its harness log {log} cannot be read, so the summarizer failure "
+                        f"cannot be confirmed")
+    else:
+        if not failed:
+            problems.append(f"its harness log {log} does not show the summarizer failure "
+                            f"({SUMMARIZER_FAILURE!r})")
+    for other in metas:
+        if other.get("run_id") == replaced:
+            continue
+        if other.get("rerun_of") == replaced:
+            problems.append(f"{other.get('run_id')} re-runs it (D19), so that re-run is the "
+                            f"unit's counted run")
+        if other.get("r7_replaces") and _unit(other) == unit:
+            problems.append(f"the unit already has an R7 replacement, {other.get('run_id')} "
+                            f"(R7 allows one)")
+    if problems:
+        raise Refused(f"--r7-replaces {replaced} is not a run R7 replaces: "
+                      + "; ".join(problems))
+
+
+def _check_rerun_files(plan: Plan, paths: Paths, metas: list[dict]) -> None:
+    """`check_r7_files` for a re-run (`--rerun-of`)."""
+    target_id = plan.rerun_of
+    folder = paths.results / plan.experiment / target_id
+    taken = []
+    for other in metas:
+        if other.get("rerun_of") == target_id:
+            taken.append(f"{other.get('run_id')} re-runs it (D19 allows one re-run)")
+        elif other.get("r7_replaces") == target_id:
+            taken.append(f"{other.get('run_id')} replaces it under R7 (a run R7 replaced is "
+                         f"not re-run)")
+    if taken:
+        raise Refused(f"--rerun-of {target_id}: it is already replaced: " + "; ".join(taken))
+    target = _run_meta(paths, plan.experiment, target_id)
+    if plan.seed in R7_RERUN_SEEDS:
+        if target is None or not target.get("r7_replaces"):
+            raise Refused(f"--rerun-of {target_id}: seed {plan.seed} re-runs an R7 "
+                          f"replacement, but {folder} has no meta.json of an R7 replacement "
+                          f"(r7_replaces)")
+        return
+    (label,) = plan.labels
+    frozen = _summary_budget((plan.profiles.get(label) or {}).get("config"))
+    if label not in R7_CONFIGS or frozen != R7_SUMMARY_BUDGET:
+        return
+    budget = None if target is None else _summary_budget(target.get("config"))
+    if budget == R7_SUMMARY_BUDGET:
+        return
+    played = (f"no meta.json of it in {folder}, so the summary budget it played under is "
+              f"unknown" if target is None
+              else f"it played under summary_max_output_tokens {budget}")
+    r7_seed = plan.seed % RERUN_SEED_OFFSET + R7_SEED_OFFSET if plan.seed is not None else None
+    raise Refused(f"--rerun-of {target_id}: {played}, and the frozen {label} profile now has "
+                  f"R7's {R7_SUMMARY_BUDGET}, so this D19 re-run would play under R7's config "
+                  f"without being an R7 replacement (amendment R7). If it ended by the "
+                  f"summarizer failure, launch its R7 replacement instead (--r7-replaces "
+                  f"{target_id} --seed {r7_seed})")
 
 
 # ── Checks that need git ───────────────────────────────────────────────
@@ -860,6 +1093,8 @@ def costs_row(plan: Plan, acct: Accounting, *, git: dict) -> dict[str, Any]:
              f"exit_reason={exit_reason}", f"git_dirty={git['git_dirty']}"]
     if plan.rerun_of:
         notes.append(f"rerun_of={plan.rerun_of}")
+    if plan.r7_replaces:
+        notes.append(f"r7_replaces={plan.r7_replaces}")
     if acct.unrecorded_usage is not None:
         notes.append("includes usage recorded only in run_meta total_usage")
     if any(t != pricing.TIER for t in acct.tiers_served):
@@ -931,7 +1166,7 @@ def write_meta(plan: Plan, acct: Accounting, harness: Harness, granted: approval
         latency=acct.latency, n_calls=acct.n_calls, n_http_requests=acct.n_http_requests,
         approved_block=plan.approved_block, planned_usd=plan.planned_usd, phase=granted.phase,
         cost_cap_usd=plan.cost_cap_usd, hold_placed=hold_placed, rerun_of=plan.rerun_of,
-        paid=True, git=git, **acct.detail, **extra)
+        r7_replaces=plan.r7_replaces, paid=True, git=git, **acct.detail, **extra)
 
 
 def redact_keys(path: Path, values: Sequence[str]) -> bool:
@@ -1083,6 +1318,8 @@ def summary_text(plan: Plan, acct: Accounting, meta: Path, row: dict | None, *,
              f"  tiers served: {acct.tiers_served or 'none reported'}",
              f"  meta: {meta}",
              f"  costs.csv row: {'appended' if row else 'none (no model call was made)'}"]
+    if plan.r7_replaces:
+        lines.insert(1, f"  R7 replacement of {plan.r7_replaces}")
     if hold_placed:
         lines.append(f"  HOLD placed: no paid run starts until the researcher merges "
                      f"'{approval.format_clear_line(plan.run_id)}' (PREREG §7.7)")
@@ -1103,6 +1340,7 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
     try:
         record = freeze.load_record(paths.freeze)
         plan = make_plan(args, record)
+        check_r7_files(plan, paths)
         lock = paths.lock or paidlock.lock_path(paths.repo, STREAM)
     except (Refused, freeze.FreezeError, paidlock.LockHeld) as e:
         print(f"refused: {e}", file=sys.stderr)
@@ -1112,6 +1350,9 @@ def main(argv: Sequence[str] | None = None, *, paths: Paths | None = None) -> in
         with paidlock.paid_run_lock(lock, run_id=plan.run_id, what=plan.describe(),
                                     stream=STREAM) as held:
             granted = check_paid(plan, paths, paidlock.HeldLock(lock, held), record)
+            # Again under the lock: a run that landed since the check above is seen now, and
+            # no other ARC run can land until this one ends.
+            check_r7_files(plan, paths)
             print(f"approved: block {plan.approved_block!r} ({granted.phase}), planned "
                   f"${plan.planned_usd:.2f}, block headroom after this run "
                   f"${granted.block_headroom_usd:.2f}"

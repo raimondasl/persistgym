@@ -1,16 +1,20 @@
 """Checkpoint C metrics (analysis/checkpoint_c.py; PREREG §10.3): each rule firing and not
 firing, re-run replacement, D19/D20 and TIME_BUDGET, the refusals of an incomplete or
 inconsistent block 2, the 3-game fallback (D32) and the output allowlist; R6's yardstick for
-a config's first counted run (§17.6 change 5) and ``--d20-run``.
+a config's first counted run (§17.6 change 5) and ``--d20-run``; R7's replacement chain (every
+chain it accepts, and the refusal of every other), with ``--d20-run`` along it.
 
 Every run here is synthetic, in a results root built under tmp_path, except the tests on
 this checkout's own results/: a reading that does not crash, block 2's rulings unchanged by
-R6, and R6's S2 and S1 thresholds from block 2's data (on a copy, with a synthetic new run)."""
+R6, R6's S2 and S1 thresholds from block 2's data (on a copy, with a synthetic new run), and
+block 2's committed Checkpoint C reading reproduced after R7 (on a copy, with and without
+synthetic R7 chains)."""
 
 from __future__ import annotations
 
 import csv
 import io
+import itertools
 import json
 import shutil
 from datetime import UTC, datetime, timedelta
@@ -79,15 +83,18 @@ class Fixture:
         (self.root / "costs.csv").write_text(buf.getvalue(), encoding="utf-8")
 
     def run(self, game, config, *, ending, level_actions, levels_completed, seed=1,
-            rerun_of=None, billed=10.0, n_calls=100, median=50.0, wall=3600.0, card=True,
-            experiment="arc_path", meta_extra=None, card_extra=None, row=True, tag=True):
+            rerun_of=None, r7_replaces=None, billed=10.0, n_calls=100, median=50.0,
+            wall=3600.0, card=True, experiment="arc_path", meta_extra=None, card_extra=None,
+            row=True, tag=True):
         self.clock += timedelta(hours=1)
         run_id = f"{self.clock:%Y%m%dT%H%M%SZ}-{config}-{game.lower()}-s{seed}"
         d = self.root / "arc_path" / run_id
         d.mkdir()
         meta = {"experiment": experiment, "run_id": run_id, "cell_or_config": config,
                 "game_requested": game.lower(), "seeds": {"replicate_seed": seed},
-                "rerun_of": rerun_of, "agent_exit_reason": ending, "exit_reason": ending,
+                "rerun_of": rerun_of,
+                **({"r7_replaces": r7_replaces} if r7_replaces else {}),
+                "agent_exit_reason": ending, "exit_reason": ending,
                 "started_utc": self.clock.isoformat(timespec="seconds"),
                 "wall_clock_s": wall, "n_calls": n_calls,
                 "latency": {"n_ok_calls": n_calls, "median_s": median},
@@ -847,13 +854,16 @@ def test_d20_run_prints_one_json_line_while_block_2_is_incomplete(tmp_path, caps
     assert got == {"run_id": tb, "config": "S2", "game": "FT09",
                    "agent_exit_reason": "TIME_BUDGET", "median_s_per_call": 400.0,
                    "threshold_s": 380.0, "incident": True, "rerun_eligible": True,
-                   "rerun_of": None, "replaced_by": [], "rerun_allowed": True}
+                   "rerun_of": None, "r7_replaces": None, "replaced_by": [],
+                   "rerun_allowed": True, "rerun_seed": 101}
     got = _d20_line(fx, capsys, err)
     assert got["incident"] is None and got["rerun_eligible"] is True
+    assert got["rerun_allowed"] is True and got["rerun_seed"] == 101
     # its threshold whatever its ending: 2 × the first S2 run's 400 s, as of its start
     assert got["threshold_s"] == 800.0
     got = _d20_line(fx, capsys, win)
     assert got["incident"] is None and got["rerun_eligible"] is False
+    assert got["rerun_allowed"] is False and got["rerun_seed"] is None
 
 
 def test_d20_run_never_allows_a_second_re_run(tmp_path, capsys):
@@ -865,13 +875,15 @@ def test_d20_run_never_allows_a_second_re_run(tmp_path, capsys):
     orig = fx.run("FT09", "S2", median=900.0, **TB)
     got = _d20_line(fx, capsys, orig)
     assert got["incident"] is True and got["rerun_allowed"] is True
+    assert got["rerun_seed"] == 101
     re = fx.run("FT09", "S2", seed=101, rerun_of=orig, ending="AGENT_ERROR",
                 level_actions=(1, 1, 1), levels_completed=0)
     got = _d20_line(fx, capsys, re)
     assert got["rerun_eligible"] is True and got["rerun_of"] == orig
-    assert got["rerun_allowed"] is False
+    assert got["rerun_allowed"] is False and got["rerun_seed"] is None
     got = _d20_line(fx, capsys, orig)
     assert got["replaced_by"] == [re] and got["rerun_allowed"] is False
+    assert got["rerun_seed"] is None
 
 
 def test_d20_run_refuses_an_unknown_or_truncated_run(tmp_path, capsys):
@@ -988,3 +1000,344 @@ def test_d20_run_reads_a_missing_scorecard_as_unknown(tmp_path, capsys):
     assert cc.main(["--results-root", str(root), "--d20-run", lost]) == 0
     got = json.loads(capsys.readouterr().out)
     assert got["incident"] is False and got["rerun_eligible"] is True
+
+
+# --- R7: the replacement chain -------------------------------------------------------------
+
+AGENT_ERR = {"ending": "AGENT_ERROR", "level_actions": (20, 40, 60), "levels_completed": 1}
+
+
+def _chain(fx, *, rerun=True, r7_rerun=False, game="FT09", config="S2", r7_ending=None):
+    """One unit's chain: an original that ends AGENT_ERROR (the summarizer failure), its D19
+    re-run (seed 101) that ends the same way, an R7 replacement (seed 201) of the unit's
+    counted run, and the R7 replacement's own D19 re-run (seed 301). Returns their run IDs."""
+    ids = {"orig": fx.run(game, config, **AGENT_ERR)}
+    last = ids["orig"]
+    if rerun:
+        ids["rerun"] = last = fx.run(game, config, seed=101, rerun_of=last, **AGENT_ERR)
+    ids["r7"] = fx.run(game, config, seed=201, r7_replaces=last,
+                       **(r7_ending or (AGENT_ERR if r7_rerun else WIN)))
+    if r7_rerun:
+        ids["r7_rerun"] = fx.run(game, config, seed=301, rerun_of=ids["r7"], **WIN)
+    return ids
+
+
+def _resolve(fx, game="FT09", config="S2"):
+    entries, _ = cc.discover(fx.root / "arc_path")
+    cc.check_links(entries)
+    pilots = cc.pilot_latency(costs.read_rows(fx.root / "costs.csv"))
+    eligible = {e.run_id: cc.rerun_eligible(e, cc.d20_check(e, entries, pilots))
+                for e in entries if not e.truncated}
+    return cc.resolve_unit(entries, game, config, eligible), {e.run_id: e for e in entries}
+
+
+@pytest.mark.parametrize("rerun,r7_rerun", [(True, False), (True, True), (False, False),
+                                            (False, True)])
+def test_every_r7_chain_resolves_to_its_last_run(tmp_path, rerun, r7_rerun):
+    """original → (re-run) → R7 replacement → (its re-run): each run replaces the one before,
+    every seed label (1, 101, 201, 301) is replicate 1, and the block-2 reading is FINAL."""
+    fx = Fixture(tmp_path)
+    fx.block()
+    ids = _chain(fx, rerun=rerun, r7_rerun=r7_rerun)
+    u, by = _resolve(fx)
+    order = [ids[k] for k in ("orig", "rerun", "r7", "r7_rerun") if k in ids]
+    assert u.original.run_id == ids["orig"] and u.r7.run_id == ids["r7"]
+    assert (u.rerun and u.rerun.run_id) == ids.get("rerun")
+    assert (u.r7_rerun and u.r7_rerun.run_id) == ids.get("r7_rerun")
+    assert u.counted.run_id == order[-1] and u.head.run_id == ids["r7"]
+    assert u.before_r7.run_id == ids.get("rerun", ids["orig"]) and u.pending is False
+    assert [by[x].replicate for x in order] == [1] * len(order)
+    for a, b in itertools.pairwise(order):
+        assert by[a].replaced_by == [b]
+    assert by[order[-1]].replaced_by == []
+    assert by[ids["r7"]].r7_replaces == u.before_r7.run_id
+    assert by[u.before_r7.run_id].r7_by == [ids["r7"]]
+    out, _ = fx.compute()
+    assert out["status"] == cc.FINAL
+    counted = {r["run_id"]: r["counted"] for r in out["runs"]}
+    assert [counted[x] for x in order] == [False] * (len(order) - 1) + [True]
+
+
+def test_an_r7_replacement_that_ended_re_run_eligible_is_pending(tmp_path):
+    fx = Fixture(tmp_path)
+    fx.block()
+    orig = fx.run("FT09", "S2", **AGENT_ERR)
+    r7 = fx.run("FT09", "S2", seed=201, r7_replaces=orig, **AGENT_ERR)
+    u, _ = _resolve(fx)
+    assert u.pending is True and u.head.run_id == r7 and u.counted.run_id == r7
+    fx.run("FT09", "S2", seed=301, rerun_of=r7, **AGENT_ERR)
+    u, _ = _resolve(fx)
+    assert u.pending is False                   # its re-run is counted as is (D19)
+
+
+def test_d20_run_along_the_r7_chain(tmp_path, capsys):
+    """D19's one re-run per head: the original gets one, its re-run none; the R7 replacement
+    that ends re-run-eligible gets its one (seed 301), and every replaced run none."""
+    fx = Fixture(tmp_path)
+    fx.block(s0_median=160.0)
+    orig = fx.run("FT09", "S2", **AGENT_ERR)
+    got = _d20_line(fx, capsys, orig)
+    assert got["rerun_allowed"] is True and got["rerun_seed"] == 101
+    re = fx.run("FT09", "S2", seed=101, rerun_of=orig, **AGENT_ERR)
+    got = _d20_line(fx, capsys, re)
+    assert got["rerun_eligible"] is True and got["rerun_allowed"] is False
+    assert got["r7_replaces"] is None and got["rerun_seed"] is None
+    r7 = fx.run("FT09", "S2", seed=201, r7_replaces=re, **AGENT_ERR)
+    got = _d20_line(fx, capsys, r7)
+    assert got["r7_replaces"] == re and got["rerun_of"] is None and got["replaced_by"] == []
+    assert got["rerun_eligible"] is True and got["rerun_allowed"] is True
+    assert got["rerun_seed"] == 301                       # the R7 replacement's one re-run
+    got = _d20_line(fx, capsys, re)
+    assert got["replaced_by"] == [r7] and got["rerun_allowed"] is False
+    assert got["rerun_seed"] is None
+    r7_re = fx.run("FT09", "S2", seed=301, rerun_of=r7, **AGENT_ERR)
+    got = _d20_line(fx, capsys, r7_re)
+    assert got["rerun_of"] == r7 and got["rerun_eligible"] is True
+    assert got["rerun_allowed"] is False                  # no second re-run
+    assert got["rerun_seed"] is None
+    got = _d20_line(fx, capsys, r7)
+    assert got["replaced_by"] == [r7_re] and got["rerun_allowed"] is False
+    assert got["rerun_seed"] is None
+    got = _d20_line(fx, capsys, orig)
+    assert got["rerun_allowed"] is False and got["rerun_seed"] is None
+
+
+def test_d20_run_on_an_r7_replacement_that_ends_final_or_replaces_an_original(tmp_path,
+                                                                              capsys):
+    fx = Fixture(tmp_path)
+    fx.block()
+    orig = fx.run("FT09", "S2", **AGENT_ERR)
+    r7 = fx.run("FT09", "S2", seed=201, r7_replaces=orig, **WIN)
+    got = _d20_line(fx, capsys, r7)
+    assert got["rerun_eligible"] is False and got["rerun_allowed"] is False
+    assert got["rerun_seed"] is None
+    # the original ended re-run-eligible, but the R7 replacement replaced it
+    got = _d20_line(fx, capsys, orig)
+    assert got["rerun_eligible"] is True and got["replaced_by"] == [r7]
+    assert got["rerun_allowed"] is False and got["rerun_seed"] is None
+
+
+def test_d20_yardsticks_leave_out_a_run_replaced_by_an_r7_replacement(tmp_path):
+    fx = Fixture(tmp_path)
+    fx.block(s0_median=160.0)
+    orig = fx.run("FT09", "S2", median=100.0, **AGENT_ERR)
+    r7 = fx.run("FT09", "S2", seed=201, r7_replaces=orig, median=300.0, **WIN)
+    later = fx.run("SB26", "S2", median=650.0, **TB)
+    _, b = fx.compute()
+    for reading in ("as_of_start", "final_counted_set"):
+        a = b.d20[later][reading]
+        assert a["yardstick_from"] == [r7] and a["threshold_s"] == 600.0
+    assert b.d20[later]["incident"] is True
+    # the R7 replacement's own yardstick leaves out the run it replaces: here, FT09 S2's
+    # original was the only earlier S2 run, so it is R6's scaled pilot median
+    pilots = cc.pilot_latency(costs.read_rows(fx.root / "costs.csv"))
+    e = next(x for x in b.entries if x.run_id == r7)
+    a = cc.d20_readings(e, b.entries, pilots)["as_of_start"]
+    assert "pilot pilot-S2" in a["yardstick_from"] and a["threshold_s"] == 2 * 95.0 * 2.0
+
+
+@pytest.mark.parametrize("case,match", [
+    ("two_r7_of_one_run", "2 R7 replacements at replicate 1"),
+    ("r7_of_r7", "2 R7 replacements at replicate 1"),
+    ("r7_of_r7_rerun", "2 R7 replacements at replicate 1"),
+    ("r7_of_a_replaced_original", "which was not the unit's counted run when it started"),
+    ("rerun_after_r7_of_original", "the late re-run is the run out of place"),
+    ("r7_for_s0", "is an S0 run"),
+    ("r7_for_s4", "is an S4 run"),
+    ("r7_seed_101", "so it should be 201"),
+    ("r7_seed_202", "so it should be 201"),
+    ("r7_of_a_missing_run", "which is not among the arc_path folders"),
+    ("r7_of_another_game", "does not match the run it replaces"),
+    ("r7_started_first", "not after the run it replaces"),
+    ("rerun_and_r7", "names both"),
+    ("rerun_of_the_r7_rerun", "itself a re-run"),
+    ("r7_rerun_seed_101", "so it should be 301"),
+    ("two_r7_reruns", "2 re-runs"),
+    ("unlinked_seed_201", "names no run it re-runs or replaces"),
+])
+def test_every_other_chain_is_refused(tmp_path, capsys, case, match):
+    """FT09 S2's original and its re-run (both AGENT_ERROR), then one way to break R7's chain:
+    the full reading and --d20-run (the block-3 driver's check) both refuse."""
+    fx = Fixture(tmp_path)
+    ids = fx.block()
+    orig = fx.run("FT09", "S2", **AGENT_ERR)
+    re = fx.run("FT09", "S2", seed=101, rerun_of=orig, **AGENT_ERR)
+
+    def run(seed, **kw):
+        return fx.run("FT09", "S2", seed=seed, **kw, **WIN)
+
+    if case == "two_r7_of_one_run":
+        run(201, r7_replaces=re)
+        run(201, r7_replaces=re)
+    elif case == "r7_of_r7":
+        run(201, r7_replaces=run(201, r7_replaces=re))
+    elif case == "r7_of_r7_rerun":
+        r7 = fx.run("FT09", "S2", seed=201, r7_replaces=re, **AGENT_ERR)
+        run(201, r7_replaces=run(301, rerun_of=r7))
+    elif case == "r7_of_a_replaced_original":
+        run(201, r7_replaces=orig)
+    elif case == "rerun_after_r7_of_original":
+        o = fx.run("SB26", "S2", **AGENT_ERR)
+        fx.run("SB26", "S2", seed=201, r7_replaces=o, **WIN)
+        fx.run("SB26", "S2", seed=101, rerun_of=o, **WIN)
+    elif case in ("r7_for_s0", "r7_for_s4"):
+        c = case[-2:].upper()
+        fx.run("FT09", c, seed=201, r7_replaces=ids[("FT09", c)], **WIN)
+    elif case == "r7_seed_101":
+        run(101, r7_replaces=re)
+    elif case == "r7_seed_202":
+        run(202, r7_replaces=re)
+    elif case == "r7_of_a_missing_run":
+        run(201, r7_replaces="20261001T000000Z-S2-ft09-s101")
+    elif case == "r7_of_another_game":
+        fx.run("SB26", "S2", seed=201, r7_replaces=re, **WIN)
+    elif case == "r7_started_first":
+        run(201, r7_replaces=re, meta_extra={"started_utc": "2026-10-01T00:00:00+00:00"})
+    elif case == "rerun_and_r7":
+        run(201, rerun_of=re, r7_replaces=re)
+    elif case == "rerun_of_the_r7_rerun":
+        r7 = fx.run("FT09", "S2", seed=201, r7_replaces=re, **AGENT_ERR)
+        r = fx.run("FT09", "S2", seed=301, rerun_of=r7, **AGENT_ERR)
+        run(401, rerun_of=r)
+    elif case == "r7_rerun_seed_101":
+        run(101, rerun_of=fx.run("FT09", "S2", seed=201, r7_replaces=re, **AGENT_ERR))
+    elif case == "two_r7_reruns":
+        r7 = fx.run("FT09", "S2", seed=201, r7_replaces=re, **AGENT_ERR)
+        run(301, rerun_of=r7)
+        run(301, rerun_of=r7)
+    elif case == "unlinked_seed_201":
+        fx.run("SB26", "S2", seed=201, **WIN)
+    assert fx.main("--no-write", "--allow-incomplete") == 2
+    assert match in capsys.readouterr().err
+    assert fx.main("--d20-run", orig) == 2
+    assert match in capsys.readouterr().err
+
+
+def test_a_re_run_started_after_the_r7_replacement_of_its_run_is_named(tmp_path, capsys):
+    """A D19 re-run of a run that an R7 replacement replaced: when the re-run started after
+    the R7 replacement, the refusal names the late re-run and both start times; when it
+    started before, the R7 replacement replaced a run that was no longer counted."""
+    fx = Fixture(tmp_path)
+    fx.block()
+    orig = fx.run("SB26", "S2", **AGENT_ERR)
+    r7 = fx.run("SB26", "S2", seed=201, r7_replaces=orig, **WIN)
+    late = fx.run("SB26", "S2", seed=101, rerun_of=orig, **WIN)
+    assert fx.main("--d20-run", r7) == 2
+    err = capsys.readouterr().err
+    entries = {e.run_id: e for e in cc.discover(fx.root / "arc_path")[0]}
+    assert entries[late].started > entries[r7].started
+    assert (f"D19 re-run {late} of {orig} started {entries[late].started.isoformat()}, after "
+            f"R7 replacement {r7} of that run ({entries[r7].started.isoformat()})") in err
+    fx2 = Fixture(tmp_path / "two")
+    fx2.block()
+    orig = fx2.run("SB26", "S2", **AGENT_ERR)
+    early = fx2.run("SB26", "S2", seed=101, rerun_of=orig, **AGENT_ERR)
+    r7 = fx2.run("SB26", "S2", seed=201, r7_replaces=orig, **WIN)
+    assert fx2.main("--d20-run", r7) == 2
+    err = capsys.readouterr().err
+    assert f"R7 replacement {r7} (started " in err and "the late re-run" not in err
+    assert (f"which was not the unit's counted run when it started: its D19 re-run {early} "
+            "(started ") in err
+
+
+def test_run_rows_outside_block_2_give_r7_replaces(tmp_path):
+    """Block 2's rows keep the committed schema (`RUN_FIELDS`); every other row adds
+    ``r7_replaces`` (`RUN_FIELDS_R7`)."""
+    fx = Fixture(tmp_path)
+    fx.block()
+    ids = _chain(fx, r7_rerun=True)
+    out, _ = fx.compute()
+    rows = {r["run_id"]: r for r in out["runs"]}
+    assert len(rows) == 8 + 4
+    for r in rows.values():
+        want = cc.RUN_FIELDS if r["block2"] else cc.RUN_FIELDS_R7
+        assert tuple(r) == want and (r["config"] in ("S0", "S4")) is r["block2"]
+    assert cc.RUN_FIELDS_R7 == (*cc.RUN_FIELDS[:6], "r7_replaces", *cc.RUN_FIELDS[6:])
+    assert rows[ids["r7"]]["r7_replaces"] == ids["rerun"]
+    assert [rows[ids[k]]["r7_replaces"] for k in ("orig", "rerun", "r7_rerun")] == [None] * 3
+
+
+def test_resolve_unit_refuses_two_r7_replacements_on_its_own(tmp_path):
+    fx = Fixture(tmp_path)
+    ids = _chain(fx)
+    extra = fx.run("FT09", "S2", seed=201, r7_replaces=ids["r7"], **WIN)
+    entries, _ = cc.discover(fx.root / "arc_path")
+    eligible = dict.fromkeys((e.run_id for e in entries), False)
+    with pytest.raises(cc.Refusal, match=f"2 R7 replacements at replicate 1 .*{extra}"):
+        cc.resolve_unit(entries, "FT09", "S2", eligible)
+
+
+# --- block 2's committed reading, after R7 ---------------------------------------------------
+
+SNAPSHOT = cc.RESULTS / "checkpoint_c" / "20261009T151039Z" / "checkpoint_c.json"
+
+
+def _snapshot_root(tmp_path):
+    """Block 2's folders, the costs.csv rows that existed when the committed Checkpoint C
+    reading was computed, and the G0 record and draw it read, under tmp_path."""
+    snap = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    root = _copy_block_2(tmp_path)
+    rows = [r for r in costs.read_rows(cc.RESULTS / "costs.csv")
+            if r["timestamp_utc"] <= snap["generated_utc"]]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=costs.COLUMNS, lineterminator="\n")
+    w.writeheader()
+    w.writerows({k: r.get(k, "") for k in costs.COLUMNS} for r in rows)
+    (root / "costs.csv").write_text(buf.getvalue(), encoding="utf-8")
+    for key in ("g0_json", "draw_json"):
+        rel = snap["inputs"][key].removeprefix("results/")
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(cc.RESULTS / rel, root / rel)
+    return root, snap
+
+
+def _without_r6_drift(obj):
+    """R6 (after the committed reading) added each D20 reading's `drift`, None for S0 and
+    S4; drop it, checking it is None."""
+    if isinstance(obj, dict):
+        assert obj.get("drift", None) is None
+        return {k: _without_r6_drift(v) for k, v in obj.items() if k != "drift"}
+    if isinstance(obj, list):
+        return [_without_r6_drift(v) for v in obj]
+    return obj
+
+
+def _folder_names(paths):
+    return [p.replace("\\", "/").rsplit("/", 1)[-1] for p in paths]
+
+
+def test_block_2s_committed_reading_is_reproduced_after_r7(tmp_path):
+    """Every number, verdict and per-run row of the committed Checkpoint C reading
+    (results/checkpoint_c/20261009T151039Z) is reproduced from the same inputs."""
+    root, snap = _snapshot_root(tmp_path)
+    git = {"git_commit": snap["git_commit"], "git_dirty": snap["git_dirty"]}
+    out, _ = cc.compute(root, snap["generated_utc"], git)
+    got = _without_r6_drift(json.loads(json.dumps(out)))
+    assert _folder_names(got["inputs"]["arc_path_folders"]) == _folder_names(
+        snap["inputs"]["arc_path_folders"])
+    got["inputs"] = snap["inputs"]                  # tmp_path, not the checkout's results/
+    got["prereg_version"] = snap["prereg_version"]  # the PREREG version is not block 2's
+    assert got == snap
+
+
+def test_r7_chains_leave_block_2s_reading_unchanged(tmp_path):
+    """The same inputs with S1 and S2 chains added (FT09 S2: original, re-run, R7
+    replacement, its re-run; SB26 S1: original and R7 replacement), none with a costs.csv
+    row: block 2's readings, verdicts and run rows are the committed ones."""
+    root, snap = _snapshot_root(tmp_path)
+    fx = Fixture.__new__(Fixture)
+    fx.root, fx.rows = root, []
+    fx.clock = datetime(2026, 10, 10, tzinfo=UTC)
+    fx.write_costs = lambda: None                    # keep the committed rows as they are
+    _chain(fx, r7_rerun=True)
+    _chain(fx, rerun=False, game="SB26", config="S1")
+    git = {"git_commit": snap["git_commit"], "git_dirty": snap["git_dirty"]}
+    out, b = cc.compute(root, snap["generated_utc"], git)
+    got = _without_r6_drift(json.loads(json.dumps(out)))
+    for key in ("status", "provisional_reasons", "warnings", "path_games",
+                "fallback_drop_game", "phase_1b", "readings"):
+        assert got[key] == snap[key], key
+    rows = {r["run_id"]: r for r in got["runs"]}
+    assert [rows[r["run_id"]] for r in snap["runs"]] == snap["runs"]
+    assert len(got["runs"]) == len(snap["runs"]) + 6
+    assert all(u.r7 is None for u in b.units.values())

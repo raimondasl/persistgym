@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -282,6 +283,8 @@ def test_counted_run_is_accounted_and_recorded(world):
     assert meta["tokens"]["reasoning_tokens"] == 500
     assert meta["approved_block"] == BLOCK and meta["phase"] == "1b"
     assert meta["seeds"]["replicate_seed"] == 1 and meta["cost_cap_usd"] == 120.0
+    assert meta["rerun_of"] is None and meta["r7_replaces"] is None
+    assert "rerun_of=" not in row["notes"] and "r7_replaces=" not in row["notes"]
     run_dir = Path(meta["raw_transcript_path"])
     if not run_dir.is_absolute():
         run_dir = runmeta.REPO_ROOT / run_dir
@@ -1451,6 +1454,332 @@ def test_pilot_plan_is_blinded_and_capped_at_its_planned_spend():
     plan = _plan(PILOT_ARGS)
     assert plan.blinded and plan.cost_cap_usd == 15.0 and plan.milestone == "M0"
     assert (plan.max_actions, plan.after_summary_turns) == (60, 5)
+
+
+# ── Amendment R7: replacing a run ended by the summarizer failure ──────
+
+R7_REPLACED = "20261010T030159Z-S2-ft09-s101"      # a D19 re-run, the unit's counted run
+R7_REPLACEMENT = "20261011T000000Z-S2-ft09-s201"
+
+
+def _game_args(config: str, game: str, seed: int, *extra: str,
+               experiment: str = "arc_path") -> list[str]:
+    return ["--approved-block", BLOCK, "--experiment", experiment, "--config", config,
+            "--game", game, "--seed", str(seed), "--planned-usd", "125", *extra]
+
+
+R7_ARGS = _game_args("S2", "ft09", 201, "--r7-replaces", R7_REPLACED)
+R7_RERUN_ARGS = _game_args("S2", "ft09", 301, "--rerun-of", R7_REPLACEMENT)
+
+
+def test_the_frozen_s1_and_s2_profiles_have_r7s_summary_budget():
+    """Patch 0018 (R7): S1 and S2 summarize with the action requests' output budget; S0
+    has no summary and S4 keeps 8,192."""
+    budgets = {lb: rp._summary_budget(e["config"]) for lb, e in RECORD["profiles"].items()}
+    assert budgets == {"S0": None, "S1": rp.R7_SUMMARY_BUDGET, "S2": rp.R7_SUMMARY_BUDGET,
+                       "S4": rp.PRE_R7_SUMMARY_BUDGET}
+    for lb in rp.R7_CONFIGS:
+        request = RECORD["profiles"][lb]["config"]["request"]
+        assert request["generation_config"]["max_output_tokens"] == rp.R7_SUMMARY_BUDGET
+
+
+@pytest.mark.parametrize("argv, replaced", [
+    (R7_ARGS, R7_REPLACED),
+    (_game_args("S2", "ft09", 201, "--r7-replaces", "20261010T020247Z-S2-ft09-s1"),
+     "20261010T020247Z-S2-ft09-s1"),                                   # an original
+    (_game_args("S1", "cd82", 202, "--r7-replaces", "20261012T010203Z-S1-cd82-s102"),
+     "20261012T010203Z-S1-cd82-s102"),
+    (_game_args("S2", "ft09-0d8bbf25", 201, "--r7-replaces", R7_REPLACED), R7_REPLACED),
+])
+def test_plan_of_an_r7_replacement(argv, replaced):
+    plan = _plan(argv)
+
+    assert plan.r7_replaces == replaced and plan.rerun_of is None
+    assert plan.run_id.endswith(f"-{argv[5]}-{argv[7][:4]}-s{argv[9]}")
+    assert plan.experiment == "arc_path" and plan.cost_cap_usd == 120.0
+
+
+def test_plan_of_an_r7_replacements_d19_rerun():
+    plan = _plan(R7_RERUN_ARGS)
+    assert (plan.rerun_of, plan.r7_replaces, plan.seed) == (R7_REPLACEMENT, None, 301)
+
+
+@pytest.mark.parametrize("argv, message", [
+    ([*R7_ARGS, "--rerun-of", "20261010T020247Z-S2-ft09-s1"], "do not go together"),
+    (_game_args("S2", "ft09", 201, "--max-actions", "50", "--r7-replaces", R7_REPLACED,
+                experiment="arc_pilot"), "counted arc_path runs only"),
+    (_game_args("S0", "ft09", 201, "--r7-replaces", "20261010T030159Z-S0-ft09-s101"),
+     "S1 and S2 only"),
+    (_game_args("S4", "ft09", 201, "--r7-replaces", "20261010T030159Z-S4-ft09-s1"),
+     "S1 and S2 only"),
+    (_game_args("S2", "ft09", 1, "--r7-replaces", R7_REPLACED), "seed r \\+ 200"),
+    (_game_args("S2", "ft09", 101, "--r7-replaces", R7_REPLACED), "seed r \\+ 200"),
+    (_game_args("S2", "ft09", 301, "--r7-replaces", R7_REPLACED), "seed r \\+ 200"),
+    (_game_args("S2", "ft09", 202, "--r7-replaces", R7_REPLACED), "not a run of this unit"),
+    (_game_args("S1", "ft09", 201, "--r7-replaces", R7_REPLACED), "not a run of this unit"),
+    (_game_args("S2", "r11l", 201, "--r7-replaces", R7_REPLACED), "not a run of this unit"),
+    (_game_args("S2", "ft09", 201, "--r7-replaces", "20261011T000000Z-S2-ft09-s201"),
+     "not a run of this unit"),                          # a replacement is never replaced
+    (_game_args("S2", "ft09", 201, "--r7-replaces", "ft09-s2-run"), "not a run of this unit"),
+    (_game_args("S2", "ft09", 201, "--r7-replaces", "../x"), "--r7-replaces must be a run_id"),
+    ([*ACCEPT_ARGS, "--r7-replaces", R7_REPLACED], "plays no game"),
+    (_game_args("S2", "ft09", 201), "labels an R7 replacement"),
+    (_game_args("S1", "cd82", 202), "labels an R7 replacement"),
+    # The D19 re-run of an R7 replacement: seed 301/302, --rerun-of that replacement.
+    (_game_args("S2", "ft09", 301), "D19 re-run of an R7"),
+    (_game_args("S2", "ft09", 301, "--rerun-of", R7_REPLACED), "D19 re-run of an R7"),
+    (_game_args("S2", "ft09", 302, "--rerun-of", R7_REPLACEMENT), "D19 re-run of an R7"),
+    (_game_args("S1", "ft09", 301, "--rerun-of", R7_REPLACEMENT), "D19 re-run of an R7"),
+    (_game_args("S2", "ft09", 101, "--rerun-of", R7_REPLACEMENT), "D19 re-run of an R7"),
+    (_game_args("S2", "ft09", 401, "--rerun-of", "20261012T000000Z-S2-ft09-s301"),
+     "no further run"),
+])
+def test_plan_refuses_what_r7_does_not_allow(argv, message):
+    with pytest.raises(rp.Refused, match=message):
+        _plan(argv)
+
+
+def test_plan_refuses_an_r7_replacement_under_the_pre_r7_profile():
+    record = json.loads(json.dumps(RECORD))
+    record["profiles"]["S2"]["config"]["runtime"]["compaction"][
+        "summary_max_output_tokens"] = rp.PRE_R7_SUMMARY_BUDGET
+    with pytest.raises(rp.Refused, match="not R7's 65536"):
+        _plan(R7_ARGS, record=record)
+
+
+def test_r7_seeds_are_free_outside_counted_runs():
+    plan = _plan(_game_args("S2", "ft09", 201, "--max-actions", "50", experiment="arc_pilot"))
+    assert plan.seed == 201 and plan.r7_replaces is None
+
+
+def _past_run(paths: rp.Paths, run_id: str, *, agent_exit_reason: str = "AGENT_ERROR",
+              budget: int = rp.PRE_R7_SUMMARY_BUDGET, log: str | None = rp.SUMMARIZER_FAILURE,
+              **fields) -> None:
+    """A committed counted run's meta.json and, unless `log` is None, its raw harness.log
+    (`log` "" writes one without the summarizer failure)."""
+    label, game, seed = rp.run_id_parts(run_id)
+    config = json.loads(json.dumps(RECORD["profiles"][label]["config"]))
+    if label in rp.R7_CONFIGS:
+        config["runtime"]["compaction"]["summary_max_output_tokens"] = budget
+    _write(paths.results / "arc_path" / run_id / "meta.json", {
+        "experiment": "arc_path", "run_id": run_id, "cell_or_config": label,
+        "game_requested": game, "seeds": {"replicate_seed": seed},
+        "exit_reason": agent_exit_reason, "agent_exit_reason": agent_exit_reason,
+        "rerun_of": None, "r7_replaces": None, "config": config, **fields})
+    if log is not None:
+        path = paths.raw / "arc_path" / run_id / "harness.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("2026-10-10 03:02:20,001 | INFO | step 1\n" + (
+            f"2026-10-10 03:10:54,389 | ERROR | Harness summary compaction failed before step "
+            f"113 after 209.360s: {log} after 4 response failures.\n" if log else ""),
+            encoding="utf-8")
+
+
+def test_an_r7_replacement_is_accounted_and_recorded(world):
+    paths, h = world
+    _past_run(paths, "20261010T020247Z-S2-ft09-s1")
+    _past_run(paths, R7_REPLACED, rerun_of="20261010T020247Z-S2-ft09-s1")
+    h.inner = lambda command, cwd: fake_game(cwd)
+
+    assert rp.main(R7_ARGS, paths=paths) == 0
+
+    assert h.calls == ["pin", "create", "apply", "sync", "resolve", "inner", "remove"]
+    (command,) = h.commands
+    s2 = RECORD["profiles"]["S2"]
+    assert command[command.index("--config") + 1] == s2["config_id"]
+    assert command[command.index("--expect-config-hash") + 1] == s2["sha256"]
+    tags = command[command.index("--tags") + 1].split(",")
+    assert tags[:4] == ["persistgym", "arc_path", "S2", "seed-201"]
+    (row,) = _rows(paths)
+    assert f"r7_replaces={R7_REPLACED}" in row["notes"] and "rerun_of=" not in row["notes"]
+    assert row["run_id"].endswith("-S2-ft09-s201")
+    meta = json.loads((paths.results / "arc_path" / row["run_id"] / "meta.json").read_text(
+        encoding="utf-8"))
+    assert (meta["r7_replaces"], meta["rerun_of"]) == (R7_REPLACED, None)
+    assert meta["seeds"]["replicate_seed"] == 201 and meta["config_hash"] == s2["sha256"]
+    assert rp._summary_budget(meta["config"]) == rp.R7_SUMMARY_BUDGET
+    assert not paths.lock.exists()
+
+
+def test_an_r7_replacements_d19_rerun_is_recorded(world):
+    paths, h = world
+    _past_run(paths, R7_REPLACEMENT, budget=rp.R7_SUMMARY_BUDGET, log=None,
+              r7_replaces=R7_REPLACED)
+    h.inner = lambda command, cwd: fake_game(cwd)
+
+    assert rp.main(R7_RERUN_ARGS, paths=paths) == 0
+
+    (row,) = _rows(paths)
+    assert f"rerun_of={R7_REPLACEMENT}" in row["notes"] and "r7_replaces=" not in row["notes"]
+    meta = json.loads((paths.results / "arc_path" / row["run_id"] / "meta.json").read_text(
+        encoding="utf-8"))
+    assert (meta["rerun_of"], meta["r7_replaces"]) == (R7_REPLACEMENT, None)
+
+
+def test_refused_when_the_d19_rerun_target_is_not_an_r7_replacement(world, capsys):
+    paths, h = world
+    _past_run(paths, R7_REPLACEMENT, budget=rp.R7_SUMMARY_BUDGET, log=None)  # no r7_replaces
+
+    assert rp.main(R7_RERUN_ARGS, paths=paths) == 2
+
+    assert "has no meta.json of an R7 replacement" in capsys.readouterr().err
+    assert h.calls == [] and not paths.lock.exists()
+
+
+@pytest.mark.parametrize("setup, message", [
+    (lambda p: None, "no meta.json of that run"),
+    (lambda p: _past_run(p, R7_REPLACED, agent_exit_reason="ACTION_BUDGET"),
+     "agent_exit_reason is ACTION_BUDGET, not AGENT_ERROR"),
+    (lambda p: _past_run(p, R7_REPLACED, budget=rp.R7_SUMMARY_BUDGET),
+     "summary_max_output_tokens 65536, not the pre-R7 8192"),
+    (lambda p: _past_run(p, R7_REPLACED, log=None), "cannot be read"),
+    (lambda p: _past_run(p, R7_REPLACED, log=""), "does not show the summarizer failure"),
+    (lambda p: _past_run(p, R7_REPLACED, game_requested="r11l"), "not this unit"),
+    (lambda p: _past_run(p, R7_REPLACED, seeds={"replicate_seed": 102}), "not this unit"),
+    (lambda p: _past_run(p, R7_REPLACED, experiment="arc_pilot"), "not this unit"),
+    (lambda p: [_past_run(p, R7_REPLACED),
+                _past_run(p, "20261010T050000Z-S2-ft09-s1", rerun_of=R7_REPLACED)],
+     "re-runs it \\(D19\\)"),
+    (lambda p: [_past_run(p, R7_REPLACED),
+                _past_run(p, R7_REPLACEMENT, budget=rp.R7_SUMMARY_BUDGET,
+                          r7_replaces="20261010T020247Z-S2-ft09-s1")],
+     "already has an R7 replacement"),
+])
+def test_refused_unless_the_replaced_run_ended_by_the_summarizer_failure(world, capsys, setup,
+                                                                         message):
+    paths, h = world
+    setup(paths)
+
+    assert rp.main(R7_ARGS, paths=paths) == 2
+
+    err = capsys.readouterr().err
+    assert re.search(message, err), err
+    assert h.calls == [] and not paths.lock.exists() and _rows(paths) == []
+
+
+def test_check_r7_files_leaves_other_runs_alone(world):
+    paths, _ = world          # no results at all: only R7 runs and S1/S2 re-runs need them
+    for argv in (GAME_ARGS, PILOT_ARGS, ACCEPT_ARGS,
+                 _game_args("S0", "ft09", 101, "--rerun-of", "20261010T020247Z-S0-ft09-s1"),
+                 _game_args("S4", "ft09", 101, "--rerun-of", "20261010T020247Z-S4-ft09-s1"),
+                 _game_args("S2", "ft09", 101, "--rerun-of", "20261010T020247Z-S2-ft09-s1",
+                            "--max-actions", "50", experiment="arc_pilot")):
+        rp.check_r7_files(_plan(argv), paths)
+
+
+# ── D19 re-runs under R7: a run already replaced; a pre-R7 S1/S2 run ──────
+
+S2_ORIGINAL = "20261010T084933Z-S2-r11l-s1"
+S2_RERUN_ARGS = _game_args("S2", "r11l", 101, "--rerun-of", S2_ORIGINAL)
+
+
+def _refused_with(paths, h, capsys, argv, message) -> str:
+    assert rp.main(argv, paths=paths) == 2
+    err = capsys.readouterr().err
+    assert re.search(message, err), err
+    assert h.calls == [] and not paths.lock.exists() and _rows(paths) == []
+    assert not paidlock.reservation_path(paths.lock, rp.STREAM).exists()
+    return err
+
+
+@pytest.mark.parametrize("setup, argv, message", [
+    # a plain D19 re-run of an S0 run that already has its re-run
+    (lambda p: [_past_run(p, "20261010T000000Z-S0-ft09-s1", agent_exit_reason="API_ERROR"),
+                _past_run(p, "20261010T010000Z-S0-ft09-s101",
+                          rerun_of="20261010T000000Z-S0-ft09-s1")],
+     _game_args("S0", "ft09", 101, "--rerun-of", "20261010T000000Z-S0-ft09-s1"),
+     "already replaced: 20261010T010000Z-S0-ft09-s101 re-runs it \\(D19 allows one"),
+    # a D19 re-run of a run an R7 replacement replaced (the late re-run R7 rules out)
+    (lambda p: [_past_run(p, S2_ORIGINAL),
+                _past_run(p, "20261011T000000Z-S2-r11l-s201", budget=rp.R7_SUMMARY_BUDGET,
+                          r7_replaces=S2_ORIGINAL)],
+     S2_RERUN_ARGS,
+     "already replaced: 20261011T000000Z-S2-r11l-s201 replaces it under R7"),
+    # a second D19 re-run of an R7 replacement: its one re-run is the unit's last run
+    (lambda p: [_past_run(p, R7_REPLACEMENT, budget=rp.R7_SUMMARY_BUDGET, log=None,
+                          r7_replaces=R7_REPLACED),
+                _past_run(p, "20261012T000000Z-S2-ft09-s301", budget=rp.R7_SUMMARY_BUDGET,
+                          log=None, rerun_of=R7_REPLACEMENT)],
+     R7_RERUN_ARGS,
+     "already replaced: 20261012T000000Z-S2-ft09-s301 re-runs it"),
+])
+def test_refused_when_the_rerun_target_is_already_replaced(world, capsys, setup, argv,
+                                                           message):
+    paths, h = world
+    setup(paths)
+    _refused_with(paths, h, capsys, argv, message)
+
+
+@pytest.mark.parametrize("config, budget, message", [
+    ("S2", rp.PRE_R7_SUMMARY_BUDGET, "it played under summary_max_output_tokens 8192"),
+    ("S1", rp.PRE_R7_SUMMARY_BUDGET, "it played under summary_max_output_tokens 8192"),
+    ("S2", None, "no meta.json of it in .*, so the summary budget it played under is unknown"),
+])
+def test_a_plain_d19_rerun_of_a_pre_r7_s1_or_s2_run_is_refused(world, capsys, config, budget,
+                                                               message):
+    """Under R7's frozen profile a D19 re-run of a run that played under 8,192 would play
+    under 65,536 without being marked as an R7 replacement: refused, with the R7 replacement
+    named as the way to go if the run ended by the summarizer failure."""
+    paths, h = world
+    original = f"20261010T084933Z-{config}-r11l-s1"
+    if budget is not None:
+        _past_run(paths, original, budget=budget)
+    argv = _game_args(config, "r11l", 101, "--rerun-of", original)
+    err = _refused_with(paths, h, capsys, argv, message)
+    assert "would play under R7's config without being an R7 replacement" in err
+    assert f"--r7-replaces {original} --seed 201" in err
+
+
+def test_a_plain_d19_rerun_of_an_s2_run_under_r7s_budget_is_recorded(world):
+    paths, h = world
+    _past_run(paths, S2_ORIGINAL, agent_exit_reason="API_ERROR", budget=rp.R7_SUMMARY_BUDGET,
+              log=None)
+    h.inner = lambda command, cwd: fake_game(cwd)
+
+    assert rp.main(S2_RERUN_ARGS, paths=paths) == 0
+
+    (row,) = _rows(paths)
+    assert f"rerun_of={S2_ORIGINAL}" in row["notes"] and row["run_id"].endswith("-s101")
+
+
+def test_a_plain_d19_rerun_of_s0_or_s4_needs_no_files(world):
+    """S0's and S4's profiles did not change under R7: a re-run of either reads only the other
+    runs' links (none here)."""
+    paths, h = world
+    h.inner = lambda command, cwd: fake_game(cwd)
+    argv = _game_args("S4", "ft09", 101, "--rerun-of", "20261010T000000Z-S4-ft09-s1")
+    assert rp.main(argv, paths=paths) == 0
+
+
+@pytest.mark.parametrize("argv, before, landed, message", [
+    (_game_args("S0", "ft09", 101, "--rerun-of", "20261010T000000Z-S0-ft09-s1"),
+     lambda p: _past_run(p, "20261010T000000Z-S0-ft09-s1", agent_exit_reason="API_ERROR"),
+     lambda p: _past_run(p, "20261010T010000Z-S0-ft09-s101",
+                         rerun_of="20261010T000000Z-S0-ft09-s1"),
+     "already replaced: 20261010T010000Z-S0-ft09-s101 re-runs it"),
+    (R7_ARGS,
+     lambda p: _past_run(p, R7_REPLACED),
+     lambda p: _past_run(p, "20261010T235959Z-S2-ft09-s201", budget=rp.R7_SUMMARY_BUDGET,
+                         log=None, r7_replaces=R7_REPLACED),
+     "already has an R7 replacement, 20261010T235959Z-S2-ft09-s201"),
+])
+def test_the_file_checks_run_again_under_the_lock(world, monkeypatch, capsys, argv, before,
+                                                  landed, message):
+    """A run that lands between the first file check and the lock (here: while check_paid
+    runs) is seen by the second check, under the lock: refused before the harness is built,
+    and the lock and the spend reservation are released."""
+    paths, h = world
+    before(paths)
+    check_paid = rp.check_paid
+
+    def check_paid_then_a_run_lands(plan, paths_, lock, record):
+        granted = check_paid(plan, paths_, lock, record)
+        assert paidlock.reservation_path(paths.lock, rp.STREAM).exists()
+        landed(paths)
+        return granted
+    monkeypatch.setattr(rp, "check_paid", check_paid_then_a_run_lands)
+
+    _refused_with(paths, h, capsys, argv, message)
 
 
 # ── Pieces ─────────────────────────────────────────────────────────────

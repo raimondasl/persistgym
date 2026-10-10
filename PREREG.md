@@ -365,7 +365,7 @@ In this section, p(cell) means the mean `success` over the episodes in that cell
 >
 > **Kill the ARC leg** if the measured S0→S4 gap, averaged over the 4 games, is below 10 RHAE points. (PLAN §4)
 
-**Operational.** [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6]
+**Operational.** [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6; amended 2026-10-10, see §17.7]
 - RHAE per counted run is the per-game score on ARC's online scorecard (`rhae`). Counted runs are defined in §7.5.
 - A **unit** u = (game, replicate) over the 4 path games of §7.2; there are 8. For config c, R̄_c is the mean RHAE over the 8 units.
 - **Gap** G = R̄_S4 − R̄_S0. Step shares: σ_loss = (R̄_S1 − R̄_S0)/G, σ_notes = (R̄_S2 − R̄_S1)/G, σ_replay = (R̄_S4 − R̄_S2)/G. They sum to 1.
@@ -561,7 +561,7 @@ PLAN §7's rows for Qwen3.6-27B and gpt-oss-120b (extension E1) and DeepSeek V4.
 - **Gemini 3.8 Flash:** Interactions API with `thinking_level: high` set explicitly (the default is medium, PLAN §16.1), on the standard service tier (D21, §7.6).
 - **Pins:** none of luna, 6.1-sol or Gemini 3.8 Flash has a dated snapshot (PLAN §16.2, §16.6). The `model_returned` string on each response is therefore the pin. If it changes during a sweep, the change is flagged, and results are also reported split by model string.
 - A response with status `incomplete` at the need step (for example, hitting `max_output_tokens`) counts as a content failure and scores 0.
-- **Output cap** (D13, as implemented by PR #22): `max_output_tokens: 32000` is sent explicitly on every luna and sol request: every step request in every harness cell (§5), every summary request in the Σ cells, and every request of the `reasoning.context` echo check and the replay-use probe (§10.1). A config cannot omit it. On OpenAI the cap includes reasoning tokens. Summary requests carry the same 32,000 (`summary_max_output_tokens`), not ARC's 8,192-token summary cap, which belongs to the ARC leg's Gemini configs (§7.1, S1).
+- **Output cap** (D13, as implemented by PR #22): `max_output_tokens: 32000` is sent explicitly on every luna and sol request: every step request in every harness cell (§5), every summary request in the Σ cells, and every request of the `reasoning.context` echo check and the replay-use probe (§10.1). A config cannot omit it. On OpenAI the cap includes reasoning tokens. Summary requests carry the same 32,000 (`summary_max_output_tokens`), not ARC's 8,192-token summary cap, which belongs to the ARC leg's Gemini configs (§7.1, S1). [Amended 2026-10-10, see §17.7: S1 and S2 now send 65,536; S4 keeps 8,192]
 - **`incomplete` responses, as implemented** (PR #22). A step response with status `incomplete` counts as an invalid action at **any** step, not only at the need step, whatever `incomplete_details.reason` says; the reason is logged.
   - Its partial text is never parsed, so a `lookup(...)` in it is not served.
   - At the need step it is the scored action and scores 0, a content failure (§2.6, §13). That includes an incomplete answer to a lookup response at the need step.
@@ -594,7 +594,7 @@ PLAN §7's rows for Qwen3.6-27B and gpt-oss-120b (extension E1) and DeepSeek V4.
 >
 > **Frozen configs.** S0-S4 config hashes are frozen in `PREREG.md` before the seed-1 runs, so S0/S4 results cannot steer the S1/S2 patches. (PLAN §16.4)
 
-**Operational** (as implemented by patches 0001-0017, `arc/README.md`; technical choices accepted by the researcher on 2026-10-01).
+**Operational** (as implemented by patches 0001-0017, `arc/README.md`; technical choices accepted by the researcher on 2026-10-01). [Amended 2026-10-10, see §17.7: patch 0018 sets S1's and S2's `summary_max_output_tokens` to 65,536]
 - **S1/S2 never drop old turns** (patch 0016). In `manual_rolling` with a summary compactor (S1, S2), the drop-oldest trim is disabled, not merely pushed out by a larger `MAX_CONTEXT_LENGTH`. History is lost only by summarizing, as in S4: at the 175k-token usage trigger, or when the provider rejects an action request as too long (one summary and one retry per action request; a second overflow ends the run with `AGENT_ERROR`). S1/S2 use S4's `MAX_CONTEXT_LENGTH` of 1,048,576 and record `context_trims`, which must stay 0. S0 still drops the oldest pair above 175k characters.
 - **Shared request block** in all four profiles: `thinking_level: high`, `thinking_summaries: auto`, `store: false`, `max_output_tokens: 65536`. In S0-S2 the thought summaries are logged but never sent back to the model. ARC's published Standard recordings carry no summaries, so its Standard run probably did not request them; this known difference is reported with the results.
 - **Transport retry** (patch 0009) stays on, with identical settings, in all four configs. It changes no request body; ARC's published runs did not have it.
@@ -606,8 +606,8 @@ PLAN §7's rows for Qwen3.6-27B and gpt-oss-120b (extension E1) and DeepSeek V4.
 | Config | Config entry name | `config_hash` (SHA-256) |
 |---|---|---|
 | S0 | `google-gemini-3-8-flash-high` | `615ea035324fdcdb114b00cfcf7eab55c56ea97b5d8808c12ad9097e93992dda` |
-| S1 | `google-gemini-3-8-flash-high-rolling-summary` | `d2f7825fab5411a1218b7a5d20520c5abb5f97d488907176b4391f760e7e54fd` |
-| S2 | `google-gemini-3-8-flash-high-rolling-summary-notes-off` | `2f0dd011bc04963835aa2ac2d28b3229ef61e0e496dbd9d417699a920e796bab` |
+| S1 | `google-gemini-3-8-flash-high-rolling-summary` | `cd475ca08341a24e414f601ecd66de3096fd947c3a41178683bd4473bfba1076` |
+| S2 | `google-gemini-3-8-flash-high-rolling-summary-notes-off` | `c41dc494a105bedd5a429bedf7301656756d378e1eb9b615ae4a7c6f563c6eb1` |
 | S4 | `google-gemini-3-8-flash-high-provider-adapter` | `e7432aafd0ad7a291be197a5634d5cbb6ee0b43edeefda1aebe26d21af54cf08` |
 | S3 (optional) | none: no profile is built or frozen | none; S3 runs only if an amendment first adds and freezes its profile (§0.3, line 13) |
 
@@ -616,12 +616,12 @@ Shared by all four configs:
 | Item | Value |
 |---|---|
 | Upstream harness | `arcprize/arc-agi-3-benchmarking`, pinned at `4ca00e607e3364a501fcbf7d1b7537dd2729cec3` (`4ca00e6`) |
-| Patch series | `arc/patches/0001-*.patch` to `0017-*.patch`, the 17 files listed in `arc/config_freeze.json` |
-| Patch-series SHA-256 | `14e25cc71411eaf5e3ca4cb87e78569061586e0a428477ce5e2fabfe02d631d6` |
-| Patched commit | `67f6dd0d37eccb8f77a7645f0e0e9fc2ea400359` |
-| Patched tree | `5206d039db6761c4f56c932fed716321113360f1` |
+| Patch series | `arc/patches/0001-*.patch` to `0018-*.patch`, the 18 files listed in `arc/config_freeze.json` |
+| Patch-series SHA-256 | `40ec95ec32560f012baace31911803677cfd664224190e38c8d8b479c820d23b` |
+| Patched commit | `b716253e7da484b4eb402420ec511f2ce36229fe` |
+| Patched tree | `ca0a64fe953ccedff5412eec5b62b9c38c2a0d15` |
 
-**Checks behind the record** (PR #21, `arc/README.md`): `apply_patches.py --each` ran the upstream unit tests after every patch: 872 passed after 0017. The only failure was the known flaky upstream test `test_recorder::test_concurrent_recording`, once after 0015 in that run and once in another full-suite run after 0017, both with other test runs loading the machine. It passes on its own, and no patch touches the recorder. The $0 offline runs with a stub model passed for S0, S1, S2 and S4 (`offline_smoke.py --toy`), and so did the launcher's inner modes (`run_path_offline.py`). The paid launcher refuses any run whose patch files, patched commit or tree, or resolved profile hash differ from this record (§12). Since PR #23 it also refuses unless `arc/config_freeze.json` is the same blob in `HEAD` as on `origin/main` and is the record the run loaded; the record's four profile hashes, patch-series SHA-256 and upstream pin, and the patched commit and tree, equal the tables in this section of the frozen PREREG.md on `origin/main` (`arc/prereg_freeze.py`); and `arc/patches` is the same tree in `HEAD` as on `origin/main`, with the patch files the run applies byte-identical to the committed ones. Once this file is on `main`, a root test (`test_the_repository_prereg_table_matches_the_committed_record`) also fails whenever the record and these tables differ.
+**Checks behind the record** (PR #21, `arc/README.md`): `apply_patches.py --each` ran the upstream unit tests after every patch: 872 passed after 0017 [Amended 2026-10-10, see §17.7: 874 passed after 0018]. The only failure was the known flaky upstream test `test_recorder::test_concurrent_recording`, once after 0015 in that run and once in another full-suite run after 0017, both with other test runs loading the machine. It passes on its own, and no patch touches the recorder. The $0 offline runs with a stub model passed for S0, S1, S2 and S4 (`offline_smoke.py --toy`), and so did the launcher's inner modes (`run_path_offline.py`). The paid launcher refuses any run whose patch files, patched commit or tree, or resolved profile hash differ from this record (§12). Since PR #23 it also refuses unless `arc/config_freeze.json` is the same blob in `HEAD` as on `origin/main` and is the record the run loaded; the record's four profile hashes, patch-series SHA-256 and upstream pin, and the patched commit and tree, equal the tables in this section of the frozen PREREG.md on `origin/main` (`arc/prereg_freeze.py`); and `arc/patches` is the same tree in `HEAD` as on `origin/main`, with the patch files the run applies byte-identical to the committed ones. Once this file is on `main`, a root test (`test_the_repository_prereg_table_matches_the_committed_record`) also fails whenever the record and these tables differ.
 
 ### 7.2 Eligibility rule
 > **Eligible:** public games where both published high-effort runs cost ≤ $60 *and* the published Standard-to-Adapter gap is ≥ 20 points. These are FT09, SB26, R11L, LP85, SC25 and CD82 (see `docs/background.md`). **[A1]** This filter can select Standard runs that were cheap because they ended in an error; the researcher decides before the draw whether to keep or amend it (§16.4).
@@ -719,7 +719,7 @@ fallback_drop = perm[3]   # D32
 
 In the pinned harness, `API_ERROR` means the ARC environment step failed, and a model API failure after the harness's retries ends as `AGENT_ERROR`. With patch 0009, a model call that fails because the 12 h clock ran out during a throttling backoff is recorded as `TIME_BUDGET` (`arc/README.md`).
 
-**Decision.** Error re-runs, on `agent_exit_reason`:
+**Decision.** [Amended 2026-10-10, see §17.7: an R7 replacement of a unit lost to the summarizer failure] Error re-runs, on `agent_exit_reason`:
 - **Re-run once** (new seed): `API_ERROR`, `AGENT_ERROR` and `UNKNOWN` (a `SCORECARD_CLOSED` run is included through its `API_ERROR`); `TIME_BUDGET` only under D20 below.
 - **Final as is:** `GAME_WIN`, `ACTION_BUDGET`, `COST_CAP` (§7.7), and `TIME_BUDGET` outside a latency incident (flagged).
 - **Counted run:** the re-run replaces the errored run in every primary analysis. If the re-run also ends in a re-run-eligible exit, it is counted as is, with levels cleared before the end scoring normally, and it is flagged. There is no second re-run.
@@ -1182,8 +1182,8 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D16 | §7.3 | Third held-out game | Replaced by D14's held-out rule (VC33 is in; RE86 is out) |
 | D17 | §7.3 | Pilot game | Accepted: the first game of the beacon-seeded order; never a held-out game |
 | D18 | §7.4 | Run order | Accepted as drafted, with the beacon seed. Changed at sign-off (§0.3 line 15): the 72 h start window for block 3 is replaced by "back to back, one at a time, in the SEED + 3 order"; both run orders are unchanged [Amended 2026-10-09, see §17.6] |
-| D19 | §7.5 | Error re-runs | Accepted; `TIME_BUDGET` follows D20 (reading `agent_exit_reason` rather than `exit_reason`, and re-running a run whose scorecard cannot be read, were confirmed at sign-off, §0.3 lines 1 and 2) |
-| D20 | §7.5 | `TIME_BUDGET` | Changed: final as is, unless a provider-latency incident (median seconds per call over 2× the config's earlier runs; how that median is taken was confirmed at sign-off, §0.3 line 3) [Amended 2026-10-09, see §17.6] |
+| D19 | §7.5 | Error re-runs | Accepted; `TIME_BUDGET` follows D20 (reading `agent_exit_reason` rather than `exit_reason`, and re-running a run whose scorecard cannot be read, were confirmed at sign-off, §0.3 lines 1 and 2) [Amended 2026-10-10, see §17.7] |
+| D20 | §7.5 | `TIME_BUDGET` | Changed: final as is, unless a provider-latency incident (median seconds per call over 2× the config's earlier runs; how that median is taken was confirmed at sign-off, §0.3 line 3) [Amended 2026-10-09, see §17.6; amended 2026-10-10, see §17.7] |
 | D21 | §7.6 | Service tier | Changed: Gemini standard tier for all ARC runs, fixed now; Flex probe dropped; per-run 12 h warning rule |
 | D22 | §7.7 | Cost guard | Accepted: $120 per run at list; `COST_CAP` final and reported; trade-off text corrected. Changed at sign-off (§0.3 line 12): the guard stays in the launcher and the $120-of-room rule stays; a run that reaches the guard places a hold: no further paid run starts, in either stream, until the researcher clears it with a merged line in `results/decisions.md` [Amended 2026-10-09, see §17.6] |
 | D23 | §8 | Cost basis | Accepted: billed estimate primary, list reported alongside, re-runs excluded [Amended 2026-10-09, see §17.6] |
@@ -1197,7 +1197,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D31 | §10.5 | Scoop trigger | Accepted: a public one-component ARC ablation; scoop search at every gate [Amended 2026-10-09, see §17.6] |
 | D32 | §10.6 | 3-game fallback | Accepted: drop the last game of the beacon-seeded order (what happens to the block-3 run order was confirmed at sign-off, §0.3 line 4) [Amended 2026-10-09, see §17.6] |
 | D33 | §13 | PersistGym errors | Accepted as drafted |
-| D34 | §3 H4 | H4 readings | Accepted as drafted [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6] |
+| D34 | §3 H4 | H4 readings | Accepted as drafted [Amended 2026-10-07, see §17.5; amended 2026-10-09, see §17.6; amended 2026-10-10, see §17.7] |
 | D35 | §3 H5 | H5 details | Accepted as drafted [Amended 2026-10-09, see §17.6] |
 | D36 | §4.6 | Run matrix | Changed: single-turn control on non-recoverable cells only; restated-at-need as full F-0 episodes; sol on the D11 cells (sol's optional replay pairs on the D11 cells were confirmed at sign-off, §0.3 line 8) [Amended 2026-10-02, see §17.3] [Amended 2026-10-03, see §17.4; amended 2026-10-09, see §17.6] |
 | D37 | §10.1 | Other G0 conditions | Accepted, on the standard tier, with the S1/S2 patches' snapshot tests required |
@@ -1205,7 +1205,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim [Amended 2026-10-02, see §17.3] |
 
 ## 17. Amendment log
-Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5) and R6 (2026-10-09, §17.6), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void; A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
+Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5), R6 (2026-10-09, §17.6) and R7 (2026-10-10, §17.7), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void; A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
 - **A-cfg:** only if the block-1 pilot forces an ARC config change after the freeze record (§7.1) is filled; merged before the first block-2 run. It writes the new values into the §7.1 tables themselves and is merged together with the regenerated `arc/config_freeze.json`: the ARC launcher reads §7.1, so a table added only to this log would make every paid ARC run refuse (PR #23).
 - **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8). [Amended 2026-10-09, see §17.6]
 - **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7). [Amended 2026-10-09, see §17.6]
@@ -1678,3 +1678,77 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 - `analysis/arc_h4.py`: the H4 reading of change 3, with tests on synthetic runs. It reads the same run folders as `analysis/checkpoint_c.py`, with R5's matched values from `analysis/arc_action_matched.py`. It writes `results/arc_h4/<UTC>/` and refuses to report shares from runs it cannot score.
 - The yardstick of change 5 in `analysis/checkpoint_c.py` (`_yardstick`), with tests. `uv run python -m analysis.checkpoint_c --no-write` prints each run's D20 verdict.
 - `uv run python -m analysis.checkpoint_c --d20-run RUN_ID` prints one JSON line for one run: its ending, median seconds per call, D20 threshold and verdict, D19's `rerun_eligible`, its re-run links, and `rerun_allowed`. `rerun_allowed` is false for a re-run and for an original that already has its re-run. The block-3 driver calls it after every run and starts a re-run right away only on `rerun_allowed: true`; anything else that is not `false` stops the block.
+
+### 17.7 Amendment R7 (2026-10-10): the S1/S2 summary request's output budget, and one replacement run per unit lost to the summarizer failure
+**Status.** Proposed by Claude. The researcher chose this option on 2026-10-10 ("go with B for ARC"; `results/decisions.md`). It takes effect when the researcher merges the pull request that adds it, together with patch 0018 and the regenerated `arc/config_freeze.json`, as §7.1 requires for a change of frozen config. That merge adopts the config change, the replacement rule, the run list and the readings below. It also waives CLAUDE.md's pilot for the two re-frozen configs (change 6). The version line and the "Frozen" status line are unchanged. It adds no spending approval: the runs below fit block `3-arc`'s approved $470.
+
+**What it changes.**
+1. **Config: the S1 and S2 profiles** (§7.1).
+   - **The change:** the summary request's output budget, `summary_max_output_tokens`, goes from 8,192 to **65,536**, the same output budget every step request has (`generation_config.max_output_tokens`). Patch 0018 makes it.
+   - **Unchanged:** everything else in the two profiles, among it the 175k trigger, the 8,192-token input headroom, the summary prompt and `MAX_CONTEXT_LENGTH`. S0 and S4 are unchanged too, with the same hashes.
+   - **Pre-R7 record:** S1 `d2f7825fab5411a1218b7a5d20520c5abb5f97d488907176b4391f760e7e54fd` and S2 `2f0dd011bc04963835aa2ac2d28b3229ef61e0e496dbd9d417699a920e796bab`, patched commit `67f6dd0d…`, tree `5206d039…`, from patches 0001-0017.
+   - **R7 record:** S1 `cd475ca0…` and S2 `c41dc494…`, patched commit `b716253e…`, tree `ca0a64fe…`, from patches 0001-0018, in §7.1's tables.
+   - Each run's `meta.json` records the config hash it played.
+2. **One R7 replacement per unit lost to the summarizer failure.** A unit qualifies when its counted S1 or S2 run (§7.5, D19 applied) ended `AGENT_ERROR` because ARC's harness summary failed 4 times. The log line reads "Harness summary compaction failed to produce a completed, non-empty summary after 4 response failures".
+   - Such a unit gets **one** replacement run under the R7 config: seed label replicate + 200, launched with `--r7-replaces <the counted run>`.
+   - The replacement becomes the unit's counted run, and the runs it replaces are reported in sensitivity analyses (change 4).
+   - D19 applies to the replacement as to any run. If it ends re-run-eligible, it gets one re-run, seed label replicate + 300. There is no further run.
+   - Counted S1 and S2 runs that did not end by the summarizer failure stand, whatever budget they played.
+   - No pre-R7 S1 or S2 run can need a D19 re-run any more: each has either ended `GAME_WIN` or used its one re-run. So the launcher refuses a plain D19 re-run of a pre-R7 S1/S2 run, because it would play under R7's config unmarked.
+3. **Runs and order** (§7.4, R6 change 2). These runs play under the R7 config, back to back, one at a time:
+   - **(a)** the R7 replacements first: FT09 S2, replacing `20261010T030159Z-S2-ft09-s101`, then R11L S2 if its counted run qualifies under change 2. That counted run is the D19 re-run of `20261010T084933Z-S2-r11l-s1`, seed label 101, which was still playing under the pre-R7 config when this was written.
+   - **(b)** then the rest of R6's order: CD82 S1, CD82 S2, R11L S1.
+   - SB26 S1 and FT09 S1 ended `GAME_WIN` under the pre-R7 config and stand.
+4. **H4** (§3 H4, R6 change 3).
+   - **Counted runs** follow the chain original → D19 re-run → R7 replacement → its D19 re-run, and the counted run is the last.
+   - **Sensitivity analyses:**
+     - (i) the frozen "originals instead of their re-runs" analysis uses each chain's first run;
+     - (ii) a new R7 sensitivity analysis uses, in each unit with an R7 replacement, the counted run the replacement replaced.
+     - Together these cover every replaced run, except an R7 replacement that is itself replaced by its own D19 re-run. That run is listed in the per-run table and flagged as in no reading.
+   - **The per-run table** gives each run's config hash and summary budget.
+   - **The S2→S4 step under R7:** it also changes the summary budget, from S2's 65,536 to S4's 8,192. In all 4 of block 2's S4 runs that budget never bound: 132 summaries, none needing a retry, at most 3,073 output tokens per attempt. So for the counted S4 runs the step still differs only by native replay and its item format, as §7.1 frozen says. The report states this next to σ_replay.
+5. **D20** (§7.5, R6 change 5).
+   - A config's earlier counted runs are pooled across the pre-R7 and R7 budgets: the config label is S1 or S2 in both.
+   - A run replaced by an R7 replacement leaves the yardstick from the replacement's start.
+   - The re-run seed of a D20 incident follows change 2.
+6. **Pilot** (CLAUDE.md). The two re-frozen configs run no paid pilot, and the researcher's merge waives it. The reasons:
+   - The change raises one output budget and changes no request otherwise. The offline stub runs check every profile's requests: S1 and S2 summary requests now send 65,536, and S4's sends 8,192.
+   - A truncated pilot could not reach the failure point, which came at the 4th to 10th summary.
+   - The first R7 run is itself the test, and it is a counted run under D19.
+7. **Nothing else changes.**
+   - The hypotheses, predictions and thresholds stay as frozen, and so do H4's definitions (R6 change 3).
+   - So do: K = 150 (§17.5), the 12 h clock, the per-level budgets, the $120 guard, D19, R6's hard stop and block `3-arc`'s limit.
+   - The frozen text of §6, §7.1 (apart from its record tables, which carry the R7 values), §7.4, §7.5 and §3 H4, and the register rows D19, D20 and D34, stays, with a pointer here.
+
+**Reason.** This is from block 3 so far (`results/decisions.md`; each run's `harness/compaction_*.json` and `harness.log`).
+- **Three S2 runs ended `AGENT_ERROR` because a harness summary came back empty 4 times:**
+  - FT09 S2 `20261010T020247Z` at action 49;
+  - its D19 re-run `20261010T030159Z` at action 112, after 9 summaries, 3 of which needed retries;
+  - R11L S2 `20261010T084933Z` at action 29.
+- **Why the summary came back empty.** The summary request's 8,192-token output budget includes the model's reasoning at `thinking_level: high`. The largest output per attempt reached 8,183 tokens. When reasoning fills the budget, no summary text is left.
+- **S1 hit the budget too, but more rarely.** SB26 S1 made 33 summaries, all on the first try. FT09 S1 made 7, one of which needed a retry. Both won.
+- **The headline step needs this fixed.** S2 exists to isolate native replay (S2→S4). A run that ends because the summary request cannot fit its own reasoning measures the harness's budget, not the S2 config's play. Under the frozen rules (D19), these runs would count as they are.
+- **Why 65,536.** The budget the harness already gives every step request, so the summary request is no longer the one place where reasoning can starve the output.
+
+**Timing.**
+- **Seen** when this was written: the endings, costs, levels cleared and summary records of block 3's runs so far (SB26 S1, FT09 S1, FT09 S2 and its re-run, R11L S2), and block 2's S4 summary records.
+- The change was triggered by a harness failure, not by any score. It applies by a fixed rule (change 2), not by choosing units.
+- Both S1 runs, which won, keep their pre-R7 runs.
+
+**What it does not show.**
+- **Mixed budgets.** The four games' S1 and S2 runs are not all on one budget: SB26 S1 and FT09 S1 played under 8,192.
+  - For SB26 S1 the budget never bound, so its run is what R7's config would have played.
+  - For FT09 S1 one summary needed a retry, so its path may differ from what R7's config would have played.
+- **A partly seen replacement.** An R7 replacement replaces a run whose partial play (levels cleared before the failure) was seen.
+- **A further failure mode.** The replacement may still fail for another reason: with 65,536 tokens, a summary can still come back empty if the model reasons past 65,536.
+- **Time.** S1 and S2 now run further from S0 and S4 in time (R6's "what it does not show").
+
+**As implemented** (the pull request that adds this amendment).
+- `arc/patches/0018-*.patch`, `arc/config_freeze.json` and §7.1's record tables. The harness's unit tests pass (874), and the offline smoke runs pass for S0-S4.
+- `arc/run_path.py`:
+  - `--r7-replaces RUN_ID` checks, before and after taking the lock, that the named run is the unit's counted S1/S2 run, ended `AGENT_ERROR` with the summarizer failure in its log, under the 8,192 budget, with no re-run and no other R7 replacement.
+  - Seeds 201/202 need it; seeds 301/302 need `--rerun-of` naming an R7 replacement.
+  - A plain D19 re-run of a pre-R7 S1/S2 run is refused, because it would play under R7's config unmarked.
+- `analysis/checkpoint_c.py`: the chain in `check_links`. `--d20-run` adds `r7_replaces` and `rerun_seed`.
+- `analysis/arc_h4.py`: the chain, the sensitivity analyses of change 4, and the per-run config hash and budget.
+- `analysis/arc_action_matched.py`: replicate = seed mod 100, plus an `r7_replaces` column.

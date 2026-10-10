@@ -1,0 +1,340 @@
+From b716253e7da484b4eb402420ec511f2ce36229fe Mon Sep 17 00:00:00 2001
+From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
+Date: Sat, 10 Oct 2026 14:15:00 -0400
+Subject: [PATCH 18/18] Raise the rolling-summary profiles' summary output cap
+
+The two Gemini 3.8 Flash high rolling-summary profiles
+(google-gemini-3-8-flash-high-rolling-summary and its notes-off
+variant) took the Provider Adapter's summary_max_output_tokens of
+8,192. At thinking_level high the model's thinking counts against that
+cap, so on thinking-heavy games a summary request can spend it before
+writing any text. Four empty summaries in a row end the run with
+AGENT_ERROR ("Harness summary compaction failed to produce a
+completed, non-empty summary after 4 response failures"). Both
+profiles now set summary_max_output_tokens to 65,536, the
+max_output_tokens of every action request. Nothing else changes: the
+175,000-token trigger, the 8,192-token input headroom,
+MAX_CONTEXT_LENGTH and the summary prompts are as before, and the
+Standard and Provider Adapter profiles are unchanged (the Provider
+Adapter keeps 8,192). Configuration validation still holds:
+175,000 + 65,536 + 8,192 is below the 1,048,576 context capacity.
+
+Tests: the rolling-summary profile equals Standard with the Provider
+Adapter's compaction policy except the summary cap, which equals the
+action output budget; both agents' compactors use 65,536; the S1/S2
+summary request snapshots carry max_output_tokens 65,536 while the
+Provider Adapter's keep 8,192; and the notes-off = Provider Adapter
+parity checks (one and two compactions, a buffered GAME_OVER frame,
+overflow recovery, an unparseable reply) allow exactly that difference
+in summary requests and no other.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ README.md                                     |  5 +-
+ benchmarking/model_configs.yaml               | 10 ++-
+ docs/runtime-state.md                         |  5 +-
+ tests/unit/test_gemini_path_payloads.py       | 74 +++++++++++++------
+ .../unit/test_gemini_summary_path_configs.py  | 36 ++++++++-
+ 5 files changed, 100 insertions(+), 30 deletions(-)
+
+diff --git a/README.md b/README.md
+index da6009a..dbeace2 100644
+--- a/README.md
++++ b/README.md
+@@ -155,7 +155,10 @@ keeps the Standard visible-text transcript but replaces oldest-turn trimming
+ with the Provider Adapter's harness summary compaction, and
+ `google-gemini-3-8-flash-high-rolling-summary-notes-off` also omits the
+ carry-forward instruction. All four request the standard service tier
+-explicitly (`request.service_tier: "standard"`).
++explicitly (`request.service_tier: "standard"`). The two rolling-summary
++profiles give the summary request the action requests' output budget of 65,536
++tokens, because at high thinking the model's reasoning counts against the
++summary cap; the Provider Adapter profile keeps 8,192.
+ 
+ Both harnesses use the same games, actions, limits, and scoring. The Standard
+ harness supports controlled comparisons across providers, while the Provider
+diff --git a/benchmarking/model_configs.yaml b/benchmarking/model_configs.yaml
+index 2e0b246..8364df6 100644
+--- a/benchmarking/model_configs.yaml
++++ b/benchmarking/model_configs.yaml
+@@ -344,7 +344,10 @@
+     compaction:
+       strategy: "harness_summary"
+       trigger_tokens: 175_000
+-      summary_max_output_tokens: 8_192
++      # The summary request gets the action requests' output budget: at
++      # high thinking the model's reasoning counts against this cap, and
++      # 8,192 left thinking-heavy games with empty summaries.
++      summary_max_output_tokens: 65_536
+       summary_input_headroom_tokens: 8_192
+   client:
+     api_key_env: "GOOGLE_API_KEY"
+@@ -383,7 +386,10 @@
+     compaction:
+       strategy: "harness_summary"
+       trigger_tokens: 175_000
+-      summary_max_output_tokens: 8_192
++      # The summary request gets the action requests' output budget: at
++      # high thinking the model's reasoning counts against this cap, and
++      # 8,192 left thinking-heavy games with empty summaries.
++      summary_max_output_tokens: 65_536
+       summary_input_headroom_tokens: 8_192
+   client:
+     api_key_env: "GOOGLE_API_KEY"
+diff --git a/docs/runtime-state.md b/docs/runtime-state.md
+index ebfe2b3..a9cc221 100644
+--- a/docs/runtime-state.md
++++ b/docs/runtime-state.md
+@@ -307,7 +307,10 @@ estimated-token limit `agent.MAX_CONTEXT_LENGTH`, whatever usage the provider
+ reports or omits; the limit still records the provider's context capacity.
+ History is lost only by summarizing. Run metadata then records
+ `state_strategy`, the compaction policy, `compaction_count`, and
+-`context_trims`, the number of oldest-turn drops, which stays 0.
++`context_trims`, the number of oldest-turn drops, which stays 0. The supplied
++Gemini rolling-summary profiles set `summary_max_output_tokens` to the action
++requests' 65,536: thinking tokens count against the summary cap, and at high
++thinking 8,192 can be spent before any summary text is written.
+ 
+ Each harness compaction is written to `compaction_NNN.json` with its summary,
+ trigger, item counts, attempts, overflow recoveries, excluded-turn counts, and
+diff --git a/tests/unit/test_gemini_path_payloads.py b/tests/unit/test_gemini_path_payloads.py
+index 466ce67..894969a 100644
+--- a/tests/unit/test_gemini_path_payloads.py
++++ b/tests/unit/test_gemini_path_payloads.py
+@@ -8,7 +8,8 @@ process. Configurations, in path order:
+ - standard: google-gemini-3-8-flash-high (manual_rolling, notes instruction on,
+   oldest turns dropped above MAX_CONTEXT_LENGTH)
+ - rolling summary: google-gemini-3-8-flash-high-rolling-summary (standard with
+-  the Provider Adapter's harness summary instead of dropping turns)
++  the Provider Adapter's harness summary instead of dropping turns, the
++  summary request getting the action requests' 65,536 output tokens)
+ - notes-off: google-gemini-3-8-flash-high-rolling-summary-notes-off (rolling
+   summary without the notes instruction)
+ - provider adapter: google-gemini-3-8-flash-high-provider-adapter
+@@ -57,7 +58,14 @@ GENERATION_CONFIG = {
+     "thinking_level": "high",
+     "thinking_summaries": "auto",
+ }
+-SUMMARY_GENERATION_CONFIG = {**GENERATION_CONFIG, "max_output_tokens": 8_192}
++# Output cap of each profile's summary requests: the Provider Adapter keeps
++# 8,192; the rolling-summary profiles give the summary the action requests'
++# 65,536, since at high thinking the reasoning counts against the cap.
++SUMMARY_MAX_OUTPUT_TOKENS = {
++    ROLLING_SUMMARY: 65_536,
++    NOTES_OFF: 65_536,
++    PROVIDER_ADAPTER: 8_192,
++}
+ # Every path profile requests the standard tier explicitly.
+ SERVICE_TIER = "standard"
+ # ARC's harness-summary prompts at 4ca00e6 (benchmarking/compaction.py).
+@@ -146,12 +154,24 @@ def _replayed_thought(turn: int) -> dict:
+     }
+ 
+ 
+-def _body(system: str, inputs: list[dict], *, summary: bool = False) -> dict:
++def _summary_generation_config(config_id: str) -> dict:
++    return {
++        **GENERATION_CONFIG,
++        "max_output_tokens": SUMMARY_MAX_OUTPUT_TOKENS[config_id],
++    }
++
++
++def _body(system: str, inputs: list[dict], *, summary_of: str | None = None) -> dict:
++    """An action request, or with ``summary_of`` that config's summary request."""
+     return {
+         "model": "gemini-3.8-flash",
+         "store": False,
+         "service_tier": SERVICE_TIER,
+-        "generation_config": SUMMARY_GENERATION_CONFIG if summary else GENERATION_CONFIG,
++        "generation_config": (
++            GENERATION_CONFIG
++            if summary_of is None
++            else _summary_generation_config(summary_of)
++        ),
+         "system_instruction": system,
+         "input": inputs,
+     }
+@@ -377,6 +397,22 @@ def _strip_native(inputs: list[dict]) -> list[dict]:
+     ]
+ 
+ 
++def _assert_notes_off_equals_adapter_without_thoughts(
++    notes_off: list[dict], adapter: list[dict]
++) -> None:
++    """S2 sends S4's requests without thought steps; summary requests differ
++    only in their output cap."""
++    assert len(notes_off) == len(adapter)
++    for s2_body, s4_body in zip(notes_off, adapter, strict=True):
++        expected = {**s4_body, "input": _strip_native(s4_body["input"])}
++        if s4_body["system_instruction"] == SUMMARY_SYSTEM_PROMPT:
++            assert s4_body["generation_config"] == _summary_generation_config(
++                PROVIDER_ADAPTER
++            )
++            expected["generation_config"] = _summary_generation_config(NOTES_OFF)
++        assert s2_body == expected
++
++
+ class _BigGame(_Game):
+     """64x64 frames: one observation renders to roughly 12k characters."""
+ 
+@@ -441,7 +477,7 @@ class TestRollingSummaryPayloads:
+             _body(system, [_user(OBS[1])]),
+             _body(system, [_user(OBS[1]), _text_turn(_note(1)), _user(OBS[2])]),
+             # Harness summary before turn 3: the whole visible-text history,
+-            # then the summary request, capped at 8,192 output tokens.
++            # then the summary request, capped at 65,536 output tokens.
+             _body(
+                 SUMMARY_SYSTEM_PROMPT,
+                 [
+@@ -451,7 +487,7 @@ class TestRollingSummaryPayloads:
+                     _text_turn(_note(2)),
+                     _user(SUMMARY_REQUEST_PROMPT),
+                 ],
+-                summary=True,
++                summary_of=config_id,
+             ),
+             _body(system, [bridge, _user(OBS[3])]),
+             _body(
+@@ -503,8 +539,9 @@ class TestRollingSummaryPayloads:
+     def test_notes_off_equals_provider_adapter_without_thought_steps(
+         self, monkeypatch, tmp_path
+     ):
+-        # S2 -> S4 adds only native replay: with thought steps removed, every
+-        # request, including the summary request, is identical.
++        # S2 -> S4 adds native replay: with thought steps removed, every
++        # action request is identical, and the summary request differs only
++        # in its output cap (65,536 in S2, 8,192 in S4).
+         notes_off, _ = _play(
+             monkeypatch,
+             tmp_path / "s2",
+@@ -521,8 +558,9 @@ class TestRollingSummaryPayloads:
+         )
+ 
+         assert len(notes_off) == len(adapter) == 5
+-        for s2_body, s4_body in zip(notes_off, adapter, strict=True):
+-            assert s2_body == {**s4_body, "input": _strip_native(s4_body["input"])}
++        assert notes_off[2]["generation_config"]["max_output_tokens"] == 65_536
++        assert adapter[2]["generation_config"]["max_output_tokens"] == 8_192
++        _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
+ 
+     def test_buffered_game_over_is_summarized_like_the_provider_adapter(
+         self, monkeypatch, tmp_path
+@@ -559,9 +597,7 @@ class TestRollingSummaryPayloads:
+         after = notes_off[3]["input"]
+         assert after[0] == _user(_bridge("summary of play 1"))
+         assert all("GAME_OVER" not in item["content"][0]["text"] for item in after)
+-        assert len(notes_off) == len(adapter)
+-        for s2_body, s4_body in zip(notes_off, adapter, strict=True):
+-            assert s2_body == {**s4_body, "input": _strip_native(s4_body["input"])}
++        _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
+ 
+     def test_rolling_summary_differs_from_notes_off_only_in_the_instruction(
+         self, monkeypatch, tmp_path
+@@ -703,7 +739,7 @@ class TestProviderAdapterPayloads:
+                     _replayed_output(_note(2)),
+                     _user(SUMMARY_REQUEST_PROMPT),
+                 ],
+-                summary=True,
++                summary_of=PROVIDER_ADAPTER,
+             ),
+             _body(NO_NOTES_PROMPT, [bridge, _user(OBS[3])]),
+             _body(
+@@ -977,14 +1013,6 @@ class _NoUsageOverflowServer(_OverflowServer):
+         return _without_usage(super().__call__(request))
+ 
+ 
+-def _assert_notes_off_equals_adapter_without_thoughts(
+-    notes_off: list[dict], adapter: list[dict]
+-) -> None:
+-    assert len(notes_off) == len(adapter)
+-    for s2_body, s4_body in zip(notes_off, adapter, strict=True):
+-        assert s2_body == {**s4_body, "input": _strip_native(s4_body["input"])}
+-
+-
+ class TestPathParity:
+     def test_standard_equals_rolling_summary_until_something_is_lost(
+         self, monkeypatch, tmp_path
+@@ -1074,7 +1102,7 @@ class TestPathParity:
+                 _text_turn(_note(2)),
+                 _user(SUMMARY_REQUEST_PROMPT),
+             ],
+-            summary=True,
++            summary_of=NOTES_OFF,
+         )
+         assert notes_off[4] == _body(NO_NOTES_PROMPT, [bridge, _user(OBS[3])])
+         _assert_notes_off_equals_adapter_without_thoughts(notes_off, adapter)
+diff --git a/tests/unit/test_gemini_summary_path_configs.py b/tests/unit/test_gemini_summary_path_configs.py
+index e01b251..768ced0 100644
+--- a/tests/unit/test_gemini_summary_path_configs.py
++++ b/tests/unit/test_gemini_summary_path_configs.py
+@@ -24,6 +24,8 @@ CARRY_FORWARD = (
+     "Include any context you want to carry forward in your reply, "
+     "along with the action you want to take."
+ )
++# max_output_tokens of every action request in the four profiles.
++ACTION_OUTPUT_BUDGET = 65_536
+ 
+ pytestmark = pytest.mark.unit
+ 
+@@ -51,7 +53,12 @@ def test_rolling_summary_is_standard_with_the_adapter_loss_policy():
+     expected = deepcopy(standard)
+     expected["id"] = ROLLING_SUMMARY
+     expected["agent"]["MAX_CONTEXT_LENGTH"] = adapter["agent"]["MAX_CONTEXT_LENGTH"]
+-    expected["runtime"]["compaction"] = adapter["runtime"]["compaction"]
++    # The adapter's compaction policy, except that the summary request gets
++    # the action requests' output budget.
++    expected["runtime"]["compaction"] = {
++        **adapter["runtime"]["compaction"],
++        "summary_max_output_tokens": ACTION_OUTPUT_BUDGET,
++    }
+ 
+     assert get_model_config(ROLLING_SUMMARY) == expected
+     assert expected["runtime"]["state"] == "manual_rolling"
+@@ -59,11 +66,34 @@ def test_rolling_summary_is_standard_with_the_adapter_loss_policy():
+     assert expected["runtime"]["compaction"] == {
+         "strategy": "harness_summary",
+         "trigger_tokens": 175_000,
+-        "summary_max_output_tokens": 8_192,
++        "summary_max_output_tokens": 65_536,
+         "summary_input_headroom_tokens": 8_192,
+     }
+ 
+ 
++@pytest.mark.parametrize("config_id", [ROLLING_SUMMARY, NOTES_OFF])
++def test_summary_budget_equals_the_action_output_budget(config_id):
++    # At high thinking the model's reasoning counts against the summary cap.
++    # The rolling-summary profiles give the summary request the 65,536 output
++    # tokens of every action request; the Provider Adapter keeps 8,192.
++    config = get_model_config(config_id)
++    compaction = config["runtime"]["compaction"]
++    adapter_compaction = get_model_config(PROVIDER_ADAPTER)["runtime"]["compaction"]
++    budget = config["request"]["generation_config"]["max_output_tokens"]
++
++    assert budget == ACTION_OUTPUT_BUDGET == 65_536
++    assert compaction["summary_max_output_tokens"] == budget
++    assert adapter_compaction["summary_max_output_tokens"] == 8_192
++    assert {**compaction, "summary_max_output_tokens": 8_192} == adapter_compaction
++    # Configuration validation still reserves the larger summary output.
++    reserved = (
++        compaction["trigger_tokens"]
++        + compaction["summary_max_output_tokens"]
++        + compaction["summary_input_headroom_tokens"]
++    )
++    assert reserved < config["agent"]["MAX_CONTEXT_LENGTH"]
++
++
+ def test_notes_off_differs_from_rolling_summary_only_in_the_flag():
+     expected = deepcopy(get_model_config(ROLLING_SUMMARY))
+     expected["id"] = NOTES_OFF
+@@ -91,7 +121,7 @@ def test_agents_summarize_visible_text(monkeypatch, tmp_path, config_id, notes):
+     assert not hasattr(agent, "_stateful_adapter")
+     assert isinstance(agent._rolling_summary_adapter, ManualRollingSummaryAdapter)
+     assert agent._summary_compactor.policy.trigger_tokens == 175_000
+-    assert agent._summary_compactor.policy.summary_max_output_tokens == 8_192
++    assert agent._summary_compactor.policy.summary_max_output_tokens == 65_536
+     assert agent.MAX_CONTEXT_LENGTH == 1_048_576
+     assert agent.analysis_mode is False
+     assert (CARRY_FORWARD in agent._build_system_prompt()) is notes
+-- 
+2.54.0.windows.1
+

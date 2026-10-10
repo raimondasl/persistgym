@@ -1,7 +1,7 @@
 From ef433150315726c8accd5155c0562719d0fabd95 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 12:38:45 -0400
-Subject: [PATCH 16/17] Never drop oldest turns when manual_rolling summarizes
+Subject: [PATCH 16/18] Never drop oldest turns when manual_rolling summarizes
 
 With harness summary compaction configured, manual_rolling still ran
 _trim_to_fit_context before every action request, so the oldest

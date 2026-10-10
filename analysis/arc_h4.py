@@ -10,16 +10,33 @@ summary. Everything here is descriptive: 4 units, no significance claims (§3 H4
 
 * every folder in ``arc_path/`` (`checkpoint_c.discover`: the allowlisted ``meta.json`` fields
   and the scored ``scorecard.json``; a folder whose ``meta.json`` is not an ``arc_path`` run is
-  refused, so a pilot folder, blinded under PREREG §11, is never read). Two more ``meta.json``
-  fields are read for the run table: ``model_returned`` and ``context_trims`` (`EXTRA_META`);
+  refused, so a pilot folder, blinded under PREREG §11, is never read). More ``meta.json``
+  fields are read for the run table (`EXTRA_META`): ``model_returned``, ``context_trims``,
+  ``config_hash`` and, of ``config``, only ``runtime.compaction.summary_max_output_tokens``
+  (the summary budget: 8,192 before R7 and 65,536 under it for S1 and S2; none for S0 and S4);
 * ``costs.csv``: the ARC pilot rows' ``latency_s`` only, for D20's yardsticks (R6's scaled one
   for S1 and S2 included, `checkpoint_c.d20_check`);
-* ``draw/*/draw.json``: the 4 path games (their order is the units' order) and SEED (D15).
+* ``draw/*/draw.json``: the 4 path games (their order is the units' order) and SEED (D15);
+* if they are under the results root (``raw/arc_path/<run_id>/harness/compaction_*.json``,
+  gitignored, so only in the checkout that ran them), block 2's S4 runs' harness compaction
+  records, and of each only ``attempts`` and ``usage.completion_tokens``: for the note on
+  σ_replay under R7 (below).
 
 **Units and counted runs** (§17.6 change 3, §7.5). A unit is one path game at replicate 1, so
 there are 4. Each (game, config) uses its counted run (`checkpoint_c.resolve_unit`): a re-run
 (seed 101) replaces its original; FT09's S0 is its seed-101 re-run. A re-run that also ends
 re-run-eligible is counted as is and flagged (D19).
+
+**R7** (the researcher's decision of 2026-10-10, option B; `checkpoint_c`'s module docstring):
+a unit whose counted S1 or S2 run ended by the summarizer failure gets one R7 replacement
+(seed 201, ``r7_replaces`` that run) under R7's summary budget of 65,536 output tokens; it is
+the unit's counted run, and its own one D19 re-run (seed 301) replaces it in turn, so the chain
+is original → (re-run) → (R7 replacement) → (its re-run). An R7 replacement whose re-run has not
+landed while it ended re-run-eligible is pending, as an original is. ``meta.json`` does not say
+which ``AGENT_ERROR`` was the summarizer failure, so the script cannot tell whether a unit is
+due an R7 replacement: it flags a counted S1 or S2 run that ended ``AGENT_ERROR`` under the
+8,192 budget without one, and an R7 replacement of a run that did not end ``AGENT_ERROR`` or
+that does not have the 65,536 budget.
 
 **Configs.** S0, S2 and S4. S1 enters only with ``--with-s1``. The analyst passes it only if
 ``results/decisions.md`` records "S1: yes", merged to ``main`` before the first block-3 ARC
@@ -63,8 +80,22 @@ the intervals and the sensitivity analyses.
   descriptive.
 
 **Sensitivity analyses** (§3 H4, as frozen, on the same units): the original runs instead of
-their re-runs (a unit whose original cannot be scored is left out and listed); and every
-unit that contains a counted run ending ``COST_CAP`` left out, its configs together.
+their re-runs, where the original is each chain's first run (§17.7 change 4 (i)): in a unit
+with an R7 replacement it is the seed-1 original, so this reading undoes D19 and R7 together
+(a unit whose original cannot be scored is left out and listed); and every unit that contains
+a counted run ending ``COST_CAP`` left out, its configs together. **R7's** (§17.7 change 4
+(ii)): the counted runs without R7, that is each R7 replacement (or its re-run) swapped for
+the run it replaced, the old config's counted run that ended in the summarizer failure
+(`checkpoint_c.Unit.before_r7`, for FT09 S2 its seed-101 re-run); the replaced runs are listed
+with both values. Every replaced run is in one of the two, except an R7 replacement that has
+its own D19 re-run: neither reading uses it, and its row says so.
+
+**σ_replay under R7** (§17.7 change 4). Once a counted S2 run played under R7's 65,536, the
+S2→S4 step also lowers the summary budget to S4's 8,192, so σ_replay is labelled with a note
+(`sigma_replay_note`): whether the 8,192 budget bound in any S4 run of block 2 (its summaries,
+retries and largest output per attempt), computed from those runs' harness compaction records
+when they are under the results root, and otherwise quoted from ``results/decisions.md``
+(2026-10-10, amendment R7) and said to be quoted.
 
 **At K = 150** (§17.5 change 1). The same reading with RHAE_K (`arc_action_matched.Run.at_k`)
 in place of RHAE, secondary and descriptive: the predictions are judged on the primary
@@ -72,12 +103,13 @@ reading only, so their conditions at K are reported, not judged. A unit is left 
 listed) if any of its counted runs has no matched values: it cannot be scored, or it fails
 ``analysis.arc_action_matched``'s checks. Censored runs enter at their final values, which are
 lower bounds, with the number of censored counted runs per config; as sensitivity analyses,
-the units that contain a censored counted run left out, the original runs, and the
-``COST_CAP`` units left out. Next to them: the mean number of levels cleared within K per
-config, and its S0→S4 difference.
+the units that contain a censored counted run left out, the original runs, the counted runs
+without R7, and the ``COST_CAP`` units left out. Next to them: the mean number of levels
+cleared within K per config, and its S0→S4 difference.
 
 **Per run**: both endings, D19's reading, RHAE, levels, actions, median seconds per model call,
-the returned model string and, for S1 and S2 runs, ``context_trims`` (patch 0016: the summary
+the returned model string, the config hash and summary budget (which config a run played under,
+before or under R7) and, for S1 and S2 runs, ``context_trims`` (patch 0016: the summary
 backstop never drops turns, so it should be 0; "not recorded" if ``meta.json`` has no value).
 
 **What is written** is built from allowlists (`TOP_FIELDS`, `RUN_FIELDS`, `OUTPUTS`): no
@@ -118,21 +150,33 @@ QUANTILES = (0.05, 0.95)                   # percentile 90% interval
 K = am.REGISTERED_K                        # §17.5
 COST_CAP = "COST_CAP"
 TRIM_CONFIGS = ("S1", "S2")                # summary compaction: context_trims should be 0
+OLD_SUMMARY_BUDGET = 8_192                  # S1 and S2 before R7
+R7_SUMMARY_BUDGET = 65_536                 # R7: the step requests' max_output_tokens
+S4_SUMMARY_BUDGET = 8_192                  # S4's, unchanged by R7
+SUMMARIZER_FAILURE_ENDING = "AGENT_ERROR"  # how the summarizer failure ends a run (R7)
+# Block 2's S4 summaries as recorded in results/decisions.md (2026-10-10, amendment R7) and
+# PREREG §17.7 change 4, quoted only where the raw compaction records are not under the
+# results root (`s4_summaries`).
+RECORDED_S4_SUMMARIES = {"summaries": 132, "retries": 0, "max_output_tokens_per_attempt": 3_073}
+RECORDED_S4_SOURCE = ("results/decisions.md (2026-10-10, amendment R7) and PREREG §17.7 "
+                      "change 4")
 A_CONTRADICTED = "A contradicted"
 A_REPLAY_HOLDS = "A's replay clause holds; A is not tested in full"
 
-EXTRA_META = ("model_returned", "context_trims")
-"""The meta.json fields read here beyond checkpoint_c's `META_FIELDS`."""
+EXTRA_META = ("model_returned", "context_trims", "config_hash", "config")
+"""The meta.json fields read here beyond checkpoint_c's `META_FIELDS` (`config`: only its
+`runtime.compaction.summary_max_output_tokens`)."""
 
-RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "replaced_by",
-              "counted", "in_reading", "started_utc", "agent_exit_reason", "exit_reason",
-              "d19_ending", "rerun_eligible", "rhae", "levels_completed", "level_count",
-              "actions", "median_s_per_call", "model_returned", "context_trims",
-              "checks_passed", "status_at_K", "rhae_at_K", "levels_cleared_at_K", "flags")
+RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "r7_replaces",
+              "replaced_by", "counted", "in_reading", "started_utc", "agent_exit_reason",
+              "exit_reason", "d19_ending", "rerun_eligible", "rhae", "levels_completed",
+              "level_count", "actions", "median_s_per_call", "model_returned", "config_hash",
+              "summary_max_output_tokens", "context_trims", "checks_passed", "status_at_K",
+              "rhae_at_K", "levels_cleared_at_K", "flags")
 TOP_FIELDS = ("generated_utc", "git_commit", "git_dirty", "prereg_version", "status",
               "provisional_reasons", "warnings", "inputs", "path_games", "configs", "with_s1",
               "seed", "bootstrap_seed", "units", "primary", "sensitivity", "at_k", "partial",
-              "run_dates", "context_trims", "runs", "skipped")
+              "sigma_replay_note", "run_dates", "context_trims", "runs", "skipped")
 OUTPUTS = ("h4.json", "summary.md")
 FINAL, PROVISIONAL = cc.FINAL, cc.PROVISIONAL
 
@@ -281,9 +325,24 @@ class Data:
     bare: list[tuple[str, str]]
 
 
+def _summary_budget(config) -> int | None:
+    """The profile's summary budget (`runtime.compaction.summary_max_output_tokens`), or None
+    for a profile without summary compaction (S0, S4)."""
+    runtime = config.get("runtime") if isinstance(config, dict) else None
+    compaction = runtime.get("compaction") if isinstance(runtime, dict) else None
+    v = compaction.get("summary_max_output_tokens") if isinstance(compaction, dict) else None
+    return None if v is None else int(v)
+
+
 def _extra(e: cc.Entry) -> dict:
     raw = json.loads((e.folder / "meta.json").read_text(encoding="utf-8"))
-    return {k: raw.get(k) for k in EXTRA_META}
+    return {"model_returned": raw.get("model_returned"),
+            "context_trims": raw.get("context_trims"), "config_hash": raw.get("config_hash"),
+            "summary_max_output_tokens": _summary_budget(raw.get("config"))}
+
+
+def _budget_word(v: int | None) -> str:
+    return "none" if v is None else f"{v:,}"
 
 
 def load(root: Path, with_s1: bool) -> Data:
@@ -306,6 +365,7 @@ def load(root: Path, with_s1: bool) -> Data:
     d20 = {e.run_id: cc.d20_check(e, entries, pilots) for e in entries if not e.truncated}
     eligible = {e.run_id: cc.rerun_eligible(e, d20[e.run_id])
                 for e in entries if not e.truncated}
+    extra = {e.run_id: _extra(e) for e in entries}
     configs = CONFIGS_S1 if with_s1 else CONFIGS
     units: dict[tuple[str, str], cc.Unit] = {}
     incomplete: list[str] = []
@@ -317,18 +377,20 @@ def load(root: Path, with_s1: bool) -> Data:
             if u.original is None:
                 incomplete.append(f"{g} {c}: no seed-{REPLICATE} run yet")
                 continue
-            o = u.original
+            o = u.head                         # the original, or the R7 replacement
             if u.pending:
                 incomplete.append(f"{g} {c}: {o.run_id} ended "
                                   f"{cc.why_ending(o, d20[o.run_id], eligible[o.run_id])}; "
                                   "its one re-run has not landed")
-            elif u.rerun is None and eligible[o.run_id] is None:
+            elif u.head_rerun is None and eligible[o.run_id] is None:
                 incomplete.append(f"{g} {c}: {o.run_id} ended TIME_BUDGET and its D20 check "
                                   "cannot be computed, so whether it is re-run is unknown")
-            if u.rerun is not None and eligible[o.run_id] is False:
-                warnings.append(f"{g} {c}: {o.run_id} was re-run although its ending "
-                                f"({cc.why_ending(o, d20[o.run_id], False)}) is final under "
-                                "D19/D20 as computed here; the re-run still replaces it (§7.5)")
+            for x, y in ((u.original, u.rerun), (u.r7, u.r7_rerun)):
+                if x is not None and y is not None and eligible[x.run_id] is False:
+                    warnings.append(f"{g} {c}: {x.run_id} was re-run although its ending "
+                                    f"({cc.why_ending(x, d20[x.run_id], False)}) is final "
+                                    "under D19/D20 as computed here; the re-run still replaces "
+                                    "it (§7.5)")
             e = u.counted
             if e.run is None:
                 incomplete.append(f"{g} {c}: counted run {e.run_id} cannot be scored "
@@ -336,10 +398,12 @@ def load(root: Path, with_s1: bool) -> Data:
             elif not e.run.checks_passed:
                 warnings.append(f"{e.run_id}: fails analysis.arc_action_matched's checks "
                                 "(no matched values, §17.5)")
-            if u.rerun is not None and eligible[u.rerun.run_id]:
-                warnings.append(f"{g} {c}: re-run {u.rerun.run_id} also ended "
-                                f"{u.rerun.d19_ending}, re-run-eligible: it is counted as is, "
+            r = u.head_rerun
+            if r is not None and eligible[r.run_id]:
+                warnings.append(f"{g} {c}: re-run {r.run_id} also ended "
+                                f"{r.d19_ending}, re-run-eligible: it is counted as is, "
                                 "flagged (D19 allows no second re-run)")
+            warnings += _r7_warnings(u, extra, pending=u.pending)
     if not with_s1:
         s1 = [e.run_id for e in entries if e.config == "S1" and not e.truncated]
         if s1:
@@ -356,8 +420,36 @@ def load(root: Path, with_s1: bool) -> Data:
                             "used")
     return Data(root=root, draw_path=draw_path, costs_csv=costs_csv, games=games, seed=seed,
                 configs=configs, with_s1=with_s1, entries=entries, units=units, d20=d20,
-                eligible=eligible, extra={e.run_id: _extra(e) for e in entries},
-                incomplete=incomplete, warnings=warnings, bare=bare)
+                eligible=eligible, extra=extra, incomplete=incomplete, warnings=warnings,
+                bare=bare)
+
+
+def _r7_warnings(u: cc.Unit, extra: dict[str, dict], pending: bool) -> list[str]:
+    """R7's checks on one unit (module docstring): flags, never refusals."""
+    budget = {k: v["summary_max_output_tokens"] for k, v in extra.items()}
+    out = []
+    if u.r7 is not None:
+        for x in (u.r7, u.r7_rerun):
+            if x is not None and budget[x.run_id] != R7_SUMMARY_BUDGET:
+                out.append(f"{u.game} {u.config}: R7 replacement chain run {x.run_id} has "
+                           f"summary budget {_budget_word(budget[x.run_id])}, not R7's "
+                           f"{R7_SUMMARY_BUDGET:,}")
+        b = u.before_r7
+        if b.d19_ending != SUMMARIZER_FAILURE_ENDING:
+            out.append(f"{u.game} {u.config}: R7 replacement {u.r7.run_id} replaces "
+                       f"{b.run_id}, which ended {b.d19_ending}, not "
+                       f"{SUMMARIZER_FAILURE_ENDING}: R7 is for a run that ended by the "
+                       "summarizer failure")
+        return out
+    e = u.counted
+    if (e is not None and not pending and u.config in cc.R7_CONFIGS
+            and e.d19_ending == SUMMARIZER_FAILURE_ENDING
+            and budget[e.run_id] == OLD_SUMMARY_BUDGET):
+        out.append(f"{u.game} {u.config}: counted run {e.run_id} ended "
+                   f"{SUMMARIZER_FAILURE_ENDING} under the {OLD_SUMMARY_BUDGET:,} summary "
+                   "budget and has no R7 replacement: if it ended by the summarizer failure, "
+                   "R7 gives the unit one (meta.json does not say which failure it was)")
+    return out
 
 
 def _counted(u: cc.Unit) -> cc.Entry:
@@ -365,7 +457,13 @@ def _counted(u: cc.Unit) -> cc.Entry:
 
 
 def _original(u: cc.Unit) -> cc.Entry:
+    """The chain's first run (§17.7 change 4 (i)): the seed-1 original, also in a unit with an
+    R7 replacement."""
     return u.original
+
+
+def _before_r7(u: cc.Unit) -> cc.Entry:
+    return u.before_r7
 
 
 def _rhae(e: cc.Entry) -> tuple[float | None, str | None]:
@@ -433,13 +531,29 @@ def _at_k_extras(d: Data, sel: dict) -> dict:
 
 
 def substitutions(d: Data) -> list[dict]:
-    """The units whose original differs from the counted run (the re-run)."""
+    """The units whose chain's first run differs from the counted run (a D19 re-run, an R7
+    replacement or its re-run)."""
     out = []
     for (g, c), u in d.units.items():
-        if u.rerun is not None:
+        if u.original is not None and u.counted is not u.original:
             out.append({"game": g, "config": c, "original": u.original.run_id,
-                        "rhae_original": u.original.rhae, "rerun": u.rerun.run_id,
-                        "rhae_rerun": u.rerun.rhae})
+                        "rhae_original": u.original.rhae, "counted": u.counted.run_id,
+                        "rhae_counted": u.counted.rhae})
+    return out
+
+
+def r7_substitutions(d: Data) -> list[dict]:
+    """The units with an R7 replacement: the run it replaced and the counted run."""
+    out = []
+    for (g, c), u in d.units.items():
+        if u.r7 is not None:
+            b, e = u.before_r7, u.counted
+            out.append({"game": g, "config": c, "replaced": b.run_id, "rhae_replaced": b.rhae,
+                        "summary_budget_replaced":
+                            d.extra[b.run_id]["summary_max_output_tokens"],
+                        "counted": e.run_id, "rhae_counted": e.rhae,
+                        "summary_budget_counted":
+                            d.extra[e.run_id]["summary_max_output_tokens"]})
     return out
 
 
@@ -448,8 +562,15 @@ def full_readings(d: Data) -> tuple[dict, dict, dict]:
     subs = substitutions(d)
     sensitivity = {
         "originals": {**_reading(d, select(d, _original, _rhae)),
-                      "note": "the original runs instead of their re-runs (§3 H4, §7.5)",
+                      "note": "the original runs instead of their re-runs (§3 H4, §7.5): each "
+                              "chain's first run (§17.7 change 4 (i)), so in a unit with an R7 "
+                              "replacement the seed-1 original, with neither D19 nor R7",
                       "substituted": subs},
+        "pre_r7": {**_reading(d, select(d, _before_r7, _rhae)),
+                   "note": "the counted runs without R7: each R7 replacement (or its re-run) "
+                           "swapped for the run it replaced, which ended in the summarizer "
+                           "failure under the 8,192 summary budget",
+                   "substituted": r7_substitutions(d)},
         "without_cost_cap": {**_reading(d, select(d, _counted, _rhae, _cost_capped)),
                              "note": f"units with a counted run ending {COST_CAP} left out, "
                                      "their configs together (§3 H4, §7.7 D22)"}}
@@ -465,8 +586,11 @@ def full_readings(d: Data) -> tuple[dict, dict, dict]:
             "without_censored": at(select(d, _counted, _rhae_k, _censored),
                                    "units that contain a censored counted run left out"),
             "originals": at(select(d, _original, _rhae_k),
-                            "the original runs instead of their re-runs; censored runs at "
-                            "their final values"),
+                            "the original runs (each chain's first run) instead of their "
+                            "re-runs; censored runs at their final values"),
+            "pre_r7": at(select(d, _before_r7, _rhae_k),
+                         "the counted runs without R7 (the runs the R7 replacements replaced); "
+                         "censored runs at their final values"),
             "without_cost_cap": at(select(d, _counted, _rhae_k, _cost_capped),
                                    f"units with a counted run ending {COST_CAP} left out; "
                                    "censored runs at their final values")}
@@ -496,21 +620,44 @@ def partial_reading(d: Data) -> dict:
                     "intervals and sensitivity analyses are withheld"}
 
 
+def _replaced_flag(e: cc.Entry, unit: cc.Unit | None) -> str:
+    """Which sensitivity analysis a replaced run is in (§17.7 change 4): the originals one
+    uses each chain's first run, R7's the run an R7 replacement replaced."""
+    by = ", ".join(e.replaced_by)
+    how = f"its R7 replacement {by}" if e.r7_by else by
+    if unit is None or not any(e is x for x in (unit.original, unit.rerun, unit.r7)):
+        return f"replaced by {how}"
+    uses = []
+    if unit.original is e:
+        uses.append("originals")
+    if unit.r7 is not None and unit.before_r7 is e:
+        uses.append("R7")
+    if not uses:
+        return (f"replaced by {how} (in no reading: the originals sensitivity analysis uses "
+                f"the chain's first run, {unit.original.run_id}, and R7's the run the R7 "
+                f"replacement replaced, {unit.before_r7.run_id})")
+    which = ("the originals and R7 sensitivity analyses" if len(uses) == 2
+             else f"the {uses[0]} sensitivity analysis")
+    return f"replaced by {how} ({which} only)"
+
+
 def run_row(e: cc.Entry, d: Data) -> dict:
     r = e.run
     unit = d.units.get((e.game, e.config))
     in_reading = (unit is not None and unit.counted is e and e.config in d.configs
                   and not unit.pending)
-    trims = d.extra[e.run_id]["context_trims"]
+    x = d.extra[e.run_id]
+    trims = x["context_trims"]
     flags = []
     if e.truncated:
         flags.append("truncated (not a counted run)")
+    if e.r7_replaces:
+        flags.append(f"R7 replacement of {e.r7_replaces}")
     if e.replaced_by:
-        flags.append(f"replaced by {', '.join(e.replaced_by)} (the originals sensitivity "
-                     "analysis only)")
-    if unit is not None and unit.pending and unit.original is e:
+        flags.append(_replaced_flag(e, unit))
+    if unit is not None and unit.pending and unit.head is e:
         flags.append("re-run-eligible; its re-run has not landed")
-    if e.rerun_of and d.eligible.get(e.run_id):
+    if e.rerun_of and d.eligible.get(e.run_id) and not e.replaced_by:
         flags.append("re-run also ended re-run-eligible: counted as is (D19)")
     if e.config == "S1" and not d.with_s1:
         flags.append("S1 without --with-s1: exploratory, not in this reading")
@@ -520,14 +667,16 @@ def run_row(e: cc.Entry, d: Data) -> dict:
         flags.append(f"context_trims {trims}, not 0")
     at = r.at_k(K) if r is not None and r.checks_passed else None
     row = {"run_id": e.run_id, "game": e.game, "config": e.config, "replicate": e.replicate,
-           "seed": e.seed, "rerun_of": e.rerun_of, "replaced_by": list(e.replaced_by),
+           "seed": e.seed, "rerun_of": e.rerun_of, "r7_replaces": e.r7_replaces,
+           "replaced_by": list(e.replaced_by),
            "counted": not e.replaced_by and not e.truncated, "in_reading": in_reading,
            "started_utc": e.started_utc, "agent_exit_reason": e.agent_exit_reason,
            "exit_reason": e.exit_reason, "d19_ending": e.d19_ending,
            "rerun_eligible": d.eligible.get(e.run_id), "rhae": e.rhae,
            "levels_completed": r and r.levels_completed, "level_count": r and r.level_count,
            "actions": e.actions, "median_s_per_call": e.median_s_per_call,
-           "model_returned": d.extra[e.run_id]["model_returned"], "context_trims": trims,
+           "model_returned": x["model_returned"], "config_hash": x["config_hash"],
+           "summary_max_output_tokens": x["summary_max_output_tokens"], "context_trims": trims,
            "checks_passed": None if r is None else r.checks_passed,
            "status_at_K": at and at["status"], "rhae_at_K": at and at["score"],
            "levels_cleared_at_K": at and at["levels_cleared"], "flags": flags}
@@ -543,6 +692,95 @@ def trims_check(d: Data) -> dict:
             "zero": [k for k, v in value.items() if v == 0],
             "not_recorded": [k for k, v in value.items() if v is None],
             "nonzero": {k: v for k, v in value.items() if v not in (None, 0)}}
+
+
+def s4_summaries(d: Data) -> dict | None:
+    """Block 2's S4 summaries from those runs' harness compaction records under the results
+    root (``raw/arc_path/<run_id>/harness/compaction_*.json``; of each record only
+    ``attempts`` and ``usage.completion_tokens``, the output tokens of its attempts, thinking
+    included); None if any of those runs has no harness folder there. A record with several
+    attempts sums their output, so its largest attempt is not known (`attempts_not_known`)."""
+    runs = sorted((e for e in d.entries if e.config == "S4" and e.block2),
+                  key=lambda x: x.started)
+    if not runs:
+        return None
+    n = retries = unknown = 0
+    peak: int | None = None
+    for e in runs:
+        folder = d.root / "raw" / cc.EXPERIMENT / e.run_id / "harness"
+        if not folder.is_dir():
+            return None
+        for path in sorted(folder.glob("compaction_*.json")):
+            n += 1
+            try:
+                rec = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                unknown += 1
+                continue
+            attempts = rec.get("attempts") if isinstance(rec, dict) else None
+            usage = rec.get("usage") if isinstance(rec, dict) else None
+            out = usage.get("completion_tokens") if isinstance(usage, dict) else None
+            if not isinstance(attempts, int) or attempts < 1:
+                unknown += 1
+                continue
+            retries += attempts - 1
+            if attempts == 1 and isinstance(out, int):
+                peak = out if peak is None else max(peak, out)
+            else:
+                unknown += 1
+    return {"runs": [e.run_id for e in runs], "summaries": n, "retries": retries,
+            "max_output_tokens_per_attempt": peak, "attempts_not_known": unknown}
+
+
+def _count(n: int, one: str, many: str) -> str:
+    return f"{n:,} {one if n == 1 else many}"
+
+
+def sigma_replay_note(d: Data) -> dict | None:
+    """σ_replay's note under R7 (§17.7 change 4), or None while no counted S2 run played under
+    R7's budget: S2→S4 then also lowers the summary budget from 65,536 to S4's 8,192, and the
+    note says whether that budget bound in block 2's S4 runs (`s4_summaries`; quoted from
+    `RECORDED_S4_SOURCE`, and said to be, when their records are not under the results
+    root)."""
+    s2 = [u.counted for g in d.games for u in [d.units.get((g, "S2"))]
+          if u is not None and u.counted is not None]
+    r7 = [e.run_id for e in s2
+          if d.extra[e.run_id]["summary_max_output_tokens"] == R7_SUMMARY_BUDGET]
+    if not r7:
+        return None
+    got = s4_summaries(d)
+    s = got or {"runs": None, **RECORDED_S4_SUMMARIES, "attempts_not_known": 0}
+    peak = s["max_output_tokens_per_attempt"]
+    bound = not (s["retries"] == 0 and s["attempts_not_known"] == 0
+                 and (peak is None or peak < S4_SUMMARY_BUDGET))
+    facts = (f"{_count(s['summaries'], 'summary', 'summaries')}, "
+             f"{_count(s['retries'], 'retry', 'retries')}, at most "
+             f"{'no' if peak is None else f'{peak:,}'} output tokens per "
+             + ("attempt" if not s["attempts_not_known"] else
+                "single-attempt summary ("
+                + _count(s["attempts_not_known"], "summary", "summaries")
+                + " whose largest attempt is not known)"))
+    source = ("from those runs' harness compaction records" if got is not None else
+              f"as recorded in {RECORDED_S4_SOURCE}; the runs' harness compaction records are "
+              "not under this results root, so this is quoted, not recomputed")
+    text = (f"S2→S4 also changes the summary budget, from S2's {R7_SUMMARY_BUDGET:,} to S4's "
+            f"{S4_SUMMARY_BUDGET:,} output tokens ({len(r7)} of the {len(s2)} counted S2 runs "
+            f"played under {R7_SUMMARY_BUDGET:,}). ")
+    if bound:
+        text += (f"In block 2's S4 runs the {S4_SUMMARY_BUDGET:,} budget may have bound: "
+                 f"{facts} ({source}), so the step may also differ by the summary budget.")
+    else:
+        text += (f"In every S4 run of block 2 the {S4_SUMMARY_BUDGET:,} budget never bound: "
+                 f"{facts} ({source}). So for the counted S4 runs the step still differs only "
+                 "by native replay and its item format.")
+    return {"s2_runs_at_r7_budget": r7, "n_counted_s2": len(s2),
+            "s2_summary_budget": R7_SUMMARY_BUDGET, "s4_summary_budget": S4_SUMMARY_BUDGET,
+            "s4_runs": s["runs"], "summaries": s["summaries"], "retries": s["retries"],
+            "max_output_tokens_per_attempt": peak,
+            "attempts_not_known": s["attempts_not_known"], "budget_bound": bound,
+            "computed": got is not None,
+            "source": "harness compaction records" if got is not None else RECORDED_S4_SOURCE,
+            "text": text}
 
 
 def run_dates(d: Data) -> dict:
@@ -582,9 +820,13 @@ def compute(root: Path, generated: str, git: dict, with_s1: bool = False) -> dic
            "seed": d.seed, "bootstrap_seed": d.seed + BOOT_SEED_OFFSET,
            "units": {f"{g} {c}": {"counted": u.counted and u.counted.run_id,
                                   "original": u.original and u.original.run_id,
-                                  "rerun": u.rerun and u.rerun.run_id, "pending": u.pending}
+                                  "rerun": u.rerun and u.rerun.run_id,
+                                  "r7_replacement": u.r7 and u.r7.run_id,
+                                  "r7_rerun": u.r7_rerun and u.r7_rerun.run_id,
+                                  "pending": u.pending}
                      for (g, c), u in d.units.items()},
            "primary": primary, "sensitivity": sensitivity, "at_k": at_k, "partial": partial,
+           "sigma_replay_note": sigma_replay_note(d),
            "run_dates": run_dates(d), "context_trims": trims_check(d),
            "runs": [run_row(e, d) for e in sorted(d.entries, key=lambda x: x.started)],
            "skipped": [{"folder": n, "reason": w} for n, w in d.bare]
@@ -596,6 +838,7 @@ def compute(root: Path, generated: str, git: dict, with_s1: bool = False) -> dic
 
 # --- summary -------------------------------------------------------------------------------
 
+PRE_R7_LABEL = "Counted runs without R7 (replaced runs back)"
 SHARE_LABELS = {"sigma_pn": "σ_pn (S0→S2: loss policy and notes removal together)",
                 "sigma_loss": "σ_loss (S0→S1: loss policy)",
                 "sigma_notes": "σ_notes (S1→S2: notes removal)",
@@ -649,7 +892,15 @@ def _game_table(r: dict, configs: list[str], with_s1: bool, label: str) -> list[
     return L
 
 
-def _reading_lines(r: dict, configs: list[str], with_s1: bool, judged: bool) -> list[str]:
+SIGMA_REPLAY_R7_LABEL = ("σ_replay (S2→S4: native replay and its item format; under R7 also "
+                         "the summary budget, see the note on R7)")
+
+
+def _reading_lines(r: dict, configs: list[str], with_s1: bool, judged: bool,
+                   note: dict | None = None, note_given: bool = False) -> list[str]:
+    """One reading's table, G, shares and predictions; `note` is σ_replay's note under R7
+    (`sigma_replay_note`), which labels σ_replay when given, in full unless `note_given`
+    (the summary gave it above)."""
     bs = r["bootstrap"]
     n = r["n_units"]
     L = _game_table(r, configs, with_s1, "RHAE" if judged else f"RHAE_{K}")
@@ -659,9 +910,13 @@ def _reading_lines(r: dict, configs: list[str], with_s1: bool, judged: bool) -> 
              "**G < 10: the shares are withheld (D34)**" + (
                  "; kill criterion 4 would fire (§10.4)." if judged else "."))]
     if r["shares_reported"]:
+        labels = {**SHARE_LABELS, **({"sigma_replay": SIGMA_REPLAY_R7_LABEL} if note else {})}
         L += ["", "| Share | Point estimate | 90% interval |", "|---|---|---|"]
-        L += [f"| {SHARE_LABELS[k]} | {v:.3f} | {_iv(bs['shares'][k], 3)} |"
+        L += [f"| {labels[k]} | {v:.3f} | {_iv(bs['shares'][k], 3)} |"
               for k, v in r["shares"].items()]
+        if note:
+            L += ["", "σ_replay under R7: see the note above." if note_given
+                  else f"**σ_replay under R7** (§17.7 change 4): {note['text']}"]
         L += [""] + _prediction_lines(r, with_s1, judged)
         L.append("- D30, descriptive: σ_replay ≥ 2/3: "
                  + ("**yes** (dominated by the replay step, the step with no provider-neutral "
@@ -727,7 +982,8 @@ def summary_lines(h: dict) -> list[str]:
         L += [f"- {x}" for x in h["provisional_reasons"]]
     L += ["", (f"**Units:** the {len(h['path_games'])} path games ({', '.join(h['path_games'])}) "
                f"at replicate {REPLICATE}, each config's counted run (§7.5: a re-run replaces its "
-               "original).")]
+               "original; R7: an R7 replacement replaces an S1 or S2 run that ended by the "
+               "summarizer failure, and its own re-run replaces it).")]
     if with_s1:
         L.append(f"**Configs:** {', '.join(configs)}, with `--with-s1`: the analyst passes it "
                  "only if `results/decisions.md` records \"S1: yes\", merged to `main` before "
@@ -752,22 +1008,38 @@ def summary_lines(h: dict) -> list[str]:
                    "counted run.")]
     else:
         pr = h["primary"]
+        note = h["sigma_replay_note"]
         L += ["", "## Primary reading: the scorecard's RHAE", ""]
-        L += _reading_lines(pr, configs, with_s1, judged=True)
+        L += _reading_lines(pr, configs, with_s1, judged=True, note=note)
         sens = h["sensitivity"]
         L += ["", "## Sensitivity analyses (§3 H4, as frozen)", ""]
         L += _compact_header(configs, with_s1)
         L += [_compact_row("Primary (for reference)", pr, configs, with_s1),
               _compact_row("Original runs instead of re-runs", sens["originals"], configs,
                            with_s1),
+              _compact_row(PRE_R7_LABEL, sens["pre_r7"], configs, with_s1),
               _compact_row(f"Units with a {COST_CAP} ending left out",
                            sens["without_cost_cap"], configs, with_s1)]
+        if note:
+            L += ["", "σ_replay here: in a reading whose S2 runs include one under "
+                      f"{R7_SUMMARY_BUDGET:,}, S2→S4 also lowers the summary budget (the note "
+                      "on R7 under the primary reading)." if pr["shares_reported"]
+                  else f"**σ_replay under R7** (§17.7 change 4): {note['text']}"]
         subs = sens["originals"]["substituted"]
-        L += ["", "Original runs used: " + ("; ".join(
+        L += ["", "Original runs used (each chain's first run): " + ("; ".join(
             f"{x['game']} {x['config']}: {_id(x['original'])} (RHAE {_n(x['rhae_original'])}) "
-            f"for its re-run {_id(x['rerun'])} ({_n(x['rhae_rerun'])})" for x in subs)
-            if subs else "none (no unit has a re-run)") + "."]
-        L += _left_out_lines(sens["originals"]) + _left_out_lines(sens["without_cost_cap"])
+            f"for the counted run {_id(x['counted'])} ({_n(x['rhae_counted'])})" for x in subs)
+            if subs else "none (no unit has a re-run or an R7 replacement)") + "."]
+        r7 = sens["pre_r7"]["substituted"]
+        L += ["", "Runs without R7 used: " + ("; ".join(
+            f"{x['game']} {x['config']}: {_id(x['replaced'])} (RHAE {_n(x['rhae_replaced'])}, "
+            f"summary budget {_budget_word(x['summary_budget_replaced'])}) for "
+            f"{_id(x['counted'])} ({_n(x['rhae_counted'])}, "
+            f"{_budget_word(x['summary_budget_counted'])})" for x in r7)
+            if r7 else "none (no unit has an R7 replacement), so this reading is the "
+                       "primary") + "."]
+        L += (_left_out_lines(sens["originals"]) + _left_out_lines(sens["pre_r7"])
+              + _left_out_lines(sens["without_cost_cap"]))
         k = h["at_k"]
         lb = k["lower_bounds"]
         L += ["", f"## At K = {k['K']} actions (PREREG §17.5; secondary, descriptive)", "",
@@ -775,7 +1047,7 @@ def summary_lines(h: dict) -> list[str]:
                "are reported, not judged. Censored runs enter at their final values, which "
                "are lower bounds."), ""]
         if lb["n_units"]:
-            L += _reading_lines(lb, configs, with_s1, judged=False)
+            L += _reading_lines(lb, configs, with_s1, judged=False, note=note, note_given=True)
         L += ["", ("Censored counted runs (lower bounds): "
                    + ", ".join(f"{c} {lb['censored'][c]}" for c in configs) + ". Mean levels "
                    "cleared within K: " + ", ".join(
@@ -784,6 +1056,7 @@ def summary_lines(h: dict) -> list[str]:
         L += _left_out_lines(lb)
         rows = (("Lower bounds", lb), ("Censored units left out", k["without_censored"]),
                 ("Original runs instead of re-runs", k["originals"]),
+                (PRE_R7_LABEL, k["pre_r7"]),
                 (f"Units with a {COST_CAP} ending left out", k["without_cost_cap"]))
         L += [""] + _compact_header(configs, with_s1)
         L += [_compact_row(name, r, configs, with_s1) for name, r in rows]
@@ -793,8 +1066,9 @@ def summary_lines(h: dict) -> list[str]:
         L += _left_out_lines(k["without_censored"])
     L += ["", "## Runs", "",
           ("| Run | Game | Config | Rep. | Counted | In reading | Ending: agent; exit | D19 | "
-           "RHAE | Levels | Actions | Median s per call | Model returned | context_trims | "
-           "Flags |"), "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+           "RHAE | Levels | Actions | Median s per call | Model returned | Config hash "
+           "(summary budget) | context_trims | Flags |"),
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in h["runs"]:
         levels = "n/a" if r["levels_completed"] is None else \
             f"{r['levels_completed']} of {r['level_count']}"
@@ -802,10 +1076,12 @@ def summary_lines(h: dict) -> list[str]:
             else str(r["model_returned"])
         trims = "n/a" if r["config"] not in TRIM_CONFIGS else (
             "not recorded" if r["context_trims"] is None else str(r["context_trims"]))
+        cfg = ("not recorded" if r["config_hash"] is None else f"`{r['config_hash'][:12]}`") + (
+            f" ({_budget_word(r['summary_max_output_tokens'])})")
         L.append(f"| `{r['run_id']}` | {r['game']} | {r['config']} | {r['replicate']} | "
                  f"{r['counted']} | {r['in_reading']} | {r['agent_exit_reason']}; "
                  f"{r['exit_reason']} | {r['d19_ending']} | {_n(r['rhae'])} | {levels} | "
-                 f"{r['actions']} | {_n(r['median_s_per_call'])} | {model} | {trims} | "
+                 f"{r['actions']} | {_n(r['median_s_per_call'])} | {model} | {cfg} | {trims} | "
                  f"{'; '.join(r['flags']) or '-'} |")
     t = h["context_trims"]
     L += ["", "## Checks", "",
@@ -826,7 +1102,9 @@ def not_shown_lines(h: dict) -> list[str]:
     """"What it does not show", in substance from §17.6, with this reading's numbers."""
     pairs = [r for r in h["runs"] if r["replaced_by"] and r["config"] in h["configs"]]
     by = {r["run_id"]: r for r in h["runs"]}
-    swings = [(r, by[r["replaced_by"][0]]) for r in pairs if r["replaced_by"][0] in by]
+    # an original and its D19 re-run (same config); an R7 pair plays two configs
+    swings = [(r, by[x]) for r in pairs for x in r["replaced_by"]
+              if x in by and by[x]["rerun_of"] == r["run_id"]]
     swing = "; ".join(f"{a['game']} {a['config']}: {_n(a['rhae'])} vs {_n(b['rhae'])}, "
                       f"{_n(abs(a['rhae'] - b['rhae']))} RHAE apart" for a, b in swings
                       if a["rhae"] is not None and b["rhae"] is not None)
@@ -845,6 +1123,7 @@ def not_shown_lines(h: dict) -> list[str]:
     if not h["with_s1"]:
         L.append("- **Without S1,** σ_pn bundles the loss policy with the notes removal, and "
                  "the notes instruction's own role is not measured.")
+    L += r7_not_shown_lines(h)
     L += [("- **No StateCarry evidence,** no sol replication of H1, no failure labels and no "
            "open-weights run: each was planned and not run (§17.6 change 1)."),
           "- **H5 on our runs is not blind** (§17.6 change 4); it is not computed here.",
@@ -856,6 +1135,35 @@ def not_shown_lines(h: dict) -> list[str]:
     return L
 
 
+def r7_not_shown_lines(h: dict) -> list[str]:
+    """R7's lines of "what it does not show" (mixed budgets; D20's pooled yardsticks), when a
+    counted S1 or S2 run of the reading's configs played under R7's budget or a unit has an
+    R7 replacement."""
+    rows = [r for r in h["runs"] if r["counted"] and r["config"] in cc.R7_CONFIGS
+            and r["config"] in h["configs"]]
+    new = sum(r["summary_max_output_tokens"] == R7_SUMMARY_BUDGET for r in rows)
+    old = sum(r["summary_max_output_tokens"] == OLD_SUMMARY_BUDGET for r in rows)
+    if not new and not any(r["r7_replaces"] for r in rows):
+        return []
+    other = len(rows) - new - old
+    names = " and ".join(c for c in h["configs"] if c in cc.R7_CONFIGS)
+    return [(f"- **R7 changed S1's and S2's summary budget mid-block** ({OLD_SUMMARY_BUDGET:,} "
+             f"to {R7_SUMMARY_BUDGET:,} output tokens): of the {len(rows)} counted {names} "
+             f"runs, {new} played under {R7_SUMMARY_BUDGET:,} and {old} under "
+             f"{OLD_SUMMARY_BUDGET:,}" + (f" ({other} with no budget recorded)" if other else "")
+             + ", so a mean over units can mix two versions of a config. The R7 sensitivity "
+             "analysis puts back the runs the R7 replacements replaced, and the originals "
+             "analysis each chain's first run; the value of a run that ended in the summarizer "
+             "failure is a lower bound of what it would have scored had it gone on, not what "
+             "the old config scores when its summary succeeds."),
+            (f"- **D20's yardsticks pool both versions** (§17.7 change 5): D20 judges each "
+             f"{' or '.join(c for c in h['configs'] if c in cc.R7_CONFIGS)} run's seconds per "
+             "model call against its config's earlier counted runs, whether they played under "
+             f"{OLD_SUMMARY_BUDGET:,} or {R7_SUMMARY_BUDGET:,}, so a run can be judged against "
+             "runs of the other version; whether the budget changes the seconds per call is not "
+             "measured here.")]
+
+
 # --- main ----------------------------------------------------------------------------------
 
 def write(out_dir: Path, run_id: str, h: dict, text: str, git: dict) -> Path:
@@ -864,7 +1172,8 @@ def write(out_dir: Path, run_id: str, h: dict, text: str, git: dict) -> Path:
                                      encoding="utf-8", newline="\n")
     (out_dir / "summary.md").write_text(text, encoding="utf-8", newline="\n")
     config = {"prereg": "PREREG.md §3 H4 as amended by §17.6 change 3 (R6), with §17.5 (R5), "
-                        "§7.5 D19/D20 and §17.6 change 5",
+                        "§7.5 D19/D20, §17.6 change 5 and R7 (S1 and S2's summary budget)",
+              "r7_summary_budget": R7_SUMMARY_BUDGET,
               "configs": h["configs"], "with_s1": h["with_s1"], "replicate": REPLICATE,
               "g_min": float(G_MIN), "n_boot": N_BOOT, "level": LEVEL,
               "bootstrap_seed": h["bootstrap_seed"], "K": K, "path_games": h["path_games"],

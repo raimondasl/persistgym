@@ -1,6 +1,7 @@
 """Action-matched ARC readings (analysis/arc_action_matched.py; PREREG §17.5, amendment R5):
 ARC's score rule against block 2's runs 1 and 2, matching at K actions and censoring on
-synthetic scorecards, reset handling, re-run links, refusals and the output allowlist.
+synthetic scorecards, reset handling, re-run links and R7's replacement chain (the replicate
+as the seed label mod 100), refusals and the output allowlist.
 
 Of block 2's runs, only runs 1 and 2 are read from the repository (both were seen before
 R5); every other ARC path run here is synthetic. The checks of PREREG §17.5's numbers also
@@ -357,6 +358,49 @@ def test_a_skipped_rerun_still_replaces_its_original(tmp_path):
     assert [r.run_id for r in runs] == ["orig"] and [n for n, _ in skipped] == ["re"]
     assert not runs[0].counted and runs[0].replaced_by == ["re"]
     assert am.run_row(runs[0], 150)["counted"] is False
+
+
+@pytest.mark.parametrize("seed,replicate", [(1, 1), (101, 1), (201, 1), (301, 1), (2, 2),
+                                            (102, 2), (202, 2), (302, 2), (None, None)])
+def test_the_replicate_is_the_seed_label_mod_100(tmp_path, seed, replicate):
+    assert am.replicate_of(seed) == replicate
+    run = am.load_run(_folder(tmp_path, "r", seed=seed))
+    assert run.replicate == replicate
+    assert am.run_row(run, 150)["replicate"] == replicate
+    assert {r["replicate"] for r in am.curve_rows(run, 150)} == {replicate}
+
+
+def test_the_r7_chain_counts_its_last_run_only(tmp_path):
+    """original → re-run (101) → R7 replacement (201) → its re-run (301): each run is replaced
+    by the next, only the last is counted, and all are replicate 1 (R7)."""
+    _folder(tmp_path, "orig", ending="AGENT_ERROR", config="S2", seed=1)
+    _folder(tmp_path, "re", ending="AGENT_ERROR", config="S2", seed=101, rerun_of="orig")
+    _folder(tmp_path, "r7", ending="AGENT_ERROR", config="S2", seed=201,
+            meta_extra={"r7_replaces": "re"})
+    _folder(tmp_path, "r7re", ending="GAME_WIN", config="S2", seed=301, rerun_of="r7")
+    runs, _ = am.collect([tmp_path / x for x in ("orig", "re", "r7", "r7re")])
+    by = {r.run_id: r for r in runs}
+    assert [by[x].replaced_by for x in ("orig", "re", "r7", "r7re")] == [
+        ["re"], ["r7"], ["r7re"], []]
+    assert [by[x].counted for x in ("orig", "re", "r7", "r7re")] == [False, False, False, True]
+    assert {r.replicate for r in runs} == {1}
+    row = am.run_row(by["r7"], 150)
+    assert (row["r7_replaces"], row["rerun_of"], row["replaced_by"], row["counted"]) == (
+        "re", "", "r7re", False)
+    assert am.run_row(by["re"], 150)["replaced_by"] == "r7"
+    assert am.run_row(by["orig"], 150)["r7_replaces"] == ""
+    assert [r["counted"] for r in am.curve_rows(by["r7re"], 150)] == [True] * len(am.CURVE_K)
+
+
+def test_an_r7_replacement_of_an_original_and_a_skipped_one_still_replace(tmp_path):
+    """An R7 replacement of an original replaces it, even when the R7 replacement itself
+    cannot be scored here (its unit then has no matched values)."""
+    _folder(tmp_path, "orig", ending="AGENT_ERROR", config="S1", seed=1)
+    _folder(tmp_path, "r7", ending="GAME_WIN", config="S1", seed=201, card=False,
+            meta_extra={"r7_replaces": "orig"})
+    runs, skipped = am.collect([tmp_path / "orig", tmp_path / "r7"])
+    assert [r.run_id for r in runs] == ["orig"] and [n for n, _ in skipped] == ["r7"]
+    assert runs[0].replaced_by == ["r7"] and not runs[0].counted
 
 
 def test_two_folders_with_one_run_id_are_refused(tmp_path):

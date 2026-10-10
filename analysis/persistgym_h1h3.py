@@ -1321,7 +1321,7 @@ def fe_logit_fit(y: np.ndarray, groups: np.ndarray, z: np.ndarray, names: list[s
     return out
 
 
-def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: int = 100,
+def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: int = 1000,
                    tol: float = 1e-8) -> tuple[np.ndarray, np.ndarray] | None:
     """Firth's penalized-likelihood logit (Firth 1993; Heinze and Schemper 2002) with template
     fixed effects: it maximises the log-likelihood plus half the log-determinant of the Fisher
@@ -1330,7 +1330,13 @@ def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: in
     penalized log-likelihood. Returns (template intercepts, slopes), or None if it does not
     converge. Used under H1_SEPARATION_RULE = "firth", the researcher's ruling of 2026-10-10.
     Checked against a direct numerical maximisation of the penalized log-likelihood in the
-    tests (to < 1e-7 on every coefficient)."""
+    tests (to < 1e-7 on every coefficient).
+
+    The steps use the Fisher information of the likelihood, not the Hessian of the penalized
+    log-likelihood, so convergence is linear: on luna's sweep, with most cells at 100%, the
+    fit took 102 steps to reach `tol`. The cap was 100 until 2026-10-10, when that sweep's
+    FINAL analysis (`results/persistgym_h1h3/20261010T205230Z/`) returned "did not converge";
+    it is 1,000 since (the researcher's decision of 2026-10-10, results/decisions.md)."""
     y = np.asarray(y, float)
     g = int(codes.max()) + 1
     x = np.column_stack([np.eye(g)[codes], np.asarray(z, float)])

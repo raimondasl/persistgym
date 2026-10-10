@@ -1310,6 +1310,49 @@ def test_firth_approaches_ml_as_n_grows():
     np.testing.assert_allclose(10 * diffs[10], 100 * diffs[100], rtol=0.05, atol=1e-3)
 
 
+def _ceiling_case(templates: int = 200, seed: int = 0):
+    """y, template codes and the §9.1 design (F-0/W-0 x R x D x N, one episode per template and
+    cell), shaped like a sweep at its ceiling: every cell is all 1 except W-0's
+    not-recoverable far cells (about 7.5% success) and one failure each in F-0
+    derived-nonrec-far and W-0 derived-nonrec-near. Only the templates with outcome variation
+    are kept, as glm_91_firth keeps them."""
+    rng = np.random.default_rng(seed)
+    rows = np.array([(t, w, r, d, n) for t in range(templates) for w in (0, 1) for r in (0, 1)
+                     for d in (0, 1) for n in (0, 1)], float)
+    _, w, r, d, n = rows.T
+    y = np.ones(len(rows))
+    lost = (w == 1) & (r == 0) & (n == 0)
+    y[lost] = (rng.random(int(lost.sum())) > 0.925).astype(float)
+    for one in ((w == 0) & (r == 0) & (d == 1) & (n == 0), (w == 1) & (r == 0) & (d == 1) & (n == 1)):
+        y[rng.choice(np.flatnonzero(one))] = 0.0
+    z, names = hh.factorial_design({"W-0": w}, r, d, n, target="W-0:R")
+    assert names[-1] == "W-0:R"
+    keep, codes, _ = hh.informative(y, rows[:, 0].astype(int))
+    return y[keep], codes, z[keep]
+
+
+def test_firth_converges_on_a_sweep_at_its_ceiling():
+    """The fit's steps converge linearly, and on a sweep with most cells at 100% (luna's shape)
+    they need more than 100 steps: the old cap of 100 returned None ("did not converge") here,
+    as it did on luna's sweep (102 steps). Under the cap of 1,000 the fit converges, to a
+    stationary point and a local maximum of the penalized log-likelihood written afresh
+    (numerical gradient; the penalized log-likelihood rises from it in every direction tried)."""
+    y, codes, z = _ceiling_case()
+    assert hh.firth_fe_logit(y, codes, z, max_iter=100) is None
+    fit = hh.firth_fe_logit(y, codes, z)
+    assert fit is not None
+    b = np.concatenate(fit)
+    assert np.isfinite(b).all() and 0 < b[-1] < 15                 # W-0 x R: finite, positive
+    x = np.column_stack([np.eye(codes.max() + 1)[codes], z])
+    def f(v):
+        return _minus_penalized(v, x, y)
+    assert np.max(np.abs(_num_grad(f, b))) < 1e-5
+    rng = np.random.default_rng(1)
+    for _ in range(20):
+        u = rng.normal(size=len(b))
+        assert f(b + 1e-3 * u / np.linalg.norm(u)) > f(b)
+
+
 # --- H3's model check: the registered model decides (B1) ----------------------------------------
 
 def _h3_frame(templates: int = 60, seed: int = 7) -> pd.DataFrame:

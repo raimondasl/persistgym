@@ -72,7 +72,9 @@ effects nested in the clusters this is conservative when templates have few obse
 confirmatory model uses is a PREREG choice; the bootstrap contrasts do not depend on it.
 
 Run: ``uv run python -m analysis.power_sim [--reps 200] [--seed 20260930] [--no-write]``;
-part 3: ``uv run python -m analysis.power_sim --part luna --reps 2000``
+part 3: ``uv run python -m analysis.power_sim --part luna --reps 2000``. A finished part-3
+run's summary.md is re-rendered by the current code from its saved files, with no simulation:
+``uv run python -m analysis.power_sim --rerender-summary results/power_sim/<run_id>``.
 """
 
 from __future__ import annotations
@@ -871,10 +873,14 @@ def luna_decision(power: pd.DataFrame, cap: int = LUNA_T_CAP,
                                                if both is not None else None),
                          **uncapped, "T_grid_max": int(full.templates.max())})
     out = pd.DataFrame(rows)
-    for col in ("T_h1", "T_h3", "T_both", "T_set", "T_h1_uncapped", "T_h3_uncapped",
-                "T_both_uncapped"):
+    for col in LUNA_DECISION_COUNTS:
         out[col] = out[col].astype("Int64")  # missing = no T (up to the cap) meets the target
     return out
+
+
+LUNA_DECISION_COUNTS = ("T_h1", "T_h3", "T_both", "T_set", "T_h1_uncapped", "T_h3_uncapped",
+                        "T_both_uncapped")
+"""`luna_decision`'s template counts: nullable integers (missing: no T meets the target)."""
 
 
 def luna_sensitivity_setups(primary: LunaSetup, others: list[LunaSetup],
@@ -1001,10 +1007,15 @@ def luna_cost_per_template(path: Path = LUNA_COST_FORECAST) -> float | None:
     return float(hit.usd.iloc[0]) / LUNA_COST_T if len(hit) else None
 
 
-def _phase_1a_spent() -> float | None:
+def _phase_1a_spent(until: datetime | None = None) -> float | None:
+    """Phase 1a's spend in results/costs.csv; with `until`, of the rows logged by then only
+    (a re-rendered summary states the spend its run saw)."""
     try:
         from common import costs
-        return costs.spend_by_phase(costs.read_rows()).get("1a")
+        rows = costs.read_rows()
+        if until is not None:
+            rows = [r for r in rows if datetime.fromisoformat(r["timestamp_utc"]) <= until]
+        return costs.spend_by_phase(rows).get("1a")
     except (OSError, ValueError):
         return None
 
@@ -1041,8 +1052,10 @@ LUNA_WHY = {
          "of its 95% Wilson interval. Chance is 0.10 (K = 10).")),
     "sd": (
         "Template random-intercept SD (logit), shared by a template's 7 cells",
-        ("Primary 0.92 is the variance measured in luna's validity runs, as §4.2 asks: the ML "
-         "estimate from its fact-withheld run (table below; the restated run carries none). "
+        (f"Primary {LUNA_VALIDITY_SD:g} is the template SD on the logit scale (a variance of "
+         f"{LUNA_VALIDITY_SD ** 2:.2f}) measured in luna's validity runs, as §4.2 asks (\"the "
+         "variance measured in the validity runs\"): the ML estimate from its fact-withheld "
+         "run (table below; the restated run carries none). "
          "PLAN §10's 1.0 is a sensitivity row. Every contrast here is paired within template, "
          "so a larger shared SD raises power (sensitivity rows); pessimistic 0, the lower end "
          "of that estimate's 95% interval, leaves the cells independent.")),
@@ -1116,8 +1129,9 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
                 "", _md_table(validity), "",
                 ("Restated-at-need succeeded in every episode, so it carries no variance. §4.2 "
                  "has the power re-simulation use the variance measured in the validity runs, "
-                 f"so the primary scenario takes the withheld run's estimate "
-                 f"({LUNA_VALIDITY_SD:g}, `LUNA_VALIDITY_SD`). That run measures how guesses "
+                 f"so the primary scenario takes the withheld run's estimate: a template SD of "
+                 f"{LUNA_VALIDITY_SD:g} on the logit scale (`LUNA_VALIDITY_SD`; a variance of "
+                 f"{LUNA_VALIDITY_SD ** 2:.2f}). That run measures how guesses "
                  "cluster by template, not how memory success does, and 20 templates leave "
                  "the interval wide, so the sensitivity rows vary the SD."), ""]
     out += ["## Result: the template count", "", _md_table(decision.drop(columns=["target"])),
@@ -1220,6 +1234,44 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
     return "\n".join(out)
 
 
+def rerender_luna_summary(run_dir: Path) -> str:
+    """summary.md of a finished luna run (``--part luna``), rendered again by this code from
+    the run's own files, with no simulation: its CSVs, meta.json's scenarios, run id and end
+    time, the command from the summary.md it replaces, the committed cost forecast, and phase
+    1a's spend in results/costs.csv's rows logged by the run's end. ValueError for a run that
+    is not a luna run or lacks a file. The CSVs hold 6 significant digits, which the summary's
+    3 decimals do not reach."""
+    meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+    config = meta.get("config") or {}
+    if config.get("part") != "luna":
+        raise ValueError(f"{run_dir} is not a luna power run (--part luna)")
+
+    def table(name: str, required: bool = False) -> pd.DataFrame | None:
+        path = run_dir / f"{name}.csv"
+        if not path.exists():
+            if required:
+                raise ValueError(f"{path} is missing")
+            return None
+        return pd.read_csv(path, keep_default_na=False, na_values=[""])
+
+    decision = table("luna_decision", required=True)
+    for col in LUNA_DECISION_COUNTS:
+        decision[col] = decision[col].astype("Int64")
+    command = None
+    for line in (run_dir / "summary.md").read_text(encoding="utf-8").splitlines():
+        if line.startswith("Command: `") and line.endswith("`"):
+            command = line.removeprefix("Command: `")[:-1]
+            break
+    if command is None:
+        raise ValueError(f"{run_dir / 'summary.md'} names no command")
+    setups = [LunaSetup(**s) for s in config["luna_setups"]]
+    finished = datetime.fromisoformat(meta["finished_utc"])
+    return luna_summary(table("luna_power", required=True), decision,
+                        table("luna_sensitivity"), table("luna_validity_sd"), setups,
+                        meta["run_id"], command, luna_cost_per_template(),
+                        _phase_1a_spent(until=finished), table("luna_normal_check"))
+
+
 # --------------------------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------------------------
@@ -1313,9 +1365,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="default: results/power_sim/<run_id>/")
     ap.add_argument("--no-write", action="store_true", help="print only")
+    ap.add_argument("--rerender-summary", type=Path, default=None, metavar="RUN_DIR",
+                    help="re-render a finished luna run's summary.md with this code from its "
+                         "saved files, with no simulation (`rerender_luna_summary`); other "
+                         "options are ignored, and --no-write prints it instead")
     args = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if args.rerender_summary is not None:
+        summary = rerender_luna_summary(args.rerender_summary)
+        if args.no_write:
+            print(summary)
+        else:
+            path = args.rerender_summary / "summary.md"
+            path.write_text(summary, encoding="utf-8", newline="\n")
+            print(f"wrote {path}")
+        return 0
 
     started = datetime.now(UTC)
     run_id = started.strftime("%Y%m%dT%H%M%SZ")

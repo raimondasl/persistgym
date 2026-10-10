@@ -452,6 +452,32 @@ def test_main_luna_writes_tables_meta_and_summary(tmp_path):
     assert (decision.T_grid_max == 60).all()
     assert "Without R6's cap no simulated T up to 60 reaches 0.80" in summary
     assert "The uncapped T is read from this simulation" in summary
+    # 0.92 is the template SD on the logit scale; its variance is 0.85
+    assert "Primary 0.92 is the template SD on the logit scale (a variance of 0.85)" in summary
+    assert "a template SD of 0.92 on the logit scale (`LUNA_VALIDITY_SD`; a variance of " \
+           "0.85)" in summary
+    assert "0.92 is the variance" not in summary
+    # re-rendered from the run's saved files, with no simulation, it is the same summary
+    assert ps.rerender_luna_summary(tmp_path) == summary
+    assert ps.main(["--rerender-summary", str(tmp_path)]) == 0
+    assert (tmp_path / "summary.md").read_text(encoding="utf-8") == summary
+
+
+def test_the_committed_luna_run_summary_is_this_codes_rerender():
+    """results/power_sim/20261010T030442Z/summary.md (luna's T, R6 change 6) is what this code
+    renders from that run's saved files (`--rerender-summary`), so its text is the committed
+    code's; it was re-rendered once after the SD wording was fixed."""
+    run = ps.REPO_ROOT / "results" / "power_sim" / "20261010T030442Z"
+    if not run.exists():
+        pytest.skip("the run is not in this checkout")
+    assert ps.rerender_luna_summary(run) == (run / "summary.md").read_text(encoding="utf-8")
+
+
+def test_rerender_refuses_a_run_that_is_not_lunas(tmp_path):
+    (tmp_path / "meta.json").write_text(json.dumps({"config": {"part": "h2"}}),
+                                        encoding="utf-8")
+    with pytest.raises(ValueError, match="not a luna power run"):
+        ps.rerender_luna_summary(tmp_path)
 
 
 def test_luna_cli_lists_must_match_the_scenarios():

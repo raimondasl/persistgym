@@ -1,16 +1,18 @@
 """Checkpoint C metrics (analysis/checkpoint_c.py; PREREG §10.3): each rule firing and not
 firing, re-run replacement, D19/D20 and TIME_BUDGET, the refusals of an incomplete or
-inconsistent block 2, the 3-game fallback (D32) and the output allowlist.
+inconsistent block 2, the 3-game fallback (D32) and the output allowlist; R6's yardstick for
+a config's first counted run (§17.6 change 5) and ``--d20-run``.
 
-Every run here is synthetic, in a results root built under tmp_path, except the last test,
-which runs the script on this checkout's own results/ (whatever block-2 folders are committed)
-to check that a PROVISIONAL reading does not crash."""
+Every run here is synthetic, in a results root built under tmp_path, except the tests on
+this checkout's own results/: a reading that does not crash, block 2's rulings unchanged by
+R6, and R6's S2 and S1 thresholds from block 2's data (on a copy, with a synthetic new run)."""
 
 from __future__ import annotations
 
 import csv
 import io
 import json
+import shutil
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -726,3 +728,263 @@ def test_the_error_rule_is_undetermined_while_missing_runs_could_make_it_fire(tm
             fx.run(g, c, **WIN)
     err = fx.compute()[0]["readings"]["four_games"]["errors"]
     assert err["errors"] == 3 and err["undetermined"] == 1 and err["fires"] is None
+
+
+# --- R6 change 5: D20's yardstick for a config's first counted run --------------------------
+
+TB = {"ending": "TIME_BUDGET", "level_actions": (20, 40, 60), "levels_completed": 1}
+
+
+def test_a_first_s2_run_uses_the_pilot_median_scaled_by_s0s_drift(tmp_path):
+    """Block 2's S0 runs run at 160 s per call against S0's 80 s pilot: drift 2. S2's first
+    counted run is measured against 95 s × 2 = 190 s (threshold 380 s), not its plain pilot
+    median of 95 s (threshold 190 s); a later S2 run uses D20 as frozen."""
+    fx = Fixture(tmp_path)
+    fx.block(s0_median=160.0)
+    first = fx.run("FT09", "S2", median=350.0, **TB)
+    second = fx.run("R11L", "S2", median=350.0, **TB)
+    third = fx.run("SB26", "S2", median=750.0, **TB)
+    out, b = fx.compute()
+    a = b.d20[first]["as_of_start"]
+    assert a["drift"]["factor"] == 2.0 and a["drift"]["s0_median_s"] == 160.0
+    assert a["drift"]["s0_pilot_s"] == PILOT["S0"] and len(a["drift"]["s0_runs"]) == 4
+    assert a["yardstick_s"] == PILOT["S2"] * 2.0 and a["threshold_s"] == 380.0
+    assert "pilot pilot-S2 × S0 drift 2.0000" in a["yardstick_from"]
+    assert b.d20[first]["incident"] is False and b.eligible[first] is False
+    assert b.d20[first]["readings_agree"]
+    # the second S2 run: 2 × the first's 350 s = 700 s, as frozen; no drift
+    a2 = b.d20[second]["as_of_start"]
+    assert a2["yardstick_from"] == [first] and a2["threshold_s"] == 700.0
+    assert a2["drift"] is None and b.d20[second]["incident"] is False
+    # the third: 2 × median(350, 350) = 700 s, and 750 s is an incident
+    assert b.d20[third]["incident"] is True and b.eligible[third] is True
+    # the summary names the scaled yardstick
+    text = "\n".join(cc.summary_lines(out))
+    assert "S0 drift 2.0000 (§17.6 change 5)" in text
+
+
+@pytest.mark.parametrize("median,incident", [(380.0, False), (380.5, True)])
+def test_the_scaled_threshold_is_twice_the_scaled_yardstick(tmp_path, median, incident):
+    """S1 (100 s pilot) and S2 (95 s) each on their first run, with S0's drift 2: thresholds
+    400 s and 380 s; each run sits at or just above its threshold."""
+    fx = Fixture(tmp_path)
+    fx.block(s0_median=160.0)
+    s1 = fx.run("CD82", "S1", median=median * PILOT["S1"] / PILOT["S2"], **TB)
+    s2 = fx.run("CD82", "S2", median=median, **TB)
+    _, b = fx.compute()
+    assert b.d20[s2]["as_of_start"]["threshold_s"] == 380.0
+    assert b.d20[s2]["incident"] is incident
+    assert b.d20[s1]["as_of_start"]["threshold_s"] == 400.0
+    assert b.d20[s1]["incident"] is incident
+
+
+def test_s0_and_s4_keep_the_plain_pilot_fallback(tmp_path):
+    """The first S4 run and the first S0 run: the plain pilot median, no drift, as block 2
+    ruled (R6 change 5 applies to S1 and S2 only)."""
+    fx = Fixture(tmp_path)
+    s4 = fx.run("FT09", "S4", median=45.0, **TB)              # 45 > 2 × 20: an incident
+    s0 = fx.run("FT09", "S0", median=150.0, **TB)             # 150 ≤ 2 × 80: final
+    _, b = fx.compute()
+    for run_id, config, incident in ((s4, "S4", True), (s0, "S0", False)):
+        a = b.d20[run_id]["as_of_start"]
+        assert a["yardstick_from"] == f"pilot pilot-{config}" and a["drift"] is None
+        assert a["yardstick_s"] == PILOT[config] and b.d20[run_id]["incident"] is incident
+
+
+def test_the_drift_reads_block_2s_counted_s0_runs_only(tmp_path):
+    """A replaced S0 original (its re-run started before the S2 run) and a seed-2 S0 run do
+    not enter the drift; the S0 re-run does."""
+    fx = Fixture(tmp_path)
+    fx.block(games=["SB26", "R11L", "CD82"], s0_median=100.0)
+    fx.run("FT09", "S4", **WIN)
+    orig = fx.run("FT09", "S0", median=900.0, **TB)          # incident: 900 > 2 × 100
+    re = fx.run("FT09", "S0", seed=101, rerun_of=orig, median=300.0, **BUDGET)
+    fx.run("SB26", "S0", seed=2, median=5000.0, **BUDGET)
+    s2 = fx.run("FT09", "S2", median=100.0, **TB)
+    _, b = fx.compute()
+    d = b.d20[s2]["as_of_start"]["drift"]
+    assert orig not in d["s0_runs"] and re in d["s0_runs"] and len(d["s0_runs"]) == 4
+    assert d["s0_median_s"] == 100.0 and d["factor"] == 100.0 / PILOT["S0"]
+    assert b.d20[s2]["final_counted_set"]["drift"]["s0_runs"] == d["s0_runs"]
+
+
+def test_without_s0_runs_the_scaled_yardstick_cannot_be_computed(tmp_path):
+    fx = Fixture(tmp_path)
+    s2 = fx.run("FT09", "S2", median=100.0, **TB)
+    _, b = fx.compute()
+    a = b.d20[s2]["as_of_start"]
+    assert a["yardstick_s"] is None and a["incident"] is None
+    assert "S0 drift" in a["yardstick_from"]
+    assert b.eligible[s2] is None
+
+
+# --- --d20-run -----------------------------------------------------------------------------
+
+def _d20_line(fx, capsys, run_id):
+    assert fx.main("--d20-run", run_id) == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert len(out) == 1
+    got = json.loads(out[0])
+    assert tuple(got) == cc.D20_RUN_FIELDS
+    return got
+
+
+def test_d20_run_prints_one_json_line_while_block_2_is_incomplete(tmp_path, capsys):
+    """Block 2 incomplete (CD82 S0 missing), no G0 record and no draw: --d20-run still
+    answers, where the full reading refuses."""
+    fx = Fixture(tmp_path)
+    fx.block(games=["FT09", "SB26", "R11L"], s0_median=160.0)
+    fx.run("CD82", "S4", **WIN)
+    tb = fx.run("FT09", "S2", median=400.0, **TB)
+    err = fx.run("SB26", "S2", median=10.0, ending="AGENT_ERROR", level_actions=(1, 1, 1),
+                 levels_completed=0)
+    win = fx.run("R11L", "S2", median=10.0, **WIN)
+    assert fx.main("--no-write") == 2
+    capsys.readouterr()
+    shutil.rmtree(fx.root / "gates")
+    shutil.rmtree(fx.root / "draw")
+    got = _d20_line(fx, capsys, tb)
+    assert got == {"run_id": tb, "config": "S2", "game": "FT09",
+                   "agent_exit_reason": "TIME_BUDGET", "median_s_per_call": 400.0,
+                   "threshold_s": 380.0, "incident": True, "rerun_eligible": True,
+                   "rerun_of": None, "replaced_by": [], "rerun_allowed": True}
+    got = _d20_line(fx, capsys, err)
+    assert got["incident"] is None and got["rerun_eligible"] is True
+    # its threshold whatever its ending: 2 × the first S2 run's 400 s, as of its start
+    assert got["threshold_s"] == 800.0
+    got = _d20_line(fx, capsys, win)
+    assert got["incident"] is None and got["rerun_eligible"] is False
+
+
+def test_d20_run_never_allows_a_second_re_run(tmp_path, capsys):
+    """D19 allows one re-run: a re-run that ends re-run-eligible, and an original that
+    already has its re-run, both answer rerun_allowed false, so a restarted driver cannot
+    start a second one."""
+    fx = Fixture(tmp_path)
+    fx.block(s0_median=160.0)
+    orig = fx.run("FT09", "S2", median=900.0, **TB)
+    got = _d20_line(fx, capsys, orig)
+    assert got["incident"] is True and got["rerun_allowed"] is True
+    re = fx.run("FT09", "S2", seed=101, rerun_of=orig, ending="AGENT_ERROR",
+                level_actions=(1, 1, 1), levels_completed=0)
+    got = _d20_line(fx, capsys, re)
+    assert got["rerun_eligible"] is True and got["rerun_of"] == orig
+    assert got["rerun_allowed"] is False
+    got = _d20_line(fx, capsys, orig)
+    assert got["replaced_by"] == [re] and got["rerun_allowed"] is False
+
+
+def test_d20_run_refuses_an_unknown_or_truncated_run(tmp_path, capsys):
+    fx = Fixture(tmp_path)
+    fx.block()
+    assert fx.main("--d20-run", "20261010T000000Z-S2-ft09-s1") == 2
+    assert "unknown run 20261010T000000Z-S2-ft09-s1" in capsys.readouterr().err
+    short = fx.run("FT09", "S2", meta_extra={"truncation_limits": {"max_actions": 5}}, **TB)
+    assert fx.main("--d20-run", short) == 2
+    assert "truncated" in capsys.readouterr().err
+    (fx.root / "arc_path" / "20261011T000000Z-S2-sb26-s1").mkdir()   # still running
+    assert fx.main("--d20-run", "20261011T000000Z-S2-sb26-s1") == 2
+    assert "unknown run" in capsys.readouterr().err
+
+
+# --- this checkout's data ------------------------------------------------------------------
+
+BLOCK2_VERDICTS = {
+    # run ID: (agent_exit_reason, re-run-eligible, D20 incident, as-of yardstick in s)
+    "20261006T144656Z-S4-cd82-s1": ("GAME_WIN", False, None, None),
+    "20261006T171726Z-S0-ft09-s1": ("TIME_BUDGET", True, True, 73.296),
+    "20261007T133444Z-S4-sb26-s1": ("GAME_WIN", False, None, None),
+    "20261007T143700Z-S0-sb26-s1": ("ACTION_BUDGET", False, None, None),
+    "20261008T013832Z-S0-cd82-s1": ("TIME_BUDGET", False, False, (181.25 + 156.679) / 2),
+    "20261008T134155Z-S0-r11l-s1": ("ACTION_BUDGET", False, None, None),
+    "20261008T212807Z-S4-r11l-s1": ("ACTION_BUDGET", False, None, None),
+    "20261009T020602Z-S4-ft09-s1": ("GAME_WIN", False, None, None),
+    "20261009T030646Z-S0-ft09-s101": ("TIME_BUDGET", False, False, 156.679),
+}
+
+
+def test_block_2s_rulings_on_this_checkouts_data_are_unchanged():
+    """R6 change 5 leaves block 2 as ruled (results/decisions.md, Checkpoint C): the FT09 S0
+    original is a D20 incident against the plain S0 pilot median; CD82 S0 and the FT09 S0
+    re-run are final; the gap is 62.59 and no counted run is an error."""
+    out, _ = cc.compute(cc.RESULTS, "now", GIT)
+    assert out["status"] == cc.FINAL
+    by = {r["run_id"]: r for r in out["runs"]}
+    for run_id, (ending, eligible, incident, yardstick) in BLOCK2_VERDICTS.items():
+        r = by[run_id]
+        assert (r["agent_exit_reason"], r["rerun_eligible"]) == (ending, eligible), run_id
+        if incident is None:
+            assert r["d20"] is None, run_id
+            continue
+        a = r["d20"]["as_of_start"]
+        assert r["d20"]["incident"] is incident and r["d20"]["readings_agree"], run_id
+        assert a["yardstick_s"] == pytest.approx(yardstick) and a["drift"] is None, run_id
+    assert by["20261006T171726Z-S0-ft09-s1"]["d20"]["as_of_start"]["yardstick_from"] == (
+        "pilot 20261002T035726Z-S0-r11l-s1")
+    four = out["readings"]["four_games"]
+    assert four["gap"]["mean_gap"] == pytest.approx(62.5889, abs=1e-4)
+    assert four["gap"]["fires"] is False
+    assert four["errors"]["errors"] == 0 and four["errors"]["fires"] is False
+    assert four["cost"]["fires"] is True
+
+
+def _copy_block_2(tmp_path):
+    """This checkout's block-2 folders and costs.csv, under tmp_path (no G0 record, no
+    draw: --d20-run needs neither)."""
+    root = tmp_path / "results"
+    for run_id in BLOCK2_VERDICTS:
+        shutil.copytree(cc.RESULTS / "arc_path" / run_id, root / "arc_path" / run_id)
+    shutil.copy(cc.RESULTS / "costs.csv", root / "costs.csv")
+    return root
+
+
+def _first_run(root, config, median, card=True):
+    """A new, uncommitted run folder with no costs.csv row."""
+    run_id = f"20261010T000000Z-{config}-ft09-s1"
+    d = root / "arc_path" / run_id
+    d.mkdir()
+    meta = {"experiment": "arc_path", "run_id": run_id, "cell_or_config": config,
+            "game_requested": "ft09", "seeds": {"replicate_seed": 1}, "rerun_of": None,
+            "agent_exit_reason": "TIME_BUDGET", "exit_reason": "TIME_BUDGET",
+            "started_utc": "2026-10-10T00:00:00+00:00", "n_calls": 100,
+            "latency": {"median_s": median}, "cost_usd": {},
+            "truncation_limits": {"max_actions": None}}
+    (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    if card:
+        (d / "scorecard.json").write_text(json.dumps(_card((20, 40, 60), 1)), encoding="utf-8")
+    return run_id
+
+
+@pytest.mark.parametrize("config,threshold", [("S2", 431.0854), ("S1", 464.1001)])
+def test_the_scaled_thresholds_on_this_checkouts_data(tmp_path, capsys, config, threshold):
+    """§17.6 change 5 on block 2's data: S0's drift is 163.37 / 73.30 = 2.229, so the first
+    counted S2 run is an incident only above 2 × 96.70 × 2.229 = 431.09 s, and S1's above
+    2 × 104.11 × 2.229 = 464.10 s."""
+    root = _copy_block_2(tmp_path)
+    below = _first_run(root, config, threshold - 0.01)
+    assert cc.main(["--results-root", str(root), "--d20-run", below]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert got["threshold_s"] == pytest.approx(threshold, abs=1e-4)
+    assert got["incident"] is False and got["rerun_eligible"] is False
+    rows = costs.read_rows(root / "costs.csv")
+    entries, _ = cc.discover(root / "arc_path")
+    e = next(x for x in entries if x.run_id == below)
+    drift = cc.d20_readings(e, entries, cc.pilot_latency(rows))["as_of_start"]["drift"]
+    assert drift["s0_median_s"] == pytest.approx(163.3705)
+    assert drift["s0_pilot_s"] == pytest.approx(73.296)
+    assert drift["factor"] == pytest.approx(2.2289, abs=1e-4)
+    shutil.rmtree(root / "arc_path" / below)
+    above = _first_run(root, config, threshold + 0.01)
+    assert cc.main(["--results-root", str(root), "--d20-run", above]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert got["incident"] is True and got["rerun_eligible"] is True
+
+
+def test_d20_run_reads_a_missing_scorecard_as_unknown(tmp_path, capsys):
+    """§0.3 line 2: a run whose scorecard cannot be read is re-run once, as UNKNOWN, even
+    when its TIME_BUDGET is not a latency incident."""
+    root = _copy_block_2(tmp_path)
+    lost = _first_run(root, "S2", 100.0, card=False)
+    assert cc.main(["--results-root", str(root), "--d20-run", lost]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert got["incident"] is False and got["rerun_eligible"] is True

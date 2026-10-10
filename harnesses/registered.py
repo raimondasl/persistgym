@@ -37,15 +37,24 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   F-r run there would be H2's contrast before G1.
 * luna (§4.6, R6 change 1, §17.6): outside its pilots it runs its main sweep and controls
   only (`luna_refusal`). Its validity runs are finished, with G1 recorded on them, so
-  `persistgym_validity` refuses luna: R6 change 1 allows no other paid runs. Its pilots stay
-  open (the single-turn control's pilot of at most 10 prompts among them). The main sweep
-  and controls are: experiment `persistgym`, the replay-off cells
-  `LUNA_CELLS` (F-0, W-0, W-n-0, Σ-n-0; its replay toggle was not verified at G0) or the
-  single-turn control (`LUNA_SINGLE_TURN_CELL`), main templates 0 to `LUNA_T` - 1 (T =
-  200, §4.2 capped by R6 change 6), base episodes or the restated-at-need control in F-0,
-  on the default generator config, with D13's request settings (`LUNA_REQUEST`: --mode
-  standard, --service-tier flex, no --W), and only once `G1_PASSED` records luna on that
-  config.
+  `persistgym_validity` refuses luna: R6 change 1 allows no other paid runs. The main sweep
+  and controls are: experiment `persistgym`, the replay-off cells `LUNA_CELLS` (F-0, W-0,
+  W-n-0, Σ-n-0; its replay toggle was not verified at G0) as the full matrix on all 8 task
+  cells (`LUNA_MATRIX`, `LUNA_TASK_CELLS`), or the single-turn control
+  (`LUNA_SINGLE_TURN_CELL`) on its 4 non-recoverable task cells
+  (`LUNA_SINGLE_TURN_TASK_CELLS`), main templates 0 to `LUNA_T` - 1 (T = 200, §4.2 capped by
+  R6 change 6), base episodes or the restated-at-need control in F-0, on the default
+  generator config, with D13's request settings (`LUNA_REQUEST`: --mode standard,
+  --service-tier flex, no --W), and only once `G1_PASSED` records luna on that config.
+* R6's hard stop (§17.6 change 1; `R6_HARD_STOP`, `r6_refusal`): those runs, the main sweep
+  with its controls and repeats, and the single-turn control's pilot (CLAUDE.md: a new
+  request type is piloted first; the sweep's request on the default config, and at most
+  `LUNA_SINGLE_TURN_PILOT_MAX` = 10 prompts in all, counted over every single-turn pilot of
+  luna) are the PersistGym stream's only paid runs left. Every other one refuses, fail
+  closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
+  every model, `persistgym_sol_h1`, the probes (`toggle_pilot`, `replay_probe`), every sol
+  run, any other experiment, and any model that is not a registered one. The rules below for those runs stay, as the record of what was
+  registered, and apply again only with `R6_HARD_STOP` off (tests).
 
 * R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
   generator config, with D13's other request settings (`H1_REPLICATION_REQUEST`), in F-0,
@@ -60,8 +69,10 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   Its pilot (W-0 and W-n-0, `H1_REPLICATION_PILOT_CELLS`) runs as any sol pilot at medium
   does, and the pooled pilot report leaves it out (`harnesses.blinding.is_left_out`).
 
-`check_run_settings` is the guard `harnesses run` applies before it takes the paid-run lock:
-pilots (`persistgym_pilot`) may use any settings, except that a sol pilot at high effort is
+`check_run_settings` is the guard `harnesses run` and `harnesses single-turn` apply before
+they take the paid-run lock: first R6's hard stop (`r6_refusal`); then, for the runs it lets
+through (and for every run with it off), the earlier rules: pilots (`persistgym_pilot`) may
+use any settings, except that a sol pilot at high effort is
 R3's engagement check and must play `sol-chain` in F-r or F-0, and a sol pilot above medium
 effort refuses after the hard stop; R4's replication runs must be exactly what R4
 registers (`replication_refusal`); every other experiment must send the model's registered
@@ -70,16 +81,20 @@ effort, a model in `REGISTERED_GENERATOR` must use its preset and a model in
 `ENGAGEMENT_REQUIRED` needs an ENGAGED check on that config in the order R2 registers
 (`engagement_refusal`), sol's main sweep needs `G1_PASSED`, and luna is held to its main
 sweep and controls (`luna_refusal`; its validity runs refuse). A model string counts as a
-registered model when it is that model or starts with it and a hyphen (`model_family`, as
-`harnesses.pricing.price_for` reads it), so a dated snapshot or alias of sol is sol, and one
-of luna is luna. The probes keep their own registered settings
-(`harnesses.probes.ECHO_CONFIG`, `REPLAY_CONFIG`; PREREG §17.1: medium on both models) and
-are not covered here.
+registered model when it is that model or a dated snapshot of it, the model followed by
+"-YYYY-MM-DD" (`model_family`), so `gpt-6.1-sol-2026-10-01` is sol and
+`gpt-6-luna-2026-10-01` is luna, while any other suffix (`gpt-6-luna-x`) names no
+registered model. The probes keep their own registered settings
+(`harnesses.probes.ECHO_CONFIG`, `REPLAY_CONFIG`; PREREG §17.1: medium on both models), which
+this module does not check; under R6 their paid runs refuse (`r6_refusal`, which
+`harnesses.cli` applies to every probe model before the paid-run lock).
 """
 
 from __future__ import annotations
 
 import json
+import re
+from datetime import date
 from pathlib import Path
 
 from harnesses.config import REASONING_EFFORTS
@@ -184,7 +199,32 @@ has none). The same values as R4's `H1_REPLICATION_REQUEST`."""
 LUNA_GENERATOR_HASH = DEFAULT_GENERATOR_HASH
 """luna plays the default generator config: the one its validity runs and the G1 spot-check
 played (§4.4), on which `G1_PASSED` records its G1."""
+LUNA_TASK_CELLS = tuple(c.id for c in ALL_CELLS)
+"""PREREG §4.6 (row 1, D36): luna's replay-off cells and the restated-at-need control run on
+all 8 task cells, as the full matrix (`harnesses.matrix.RunMatrix.full`, --task-cell all):
+every run of a cell plays the same templates in every task cell, and no --matrix d11 or
+--cell-templates."""
+LUNA_MATRIX = "full"
+"""The run matrix (`RunMatrix.name`) of luna's harness-cell main runs."""
+LUNA_SINGLE_TURN_TASK_CELLS = tuple(c.id for c in ALL_CELLS if not c.recoverable)
+"""PREREG §4.3, D36: the single-turn control runs on the 4 non-recoverable task cells, all of
+them (`single_turn.NONREC_TASK_CELLS`)."""
 R6_REF = "PREREG.md §17.6 (amendment R6)"
+R6_HARD_STOP = True
+"""PREREG §17.6 change 1 (R6): the PersistGym stream's only paid runs left are luna's main
+sweep and controls (`luna_refusal`) and the single-turn control's pilot (CLAUDE.md: a new
+request type is piloted first), then a hard stop. True: `r6_refusal` refuses every other
+paid run of the stream, fail closed. Tests set it False to exercise the rules R6 stopped."""
+LUNA_SINGLE_TURN_PILOT_MAX = 10
+"""CLAUDE.md: a pilot is at most 10 episodes. The single-turn control's pilot is at most 10
+prompts in all: templates x task cells, over every single-turn pilot run of luna under the
+results root (`_single_turn_pilot_prompts`)."""
+R6_STOP = (f"R6's hard stop ({R6_REF} change 1): the PersistGym stream's only paid runs left "
+           f"are {LUNA_MODEL}'s main sweep and controls (--experiment {LUNA_EXPERIMENT}) and "
+           f"the single-turn control's pilot (`single-turn --experiment {PILOT_EXPERIMENT} "
+           f"--split pilot` with the sweep's request settings on the default config, at most "
+           f"{LUNA_SINGLE_TURN_PILOT_MAX} prompts in all); no other paid run, and none after "
+           "these")
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
@@ -225,15 +265,29 @@ def _rule_for(generator_hash: str) -> dict | None:
         generator_hash)
 
 
+def _is_dated_snapshot(model: str, name: str) -> bool:
+    """Whether `model` is `name` followed by a hyphen and a calendar date, YYYY-MM-DD."""
+    suffix = model.removeprefix(name + "-")
+    if suffix == model or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", suffix):
+        return False
+    try:
+        date.fromisoformat(suffix)
+    except ValueError:
+        return False
+    return True
+
+
 def model_family(model: str) -> str:
-    """The registered model a model string names: the longest `REGISTERED_EFFORT` model that
-    it equals or starts with followed by a hyphen (a dated snapshot or alias, as
-    `harnesses.pricing.price_for` reads it), else the string itself."""
-    best = None
+    """The registered model a model string names: the `REGISTERED_EFFORT` model that it
+    equals, or of which it is a dated snapshot, the model followed by "-YYYY-MM-DD" (a real
+    date); else the string itself, which no rule of a registered model then covers (under R6,
+    `r6_refusal` refuses it). An alias or any other suffix is not the model: the guard reads
+    the requested string, and the model strings the API returned on every committed run are
+    the bare names (`gpt-6-luna`, `gpt-6.1-sol`)."""
     for name in REGISTERED_EFFORT:
-        if (model == name or model.startswith(name + "-")) and len(name) > len(best or ""):
-            best = name
-    return best or model
+        if model == name or _is_dated_snapshot(model, name):
+            return name
+    return model
 
 
 def registered_effort(model: str) -> str:
@@ -439,6 +493,80 @@ def replication_refusal(experiment: str, model: str, effort: str, cell: str,
     return None
 
 
+def _single_turn_pilot_prompts(results_root: Path) -> tuple[int, str | None]:
+    """The prompts earlier single-turn pilots of luna played (`n_episodes_run` of each
+    results/persistgym_pilot/*/meta.json whose `cell_or_config` is the control's cell and
+    whose model is luna), and why they cannot be counted (an unreadable meta.json), or None.
+    meta.json is a pilot's committed, blinded file: no outcome is read."""
+    total = 0
+    for path in sorted((results_root / PILOT_EXPERIMENT).glob("*/meta.json")):
+        try:
+            meta = json.loads(path.read_text(encoding="utf-8"))
+            if meta.get("cell_or_config") != LUNA_SINGLE_TURN_CELL:
+                continue
+            if model_family(str(meta.get("model_requested"))) == LUNA_MODEL:
+                total += int(meta["n_episodes_run"])
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+            return total, (f"cannot count the prompts of earlier single-turn pilots: {path} "
+                           f"({type(e).__name__}); fix it first")
+    return total, None
+
+
+def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path, *,
+               split: str | None = None, task_cells: tuple[str, ...] | None = None,
+               templates: tuple[int, int] | None = None, effort: str | None = None,
+               generator_hash: str | None = None,
+               request: dict | None = None) -> str | None:
+    """Why R6's hard stop (§17.6 change 1; `R6_HARD_STOP`) refuses a paid run of the
+    PersistGym stream, or None; every paid command calls it before the paid-run lock (`run`
+    and `single-turn` through `check_run_settings`, the probes with `cell` None). Fail closed:
+    * a model that is not a registered model (`model_family` not in `REGISTERED_EFFORT`)
+      refuses everywhere;
+    * luna in `persistgym` passes on to `luna_refusal`, which holds it to its main sweep and
+      controls;
+    * in `persistgym_pilot`, luna's single-turn pilot only: the control's cell, `split`
+      pilot, the request the sweep sends (luna's registered `effort`, D13's `request`
+      settings, `LUNA_REQUEST`, and the default config, `generator_hash`), and at most
+      `LUNA_SINGLE_TURN_PILOT_MAX` prompts in all, this run's (`templates` x `task_cells`)
+      with those of earlier ones (`_single_turn_pilot_prompts`). Any of these left as None
+      refuses. So a pilot of another request cannot use up the allowance;
+    * every other run refuses: `persistgym_validity` for every model, `persistgym_sol_h1`,
+      `toggle_pilot` and `replay_probe` (the probes), any other pilot, any sol run and any
+      other experiment."""
+    if not R6_HARD_STOP:
+        return None
+    family = model_family(model)
+    if family not in REGISTERED_EFFORT:
+        return (f"{R6_STOP}; got model {model}, which is not a registered model (the "
+                f"registered ones: {', '.join(REGISTERED_EFFORT)}, or a dated snapshot "
+                "-YYYY-MM-DD of one)")
+    if family == LUNA_MODEL and experiment == LUNA_EXPERIMENT:
+        return None
+    if family == LUNA_MODEL and experiment == PILOT_EXPERIMENT and cell == LUNA_SINGLE_TURN_CELL:
+        wrong = [f"--split {split}"] if split != "pilot" else []
+        if effort != REGISTERED_EFFORT[LUNA_MODEL]:
+            wrong.append(f"--effort {effort}")
+        if generator_hash != LUNA_GENERATOR_HASH:
+            wrong.append(f"generator config {str(generator_hash)[:12]}")
+        wrong += _request_wrong(request, LUNA_REQUEST)
+        if task_cells is None or templates is None:
+            wrong.append("its prompts (templates and task cells not given)")
+            n = 0
+        else:
+            n = max(templates[1] - templates[0], 0) * len(task_cells)
+        earlier, why = _single_turn_pilot_prompts(results_root)
+        if why:
+            return f"{R6_STOP}; {why}"
+        if earlier + n > LUNA_SINGLE_TURN_PILOT_MAX:
+            wrong.append(f"{n} prompts" + (f" after {earlier} in earlier single-turn pilots"
+                                           if earlier else ""))
+        if wrong:
+            return f"{R6_STOP}; got a single-turn pilot with " + "; ".join(wrong)
+        return None
+    return (f"{R6_STOP}; got --experiment {experiment}, model {model}"
+            + (f", cell {cell}" if cell else ""))
+
+
 def _luna_templates_wrong(templates: tuple[int, int] | None) -> list[str]:
     """luna's main runs and controls play main templates 0 to `LUNA_T` - 1 only: `templates`
     is the run's (first index, last index + 1); None (not given) is wrong."""
@@ -450,19 +578,42 @@ def _luna_templates_wrong(templates: tuple[int, int] | None) -> list[str]:
     return [f"main templates {start}-{stop - 1}"]
 
 
+def _luna_cells_wrong(cell: str, task_cells: tuple[str, ...] | None,
+                      matrix: str | None) -> list[str]:
+    """luna's harness-cell runs play the full matrix (`LUNA_MATRIX`) on all 8 task cells
+    (`LUNA_TASK_CELLS`); the single-turn control plays exactly its 4 non-recoverable task
+    cells (`LUNA_SINGLE_TURN_TASK_CELLS`), with no run matrix of its own. `task_cells` (the
+    task cells the run plays) or, for a harness cell, `matrix` (`RunMatrix.name`) left as
+    None is wrong."""
+    single = cell == LUNA_SINGLE_TURN_CELL
+    want = LUNA_SINGLE_TURN_TASK_CELLS if single else LUNA_TASK_CELLS
+    wrong = []
+    if not single and matrix != LUNA_MATRIX:
+        wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
+                      None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+    if task_cells is None:
+        wrong.append("task cells (not given)")
+    elif sorted(task_cells) != sorted(want):
+        wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
+    return wrong
+
+
 def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
                  variant: str, request: dict | None = None,
-                 templates: tuple[int, int] | None = None) -> str | None:
+                 templates: tuple[int, int] | None = None,
+                 task_cells: tuple[str, ...] | None = None,
+                 matrix: str | None = None) -> str | None:
     """Why a luna run outside `persistgym_pilot` must refuse, or None (§4.6, R6 change 1;
     fail closed). Its validity runs (`persistgym_validity`) refuse: they are finished, G1 is
     recorded on them (`G1_PASSED`), and R6 change 1 allows no other paid runs. Otherwise it
     is luna's main sweep or one of its controls only: experiment `persistgym`, a replay-off
-    cell (`LUNA_CELLS`) or the single-turn control (`LUNA_SINGLE_TURN_CELL`), on main
-    templates 0 to `LUNA_T` - 1 (`templates`, the run's first index and last index + 1),
-    base episodes or the restated-at-need control in F-0 (`LUNA_RUN`), on the default
-    generator config, with D13's request settings (`LUNA_REQUEST`), and only once
-    `G1_PASSED` records luna's G1 on that config. `request` or `templates` left as None
-    refuses."""
+    cell (`LUNA_CELLS`) as the full matrix on the 8 task cells, or the single-turn control
+    (`LUNA_SINGLE_TURN_CELL`) on its 4 non-recoverable task cells (`_luna_cells_wrong`:
+    `task_cells` and `matrix`), on main templates 0 to `LUNA_T` - 1 (`templates`, the run's
+    first index and last index + 1), base episodes or the restated-at-need control in F-0
+    (`LUNA_RUN`), on the default generator config, with D13's request settings
+    (`LUNA_REQUEST`), and only once `G1_PASSED` records luna's G1 on that config. `request`,
+    `templates`, `task_cells` or, for a harness cell, `matrix` left as None refuses."""
     if experiment == VALIDITY_EXPERIMENT:
         return (f"{VALIDITY_EXPERIMENT} runs no {LUNA_MODEL} run any more: luna's validity runs "
                 f"are finished and G1 is recorded on them (harnesses/registered.py G1_PASSED; "
@@ -478,13 +629,17 @@ def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
          variant == "restated" and cell != LUNA_RESTATED_CELL),
         (f"generator config {generator_hash[:12]}", generator_hash != LUNA_GENERATOR_HASH))
         if bad]
+    if cell in (*LUNA_CELLS, LUNA_SINGLE_TURN_CELL):
+        wrong += _luna_cells_wrong(cell, task_cells, matrix)
     wrong += _luna_templates_wrong(templates)
     wrong += _request_wrong(request, LUNA_REQUEST)
     if wrong:
         return (f"outside {PILOT_EXPERIMENT}, {LUNA_MODEL} runs its main sweep and controls "
                 f"only ({R6_REF} change 1; PREREG §4.6): --experiment "
                 f"{LUNA_EXPERIMENT}, a replay-off cell ({', '.join(LUNA_CELLS)}; luna's "
-                f"replay toggle was not verified at G0) or the single-turn control, "
+                f"replay toggle was not verified at G0) on all 8 task cells (the full matrix: "
+                f"--task-cell all, no --matrix d11 or --cell-templates) or the single-turn "
+                f"control on its 4 non-recoverable task cells (--task-cell all), "
                 f"--split main, main templates 0-{LUNA_T - 1} (T = {LUNA_T}: PREREG §4.2's "
                 f"rule, capped by R6 change 6), --variant base, or restated in cell "
                 f"{LUNA_RESTATED_CELL} (the restated-at-need control), on the default "
@@ -503,9 +658,14 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        generator_hash: str, results_root: Path, *, split: str,
                        variant: str, task_cells: tuple[str, ...] | None = None,
                        request: dict | None = None,
-                       templates: tuple[int, int] | None = None) -> str | None:
-    """Why `harnesses run` must refuse these settings before any paid call, or None. In
-    order:
+                       templates: tuple[int, int] | None = None,
+                       matrix: str | None = None) -> str | None:
+    """Why `harnesses run` (and `single-turn`) must refuse these settings before any paid
+    call, or None. In order:
+    0. R6's hard stop (`r6_refusal`, while `R6_HARD_STOP`): every run but luna's in
+       `persistgym` and luna's single-turn pilot of at most 10 prompts in all refuses, and so
+       does any model that is not a registered one; the rules below stay as they were for
+       the runs it lets through (and for every run when it is off);
     1. pilots may use any settings, except a sol pilot at high effort (R3's engagement
        check), which must play the `sol-chain` config in F-r or F-0, and a sol pilot at any
        effort above medium after R3's hard stop;
@@ -515,18 +675,25 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        settings (`request`) and, for its validity run, on validity templates 0-19
        (`templates`), and its main runs need `REPLICATION_G1_PASSED`
        (`replication_refusal`); steps 2-7 do not apply to it;
-    2. every other experiment sends the model's registered effort (a dated snapshot or alias
-       counts as its model, `model_family`);
-    R6. a luna run is its main sweep or a control, on main templates 0 to `LUNA_T` - 1
-       (`templates`) of the default config, with D13's request settings (`request`), after
-       `G1_PASSED`, and its validity runs refuse (they are finished: G1 is recorded)
-       (`luna_refusal`; §4.6, R6 change 1); steps 3-7 do not apply to it;
+    2. every other experiment sends the model's registered effort (a dated snapshot counts as
+       its model, `model_family`);
+    R6. a luna run is its main sweep or a control, a harness cell on the full matrix
+       (`matrix`) of the 8 task cells or the single-turn control on its 4 (`task_cells`), on
+       main templates 0 to `LUNA_T` - 1 (`templates`) of the default config, with D13's
+       request settings (`request`), after `G1_PASSED`, and its validity runs refuse (they
+       are finished: G1 is recorded) (`luna_refusal`; §4.6, R6 change 1); steps 3-7 do not
+       apply to it;
     3. a model in `REGISTERED_GENERATOR` uses its preset's config;
     4. a model in `REGISTERED_CELLS` runs one of its cells;
     5. in `persistgym_validity`, a model in `ENGAGEMENT_REQUIRED` runs exactly a validity
        run (`VALIDITY_RUN`: cell F-0, `split` validity, `variant` restated or withheld);
     6. such a model needs an ENGAGED check on that config (`engagement_refusal`);
     7. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config."""
+    why = r6_refusal(experiment, model, cell, results_root, split=split,
+                     task_cells=task_cells, templates=templates, effort=effort,
+                     generator_hash=generator_hash, request=request)
+    if why:
+        return why
     family = model_family(model)
     sol = family in ENGAGEMENT_REQUIRED
     if experiment == PILOT_EXPERIMENT:
@@ -557,7 +724,8 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                 f"{PILOT_EXPERIMENT} runs may use another effort{replication}")
     if family == LUNA_MODEL:
         return luna_refusal(experiment, cell, generator_hash, split=split, variant=variant,
-                            request=request, templates=templates)
+                            request=request, templates=templates, task_cells=task_cells,
+                            matrix=matrix)
     preset = REGISTERED_GENERATOR.get(family)
     if preset is not None and generator_hash != PRESET_HASHES[preset]:
         return (f"{experiment} runs {family} on the generator preset {preset!r} only "

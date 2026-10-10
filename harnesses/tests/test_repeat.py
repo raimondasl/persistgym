@@ -7,7 +7,9 @@ repeat-1 run as one. The real guarded transport is built with a stub client answ
 fake model, as in test_cli_end_to_end.py; every lock, ledger and run folder is temporary.
 
 luna's main sweep plays the default config (registered.luna_refusal); these runs play the
-small volume, so the tests record luna's G1 on the small config instead."""
+small volume, so the tests record luna's G1 on the small config instead. Its runs play all 8
+task cells (registered.LUNA_TASK_CELLS); these play one, to stay small, so the tests register
+that one instead (`_one_task_cell`); test_registered.py tests the full-matrix rule."""
 
 from __future__ import annotations
 
@@ -38,6 +40,11 @@ MAIN = ["run", "--cell", "F-0", "--model", LUNA, "--split", "main", "--start", "
         "11", "--task-cell", "observed-nonrec-far", *SMALL, "--experiment", "persistgym",
         "--approved-block", "3-persistgym", "--planned-usd", "1"]
 REPEATED = ["main-000000/observed-nonrec-far/base", "main-000010/observed-nonrec-far/base"]
+
+
+def _one_task_cell(monkeypatch) -> None:
+    """luna's guard with its main runs' task cells cut to the one these runs play."""
+    monkeypatch.setattr(registered, "LUNA_TASK_CELLS", ("observed-nonrec-far",))
 
 
 def _luna_g1_on_the_small_config(monkeypatch) -> str:
@@ -72,6 +79,7 @@ def main_env(tmp_path, monkeypatch):
             client_factory=lambda timeout, fake=fakes[-1]: _FakeBackedClient(fake))
     monkeypatch.setattr(cli, "OpenAIResponsesTransport", transport)
     _luna_g1_on_the_small_config(monkeypatch)
+    _one_task_cell(monkeypatch)
     return tmp_path, costs_csv
 
 
@@ -178,6 +186,7 @@ def test_account_run_rebuilds_a_repeat_run(tmp_path, monkeypatch, capsys, with_p
     monkeypatch.setattr(paidlock, "holder_alive", lambda info: None)
     env = Env(tmp_path, monkeypatch, experiments=("persistgym_pilot", "persistgym"))
     _luna_g1_on_the_small_config(monkeypatch)
+    _one_task_cell(monkeypatch)
     # Env approves block 1-pilots for the experiments it is given
     main = [a if a != "3-persistgym" else "1-pilots" for a in MAIN[1:]]
     args = [*main, "--repeat-index", "1"]

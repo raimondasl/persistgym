@@ -8,7 +8,11 @@ episodes.jsonl, then its `finalize` failed (`git rev-parse HEAD` could not start
 3221225794), so it kept the paid-run lock with the reason and its totals, kept its spend
 reservation, and wrote no costs row, summary.json or meta.json. Since the fix `finalize`
 starts no process, so these tests raise the incident's exception where `finalize` can still
-fail, at the row's write: the lock then holds the reason the incident's held."""
+fail, at the row's write: the lock then holds the reason the incident's held.
+
+The run these tests account for is a luna F-0 pilot, which R6's hard stop (PREREG §17.6 change
+1) refuses now, so the module runs with the stop off (`pre_r6`); account-run is $0 and applies
+no guard, and accounts for luna's main runs the same way (test_repeat.py)."""
 
 from __future__ import annotations
 
@@ -46,6 +50,7 @@ VALIDITY_ARGS = ["--cell", "F-0", "--model", "gpt-6-luna", "--split", "validity"
 INCIDENT_EXIT = 3221225794  # 0xC0000142, STATUS_DLL_INIT_FAILED
 VOLATILE_META = {"started_utc", "finished_utc", "recovered"}
 REAL_HOLDER_ALIVE = paidlock.holder_alive  # the fixture replaces it
+pytestmark = pytest.mark.usefixtures("pre_r6")
 
 
 class _Obj:
@@ -201,6 +206,16 @@ def _printed(env: Env, text: str, value: str) -> bool:
     for tmp in (str(env.tmp), env.tmp.as_posix()):
         text = text.replace(tmp, "<tmp>")
     return re.search(rf"(?<![\w.]){re.escape(value)}(?![\w])", text) is not None
+
+
+def test_r6_refuses_the_pilot_these_tests_account_for(env, monkeypatch, capsys):
+    """With R6's hard stop on, as it is, the pilot run these tests use refuses before the
+    paid-run lock; account-run itself needs no such check (it makes no call)."""
+    monkeypatch.setattr(registered, "R6_HARD_STOP", True)
+    world = env.use(World(env.tmp, "r6"))
+    assert _run(RUN_ARGS) == 2
+    assert capsys.readouterr().err.startswith(f"refused: {registered.R6_STOP}")
+    assert world.rows() == [] and not world.lock.exists() and env.calls == []
 
 
 # --- the incident and its recovery ------------------------------------------------------------

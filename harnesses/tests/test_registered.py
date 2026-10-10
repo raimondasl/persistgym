@@ -25,6 +25,7 @@ from harnesses.config import HarnessConfig
 from harnesses.openai_transport import ALLOW_ENV
 from harnesses.tests.conftest import SMALL
 from persistgym.config import PRESET_HASHES
+from persistgym.episode import ALL_CELLS
 
 SOL, LUNA = "gpt-6.1-sol", "gpt-6-luna"
 VARIANT, DEFAULT = PRESET_HASHES["sol-chain"], PRESET_HASHES["default"]
@@ -37,17 +38,20 @@ MEDIUM_PILOT = ("20261002T083238Z-F-r-gpt-6.1-sol", "20261002T083706Z-F-0-gpt-6.
 R2_CHECK = ("20261002T173710Z-F-r-gpt-6.1-sol", "20261002T180358Z-F-0-gpt-6.1-sol")
 R2_FILE = "reasoning-check-20261002T225917Z"
 RESULTS = runmeta.REPO_ROOT / "results"
+ALL_TASK_CELLS = tuple(c.id for c in ALL_CELLS)            # luna's sweep
+NONREC = tuple(c.id for c in ALL_CELLS if not c.recoverable)  # the single-turn control
 
 
 def guard(experiment: str, model: str, effort: str, root: Path, cell: str = "F-0",
           gen: str = VARIANT, split: str = "validity", variant: str = "restated",
-          request: dict | None = None,
-          templates: tuple[int, int] | None = None) -> str | None:
+          request: dict | None = None, templates: tuple[int, int] | None = None,
+          task_cells: tuple[str, ...] | None = None, matrix: str | None = None) -> str | None:
     """The guard on these settings; the split and variant are a validity run's unless given,
-    and the request settings and templates are not given unless given."""
+    and the request settings, templates, task cells and matrix are not given unless given."""
     return registered.check_run_settings(experiment, model, effort, cell, gen, root,
                                          split=split, variant=variant, request=request,
-                                         templates=templates)
+                                         templates=templates, task_cells=task_cells,
+                                         matrix=matrix)
 
 
 def test_the_registered_settings():
@@ -70,6 +74,15 @@ def test_the_registered_settings():
         "mode": "standard", "service_tier": "flex", "W": None}
     assert registered.LUNA_T == 200                     # §4.2's rule, capped by R6 change 6
     assert (registered.LUNA_MODEL, registered.LUNA_EXPERIMENT) == (LUNA, "persistgym")
+    # §4.6, D36: the full matrix on the 8 task cells; the single-turn control on its 4
+    assert registered.LUNA_MATRIX == "full" and registered.LUNA_TASK_CELLS == ALL_TASK_CELLS
+    assert len(ALL_TASK_CELLS) == 8 and registered.LUNA_SINGLE_TURN_TASK_CELLS == NONREC
+    assert NONREC == ("observed-nonrec-near", "observed-nonrec-far", "derived-nonrec-near",
+                      "derived-nonrec-far")
+    # R6 change 1: the hard stop is on, and its pilot allowance is CLAUDE.md's 10
+    assert registered.R6_HARD_STOP is True and registered.LUNA_SINGLE_TURN_PILOT_MAX == 10
+    assert registered.R6_STOP.startswith("R6's hard stop (PREREG.md §17.6 (amendment R6) "
+                                         "change 1)")
     assert registered.VARIANT_GENERATOR_HASH == VARIANT
     assert registered.rule() == {
         "prereg": "PREREG.md §17.3 (amendment R3)", "model": SOL, "effort": "high",
@@ -158,9 +171,41 @@ def _r2_file(results: Path) -> Path:
     return dst
 
 
-def test_a_snapshot_or_alias_of_a_model_is_that_model(tmp_path):
-    """A dated snapshot or alias of sol (as harnesses.pricing prices it) is sol: it defaults
-    to high, cannot run outside pilots at medium, and needs the engagement check."""
+def test_model_family_is_the_model_or_a_dated_snapshot_of_it():
+    """A model string names a registered model only as that model or a dated snapshot of it,
+    "-YYYY-MM-DD" with a real date; any other suffix names no registered model (R6 then
+    refuses it). The strings the API returned on every committed run are the bare names, and
+    they map to themselves."""
+    for name in (LUNA, SOL):
+        for snapshot in (f"{name}-2026-10-01", f"{name}-2027-02-28", f"{name}-2028-02-29"):
+            assert registered.model_family(snapshot) == name
+        assert registered.model_family(name) == name
+        for other in (f"{name}-x", f"{name}-latest", f"{name}-mini", f"{name}-2026-10",
+                      f"{name}-20261001", f"{name}-2026-13-01", f"{name}-2026-02-30",
+                      f"{name}-2026-10-01-x", f"{name}-2026-10-01T00", f"{name}--2026-10-01",
+                      f"{name}2026-10-01", f"x-{name}", f"{name.upper()}"):
+            assert registered.model_family(other) == other, other
+            assert registered.registered_effort(other) == "medium"
+    assert registered.model_family("gpt-6.1-solar") == "gpt-6.1-solar"
+    # every model string the API returned, and every one requested, in the committed
+    # meta.json files under results/ (a list for runs of several calls); results/raw/ is
+    # never read
+    seen = set()
+    for path in (p for d in RESULTS.iterdir() if d.is_dir() and d.name != "raw"
+                 for p in d.rglob("meta.json")):
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        returned = meta.get("model_returned")
+        for m in [meta.get("model_requested"),
+                  *(returned if isinstance(returned, list) else [returned])]:
+            if isinstance(m, str) and m.startswith("gpt-"):
+                seen.add(m)
+    assert seen == {LUNA, SOL}
+    assert {registered.model_family(m) for m in seen} == {LUNA, SOL}
+
+
+def test_a_snapshot_or_alias_of_a_model_is_that_model(tmp_path, pre_r6):
+    """A dated snapshot of sol is sol: it defaults to high, cannot run outside pilots at
+    medium, and needs the engagement check (with R6's hard stop off: the rules as before)."""
     alias = f"{SOL}-2026-10-01"
     assert registered.model_family(alias) == SOL and registered.model_family(LUNA) == LUNA
     assert registered.model_family("gpt-6.1-solar") == "gpt-6.1-solar"   # not a hyphen
@@ -180,7 +225,7 @@ def test_a_snapshot_or_alias_of_a_model_is_that_model(tmp_path):
     assert guard("persistgym_validity", f"{LUNA}-x", "high", tmp_path) is not None
 
 
-def test_pilots_may_use_any_settings_but_sol_at_high_effort(tmp_path):
+def test_pilots_may_use_any_settings_but_sol_at_high_effort(tmp_path, pre_r6):
     """R3: pilots stay free, except that a sol pilot at high effort is R3's engagement check:
     sol-chain in F-r or F-0 only; and after R3's hard stop no sol pilot runs above medium
     effort ("no further variant or effort")."""
@@ -214,7 +259,7 @@ def test_pilots_may_use_any_settings_but_sol_at_high_effort(tmp_path):
 
 @pytest.mark.parametrize("experiment", ["persistgym", "persistgym_validity",
                                         "statecarry_persistgym"])
-def test_outside_pilots_only_the_registered_effort(tmp_path, experiment, monkeypatch):
+def test_outside_pilots_only_the_registered_effort(tmp_path, experiment, monkeypatch, pre_r6):
     if experiment == "persistgym_validity":
         for gen in (DEFAULT, VARIANT, "0" * 64):
             for cell in ("F-0", "F-r", "W-n-0"):        # luna's validity runs: finished (R6)
@@ -233,7 +278,7 @@ def test_outside_pilots_only_the_registered_effort(tmp_path, experiment, monkeyp
     assert guard(experiment, "gpt-unknown", "medium", tmp_path, "W-n-r", "0" * 64) is None
 
 
-def test_sol_outside_pilots_plays_sol_chain_in_f_r_and_f_0_only(tmp_path, monkeypatch):
+def test_sol_outside_pilots_plays_sol_chain_in_f_r_and_f_0_only(tmp_path, monkeypatch, pre_r6):
     _write_check(tmp_path, "c1")
     monkeypatch.setitem(registered.G1_PASSED, SOL, VARIANT)
     assert guard("persistgym", SOL, "high", tmp_path, "F-r", split="main",
@@ -250,7 +295,7 @@ def test_sol_outside_pilots_plays_sol_chain_in_f_r_and_f_0_only(tmp_path, monkey
             assert "in the harness cells F-r, F-0 only" in why and cell in why
 
 
-def test_the_main_sweep_needs_g1_on_the_variant(tmp_path, monkeypatch):
+def test_the_main_sweep_needs_g1_on_the_variant(tmp_path, monkeypatch, pre_r6):
     """R2's NOT_ENGAGED (default config) plus an ENGAGED R3 check: sol's validity run goes;
     its main sweep refuses until the G1 decision PR records the variant's hash."""
     _r2_file(tmp_path)
@@ -265,7 +310,7 @@ def test_the_main_sweep_needs_g1_on_the_variant(tmp_path, monkeypatch):
     assert guard("statecarry_persistgym", SOL, "high", tmp_path) is None
 
 
-def test_sols_validity_experiment_holds_its_validity_run_only(tmp_path):
+def test_sols_validity_experiment_holds_its_validity_run_only(tmp_path, pre_r6):
     """PREREG §4.4, §17.3: sol's validity run needs no G1, so `persistgym_validity` lets sol
     run exactly that, F-0 on the validity split, restated or withheld. A base-variant or F-r
     run there (H2's contrast), or one on the main split, would bypass G1: it refuses."""
@@ -312,7 +357,7 @@ def test_checks_are_keyed_by_generator_config(tmp_path):
     assert registered.engagement_refusal(tmp_path, SOL, VARIANT) is None
 
 
-def test_the_r3_hard_stop(tmp_path, monkeypatch):
+def test_the_r3_hard_stop(tmp_path, monkeypatch, pre_r6):
     """R3: a NOT_ENGAGED check on the variant refuses every non-pilot sol run for good, even
     next to an ENGAGED file and with G1 recorded; so does an UNSCORABLE check there twice."""
     monkeypatch.setitem(registered.G1_PASSED, SOL, VARIANT)
@@ -338,7 +383,7 @@ def test_the_r3_hard_stop(tmp_path, monkeypatch):
     assert registered.HARD_STOP in guard("persistgym_pilot", SOL, "high", tmp_path)
 
 
-def test_sol_outside_pilots_needs_an_engaged_check(tmp_path):
+def test_sol_outside_pilots_needs_an_engaged_check(tmp_path, pre_r6):
     def why():
         return guard("persistgym_validity", SOL, "high", tmp_path)
     assert "need an ENGAGED engagement check" in why()               # none at all
@@ -372,7 +417,7 @@ def test_sol_outside_pilots_needs_an_engaged_check(tmp_path):
     assert "cannot read the engagement check" in why()               # rule not an object
 
 
-def test_the_check_decides_in_r2s_order(tmp_path):
+def test_the_check_decides_in_r2s_order(tmp_path, pre_r6):
     """R2's order, on the variant (R3): the check on pilot templates 0 and 1 decides; only
     if it is UNSCORABLE does a second one on 2 and 3, and if that is UNSCORABLE too, R3's
     hard stop. A check is run once on its templates (a re-scoring of the same runs is the
@@ -405,11 +450,12 @@ def test_the_check_decides_in_r2s_order(tmp_path):
     assert "so none was due on" in why()
 
 
-def test_the_repositorys_own_state_after_r3s_hard_stop():
+def test_the_repositorys_own_state_after_r3s_hard_stop(pre_r6):
     """With this checkout's results/ (R2's NOT_ENGAGED file on the default config, and R3's
-    NOT_ENGAGED file on the variant, 2026-10-03: R3's hard stop): no further check run, no
-    sol pilot above medium and no H2 run of sol, on either config; sol pilots at medium and
-    luna's main sweep (G1 recorded) are unaffected, and luna's validity runs are finished."""
+    NOT_ENGAGED file on the variant, 2026-10-03: R3's hard stop) and R6's hard stop off: no
+    further check run, no sol pilot above medium and no H2 run of sol, on either config; sol
+    pilots at medium and luna's main sweep (G1 recorded) are unaffected, and luna's validity
+    runs are finished. With R6 on, see test_r6_the_repositorys_own_state."""
     assert registered.HARD_STOP in registered.hard_stop(RESULTS)
     for cell in ("F-r", "F-0"):
         assert registered.HARD_STOP in guard("persistgym_pilot", SOL, "high", RESULTS, cell)
@@ -427,21 +473,199 @@ def test_the_repositorys_own_state_after_r3s_hard_stop():
         assert luna(cell=cell) is None
 
 
+# --- R6's hard stop (PREREG §17.6 change 1; registered.r6_refusal) ------------------------------
+
+def _r6(why: str | None) -> bool:
+    return why is not None and why.startswith(registered.R6_STOP)
+
+
+def _single_turn_pilot(n: int = 2, cells: tuple[str, ...] = NONREC, root: Path = RESULTS,
+                       split: str = "pilot", model: str = LUNA, gen: str = DEFAULT,
+                       effort: str = "medium") -> str | None:
+    """The guard on luna's single-turn pilot: `n` pilot templates x `cells`."""
+    return guard("persistgym_pilot", model, effort, root, registered.LUNA_SINGLE_TURN_CELL,
+                 gen, split, "base", registered.LUNA_REQUEST, (0, n), cells)
+
+
+@pytest.mark.parametrize(("experiment", "model", "effort", "cell", "split", "variant"), [
+    ("persistgym_validity", LUNA, "medium", "F-0", "validity", "restated"),
+    ("persistgym_validity", LUNA, "medium", "F-0", "validity", "withheld"),
+    ("persistgym_validity", SOL, "high", "F-0", "validity", "restated"),
+    ("persistgym_validity", SOL, "medium", "F-0", "validity", "restated"),   # R4's
+    ("persistgym_sol_h1", SOL, "medium", "F-0", "main", "base"),
+    ("persistgym_sol_h1", LUNA, "medium", "F-0", "main", "base"),
+    ("persistgym_pilot", LUNA, "medium", "F-0", "pilot", "base"),
+    ("persistgym_pilot", LUNA, "medium", "W-n-0", "pilot", "base"),
+    ("persistgym_pilot", LUNA, "medium", "F-r", "pilot", "restated"),
+    ("persistgym_pilot", SOL, "medium", "W-0", "pilot", "base"),            # R4's pilot
+    ("persistgym_pilot", SOL, "high", "F-r", "pilot", "base"),              # R3's check
+    ("persistgym_pilot", SOL, "medium", "single-turn", "pilot", "base"),
+    ("persistgym", SOL, "high", "F-r", "main", "base"),
+    ("persistgym", SOL, "medium", "F-0", "main", "base"),
+    ("statecarry_persistgym", LUNA, "medium", "F-0", "main", "base"),
+    ("toggle_pilot", LUNA, "medium", None, "main", "base"),
+    ("replay_probe", SOL, "medium", None, "main", "base")])
+def test_r6_refuses_every_other_paid_run(tmp_path, monkeypatch, experiment, model, effort,
+                                         cell, split, variant):
+    """R6 change 1: outside luna's sweep and controls and the single-turn pilot, every paid
+    run of the stream refuses, citing §17.6 change 1, whatever else would let it go (an
+    ENGAGED check and G1 for sol, R4's replication G1) and for a dated snapshot too; with the
+    hard stop off, the run is judged by the rules from before (it may pass or refuse)."""
+    _write_check(tmp_path, "engaged")
+    monkeypatch.setitem(registered.G1_PASSED, SOL, VARIANT)
+    monkeypatch.setitem(registered.REPLICATION_G1_PASSED, SOL, DEFAULT)
+    for m in (model, f"{model}-2026-10-01"):
+        why = registered.r6_refusal(experiment, m, cell, tmp_path, split=split,
+                                    task_cells=ALL_TASK_CELLS, templates=(0, 1))
+        assert _r6(why) and f"got --experiment {experiment}, model {m}" in why
+        assert "§17.6 (amendment R6) change 1" in why
+        if cell is not None:
+            for gen in (DEFAULT, VARIANT):
+                assert guard(experiment, m, effort, tmp_path, cell, gen, split, variant,
+                             registered.LUNA_REQUEST, (0, 1), ALL_TASK_CELLS, "full") == why
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    assert registered.r6_refusal(experiment, model, cell, tmp_path, split=split) is None
+
+
+@pytest.mark.parametrize("model", ["gpt-unknown", f"{LUNA}-x", f"{LUNA}-latest",
+                                   f"{SOL}-2026-02-30", "gpt-6-luna2026-10-01"])
+def test_r6_refuses_a_model_that_is_not_registered_everywhere(tmp_path, model):
+    """Fail closed: a model string that names no registered model refuses in every
+    experiment, the single-turn pilot and luna's sweep included; with R6 off such a model
+    was let through at medium."""
+    for experiment, cell, split in (("persistgym", "F-0", "main"),
+                                    ("persistgym_pilot", "single-turn", "pilot"),
+                                    ("persistgym_pilot", "F-0", "pilot"),
+                                    ("persistgym_validity", "F-0", "validity"),
+                                    ("toggle_pilot", None, "main")):
+        why = registered.r6_refusal(experiment, model, cell, tmp_path, split=split,
+                                    task_cells=NONREC, templates=(0, 1))
+        assert _r6(why) and f"got model {model}, which is not a registered model" in why
+    assert _r6(_single_turn_pilot(1, root=tmp_path, model=model))
+    assert _r6(luna(model=model, root=tmp_path))
+
+
+def test_r6_lets_lunas_sweep_controls_and_single_turn_pilot_through(tmp_path):
+    """What R6 change 1 keeps: luna's main sweep and controls in persistgym (judged then by
+    luna_refusal), and the single-turn control's pilot of at most 10 prompts (templates x task
+    cells): on the pilot split, with the request the sweep sends (luna's registered effort,
+    D13's settings, the default config), so that no pilot of another request uses up the
+    allowance."""
+    for cell in (*registered.LUNA_CELLS, registered.LUNA_SINGLE_TURN_CELL):
+        assert luna(cell=cell, root=tmp_path) is None
+        assert registered.r6_refusal("persistgym", LUNA, cell, tmp_path) is None
+    assert luna(variant="restated", root=tmp_path) is None
+    for n, cells in ((1, NONREC), (2, NONREC), (5, NONREC[:2]), (10, NONREC[:1])):
+        assert _single_turn_pilot(n, cells, tmp_path) is None, (n, cells)
+    for kw, got in (({"gen": "0" * 64}, "generator config 000000000000"),
+                    ({"gen": VARIANT}, f"generator config {VARIANT[:12]}"),
+                    ({"effort": "high"}, "--effort high"),
+                    ({"effort": "low"}, "--effort low")):
+        why = _single_turn_pilot(2, NONREC, tmp_path, **kw)
+        assert _r6(why) and why.endswith(f"got a single-turn pilot with {got}")
+    for request, got in (({**registered.LUNA_REQUEST, "service_tier": "default"},
+                          "--service-tier default"),
+                         ({**registered.LUNA_REQUEST, "mode": "pro"}, "--mode pro"),
+                         (None, "--mode, --service-tier and --W (not given)")):
+        why = guard("persistgym_pilot", LUNA, "medium", tmp_path,
+                    registered.LUNA_SINGLE_TURN_CELL, DEFAULT, "pilot", "base", request,
+                    (0, 2), NONREC)
+        assert _r6(why) and why.endswith(f"got a single-turn pilot with {got}")
+    for n, cells, prompts in ((3, NONREC, 12), (11, NONREC[:1], 11), (6, NONREC[:2], 12)):
+        why = _single_turn_pilot(n, cells, tmp_path)
+        assert _r6(why) and why.endswith(f"got a single-turn pilot with {prompts} prompts")
+    why = _single_turn_pilot(2, NONREC, tmp_path, split="main")
+    assert _r6(why) and "got a single-turn pilot with --split main" in why
+    for templates, cells in ((None, NONREC), ((0, 2), None)):
+        why = guard("persistgym_pilot", LUNA, "medium", tmp_path,
+                    registered.LUNA_SINGLE_TURN_CELL, DEFAULT, "pilot", "base",
+                    registered.LUNA_REQUEST, templates, cells)
+        assert _r6(why) and "its prompts (templates and task cells not given)" in why
+
+
+def _pilot_meta(results: Path, name: str, **fields) -> Path:
+    """A committed pilot meta.json under `results`: a single-turn pilot of luna unless
+    `fields` say otherwise."""
+    meta = {"experiment": "persistgym_pilot", "run_id": name, "cell_or_config": "single-turn",
+            "model_requested": LUNA, "n_episodes_run": 8, **fields}
+    path = results / "persistgym_pilot" / name / "meta.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(meta), encoding="utf-8")
+    return path
+
+
+def test_r6_counts_the_prompts_of_earlier_single_turn_pilots(tmp_path):
+    """At most 10 prompts in all: a single-turn pilot of luna that ran (its committed
+    meta.json's n_episodes_run) counts against the next one; other pilots' meta.json do not
+    count; an unreadable one refuses until fixed."""
+    _pilot_meta(tmp_path, "harness", cell_or_config="F-0", n_episodes_run=8)
+    _pilot_meta(tmp_path, "sol", model_requested=SOL)
+    assert registered._single_turn_pilot_prompts(tmp_path) == (0, None)
+    assert _single_turn_pilot(2, NONREC, tmp_path) is None                  # 8 prompts
+    _pilot_meta(tmp_path, "first", model_requested=f"{LUNA}-2026-10-01")
+    assert registered._single_turn_pilot_prompts(tmp_path) == (8, None)
+    why = _single_turn_pilot(1, NONREC, tmp_path)                          # 8 + 4 > 10
+    assert _r6(why) and why.endswith("got a single-turn pilot with 4 prompts after 8 in "
+                                     "earlier single-turn pilots")
+    assert _single_turn_pilot(1, NONREC[:2], tmp_path) is None             # 8 + 2 = 10
+    _pilot_meta(tmp_path, "second", n_episodes_run=2)
+    assert _r6(_single_turn_pilot(1, NONREC[:1], tmp_path))                # 10 + 1 > 10
+    assert luna(root=tmp_path) is None                         # the sweep does not count them
+    bad = _pilot_meta(tmp_path, "broken")
+    bad.write_text("{not json", encoding="utf-8")
+    why = _single_turn_pilot(1, NONREC[:1], tmp_path)
+    assert _r6(why) and "cannot count the prompts of earlier single-turn pilots" in why
+    bad.write_text(json.dumps({"cell_or_config": "single-turn", "model_requested": LUNA}),
+                   encoding="utf-8")                                       # no n_episodes_run
+    assert "cannot count the prompts" in _single_turn_pilot(1, NONREC[:1], tmp_path)
+
+
+def test_r6_the_repositorys_own_state():
+    """With this checkout's results/ and R6 on, as it is: luna's sweep and controls and its
+    single-turn pilot go (no single-turn pilot has run yet); every sol run, every other luna
+    pilot and every validity run refuses with R6's message, whatever R3's hard stop says."""
+    assert registered.R6_HARD_STOP
+    for cell in (*registered.LUNA_CELLS, registered.LUNA_SINGLE_TURN_CELL):
+        assert luna(cell=cell) is None
+    earlier, why = registered._single_turn_pilot_prompts(RESULTS)
+    assert why is None
+    assert (_single_turn_pilot(2) is None) is (earlier + 8 <= 10)  # once it has run: refused
+    for experiment, model, effort, cell, split in (
+            ("persistgym_pilot", SOL, "high", "F-r", "pilot"),
+            ("persistgym_pilot", SOL, "medium", "W-0", "pilot"),
+            ("persistgym_pilot", LUNA, "medium", "F-0", "pilot"),
+            ("persistgym_validity", LUNA, "medium", "F-0", "validity"),
+            ("persistgym_validity", SOL, "medium", "F-0", "validity"),
+            ("persistgym_sol_h1", SOL, "medium", "F-0", "main"),
+            ("persistgym", SOL, "high", "F-r", "main")):
+        assert _r6(guard(experiment, model, effort, RESULTS, cell, DEFAULT, split, "base"))
+
+
 # --- luna's main sweep (PREREG §4.6, §17.6 change 1; registered.luna_refusal) ------------------
+
+SWEEP = object()  # luna()'s task cells and matrix: the main sweep's own
+
 
 def luna(experiment: str = "persistgym", cell: str = "F-0", gen: str = DEFAULT,
          split: str = "main", variant: str = "base", model: str = LUNA,
          root: Path = RESULTS, request: dict | None = registered.LUNA_REQUEST,
-         templates: tuple[int, int] | None = (0, registered.LUNA_T)) -> str | None:
-    """The guard on a luna run; its main sweep's settings unless given."""
+         templates: tuple[int, int] | None = (0, registered.LUNA_T),
+         task_cells=SWEEP, matrix=SWEEP) -> str | None:
+    """The guard on a luna run; its main sweep's settings unless given: the full matrix on
+    the 8 task cells, or for the single-turn control its 4 non-recoverable ones."""
+    single = cell == registered.LUNA_SINGLE_TURN_CELL
+    if task_cells is SWEEP:
+        task_cells = NONREC if single else ALL_TASK_CELLS
+    if matrix is SWEEP:
+        matrix = None if single else "full"
     return guard(experiment, model, "medium", root, cell, gen, split, variant, request,
-                 templates)
+                 templates, task_cells, matrix)
 
 
 def test_lunas_main_sweep_and_controls_go():
     """Experiment persistgym: the 4 replay-off cells on main base episodes, the restated-at-
     need control as full F-0 episodes, and the single-turn control's cell, on the default
-    config (G1 recorded on it); a dated snapshot or alias of luna is luna."""
+    config (G1 recorded on it); a dated snapshot of luna is luna."""
     for cell in ("F-0", "W-0", "W-n-0", "Σ-n-0", registered.LUNA_SINGLE_TURN_CELL):
         assert luna(cell=cell) is None
     assert luna(variant="restated") is None
@@ -480,31 +704,56 @@ def test_lunas_main_sweep_and_controls_go():
     ({"templates": (200, 210)}, "got main templates 200-209"),
     ({"templates": None}, "got main templates (not given)"),
     ({"cell": "W-0", "request": {"mode": "pro", "service_tier": "flex", "W": 1000}},
-     "got --mode pro; --W 1000")])
-def test_lunas_main_sweep_refuses_anything_else(changes, got):
+     "got --mode pro; --W 1000"),
+    # the full matrix on the 8 task cells (§4.6, D36); not given refuses (fail closed)
+    ({"task_cells": ALL_TASK_CELLS[:7]}, f"got task cells {', '.join(ALL_TASK_CELLS[:7])}"),
+    ({"task_cells": ("observed-nonrec-far",)}, "got task cells observed-nonrec-far"),
+    ({"task_cells": ()}, "got task cells (none)"),
+    ({"task_cells": None}, "got task cells (not given)"),
+    ({"matrix": "d11"}, "got --matrix d11"),
+    ({"matrix": "custom"}, "got --cell-templates"),
+    ({"matrix": None}, "got run matrix (not given)"),
+    ({"cell": "W-n-0", "matrix": "d11", "task_cells": NONREC},
+     f"got --matrix d11; task cells {', '.join(NONREC)}"),
+    # the single-turn control: its 4 non-recoverable task cells exactly
+    ({"cell": "single-turn", "task_cells": NONREC[:2]},
+     f"got task cells {', '.join(NONREC[:2])}"),
+    ({"cell": "single-turn", "task_cells": ALL_TASK_CELLS},
+     f"got task cells {', '.join(ALL_TASK_CELLS)}"),
+    ({"cell": "single-turn", "task_cells": None}, "got task cells (not given)")])
+def test_lunas_main_sweep_refuses_anything_else(changes, got, pre_r6, monkeypatch):
+    """luna_refusal's own message (with R6's hard stop off, so that runs R6 refuses first,
+    in other experiments, reach it too; with it on they refuse as R6's: test_r6_*)."""
     why = luna(**changes)
     assert why.startswith("outside persistgym_pilot, gpt-6-luna runs its main sweep and "
                           "controls only (PREREG.md §17.6 (amendment R6)")
     assert got in why and "3d6bc648eaa9" in why
     assert "with --mode standard, --service-tier flex and no --W (D13)" in why
     assert "main templates 0-199 (T = 200: PREREG §4.2's rule, capped by R6 change 6)" in why
+    assert ("on all 8 task cells (the full matrix: --task-cell all, no --matrix d11 or "
+            "--cell-templates) or the single-turn control on its 4 non-recoverable task "
+            "cells") in why
     assert luna(model=f"{LUNA}-2026-10-01", **changes) is not None
+    monkeypatch.setattr(registered, "R6_HARD_STOP", True)   # with R6 on: refused too
+    assert luna(**changes) is not None
 
 
 def test_lunas_main_sweep_needs_g1_on_its_config(monkeypatch):
-    """Fail closed: without G1_PASSED on the default config, luna's main sweep refuses; its
-    pilots need no G1."""
+    """Fail closed: without G1_PASSED on the default config, luna's main sweep and controls
+    refuse; its single-turn pilot needs no G1."""
     monkeypatch.delitem(registered.G1_PASSED, LUNA)
     why = luna()
     assert "only after the researcher has recorded G1" in why and "G1_PASSED" in why
+    assert "G1_PASSED" in luna(cell=registered.LUNA_SINGLE_TURN_CELL)
     monkeypatch.setitem(registered.G1_PASSED, LUNA, VARIANT)            # another config
     assert "G1_PASSED" in luna()
-    assert luna("persistgym_pilot", "F-r", "0" * 64, "pilot") is None
+    assert _single_turn_pilot(2) is None
     monkeypatch.setitem(registered.G1_PASSED, LUNA, DEFAULT)
     assert luna() is None
 
 
-def test_lunas_validity_runs_are_finished_and_sols_rules_unchanged(tmp_path, monkeypatch):
+def test_lunas_validity_runs_are_finished_and_sols_rules_unchanged(tmp_path, monkeypatch,
+                                                                    pre_r6):
     """luna's validity runs are finished, with G1 recorded on them, and R6 change 1 allows no
     other paid runs: persistgym_validity refuses every luna run, whatever its cell, config,
     split, variant or request settings, and with G1 recorded or not; its pilots stay open.
@@ -554,7 +803,24 @@ LUNA_MAIN = ["run", "--model", LUNA, "--split", "main", "--n", "10", "--experime
     (["--cell", "W-0", "--W", "30000"], "got --W 30000"),
     (["--cell", "F-0", "--start", "190", "--n", "20"], "got main templates 190-209"),
     (["--cell", "F-0", "--start", "200"], "got main templates 200-209"),
-    (["--cell", "F-0", "--n", "210", "--repeat-index", "1"], "got main templates 0-209")])
+    (["--cell", "F-0", "--n", "210", "--repeat-index", "1"], "got main templates 0-209"),
+    # the full matrix on the 8 task cells (registered.LUNA_MATRIX, LUNA_TASK_CELLS)
+    (["--cell", "F-0", "--task-cell", "observed-nonrec-far"],
+     "got task cells observed-nonrec-far"),
+    (["--cell", "W-0", "--task-cell", *ALL_TASK_CELLS[1:]],
+     f"got task cells {', '.join(ALL_TASK_CELLS[1:])}"),
+    (["--cell", "F-0", "--matrix", "d11", "--n", "30"],
+     ("got --matrix d11; task cells observed-nonrec-far, observed-rec-far, "
+      "derived-nonrec-far, derived-rec-far")),
+    (["--cell", "F-0", "--cell-templates", *(f"{c}=10" for c in ALL_TASK_CELLS)],
+     "got --cell-templates"),
+    (["--cell", "F-0", "--variant", "restated", "--task-cell", "derived-rec-far"],
+     "got task cells derived-rec-far"),
+    # R6's hard stop: luna's other experiments
+    (["--cell", "F-0", "--split", "validity", "--experiment", "persistgym_validity"],
+     "R6's hard stop (PREREG.md §17.6 (amendment R6) change 1)"),
+    (["--cell", "F-0", "--experiment", "persistgym_sol_h1"], "R6's hard stop"),
+    (["--cell", "F-0", "--model", "gpt-unknown"], "which is not a registered model")])
 def test_run_refuses_lunas_unregistered_main_runs_before_the_lock(armed, capsys, args,
                                                                   message):
     assert cli.main([*LUNA_MAIN, *args]) == 2
@@ -636,7 +902,8 @@ VALIDITY = ["run", "--split", "validity", "--variant", "restated", "--experiment
     (["--cell", "F-0", "--model", SOL, "--gen-preset", "sol-chain", "--split", "main"],
      "as its validity run only"),
     (["--cell", "F-0", "--model", LUNA, "--gen-set", "nope=1"], "--gen-set")])
-def test_run_refuses_unregistered_settings_before_the_lock(armed, capsys, args, message):
+def test_run_refuses_unregistered_settings_before_the_lock(armed, capsys, args, message,
+                                                            pre_r6):
     assert cli.main([*VALIDITY, *args]) == 2
     err = capsys.readouterr().err
     assert err.startswith("refused:") and message in err
@@ -648,7 +915,8 @@ def test_run_refuses_unregistered_settings_before_the_lock(armed, capsys, args, 
       "low", *SMALL_SETS], False),
     (["--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot",
       "--gen-preset", "sol-chain"], False)])
-def test_run_passes_registered_settings_on_to_the_paid_path(armed, monkeypatch, args, engaged):
+def test_run_passes_registered_settings_on_to_the_paid_path(armed, monkeypatch, args, engaged,
+                                                             pre_r6):
     if engaged:
         _write_check(armed, "check")
     reached = []
@@ -661,6 +929,28 @@ def test_run_passes_registered_settings_on_to_the_paid_path(armed, monkeypatch, 
     (what,) = reached
     model = args[1]
     assert f"F-0 on {model}" in what
+
+
+@pytest.mark.parametrize("args", [
+    ["--cell", "F-0", "--model", SOL, "--gen-preset", "sol-chain"],
+    ["--cell", "F-0", "--model", SOL, "--effort", "medium", "--task-cell", "observed-rec-far"],
+    ["--cell", "F-0", "--model", LUNA],
+    ["--cell", "F-0", "--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot",
+     "--effort", "low", *SMALL_SETS],
+    ["--cell", "F-0", "--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot",
+     "--gen-preset", "sol-chain"],
+    ["--cell", "W-n-0", "--model", LUNA, "--split", "pilot", "--experiment",
+     "persistgym_pilot", *SMALL_SETS]])
+def test_r6_refuses_the_runs_the_rules_above_judge_before_the_lock(armed, monkeypatch, capsys,
+                                                                   args):
+    """With R6 on (as it is), the validity runs, sol's runs and luna's harness-cell pilots
+    that the tests above judge by the earlier rules refuse with R6's message, before the
+    paid-run lock and even with an ENGAGED check and sol's G1 recorded."""
+    _write_check(armed, "check")
+    monkeypatch.setitem(registered.G1_PASSED, SOL, VARIANT)
+    assert cli.main([*VALIDITY, *args]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith(f"refused: {registered.R6_STOP}")
 
 
 # --- command examples ---------------------------------------------------------------------------
@@ -765,10 +1055,14 @@ def test_cli_docstring_examples_parse():
             ["all"], "base", 16, "3-persistgym", "M2")
         assert (a.mode, a.service_tier, a.W) == ("standard", "flex", None)
         gen = runmeta.config_hash(cli._gen_config(a.gen_preset, a.gen_set).to_dict())
+        m = cli._run_matrix(a)
+        cells = tuple(c for c, n in m.templates if n)
+        assert m.name == "full" and cells == ALL_TASK_CELLS
         assert luna(cell=a.cell, gen=gen, request={"mode": a.mode, "service_tier":
                                                    a.service_tier, "W": a.W},
-                    templates=(a.start, a.start + a.n)) is None
-        assert cli._run_matrix(a).n_episodes == (1600 if a.repeat_index == 0 else 160)
+                    templates=(a.start, a.start + a.n), task_cells=cells,
+                    matrix=m.name) is None
+        assert m.n_episodes == (1600 if a.repeat_index == 0 else 160)
     assert cli._run_matrix(luna_runs[1]).played == tuple(range(0, 200, 10))
 
 

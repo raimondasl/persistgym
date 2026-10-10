@@ -57,7 +57,11 @@ def _prompt_text(payload: dict) -> str:
 
 def _replies(prompts, how: list[str]):
     """A fake reply function: prompt k (in run order, cycling) gets the reply kind how[k]:
-    the correct letter, the correct value, a wrong letter, or no action at all."""
+    the correct letter, the correct value, a wrong letter, or no action at all; or, for the
+    format check, the correct letter in the transcript's style, a routine action (as an
+    ACTION line or in the transcript's style: the earlier EVENT's oracle action), a lookup,
+    or another verb; `right` and `wrong` give the right or a wrong letter in the same
+    words."""
     replies = {}
     for k, p in enumerate(prompts):
         c = p.control
@@ -69,6 +73,12 @@ def _replies(prompts, how: list[str]):
             "value": f"ACTION: {verb}({value})",
             "wrong": f"ACTION: {verb}({wrong})",
             "none": "I cannot tell from these records.",
+            "agent_need": f"Agent: {verb}({right})",
+            "routine": f"ACTION: {c['replies'][-1]}",
+            "agent_routine": f"Agent: {c['replies'][-1]}",
+            "lookup": "ACTION: lookup(LINDEN)",
+            "other": f"ACTION: answer({right})",
+            "right": f"ACTION: {verb}({right})",
         }[how[k % len(how)]]
     return lambda payload, i: replies[_prompt_text(payload)]
 
@@ -197,7 +207,55 @@ def test_an_incomplete_response_scores_zero(prompts, tmp_path):
         (inc,) = x["incomplete"]
         assert inc["reason"] == "max_output_tokens" and inc["max_output_tokens"] == 32_000
         assert inc["reply_chars"] > 0
+        # the format check classes the partial text, so it does not count incomplete
+        # replies apart (an incomplete need step is an outcome)
+        assert x["reply_action_class"] == "need_verb"
     assert meta["exit_reason"] == "COMPLETED"
+    summary = json.loads((tmp_path / "results" / "persistgym" / "st" / "summary.json")
+                         .read_text(encoding="utf-8"))
+    assert summary["reply_action_classes"] == {"need_verb": 2, "routine_verb": 0,
+                                               "other_verb": 0, "none": 0}
+
+
+def test_the_summary_counts_the_kinds_of_action_the_replies_give(prompts, tmp_path):
+    """The format check (harnesses/DESIGN.md §7.7, §11): each reply's action as the scorer
+    reads it, by its verb alone: the need verb (in either style), a routine or lookup verb
+    (an answer to an earlier EVENT of the flattened prompt, in either style; scores 0),
+    another verb (scores 0) or none (unparsed); summary.json counts them."""
+    how = ["letter", "agent_routine", "other", "none", "wrong", "routine", "lookup",
+           "agent_need"]
+    _run(prompts, FakeModel(_replies(prompts, how)), tmp_path)
+    out = tmp_path / "results" / "persistgym" / "st"
+    lines = _lines(out / "episodes.jsonl")
+    assert [x["reply_action_class"] for x in lines] == [
+        "need_verb", "routine_verb", "other_verb", "none", "need_verb", "routine_verb",
+        "routine_verb", "need_verb"]
+    # scored as the need step: a routine call in the transcript's style is read as the
+    # action (PREREG D4's known verbs), so it is wrong, not unparsed
+    assert [x["need_outcome"] for x in lines] == [
+        "correct", "wrong", "wrong", "unparsed", "wrong", "wrong", "wrong", "correct"]
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["reply_action_classes"] == {"need_verb": 3, "routine_verb": 3,
+                                               "other_verb": 1, "none": 1}
+    assert list(summary["reply_action_classes"]) == list(blinding.REPLY_ACTION_CLASSES)
+
+
+def test_a_pilots_format_check_says_nothing_of_the_option_chosen(tmp_path):
+    """PREREG §11: a pilot whose need-verb replies are all right and one whose replies are
+    all wrong, in the same words, commit the same summary.json (the classes count verbs, not
+    options); only the raw records, under results/raw/, differ in need_correct."""
+    pilot = single_turn.build_prompts("pilot", [0, 1], SMALL, NONREC)
+    for name, kind in (("right", "right"), ("wrong", "wrong")):
+        _run(pilot, FakeModel(_replies(pilot, [kind])), tmp_path, experiment=PILOT,
+             run_id=name)
+    out, raw = tmp_path / "results" / PILOT, tmp_path / "raw" / PILOT
+    summary = (out / "right" / "summary.json").read_bytes()
+    assert summary == (out / "wrong" / "summary.json").read_bytes()
+    doc = json.loads(summary)
+    assert doc["blinded"] and doc["reply_action_classes"]["need_verb"] == 8
+    assert "need_correct" not in summary.decode("utf-8")
+    assert {x["need_correct"] for x in _lines(raw / "right" / "episodes.jsonl")} == {True}
+    assert {x["need_correct"] for x in _lines(raw / "wrong" / "episodes.jsonl")} == {False}
 
 
 @pytest.mark.parametrize("kind, fake_kw, exit_reason, run_exit", [
@@ -235,7 +293,11 @@ def test_api_errors_end_the_prompt_and_two_abort_the_run(prompts, tmp_path):
     lines = _lines(tmp_path / "results" / "persistgym" / "st" / "episodes.jsonl")
     assert [x["exit_reason"] for x in lines] == ["API_ERROR", "API_ERROR"]
     assert all(x["n_requests"] == 0 and x["need_outcome"] is None for x in lines)
+    assert all(x["reply_action_class"] is None for x in lines)          # no reply read
     assert meta["exit_reason"] == "ABORTED_API_ERRORS" and transport.calls == 2
+    summary = json.loads((tmp_path / "results" / "persistgym" / "st" / "summary.json")
+                         .read_text(encoding="utf-8"))
+    assert summary["reply_action_classes"] == dict.fromkeys(blinding.REPLY_ACTION_CLASSES, 0)
 
 
 def test_parallel_play_writes_what_sequential_play_writes(prompts, tmp_path):
@@ -336,7 +398,9 @@ def test_single_turn_cli_main_run(paid_env, capsys):
     assert row["service_tier"] == "flex" and int(row["reasoning_tokens"]) == 8 * 37
     assert row["notes"].startswith("approved_block=3-persistgym; context_mismatches=0; "
                                    "effort_mismatches=0;")
-    assert row["notes"].endswith("; main 0-1 control=single_turn repeat_index=0")
+    # as `run` writes its notes: no repeat at repeat 0
+    assert row["notes"].endswith("; main 0-1 control=single_turn")
+    assert "repeat" not in row["notes"]
     # every request is the control's, at luna's registered settings (F-0's)
     (fake,) = fakes
     want = [single_turn.build_request(p.control, CFG).payload
@@ -370,22 +434,18 @@ def test_single_turn_cli_main_run(paid_env, capsys):
 
 def test_single_turn_cli_repeat_1_plays_the_seeds_divisible_by_10(paid_env):
     tmp, costs_csv, _ = paid_env
-    args = [*MAIN, "--n", "20", "--repeat-index", "1", "--task-cell", "derived-nonrec-far",
-            "observed-nonrec-far"]
+    args = [*MAIN, "--n", "20", "--repeat-index", "1"]
     assert cli.main(args) == 0
     (run_dir,) = (tmp / "results" / "persistgym").iterdir()
     assert run_dir.name.endswith("-single-turn-gpt-6-luna-repeat1")  # as `run` names one
     lines = _lines(run_dir / "episodes.jsonl")
     assert [x["episode_id"] for x in lines] == [
-        "main-000000/observed-nonrec-far/single_turn",
-        "main-000000/derived-nonrec-far/single_turn",
-        "main-000010/observed-nonrec-far/single_turn",
-        "main-000010/derived-nonrec-far/single_turn"]
+        f"main-0000{t}/{c}/single_turn" for t in ("00", "10") for c in NONREC]
     assert {x["repeat_index"] for x in lines} == {1}
     meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
     assert meta["repeat_index"] == 1 and meta["seeds"] == {"template_seeds": [0, 10]}
     (row,) = costs.read_rows(costs_csv)
-    assert row["n_calls"] == "4" and row["notes"].endswith("main 0-19 control=single_turn "
+    assert row["n_calls"] == "8" and row["notes"].endswith("main 0-19 control=single_turn "
                                                            "repeat_index=1")
 
 
@@ -414,6 +474,27 @@ def test_single_turn_cli_pilot_is_blinded(paid_env):
     assert (tmp / "raw" / PILOT / "p" / "episodes.jsonl").exists()
 
 
+def test_the_pilot_is_at_most_10_prompts_over_all_its_runs(paid_env, capsys):
+    """R6's hard stop lets the single-turn pilot run up to 10 prompts in all: a run counts the
+    prompts earlier single-turn pilots of luna played (their meta.json), and one that would
+    pass 10 refuses before the paid-run lock, spending nothing."""
+    _, costs_csv, fakes = paid_env
+    pilot = ["single-turn", *SMALL_ARGS, "--approved-block", "3-persistgym", "--planned-usd",
+             "1"]
+    assert cli.main([*pilot, "--n", "2", "--run-id", "p1"]) == 0            # 8 prompts
+    capsys.readouterr()
+    assert cli.main([*pilot, "--n", "1", "--run-id", "p2"]) == 2            # 8 + 4 > 10
+    err = capsys.readouterr().err
+    assert err.startswith(f"refused: {registered.R6_STOP}")
+    assert "got a single-turn pilot with 4 prompts after 8 in earlier single-turn pilots" in err
+    assert len(fakes) == 1 and len(costs.read_rows(costs_csv)) == 1
+    assert cli.main([*pilot, "--n", "1", "--task-cell", *NONREC[:2], "--run-id", "p3"]) == 0
+    assert cli.main([*pilot, "--n", "1", "--task-cell", NONREC[0], "--run-id", "p4"]) == 2
+    assert "after 10 in earlier single-turn pilots" in capsys.readouterr().err
+    assert [r["run_id"] for r in costs.read_rows(costs_csv)] == ["p1", "p3"]
+    assert registered._single_turn_pilot_prompts(cli.RESULTS) == (10, None)
+
+
 def test_single_turn_stops_at_its_planned_spend_and_places_no_hold(paid_env):
     tmp, _, fakes = paid_env
     assert cli.main([*MAIN[:MAIN.index("--planned-usd") + 1], "0.0000001", "--run-id",
@@ -431,7 +512,20 @@ PILOT_RUN = ["single-turn", "--n", "1", *SMALL_ARGS, "--approved-block", "3-pers
 @pytest.mark.parametrize("args, says", [
     ([*PILOT_RUN, "--task-cell", "observed-rec-far"], "non-recoverable"),
     ([*PILOT_RUN, "--repeat-index", "1"], "main templates only"),
-    ([*PILOT_RUN, "--n", "3"], "a pilot is at most 10 prompts, got 12"),
+    # R6's hard stop (registered.r6_refusal): the single-turn pilot of luna only, at most 10
+    # prompts in all
+    ([*PILOT_RUN, "--n", "3"], "got a single-turn pilot with 12 prompts"),
+    ([*PILOT_RUN, "--model", "gpt-6.1-sol"],
+     "R6's hard stop (PREREG.md §17.6 (amendment R6) change 1)"),
+    ([*PILOT_RUN, "--model", "gpt-unknown"], "which is not a registered model"),
+    # ... with the sweep's request: luna's registered effort, D13's settings, luna's config
+    # (here the small one, as these tests record luna's G1 on it)
+    ([*PILOT_RUN, "--effort", "high"], "got a single-turn pilot with --effort high"),
+    ([*PILOT_RUN, "--service-tier", "default"],
+     "got a single-turn pilot with --service-tier default"),
+    (["single-turn", "--n", "1", "--approved-block", "3-persistgym", "--planned-usd", "1"],
+     "got a single-turn pilot with generator config 3d6bc648eaa9"),
+    ([*MAIN, "--model", "gpt-6-luna-x"], "gpt-6-luna only (PREREG §3 H3), got gpt-6-luna-x"),
     ([*PILOT_RUN, "--split", "main"], "--split pilot only"),
     ([*PILOT_RUN, "--experiment", "persistgym"], "pilot data"),
     ([*PILOT_RUN, "--experiment", "persistgym_validity", "--split", "validity"],
@@ -454,6 +548,9 @@ PILOT_RUN = ["single-turn", "--n", "1", *SMALL_ARGS, "--approved-block", "3-pers
     ([*MAIN, "--start", "190", "--n", "20", "--repeat-index", "1"],
      "got main templates 190-209"),
     ([*MAIN, "--start", "49999", "--n", "2"], "outside the main range"),
+    # the 4 non-recoverable task cells exactly (registered.LUNA_SINGLE_TURN_TASK_CELLS)
+    ([*MAIN, "--task-cell", "observed-nonrec-far"], "got task cells observed-nonrec-far"),
+    ([*MAIN, "--task-cell", *NONREC[:3]], f"got task cells {', '.join(NONREC[:3])}"),
 ])
 def test_single_turn_refuses_before_the_lock(paid_env, monkeypatch, capsys, args, says):
     _, costs_csv, fakes = paid_env
@@ -489,8 +586,10 @@ def test_single_turn_needs_lunas_g1_on_the_config_it_plays(paid_env, monkeypatch
     assert fakes == [] and costs.read_rows(costs_csv) == []
 
 
-def test_paid_calls_off_never_touch_the_lock(monkeypatch, capsys):
+def test_paid_calls_off_never_touch_the_lock(monkeypatch, capsys, tmp_path):
     monkeypatch.delenv(ALLOW_ENV, raising=False)
+    monkeypatch.setattr(cli, "RESULTS", tmp_path / "results")  # no earlier pilot counted
+    _luna_g1_on_the_small_config(monkeypatch)               # R6: the pilot plays luna's config
 
     def no_lock(*a, **k):
         raise AssertionError("must not take the paid-run lock")

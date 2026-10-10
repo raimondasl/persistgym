@@ -7,7 +7,12 @@ main split, base variant; only after `REPLICATION_G1_PASSED`). R2's and R3's eng
 verdicts and R3's hard stop do not block it, and none of its cases can run F-r, `sol-chain`,
 a derived task cell or an effort above medium. Every R2/R3 refusal of sol's H2 runs stays.
 Also: the R4 commands in the CLI docstring and in PREREG §17.4 parse, and the guard treats
-them as registered."""
+them as registered.
+
+R6 (PREREG §17.6 change 1) drops the replication's main runs and allows no further paid run
+but luna's, so R6's hard stop refuses every run here first. The module tests R4's rules with
+the stop off (`pre_r6`), as the record of what was registered;
+`test_r6_refuses_every_replication_run` checks them with it on."""
 
 from __future__ import annotations
 
@@ -36,6 +41,7 @@ OBSERVED = ("observed-nonrec-near", "observed-nonrec-far", "observed-rec-near",
 DERIVED = tuple(c.id for c in ALL_CELLS if c.fact == "derived")
 H1 = "persistgym_sol_h1"
 VAL = "persistgym_validity"
+pytestmark = pytest.mark.usefixtures("pre_r6")
 
 
 REQUEST = {"mode": "standard", "service_tier": "flex", "W": None}       # D13 (§6)
@@ -78,6 +84,19 @@ def test_the_replications_registered_settings():
     # its own budget experiment: phase 1a, the PersistGym stream
     assert costs.EXPERIMENT_PHASE[H1] == "1a"
     assert paidlock.EXPERIMENT_STREAM[H1] == paidlock.PERSISTGYM
+
+
+def test_r6_refuses_every_replication_run(tmp_path, monkeypatch):
+    """With R6's hard stop on, as it is: the replication's validity run, its main runs (even
+    with REPLICATION_G1_PASSED recorded) and its pilot refuse, citing §17.6 change 1."""
+    monkeypatch.setattr(registered, "R6_HARD_STOP", True)
+    monkeypatch.setitem(registered.REPLICATION_G1_PASSED, SOL, DEFAULT)
+    for why in (r4(VAL, root=tmp_path), r4(H1, root=tmp_path),
+                r4(H1, cell="W-n-0", root=tmp_path),
+                r4("persistgym_pilot", cell="W-0", split="pilot", root=tmp_path)):
+        assert why.startswith(registered.R6_STOP) and "model gpt-6.1-sol" in why
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    assert r4(VAL, root=tmp_path) is None and r4(H1, root=tmp_path) is None
 
 
 def test_the_validity_run_needs_no_check_no_g1_and_ignores_the_hard_stop(tmp_path):

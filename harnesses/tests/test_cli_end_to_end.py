@@ -2,7 +2,13 @@
 a stub client whose `responses.create` is answered by the fake model. This checks that a paid
 run would write its results, meta.json and exactly one costs.csv row per run, before any
 money is spent on finding out, and that it holds the paid-run lock (a temporary file here,
-never the shared one) and leaves it held when its spend is not in costs.csv."""
+never the shared one) and leaves it held when its spend is not in costs.csv.
+
+The runs these tests use (the probes, luna's harness-cell pilots, sol's runs) are ones R6's
+hard stop (PREREG §17.6 change 1) refuses now, so the module runs with the stop off
+(`pre_r6`) to test the paid path itself; `test_r6_refuses_these_runs_before_the_lock` checks
+them with it on. luna's main runs and the single-turn control take the same path
+(test_repeat.py, test_single_turn.py)."""
 
 from __future__ import annotations
 
@@ -15,10 +21,12 @@ import pytest
 
 from common import costs, hold, paidlock, runmeta
 from common.tests.gitrepo import DRAFT_PREREG, git_in, push_main, write_decisions
-from harnesses import blinding, cli, probes, runner
+from harnesses import blinding, cli, probes, registered, runner
 from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
 from harnesses.tests.conftest import SMALL_CHAIN_ARGS, prereg_repo
+
+pytestmark = pytest.mark.usefixtures("pre_r6")
 
 
 class _Obj:
@@ -688,3 +696,33 @@ def test_the_default_lock_is_the_shared_one(monkeypatch, tmp_path):
     assert asked == [(runmeta.REPO_ROOT, "persistgym")]
     assert seen == [(tmp_path / name, True, "persistgym")]
     assert not (tmp_path / name).exists()
+
+
+@pytest.mark.parametrize("argv", [
+    ["probe-echo", "--approved-block", "1-pilots", "--planned-usd", "0.5"],
+    ["probe-echo", "--model", "gpt-6-luna", "--approved-block", "1-pilots", "--planned-usd",
+     "0.5"],
+    ["probe-replay", "--model", "gpt-6.1-sol", "--n", "2", "--approved-block", "1-pilots",
+     "--planned-usd", "1"],
+    ["probe-replay", "--design", "fork", "--approved-block", "1-pilots", "--planned-usd", "1"],
+    PILOT_RUN, RUN,
+    ["run", "--cell", "F-0", "--model", "gpt-6.1-sol", "--effort", "medium", "--n", "1",
+     "--approved-block", "1-pilots", "--planned-usd", "1"]])
+def test_r6_refuses_these_runs_before_the_lock(paid_env, monkeypatch, capsys, argv):
+    """With R6's hard stop on, as it is: the probes (toggle_pilot, replay_probe, for any
+    model) and the pilots of harness cells refuse before the paid-run lock and spend nothing,
+    paid calls on or off."""
+    _, costs_csv, fakes = paid_env
+    monkeypatch.setattr(registered, "R6_HARD_STOP", True)
+
+    def no_lock(*a, **k):
+        raise AssertionError("must not take the paid-run lock")
+    monkeypatch.setattr(paidlock, "paid_run_lock", no_lock)
+    monkeypatch.setattr(paidlock, "lock_path", no_lock)
+    for allow in ("1", None):
+        if allow is None:
+            monkeypatch.delenv(ALLOW_ENV, raising=False)
+        assert cli.main(argv) == 2
+        err = capsys.readouterr().err
+        assert err.startswith(f"refused: {registered.R6_STOP}; got --experiment "), err
+    assert fakes == [] and costs.read_rows(costs_csv) == []

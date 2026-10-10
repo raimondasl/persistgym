@@ -101,6 +101,15 @@ def no_shared_paid_lock(monkeypatch, tmp_path_factory):
                         / "no-shared-paid-lock" / "costs.csv")
 
 
+@pytest.fixture
+def pre_r6(monkeypatch):
+    """R6's hard stop off (`registered.R6_HARD_STOP`; PREREG §17.6 change 1), for tests of
+    the paths it closed (pilots of harness cells, the probes, validity runs, sol's runs): the
+    rules as they were before R6, which stay in the code as the record of what was
+    registered. Each module that uses it also checks that R6 refuses the path."""
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+
+
 # --- a throwaway git repo with a committed PREREG.md (paid-guard tests) --------------------
 # The helpers live in common/tests/gitrepo.py (shared with the common/approval.py tests).
 

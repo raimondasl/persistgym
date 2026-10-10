@@ -8,18 +8,22 @@ and prints the summary. Claude proposes; **the researcher makes the go/no-go cal
 
 ``--d20-run RUN_ID`` instead prints one JSON line for that one ``arc_path`` run and exits 0:
 ``{"run_id", "config", "game", "agent_exit_reason", "median_s_per_call", "threshold_s",
-"incident", "rerun_eligible", "rerun_of", "replaced_by", "rerun_allowed"}`` (exit 2, with the
-reason on stderr, if no run folder with a ``meta.json`` holds that run, the run is truncated, or
-the folders are inconsistent; any other failure exits non-zero too). The block-3 driver calls it
-after every run and starts a re-run right away only on ``"rerun_allowed": true`` (PREREG §17.6
-changes 2 and 5); ``null``, a non-zero exit or output it cannot parse stops the block. It reads only ``costs.csv`` (the pilots' ``latency_s``) and
+"incident", "rerun_eligible", "rerun_of", "r7_replaces", "replaced_by", "rerun_allowed"}``
+(exit 2, with the reason on stderr, if no run folder with a ``meta.json`` holds that run, the
+run is truncated, or the folders are inconsistent; any other failure exits non-zero too). A
+re-run's seed label is the run's + 100 (101 for an original, 301 for an R7 replacement). The
+block-3 driver calls it after every run and starts a re-run right away only on
+``"rerun_allowed": true`` (PREREG §17.6 changes 2 and 5); ``null``, a non-zero exit or output
+it cannot parse stops the block. It reads only ``costs.csv`` (the pilots' ``latency_s``) and
 the ``arc_path`` folders, so block 2's completeness, the G0 record and the draw do not matter.
 ``threshold_s`` is 2 × the as-of-start yardstick below, whatever the ending; ``incident`` is
 D20's verdict, ``null`` unless the run ended ``TIME_BUDGET`` (D20 reads only those);
 ``rerun_eligible`` is D19's verdict on the ending alone, and ``null`` means it cannot be computed
 (a ``TIME_BUDGET`` without a median or a yardstick). ``rerun_allowed`` adds D19's "no second
-re-run": it is ``rerun_eligible`` for an original that has no re-run yet, ``false`` for a
-re-run or an already replaced original, and ``null`` when ``rerun_eligible`` is.
+re-run": it is ``rerun_eligible`` for a run that is not a re-run and has not been replaced (an
+original, or an R7 replacement, whose one D19 re-run R7 keeps), ``false`` for a D19 re-run or a
+run already replaced (by its re-run or by an R7 replacement), and ``null`` when
+``rerun_eligible`` is. ``r7_replaces`` is the run an R7 replacement replaces, else ``null``.
 
 **Inputs**, all under the results root (default ``results/``):
 
@@ -40,6 +44,19 @@ run. **Counted run** (PREREG §7.5): a re-run (``rerun_of`` in its ``meta.json``
 1 + 100 = 101, PREREG §7.4) replaces its original in every reading; both are listed. A re-run
 whose original is missing, of another game or config, with another seed label, of a re-run,
 or a second re-run of one run, is refused (exit 2), as are two seed-1 originals of one unit.
+
+**R7** (the researcher's decision of 2026-10-10, option B; S1 and S2 only, so never in block
+2): a unit whose counted S1 or S2 run ended by the summarizer failure gets one R7 replacement
+under R7's summary budget (``r7_replaces`` in its ``meta.json``, naming that counted run; seed
+label replicate + 200 = 201). It becomes the unit's counted run, and its own one D19 re-run
+(seed label 201 + 100 = 301, ``rerun_of`` the R7 replacement) replaces it in turn. `check_links`
+accepts exactly the chains original → (D19 re-run) → (R7 replacement) → (its D19 re-run) and
+refuses anything else: two R7 replacements of one unit, an R7 replacement of a run that was
+not the unit's counted run when it started, one for S0 or S4, a run that is both a re-run and
+an R7 replacement, and a re-run of a re-run (the R7 replacement's re-run is a re-run of an R7
+replacement, not of a re-run). The replicate is the seed label mod 100 (1, 101, 201 and 301 are
+replicate 1); an original's seed label is its replicate (below 100). D20's yardsticks treat a
+run replaced by an R7 replacement as replaced from the R7 replacement's start, as for a re-run.
 
 **Incomplete block.** Without ``--allow-incomplete`` the script refuses (exit 2) while block 2
 is incomplete: a unit has no run; its run's ending is re-run-eligible under D19 and its one
@@ -141,6 +158,8 @@ BLOCK = "2-arc-seed1"
 BLOCK_CONFIGS = ("S0", "S4")
 REPLICATE = 1
 RERUN_SEED_OFFSET = 100            # PREREG §7.4: a re-run of replicate s gets seed s + 100
+R7_SEED_OFFSET = 200               # R7: an R7 replacement of replicate s gets seed s + 200
+R7_CONFIGS = ("S1", "S2")          # R7 raises S1's and S2's summary budget only
 PHASE = "1b"
 GAP_MIN = 5.0                      # §10.3: fires if the mean gap is < 5
 MAX_ERRORS = 3                     # §10.3: fires if more than 3 runs end in an error
@@ -188,6 +207,7 @@ class Entry:
     config: str
     seed: int | None
     rerun_of: str | None
+    r7_replaces: str | None
     agent_exit_reason: str | None
     exit_reason: str | None
     started_utc: str | None
@@ -199,7 +219,9 @@ class Entry:
     meta_list: float | None
     run: am.Run | None
     skip_reason: str | None
-    replaced_by: list[str] = field(default_factory=list)
+    replaced_by: list[str] = field(default_factory=list)   # reruns + r7_by, in run order
+    reruns: list[str] = field(default_factory=list)        # D19 re-runs naming this run
+    r7_by: list[str] = field(default_factory=list)         # R7 replacements naming this run
     billed: float | None = None
     listed: float | None = None
     costs_row: str = "missing"
@@ -208,9 +230,8 @@ class Entry:
 
     @property
     def replicate(self) -> int | None:
-        if self.seed is None:
-            return None
-        return self.seed - RERUN_SEED_OFFSET if self.rerun_of else self.seed
+        """The seed label mod 100 (`arc_action_matched.replicate_of`)."""
+        return am.replicate_of(self.seed)
 
     @property
     def block2(self) -> bool:
@@ -265,7 +286,8 @@ def load_entry(folder: Path) -> Entry:
     run_id = str(meta["run_id"])
     return Entry(folder=folder, run_id=run_id, game=str(meta["game_requested"]).upper(),
                  config=str(meta["cell_or_config"]), seed=_int(seeds.get("replicate_seed")),
-                 rerun_of=meta["rerun_of"], agent_exit_reason=meta["agent_exit_reason"],
+                 rerun_of=meta["rerun_of"], r7_replaces=meta["r7_replaces"],
+                 agent_exit_reason=meta["agent_exit_reason"],
                  exit_reason=meta["exit_reason"], started_utc=meta["started_utc"],
                  started=_started(run_id, meta["started_utc"]),
                  truncated=any(v is not None
@@ -279,8 +301,9 @@ def load_entry(folder: Path) -> Entry:
 
 
 def discover(arc_path: Path) -> tuple[list[Entry], list[tuple[str, str]]]:
-    """Every run folder in `arc_path`, linked to its re-run, and the folders without a
-    meta.json (not a finished run). Refuses two folders with one run ID."""
+    """Every run folder in `arc_path`, linked to the runs that replace it (its D19 re-run or
+    an R7 replacement), and the folders without a meta.json (not a finished run). Refuses two
+    folders with one run ID."""
     if not arc_path.is_dir():
         return [], []
     entries, bare = [], []
@@ -295,35 +318,105 @@ def discover(arc_path: Path) -> tuple[list[Entry], list[tuple[str, str]]]:
             raise Refusal(f"two folders hold run {e.run_id}")
         by_id[e.run_id] = e
     for e in entries:
-        if e.rerun_of in by_id:
-            by_id[e.rerun_of].replaced_by.append(e.run_id)
+        for name, links in ((e.rerun_of, "reruns"), (e.r7_replaces, "r7_by")):
+            if name in by_id:
+                getattr(by_id[name], links).append(e.run_id)
+                by_id[name].replaced_by.append(e.run_id)
     return entries, bare
 
 
 def check_links(entries: list[Entry]) -> None:
-    """A re-run must name an original of the same game and config, with seed label original +
-    100; there is no re-run of a re-run and no second re-run (PREREG §7.4, §7.5)."""
+    """Each unit's runs form one chain, original → (D19 re-run) → (R7 replacement) → (its D19
+    re-run) (PREREG §7.4, §7.5; R7, module docstring); anything else is refused:
+
+    * a D19 re-run names an original or an R7 replacement (not a re-run) of the same game and
+      config, with seed label that run's + 100, and is its only re-run;
+    * an R7 replacement is an S1 or S2 run, the only one of its unit, with seed label replicate
+      + 200; it names a run of the same game and config that was the unit's counted run when it
+      started: an original or a D19 re-run that started before it, has no D19 re-run of its
+      own and is neither an R7 replacement nor an R7 replacement's re-run;
+    * no run is both, and an original's seed label is its replicate (below 100)."""
     by_id = {e.run_id: e for e in entries}
+    r7s: dict[tuple, list[Entry]] = {}
     for e in entries:
-        if not e.rerun_of:
-            continue
-        orig = by_id.get(e.rerun_of)
-        if orig is None:
-            raise Refusal(f"re-run {e.run_id} names {e.rerun_of}, which is not among the "
-                          "arc_path folders")
-        if orig.rerun_of:
-            raise Refusal(f"re-run {e.run_id} re-runs {orig.run_id}, itself a re-run: D19 "
-                          "allows no second re-run")
-        if (e.game, e.config) != (orig.game, orig.config):
-            raise Refusal(f"re-run {e.run_id} ({e.game} {e.config}) does not match its "
-                          f"original {orig.run_id} ({orig.game} {orig.config})")
-        if orig.seed is None or e.seed != orig.seed + RERUN_SEED_OFFSET:
-            raise Refusal(f"re-run {e.run_id} has seed label {e.seed}; its original "
-                          f"{orig.run_id} has {orig.seed}, so it should be "
-                          f"{None if orig.seed is None else orig.seed + RERUN_SEED_OFFSET}")
-        if len(orig.replaced_by) > 1:
-            raise Refusal(f"{orig.run_id} has {len(orig.replaced_by)} re-runs "
-                          f"({', '.join(orig.replaced_by)}): D19 allows one")
+        if e.r7_replaces:
+            r7s.setdefault((e.game, e.config, e.replicate), []).append(e)
+    for (game, config, rep), group in r7s.items():
+        if len(group) > 1:
+            raise Refusal(f"{game} {config}: {len(group)} R7 replacements at replicate {rep} "
+                          f"({', '.join(x.run_id for x in group)}): R7 allows one per unit")
+    for e in entries:
+        if e.rerun_of and e.r7_replaces:
+            raise Refusal(f"run {e.run_id} names both a run it re-runs ({e.rerun_of}) and a "
+                          f"run it replaces under R7 ({e.r7_replaces}); it can be only one")
+        if e.r7_replaces:
+            _check_r7(e, by_id)
+        elif e.rerun_of:
+            _check_rerun(e, by_id)
+        elif e.seed is not None and e.seed >= RERUN_SEED_OFFSET:
+            raise Refusal(f"run {e.run_id} has seed label {e.seed} but names no run it re-runs "
+                          "or replaces: an original's seed label is its replicate (below "
+                          f"{RERUN_SEED_OFFSET}), a D19 re-run's its original's + "
+                          f"{RERUN_SEED_OFFSET} and an R7 replacement's the replicate + "
+                          f"{R7_SEED_OFFSET}")
+
+
+def _check_rerun(e: Entry, by_id: dict[str, Entry]) -> None:
+    """D19: one re-run of an original or of an R7 replacement (`check_links`)."""
+    orig = by_id.get(e.rerun_of)
+    if orig is None:
+        raise Refusal(f"re-run {e.run_id} names {e.rerun_of}, which is not among the "
+                      "arc_path folders")
+    if orig.rerun_of:
+        raise Refusal(f"re-run {e.run_id} re-runs {orig.run_id}, itself a re-run: D19 "
+                      "allows no second re-run (after a re-run, only an R7 replacement and "
+                      "its one re-run follow)")
+    if (e.game, e.config) != (orig.game, orig.config):
+        raise Refusal(f"re-run {e.run_id} ({e.game} {e.config}) does not match its "
+                      f"original {orig.run_id} ({orig.game} {orig.config})")
+    if orig.seed is None or e.seed != orig.seed + RERUN_SEED_OFFSET:
+        raise Refusal(f"re-run {e.run_id} has seed label {e.seed}; its original "
+                      f"{orig.run_id} has {orig.seed}, so it should be "
+                      f"{None if orig.seed is None else orig.seed + RERUN_SEED_OFFSET}")
+    if len(orig.reruns) > 1:
+        raise Refusal(f"{orig.run_id} has {len(orig.reruns)} re-runs "
+                      f"({', '.join(orig.reruns)}): D19 allows one")
+
+
+def _check_r7(e: Entry, by_id: dict[str, Entry]) -> None:
+    """R7: one replacement of the unit's counted S1 or S2 run (`check_links`)."""
+    target = by_id.get(e.r7_replaces)
+    if target is None:
+        raise Refusal(f"R7 replacement {e.run_id} names {e.r7_replaces}, which is not among "
+                      "the arc_path folders")
+    if e.config not in R7_CONFIGS:
+        raise Refusal(f"R7 replacement {e.run_id} is an {e.config} run: R7 raises the summary "
+                      f"budget of {' and '.join(R7_CONFIGS)} only, so no other config has an "
+                      "R7 replacement")
+    if (e.game, e.config) != (target.game, target.config):
+        raise Refusal(f"R7 replacement {e.run_id} ({e.game} {e.config}) does not match the run "
+                      f"it replaces, {target.run_id} ({target.game} {target.config})")
+    first = by_id.get(target.rerun_of) if target.rerun_of else None
+    if target.r7_replaces or (first is not None and first.r7_replaces):
+        raise Refusal(f"R7 replacement {e.run_id} replaces {target.run_id}, which is itself "
+                      "an R7 replacement or its re-run: R7 allows one replacement per unit")
+    if target.truncated:
+        raise Refusal(f"R7 replacement {e.run_id} replaces {target.run_id}, a truncated run "
+                      "(never a counted run)")
+    if target.reruns:
+        raise Refusal(f"R7 replacement {e.run_id} replaces {target.run_id}, which is not the "
+                      f"unit's counted run: its D19 re-run {', '.join(target.reruns)} replaces "
+                      "it. R7 replaces the unit's counted run at its start, and a run it "
+                      "replaced is not re-run")
+    if target.seed is None or e.seed != target.replicate + R7_SEED_OFFSET:
+        want = None if target.seed is None else target.replicate + R7_SEED_OFFSET
+        raise Refusal(f"R7 replacement {e.run_id} has seed label {e.seed}; the run it "
+                      f"replaces, {target.run_id}, has {target.seed} (replicate "
+                      f"{target.replicate}), so it should be {want}")
+    if not target.started < e.started:
+        raise Refusal(f"R7 replacement {e.run_id} started {e.started.isoformat()}, not after "
+                      f"the run it replaces, {target.run_id} ({target.started.isoformat()}): "
+                      "it replaces the unit's counted run at its start")
 
 
 def attach_costs(entries: list[Entry], rows: list[dict]) -> None:
@@ -477,10 +570,30 @@ class Unit:
     config: str
     original: Entry | None = None
     rerun: Entry | None = None
-    pending: bool = False          # the original is re-run-eligible and its re-run is missing
+    r7: Entry | None = None        # the R7 replacement (S1 and S2 only)
+    r7_rerun: Entry | None = None  # the R7 replacement's D19 re-run
+    pending: bool = False          # the head is re-run-eligible and its re-run is missing
 
     @property
     def counted(self) -> Entry | None:
+        """The last run of the chain original → re-run → R7 replacement → its re-run."""
+        return self.r7_rerun or self.r7 or self.rerun or self.original
+
+    @property
+    def head(self) -> Entry | None:
+        """The run whose one D19 re-run the unit has or may get: its R7 replacement if it has
+        one, else its original."""
+        return self.r7 or self.original
+
+    @property
+    def head_rerun(self) -> Entry | None:
+        """The head's D19 re-run."""
+        return self.rerun if self.r7 is None else self.r7_rerun
+
+    @property
+    def before_r7(self) -> Entry | None:
+        """The counted run without R7: the run the R7 replacement replaced, or the counted run
+        of a unit without one."""
         return self.rerun or self.original
 
 
@@ -502,20 +615,27 @@ class Block:
 
 def resolve_unit(entries: list[Entry], game: str, config: str,
                  eligible: dict[str, bool | None], replicate: int = REPLICATE) -> Unit:
-    """The (game, config) unit at `replicate` (PREREG §7.5): its original, its re-run, which
-    replaces it, and whether a re-run is pending (the original is re-run-eligible and its
-    re-run has not landed). Refuses two originals. Call `check_links` first."""
+    """The (game, config) unit at `replicate` (PREREG §7.5; R7): its original, its re-run, its
+    R7 replacement and that one's re-run, each replacing the one before, and whether a re-run
+    is pending (the head, `Unit.head`, is re-run-eligible and its re-run has not landed).
+    Refuses two originals or two R7 replacements. Call `check_links` first."""
     mine = [e for e in entries if not e.truncated and e.replicate == replicate
             and (e.game, e.config) == (game, config)]
-    originals = [e for e in mine if not e.rerun_of]
-    reruns = [e for e in mine if e.rerun_of]
+    originals = [e for e in mine if not e.rerun_of and not e.r7_replaces]
+    r7s = [e for e in mine if e.r7_replaces]
     if len(originals) > 1:
         raise Refusal(f"{game} {config}: {len(originals)} seed-{replicate} runs that are not "
                       f"re-runs ({', '.join(e.run_id for e in originals)}); exactly one may "
                       "be counted")
-    u = Unit(game, config, originals[0] if originals else None, reruns[0] if reruns else None)
-    u.pending = bool(u.original is not None and u.rerun is None
-                     and eligible[u.original.run_id])
+    if len(r7s) > 1:
+        raise Refusal(f"{game} {config}: {len(r7s)} R7 replacements at replicate {replicate} "
+                      f"({', '.join(e.run_id for e in r7s)}): R7 allows one per unit")
+    r7 = r7s[0] if r7s else None
+    reruns = [e for e in mine if e.rerun_of and (r7 is None or e.rerun_of != r7.run_id)]
+    r7_reruns = [e for e in mine if r7 is not None and e.rerun_of == r7.run_id]
+    u = Unit(game, config, originals[0] if originals else None, reruns[0] if reruns else None,
+             r7, r7_reruns[0] if r7_reruns else None)
+    u.pending = bool(u.head is not None and u.head_rerun is None and eligible[u.head.run_id])
     return u
 
 
@@ -536,8 +656,9 @@ def build_block(entries: list[Entry], bare: list[tuple[str, str]], games: list[s
                 continue
             elig = eligible[u.original.run_id]
             if u.pending:
-                incomplete.append(f"{g} {c}: {u.original.run_id} ended "
-                                  f"{why_ending(u.original, d20[u.original.run_id], elig)}; "
+                h = u.head
+                incomplete.append(f"{g} {c}: {h.run_id} ended "
+                                  f"{why_ending(h, d20[h.run_id], eligible[h.run_id])}; "
                                   "its one re-run has not landed (it stands in, flagged)")
             if u.rerun is not None and elig is False:
                 warnings.append(f"{g} {c}: {u.original.run_id} was re-run although its ending "
@@ -557,7 +678,7 @@ def build_block(entries: list[Entry], bare: list[tuple[str, str]], games: list[s
             if e.n_calls is None:
                 incomplete.append(f"{g} {c}: counted run {e.run_id} has no n_calls in its "
                                   "meta.json")
-            for x in (u.original, u.rerun):
+            for x in (u.original, u.rerun, u.r7, u.r7_rerun):
                 if x is None:
                     continue
                 if x.costs_row == "mismatch":
@@ -717,7 +838,7 @@ def cost_reading(b: Block, games: list[str], spent: float, cap: float) -> dict:
     # A pending re-run (on any path game: phase-1b spend is not split by game) has not been
     # paid yet, so the spend to date leaves it out. Priced at its original's billed cost, as a
     # PROVISIONAL sensitivity reading only; the rule reads the spend in costs.csv.
-    stand_ins = [u.original for u in b.units.values() if u.pending]
+    stand_ins = [u.head for u in b.units.values() if u.pending]
     pending_spend = sum(e.billed or 0.0 for e in stand_ins)
     after = remaining - pending_spend
     return {"rule": "D27 at Checkpoint C: ([seed 2: S0 + S4 billed per game] + [S1, S2 in both "
@@ -776,7 +897,7 @@ def run_row(e: Entry, b: Block, forecasts: dict[tuple[str, str], float]) -> dict
     row = {"run_id": e.run_id, "game": e.game, "config": e.config, "replicate": e.replicate,
            "seed": e.seed, "rerun_of": e.rerun_of, "replaced_by": list(e.replaced_by),
            "counted": not e.replaced_by and not e.truncated,
-           "rerun_pending": any(u.pending and u.original is e for u in b.units.values()),
+           "rerun_pending": any(u.pending and u.head is e for u in b.units.values()),
            "block2": e.block2,
            "started_utc": e.started_utc, "agent_exit_reason": e.agent_exit_reason,
            "exit_reason": e.exit_reason, "d19_ending": e.d19_ending,
@@ -817,8 +938,8 @@ def _incident_word(incident: bool | None) -> str:
 
 
 D20_RUN_FIELDS = ("run_id", "config", "game", "agent_exit_reason", "median_s_per_call",
-                  "threshold_s", "incident", "rerun_eligible", "rerun_of", "replaced_by",
-                  "rerun_allowed")
+                  "threshold_s", "incident", "rerun_eligible", "rerun_of", "r7_replaces",
+                  "replaced_by", "rerun_allowed")
 
 
 def d20_run(root: Path, run_id: str) -> dict:
@@ -846,8 +967,10 @@ def d20_run(root: Path, run_id: str) -> dict:
            "threshold_s": d20_readings(e, entries, pilots)["as_of_start"]["threshold_s"],
            "incident": None if d20 is None else d20["incident"],
            "rerun_eligible": rerun_eligible(e, d20),
-           "rerun_of": e.rerun_of, "replaced_by": list(e.replaced_by)}
-    # D19 allows one re-run: never for a re-run, nor for an original that already has one
+           "rerun_of": e.rerun_of, "r7_replaces": e.r7_replaces,
+           "replaced_by": list(e.replaced_by)}
+    # D19 allows one re-run: never for a re-run, nor for a run already replaced (by its re-run
+    # or by an R7 replacement); an R7 replacement that is not yet replaced gets its one
     out["rerun_allowed"] = (None if out["rerun_eligible"] is None
                             else bool(out["rerun_eligible"]) and not e.rerun_of
                             and not e.replaced_by)

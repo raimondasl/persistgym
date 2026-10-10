@@ -44,10 +44,16 @@ fails.
 The registered matched count is K = 150 (`REGISTERED_K`); the curve adds K = 50, 100 and 200
 (`CURVE_K`). `--k` sets another K, which the outputs label exploratory.
 
-**Counted runs** (PREREG §7.5): a run named by another run's `rerun_of` is replaced by that
-re-run in every primary analysis; both are listed, the original with `counted` false. The link
-is read from every folder's `meta.json`, so a re-run that is skipped below still replaces its
-original.
+**Counted runs** (PREREG §7.5; amendment R7): a run named by another run's `rerun_of` (a D19
+re-run) or `r7_replaces` (an R7 replacement: S1 or S2 under R7's summary budget, replacing a
+run that ended by the summarizer failure) is replaced by that run in every primary analysis;
+all are listed, each replaced run with `counted` false. A unit's chain is original → (D19
+re-run) → (R7 replacement) → (its D19 re-run), and its last run is the counted one. The links
+are read from every folder's `meta.json`, so a run that is skipped below still replaces the run
+it names. `analysis.checkpoint_c.check_links` checks the chains; this module only follows them.
+The **replicate** is the seed label mod 100: an original's seed label is its replicate, a D19
+re-run's is its original's + 100 (PREREG §7.4) and an R7 replacement's is the replicate + 200,
+so 1, 101, 201 and 301 are all replicate 1.
 
 **Runs without matched values** (PREREG §17.5): a run fails the checks (`checks_passed` false)
 when its recomputed score or level scores differ from its scorecard's, or its Σ
@@ -96,14 +102,15 @@ COMPLETE_ENDINGS = ("GAME_WIN", "ACTION_BUDGET")
 OBSERVED, COMPLETE, CENSORED = "OBSERVED", "COMPLETE", "CENSORED"
 COST_TOLERANCE_USD = 1e-6
 SCORE_TOLERANCE = 1e-9
+SEED_LABEL_STEP = 100                   # PREREG §7.4 (+ 100, a D19 re-run); R7 (+ 200)
 
 META_FIELDS = ("experiment", "run_id", "cell_or_config", "game_requested", "seeds",
-               "rerun_of", "agent_exit_reason", "exit_reason", "wall_clock_s", "cost_usd",
-               "truncation_limits")
+               "rerun_of", "r7_replaces", "agent_exit_reason", "exit_reason", "wall_clock_s",
+               "cost_usd", "truncation_limits")
 """The only meta.json fields read."""
 
-RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "replaced_by",
-              "counted", "agent_exit_reason", "exit_reason", "actions", "resets",
+RUN_FIELDS = ("run_id", "game", "config", "replicate", "seed", "rerun_of", "r7_replaces",
+              "replaced_by", "counted", "agent_exit_reason", "exit_reason", "actions", "resets",
               "sum_level_actions", "levels_completed", "level_count", "score_scorecard",
               "score_recomputed", "score_reproduced", "checks_passed", "cleared_at_actions",
               "wall_clock_s", "seconds_per_action", "cost_billed_usd", "cost_list_usd",
@@ -201,6 +208,7 @@ class Run:
     score_scorecard: float
     replaced_by: list[str] = field(default_factory=list)
     costs_row: str = "not checked"
+    r7_replaces: str | None = None
 
     @property
     def counted(self) -> bool:
@@ -256,6 +264,12 @@ def _number(value) -> float | None:
     return None if value is None else float(value)
 
 
+def replicate_of(seed: int | None) -> int | None:
+    """The replicate a seed label stands for: the label mod 100 (1, 101, 201 and 301 are all
+    replicate 1; module docstring)."""
+    return None if seed is None else int(seed) % SEED_LABEL_STEP
+
+
 def load_run(folder: Path) -> Run | str:
     """The run in `folder`, or the reason it is skipped. Refused unless its meta.json is an
     arc_path run (so no pilot folder is ever read)."""
@@ -288,11 +302,10 @@ def load_run(folder: Path) -> Run | str:
                 f"{level_count}")
     seeds = meta["seeds"] or {}
     seed = seeds.get("replicate_seed")
-    replicate = None if seed is None else (seed - 100 if meta["rerun_of"] else seed)
     cost = meta["cost_usd"] or {}
     return Run(folder=folder, run_id=meta["run_id"], game=str(meta["game_requested"]).upper(),
-               config=meta["cell_or_config"], seed=seed, replicate=replicate,
-               rerun_of=meta["rerun_of"],
+               config=meta["cell_or_config"], seed=seed, replicate=replicate_of(seed),
+               rerun_of=meta["rerun_of"], r7_replaces=meta["r7_replaces"],
                agent_exit_reason=meta["agent_exit_reason"] or "UNKNOWN",
                exit_reason=meta["exit_reason"], wall_clock_s=_number(meta["wall_clock_s"]),
                cost_billed_usd=_number(cost.get("billed_est")),
@@ -311,14 +324,15 @@ def run_folders(root: Path = ARC_PATH) -> list[Path]:
 
 
 def collect(folders: list[Path]) -> tuple[list[Run], list[tuple[str, str]]]:
-    """The runs in `folders`, linked to their re-runs, and the skipped folders with reasons.
-    The links come from every folder's meta.json, skipped folders included, so an original
-    whose re-run is skipped is still not counted (PREREG §7.5)."""
+    """The runs in `folders`, linked to the runs that replace them (a D19 re-run or an R7
+    replacement), and the skipped folders with reasons. The links come from every folder's
+    meta.json, skipped folders included, so a run whose replacement is skipped is still not
+    counted (PREREG §7.5; R7)."""
     runs, skipped, links = [], [], []
     for folder in folders:
         got = load_run(folder)
         meta = _meta(Path(folder))
-        links.append((meta["run_id"], meta["rerun_of"]))
+        links.append((meta["run_id"], (meta["rerun_of"], meta["r7_replaces"])))
         if isinstance(got, str):
             skipped.append((Path(folder).name, got))
         else:
@@ -326,9 +340,10 @@ def collect(folders: list[Path]) -> tuple[list[Run], list[tuple[str, str]]]:
     if len({run_id for run_id, _ in links}) != len(links):
         raise ValueError("two folders hold the same run_id")
     by_id = {r.run_id: r for r in runs}
-    for rerun_id, original in links:
-        if original in by_id:
-            by_id[original].replaced_by.append(rerun_id)
+    for run_id, replaced in links:
+        for name in replaced:
+            if name in by_id:
+                by_id[name].replaced_by.append(run_id)
     return runs, skipped
 
 
@@ -365,7 +380,8 @@ def run_row(run: Run, k: int) -> dict:
     at = run.at_k(k)
     row = {"run_id": run.run_id, "game": run.game, "config": run.config,
            "replicate": run.replicate, "seed": run.seed, "rerun_of": run.rerun_of or "",
-           "replaced_by": ";".join(run.replaced_by), "counted": run.counted,
+           "r7_replaces": run.r7_replaces or "", "replaced_by": ";".join(run.replaced_by),
+           "counted": run.counted,
            "agent_exit_reason": run.agent_exit_reason, "exit_reason": run.exit_reason or "",
            "actions": run.actions, "resets": run.resets,
            "sum_level_actions": run.sum_level_actions,
@@ -440,8 +456,9 @@ def summary_lines(runs: list[Run], skipped: list[tuple[str, str]], k: int,
          ("- **Status at K:** OBSERVED (the run took ≥ K actions; exact), COMPLETE (fewer, "
           "ended GAME_WIN or ACTION_BUDGET; final values hold at K), CENSORED (fewer, ended "
           "any other way; values are lower bounds)."),
-         ("- Only counted runs enter the H4 readings; a run replaced by its re-run is listed "
-          "with counted = False (PREREG §7.5)."),
+         ("- Only counted runs enter the H4 readings; a run replaced by its re-run or by its "
+          "R7 replacement is listed with counted = False (PREREG §7.5; R7). Rep. is the seed "
+          "label mod 100."),
          ("- A run that fails a check below, or a counted run that is skipped, has no matched "
           "values: the readings leave its unit out and list it."), "",
          f"## Runs at K = {k}", "",

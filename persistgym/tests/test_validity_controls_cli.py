@@ -7,7 +7,13 @@ import pytest
 from persistgym import tokens
 from persistgym.cli import main, parse_overrides
 from persistgym.config import GeneratorConfig
-from persistgym.controls import score_single_turn, single_turn_control
+from persistgym.controls import (
+    REPLY_ACTION_CLASSES,
+    reply_action_class,
+    score_single_turn,
+    single_turn_control,
+)
+from persistgym.env import EpisodeEnv
 from persistgym.episode import read_jsonl
 from persistgym.filler import Reserved
 from persistgym.skins import get_skin
@@ -324,6 +330,73 @@ def test_single_turn_scoring_matches_env(small_eps):
     assert not r["correct"] and r["outcome"] == "wrong" and r["label"] == wrong
     assert score_single_turn(c, "no idea")["outcome"] == "unparsed"
     assert score_single_turn(c, f"ACTION: lookup({ep.entity})")["outcome"] == "wrong"
+
+
+def _need_replies(ep) -> list[str]:
+    """Need-step replies in every form the parse tells apart."""
+    verb, right = ep.need_verb, ep.correct_label
+    wrong = next(o.label for o in ep.options if o.label != right)
+    routine = ep.steps[ep.need_step - 1].expected_action
+    return [f"ACTION: {verb}({right})", f"ACTION: {verb}({wrong})",
+            f"ACTION: {verb}({ep.target_value})", f"Agent: {verb}({right})",
+            f"Agent: {verb}({wrong})", f"{verb}({right}), or so I think.",
+            # a known call after the need-verb call, with no ACTION line: the last one counts
+            f"{verb}({right}) after the last {routine}",
+            f"Agent: {verb}({right})\nAgent: {routine}", f"Agent: {routine}",
+            f"ACTION: {routine}", f"ACTION: lookup({ep.entity})", f"lookup({ep.entity})",
+            f"ACTION: answer({right})", f"ACTION: {right}", "no idea", "",
+            f"ACTION: {routine}\nACTION: {verb}({right})",
+            f"ACTION: {verb}({right})\nACTION: {routine}",
+            f"ACTION: {verb}({right}) and answer({wrong})"]
+
+
+def _env_need_outcome(ep, reply: str) -> str:
+    """How `EpisodeEnv` scores `reply` at the need step, after oracle routine replies."""
+    env = EpisodeEnv(ep)
+    for i in range(ep.need_step):
+        env.step(f"ACTION: {ep.steps[i].expected_action}")
+    env.step(reply)
+    return env.outcomes[ep.need_step]
+
+
+def test_single_turn_scoring_is_the_need_steps_on_every_reply_form(small_eps):
+    """`score_single_turn` scores every reply as `EpisodeEnv` scores the need step, with the
+    same known verbs for the non-strict parse (PREREG D4): a routine call after the need-verb
+    call is the action read (wrong), not skipped. A lookup is wrong here and invalid_lookup in
+    the env: both score 0 in a non-recoverable cell."""
+    for cell in ("observed-nonrec-near", "observed-nonrec-far", "derived-nonrec-near",
+                 "derived-nonrec-far"):
+        ep = pick(small_eps, cell)
+        c = single_turn_control(ep)
+        for reply in _need_replies(ep):
+            want = _env_need_outcome(ep, reply)
+            got = score_single_turn(c, reply)
+            assert got["outcome"] == {"invalid_lookup": "wrong"}.get(want, want), reply
+            assert got["correct"] is (want == "correct")
+    ep = pick(small_eps, "observed-nonrec-far")
+    routine = ep.steps[ep.need_step - 1].expected_action
+    reply = f"{ep.need_verb}({ep.correct_label}) after the last {routine}"
+    assert score_single_turn(single_turn_control(ep), reply)["outcome"] == "wrong"
+
+
+def test_reply_action_class_reads_the_verb_alone(small_eps):
+    """The format check's class of a reply (`reply_action_class`): the kind of action the
+    scorer reads, by its verb alone, so a right and a wrong option get the same class."""
+    assert REPLY_ACTION_CLASSES == ("need_verb", "routine_verb", "other_verb", "none")
+    ep = pick(small_eps, "derived-nonrec-far")
+    c = single_turn_control(ep)
+    got = [reply_action_class(c, r) for r in _need_replies(ep)]
+    assert got == ["need_verb", "need_verb", "need_verb", "need_verb", "need_verb",
+                   "need_verb", "routine_verb", "routine_verb", "routine_verb",
+                   "routine_verb", "routine_verb", "routine_verb", "other_verb", "none", "none",
+                   "none", "need_verb", "routine_verb", "need_verb"]
+    for reply, cls in zip(_need_replies(ep), got, strict=True):     # the scorer's own parse
+        outcome = score_single_turn(c, reply)["outcome"]
+        assert (cls == "none") is (outcome == "unparsed")
+        if outcome == "correct":
+            assert cls == "need_verb"
+    strict = {**c, "strict_action_parse": True}               # no ACTION line: nothing read
+    assert reply_action_class(strict, f"Agent: {ep.need_verb}({ep.correct_label})") == "none"
 
 
 TOY = {"K_options": 4, "validity_margin_pp": 10.0, "minor_component_range": [61, 98],

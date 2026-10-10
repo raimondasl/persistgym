@@ -9,7 +9,9 @@ For an experiment in `BLINDED_EXPERIMENTS`:
   `results/raw/<experiment>/<run_id>/`;
 * the committed `results/<experiment>/<run_id>/` gets `meta.json`, whose `tokens` leave out
   `reasoning_tokens`, and `summary.json` (`run_summary`): errors, latency, cost and the
-  echo-match rates of `reasoning.context` and `reasoning.effort`, nothing else;
+  echo-match rates of `reasoning.context` and `reasoning.effort`, and for a run of H3's
+  single-turn control the kinds of action its replies give (`reply_action_classes`: by the
+  verb alone, never the option), nothing else;
 * `meta.json`'s `parallel` (`harnesses.parallel.ParallelPlay.info`) is cut to
   `PARALLEL_FIELDS` (`blinded_parallel`), and the whole block goes to the gitignored
   `results/raw/<experiment>/<run_id>/parallel.json` (`runner.PARALLEL_INFO`), next to the
@@ -78,6 +80,7 @@ from pathlib import Path
 
 from harnesses import registered
 from persistgym.config import PRESET_HASHES
+from persistgym.controls import REPLY_ACTION_CLASSES
 
 BLINDED_EXPERIMENTS = frozenset({"persistgym_pilot"})
 WITHHELD_NOTE = "reasoning_tokens withheld: pilot blinding (PREREG §11)"
@@ -188,9 +191,25 @@ def _echo_match(eps: list[dict]) -> dict:
     return dict(sorted(out.items()))
 
 
-def run_summary(eps: list[dict], *, blinded: bool) -> dict:
-    """The committed summary of one run (one harness cell). Allowlisted fields only."""
-    return {
+def reply_action_classes(eps: list[dict]) -> dict[str, int]:
+    """H3's single-turn control: how many replies the scorer reads as each kind of action
+    (`persistgym.controls.reply_action_class`, by the verb alone: the need verb, a routine or
+    lookup verb, another verb, none), every class listed. A prompt with no reply read (an
+    API error, the run's stop, a stop on an echo mismatch) is in no class; its exit reason is
+    in `errors`. An incomplete reply is classed on its partial text, so the classes do not
+    count incomplete replies apart (an incomplete need step scores 0: an outcome). It says
+    nothing of which option a need-verb reply chose or whether it is right, so a pilot commits
+    it (PREREG §11): it is the pilot's format check (harnesses/DESIGN.md §7.7, §11). The
+    need-verb count bounds the run's successes from above; the other classes count replies
+    that score 0."""
+    got = Counter(e.get("reply_action_class") for e in eps)
+    return {c: got.get(c, 0) for c in REPLY_ACTION_CLASSES}
+
+
+def run_summary(eps: list[dict], *, blinded: bool, reply_actions: bool = False) -> dict:
+    """The committed summary of one run (one harness cell, or one single-turn control run,
+    which adds `reply_action_classes` with `reply_actions`). Allowlisted fields only."""
+    out = {
         "blinded": blinded,
         "n_episodes": len(eps),
         "errors": _errors(eps),
@@ -198,6 +217,9 @@ def run_summary(eps: list[dict], *, blinded: bool) -> dict:
         "cost_usd": _cost(eps),
         "echo_match": _echo_match(eps),
     }
+    if reply_actions:
+        out["reply_action_classes"] = reply_action_classes(eps)
+    return out
 
 
 # --- the pooled pilot report ---------------------------------------------------------------
@@ -252,7 +274,7 @@ SINGLE_TURN_CONTROL = "single_turn"
 
 def is_left_out(e: dict) -> bool:
     """Whether the pooled report leaves an episode record out: an episode of PREREG §17.4's
-    pilot of sol's H1 replication, sol (or a snapshot or alias of it) at medium effort on the
+    pilot of sol's H1 replication, sol (or a dated snapshot of it) at medium effort on the
     default generator config in W-0 or W-n-0 (`registered.H1_REPLICATION_PILOT_CELLS`).
     Those runs would join block 1's sol pool (F-r and F-0 at medium on the default config),
     which earlier reports have shown, so any report with them would show the window cells'

@@ -36,7 +36,10 @@ The control is built from non-recoverable base episodes only. A recoverable cell
 same observations, and its system prompt offers `lookup`, which a single prompt cannot
 serve (there is no next update), so its control would differ only by offering an action
 that cannot work. `score_single_turn` scores a reply exactly as `EpisodeEnv` scores the
-need step.
+need step, with the same known verbs for the non-strict parse. `reply_action_class` names
+the kind of action that parse reads in a reply (the need verb, a routine or lookup verb,
+another verb, or none) by its verb alone: a format diagnostic that says nothing of the option
+chosen.
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from persistgym import tokens
-from persistgym.env import need_label, parse_action
+from persistgym.env import OTHER_VERBS, known_verbs, need_label, parse_action
 from persistgym.episode import Episode
 
 SEP = "\n"
@@ -145,12 +148,21 @@ def single_turn_control(ep: Episode, replies: Sequence[str] | None = None,
     }
 
 
+def _parse(control: dict, reply: str):
+    """The action `EpisodeEnv` reads in a need-step reply: the last `ACTION: verb(arg)` line,
+    or, unless strict, the last call with a known verb (`env.known_verbs`: the need verb, the
+    routine steps' verbs and `lookup`, PREREG D4) anywhere in the reply."""
+    return parse_action(reply, known_verbs(control["need_verb"]),
+                        control["strict_action_parse"])
+
+
 def score_single_turn(control: dict, reply: str) -> dict:
     """Score a model reply to a single-turn control the way `EpisodeEnv` scores the need
-    step: the last `ACTION: verb(arg)` (or, unless strict, the last need-verb call), letter or,
-    if allowed, option value."""
+    step: the action `_parse` reads, whose verb must be the need verb and whose argument the
+    letter or, if allowed, the option value. A lookup scores `wrong` here (`EpisodeEnv`:
+    `invalid_lookup`, which a non-recoverable cell scores 0 too)."""
     verb = control["need_verb"]
-    parsed = parse_action(reply, {verb.lower()}, control["strict_action_parse"])
+    parsed = _parse(control, reply)
     options = [(o["label"], o["value"]) for o in control["options"]]
     label = need_label(parsed, verb, options, control["accept_value_answers"])
     if parsed is None or parsed.verb is None:
@@ -159,3 +171,22 @@ def score_single_turn(control: dict, reply: str) -> dict:
         outcome = "correct" if label == control["correct_label"] else "wrong"
     return {"correct": outcome == "correct", "outcome": outcome, "label": label,
             "action": parsed.raw if parsed else None}
+
+
+REPLY_ACTION_CLASSES = ("need_verb", "routine_verb", "other_verb", "none")
+"""The kinds of action `reply_action_class` tells apart."""
+
+
+def reply_action_class(control: dict, reply: str) -> str:
+    """The kind of the action the scorer reads in a reply (`_parse`, as `score_single_turn`
+    reads it), by its verb alone, never its argument, so it says nothing of the option chosen
+    or whether it is right: `need_verb` (the episode's need verb, e.g. store), `routine_verb`
+    (a routine step's verb or lookup, `env.OTHER_VERBS`: e.g. a reply to an earlier EVENT of
+    the flattened prompt, which scores 0), `other_verb` (an `ACTION:` line with any other
+    verb) or `none` (no action read: `score_single_turn`'s `unparsed`)."""
+    parsed = _parse(control, reply)
+    if parsed is None or parsed.verb is None:
+        return "none"
+    if parsed.verb == control["need_verb"].lower():
+        return "need_verb"
+    return "routine_verb" if parsed.verb in OTHER_VERBS else "other_verb"

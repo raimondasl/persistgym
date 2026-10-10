@@ -25,7 +25,12 @@ harnesses/tests/test_payload_snapshots.py asserts the whole body.
 * a response with status `incomplete` (e.g. at `max_output_tokens`) is an invalid answer and
   scores 0 whatever its partial text says (PREREG §6, §13; D13): `need_outcome` `incomplete`;
   the prompt is not excluded and not re-run;
-* COST_CAP, API_ERROR and RUN_STOPPED end a prompt as they end an episode.
+* COST_CAP, API_ERROR and RUN_STOPPED end a prompt as they end an episode;
+* every reply read, an incomplete one on its partial text, gets `reply_action_class`, the
+  kind of action the scorer reads in it by its verb alone (`controls.reply_action_class`:
+  need verb, routine or lookup verb, other verb, none), and summary.json counts the classes
+  (`blinding.reply_action_classes`), for a pilot too: the format check of
+  harnesses/DESIGN.md §7.7, which says nothing of the option chosen.
 
 **A run** (`run_controls`) plays its prompts in order, one at a time or up to 16 at once
 (PREREG §4.6; `harnesses.parallel`, with spend reserved for the prompts in flight and every
@@ -69,7 +74,7 @@ from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_para
 from harnesses.registered import model_family
 from harnesses.session import HarnessSession, Request
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, GeneratorConfig
-from persistgym.controls import score_single_turn, single_turn_control
+from persistgym.controls import reply_action_class, score_single_turn, single_turn_control
 from persistgym.episode import ALL_CELLS, TaskCell
 from persistgym.render import generate
 from persistgym.template import seed_for
@@ -219,6 +224,10 @@ class PromptRun:
     # correct, wrong, unparsed (score_single_turn) or incomplete (D13); None if not scored
     need_outcome: str | None = None
     need_action: str | None = None  # the action line the reply was scored on
+    # the kind of action the scorer reads in the reply, by its verb alone
+    # (`controls.reply_action_class`); also for an incomplete reply's partial text; None if
+    # no reply was read
+    reply_action_class: str | None = None
     n_requests: int = 0
     incomplete: list[dict] = field(default_factory=list)  # the response, if incomplete
     echo: dict = field(default_factory=dict)
@@ -269,9 +278,12 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
             if stop is not None:
                 run.exit_reason = runner.ECHO_MISMATCH_EXITS[stop]
                 return run
+        reply = output_text(response)
+        # the format diagnostic (summary.json): incomplete replies are classed on their
+        # partial text too, so the classes' total does not count them apart
+        run.reply_action_class = reply_action_class(c, reply)
         if response.get("status") == "incomplete":
             # PREREG §6, §13 (D13): an invalid answer, whatever the partial text says
-            reply = output_text(response)
             details = response.get("incomplete_details") or {}
             run.need_outcome = "incomplete"
             run.incomplete.append({
@@ -280,7 +292,7 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
                 "output_tokens": (response.get("usage") or {}).get("output_tokens"),
                 "reply_chars": len(reply)})
         else:
-            score = score_single_turn(c, output_text(response))
+            score = score_single_turn(c, reply)
             run.need_correct = score["correct"]
             run.need_outcome = score["outcome"]
             run.need_label = score["label"]
@@ -430,7 +442,8 @@ def run_controls(prompts: list[Prompt], cfg: HarnessConfig, transport: runner.Tr
         if play is not None and play.plan is not None:
             runner._write_raw(raw_dir / runner.RESERVATIONS_LOG,
                               "".join(json.dumps(x) + "\n" for x in play.plan.log))
-        summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded)
+        summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded,
+                                       reply_actions=True)
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
                                               encoding="utf-8")
         parallel_info = (play.info() if play is not None

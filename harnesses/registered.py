@@ -46,14 +46,19 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   R6 change 6), base episodes or the restated-at-need control in F-0, on the default
   generator config, with D13's request settings (`LUNA_REQUEST`: --mode standard,
   --service-tier flex, no --W), and only once `G1_PASSED` records luna on that config.
-* R6's hard stop (§17.6 change 1; `R6_HARD_STOP`, `r6_refusal`): those runs, the main sweep
-  with its controls and repeats, and the single-turn control's pilot (CLAUDE.md: a new
-  request type is piloted first; the sweep's request on the default config, and at most
+* R6's hard stop (§17.6 change 1; `R6_HARD_STOP`, `r6_refusal`): R6 change 1 leaves the
+  PersistGym stream those runs, the main sweep with its controls and repeats, and no others.
+  It does not list the single-turn control's pilot. The guard lets that pilot through under
+  CLAUDE.md's pilot rule (a new request type runs a pilot of at most 10 episodes before its
+  sweep): the sweep's request on the default config, on pilot templates, at most
   `LUNA_SINGLE_TURN_PILOT_MAX` = 10 prompts in all, counted over every single-turn pilot of
-  luna) are the PersistGym stream's only paid runs left. Every other one refuses, fail
-  closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
-  every model, `persistgym_sol_h1`, the probes (`toggle_pilot`, `replay_probe`), every sol
-  run, any other experiment, and any model that is not a registered one. The rules below for those runs stay, as the record of what was
+  luna in this checkout's results/. Like any paid run, it also needs an approval line that
+  lists its experiment (`common/approval.py`): block `3-persistgym`'s lists
+  `persistgym_pilot` for it explicitly, so the researcher approves the pilot by name.
+  Every other run refuses, fail closed: any other pilot (a harness cell's, or any of sol's),
+  `persistgym_validity` for every model, `persistgym_sol_h1`, the probes (`toggle_pilot`,
+  `replay_probe`), every sol run, any other experiment, and any model that is not a
+  registered one. The rules below for those runs stay, as the record of what was
   registered, and apply again only with `R6_HARD_STOP` off (tests).
 
 * R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
@@ -184,12 +189,15 @@ episodes (`persistgym.controls`)."""
 LUNA_RUN = {"split": ("main",), "variant": ("base", "restated")}
 """luna's main sweep plays main templates, base episodes, and the restated-at-need control
 (§4.3) as full F-0 episodes (§4.6, D36): --variant restated in cell F-0 only."""
-# PREREG §4.2 rule capped at 200 by R6 change 6; recorded in results/decisions.md in this PR
+# T = 200 (PREREG §4.2's rule, capped at 200 by R6 change 6) is recorded in
+# results/decisions.md (2026-10-10 entry, added in this PR), from the power re-simulation
+# results/power_sim/20261010T030442Z
 LUNA_T = 200
 """luna's template count T per task cell (§4.2's rule, capped at 200 by R6 change 6, §17.6;
-the power re-simulation in results/power_sim/ finds no T <= 200 that meets the rule). Its
-main runs and controls play main templates 0 to `LUNA_T` - 1 only: a run whose --start +
---n passes `LUNA_T` refuses (its repeat-1 runs play a subset of that range)."""
+recorded in results/decisions.md, 2026-10-10 entry). The power re-simulation
+results/power_sim/20261010T030442Z finds no T <= 200 that meets the rule. Its main runs and
+controls play main templates 0 to `LUNA_T` - 1 only: a run whose --start + --n passes
+`LUNA_T` refuses (its repeat-1 runs play a subset of that range)."""
 LUNA_RESTATED_CELL = "F-0"
 LUNA_REQUEST = {"mode": "standard", "service_tier": "flex", "W": None}
 """D13's other request settings as frozen (§6; R6 change 10 keeps luna's effort and Flex
@@ -212,19 +220,23 @@ them (`single_turn.NONREC_TASK_CELLS`)."""
 R6_REF = "PREREG.md §17.6 (amendment R6)"
 R6_HARD_STOP = True
 """PREREG §17.6 change 1 (R6): the PersistGym stream's only paid runs left are luna's main
-sweep and controls (`luna_refusal`) and the single-turn control's pilot (CLAUDE.md: a new
-request type is piloted first), then a hard stop. True: `r6_refusal` refuses every other
-paid run of the stream, fail closed. Tests set it False to exercise the rules R6 stopped."""
+sweep and controls (`luna_refusal`), then a hard stop. R6 change 1 does not list the
+single-turn control's pilot; the guard lets it through under CLAUDE.md's pilot rule (a new
+request type runs a pilot of at most 10 episodes before its sweep), and block
+`3-persistgym`'s approval line lists `persistgym_pilot` for it explicitly. True:
+`r6_refusal` refuses every other paid run of the stream, fail closed. Tests set it False to
+exercise the rules R6 stopped."""
 LUNA_SINGLE_TURN_PILOT_MAX = 10
 """CLAUDE.md: a pilot is at most 10 episodes. The single-turn control's pilot is at most 10
 prompts in all: templates x task cells, over every single-turn pilot run of luna under the
-results root (`_single_turn_pilot_prompts`)."""
+results root, this checkout's results/ (`_single_turn_pilot_prompts`)."""
 R6_STOP = (f"R6's hard stop ({R6_REF} change 1): the PersistGym stream's only paid runs left "
-           f"are {LUNA_MODEL}'s main sweep and controls (--experiment {LUNA_EXPERIMENT}) and "
-           f"the single-turn control's pilot (`single-turn --experiment {PILOT_EXPERIMENT} "
+           f"are {LUNA_MODEL}'s main sweep and controls (--experiment {LUNA_EXPERIMENT}), "
+           f"plus, under CLAUDE.md's pilot rule (R6 change 1 does not list it), the "
+           f"single-turn control's pilot (`single-turn --experiment {PILOT_EXPERIMENT} "
            f"--split pilot` with the sweep's request settings on the default config, at most "
-           f"{LUNA_SINGLE_TURN_PILOT_MAX} prompts in all); no other paid run, and none after "
-           "these")
+           f"{LUNA_SINGLE_TURN_PILOT_MAX} prompts in all, approved by name in block "
+           "3-persistgym's line); no other paid run, and none after these")
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
@@ -493,11 +505,34 @@ def replication_refusal(experiment: str, model: str, effort: str, cell: str,
     return None
 
 
+def _planned_prompts(meta: dict) -> int:
+    """The prompts one single-turn run counts for: the larger of the prompts it played
+    (`n_episodes_run`) and those it planned (`config.episode_ids`, when its meta.json has
+    them), so a run that stopped early counts every prompt it planned. TypeError for a count
+    that is not an integer or a list that is not one; ValueError for a negative count."""
+    played = meta["n_episodes_run"]
+    if not isinstance(played, int) or isinstance(played, bool):
+        raise TypeError(f"n_episodes_run {played!r} is not an integer")
+    if played < 0:
+        raise ValueError(f"n_episodes_run {played} is negative")
+    planned = (meta.get("config") or {}).get("episode_ids")
+    if planned is None:
+        return played
+    if not isinstance(planned, list):
+        raise TypeError(f"config.episode_ids is not a list: {planned!r}")
+    return max(played, len(planned))
+
+
 def _single_turn_pilot_prompts(results_root: Path) -> tuple[int, str | None]:
-    """The prompts earlier single-turn pilots of luna played (`n_episodes_run` of each
-    results/persistgym_pilot/*/meta.json whose `cell_or_config` is the control's cell and
-    whose model is luna), and why they cannot be counted (an unreadable meta.json), or None.
-    meta.json is a pilot's committed, blinded file: no outcome is read."""
+    """The prompts earlier single-turn pilots of luna played or planned
+    (`_planned_prompts` of each results/persistgym_pilot/*/meta.json whose `cell_or_config`
+    is the control's cell and whose model is luna), and why they cannot be counted (an
+    unreadable meta.json, or a count in it that is negative or not an integer), or None.
+    meta.json is a pilot's committed, blinded file: no outcome is read.
+
+    Only `results_root`, this checkout's results/, is read. A single-turn pilot whose
+    meta.json is only in another checkout or worktree, or was never written, does not count
+    here until its meta.json is in this checkout."""
     total = 0
     for path in sorted((results_root / PILOT_EXPERIMENT).glob("*/meta.json")):
         try:
@@ -505,11 +540,29 @@ def _single_turn_pilot_prompts(results_root: Path) -> tuple[int, str | None]:
             if meta.get("cell_or_config") != LUNA_SINGLE_TURN_CELL:
                 continue
             if model_family(str(meta.get("model_requested"))) == LUNA_MODEL:
-                total += int(meta["n_episodes_run"])
+                total += _planned_prompts(meta)
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             return total, (f"cannot count the prompts of earlier single-turn pilots: {path} "
-                           f"({type(e).__name__}); fix it first")
+                           f"({type(e).__name__}: {e}); fix it first")
     return total, None
+
+
+def _single_turn_pilot_wrong(templates: tuple[int, int], task_cells: tuple[str, ...]
+                             ) -> list[str]:
+    """What is wrong with the prompts a single-turn pilot plays: `templates`, the run's
+    (first index, last index + 1), must be a non-empty range from index 0 up; `task_cells`
+    must be a non-empty subset of the control's 4 non-recoverable task cells
+    (`LUNA_SINGLE_TURN_TASK_CELLS`), none given twice."""
+    wrong = []
+    start, stop = templates
+    if not 0 <= start < stop:
+        wrong.append(f"pilot templates [{start}, {stop}) (an empty range or a negative index)")
+    cells = tuple(task_cells)
+    if (not cells or len(set(cells)) != len(cells)
+            or not set(cells) <= set(LUNA_SINGLE_TURN_TASK_CELLS)):
+        wrong.append(f"task cells {', '.join(cells) or '(none)'} (the control's are "
+                     f"{', '.join(LUNA_SINGLE_TURN_TASK_CELLS)}, each at most once)")
+    return wrong
 
 
 def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path, *,
@@ -524,11 +577,16 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
       refuses everywhere;
     * luna in `persistgym` passes on to `luna_refusal`, which holds it to its main sweep and
       controls;
-    * in `persistgym_pilot`, luna's single-turn pilot only: the control's cell, `split`
-      pilot, the request the sweep sends (luna's registered `effort`, D13's `request`
-      settings, `LUNA_REQUEST`, and the default config, `generator_hash`), and at most
-      `LUNA_SINGLE_TURN_PILOT_MAX` prompts in all, this run's (`templates` x `task_cells`)
-      with those of earlier ones (`_single_turn_pilot_prompts`). Any of these left as None
+    * in `persistgym_pilot`, luna's single-turn pilot only, which R6 change 1 does not list
+      and CLAUDE.md's pilot rule allows (a new request type is piloted before its sweep;
+      block `3-persistgym`'s approval line lists `persistgym_pilot` for it): the control's
+      cell, `split` pilot, the request the sweep sends (luna's registered `effort`, D13's
+      `request` settings, `LUNA_REQUEST`, and the default config, `generator_hash`), a
+      non-empty template range from index 0 up (`templates`, first index < last index + 1)
+      on a non-empty subset of the 4 non-recoverable task cells, none twice (`task_cells`,
+      `_single_turn_pilot_wrong`), and at most `LUNA_SINGLE_TURN_PILOT_MAX` prompts in all,
+      this run's (`templates` x `task_cells`) with those earlier ones played or planned in
+      this checkout's results/ (`_single_turn_pilot_prompts`). Any of these left as None
       refuses. So a pilot of another request cannot use up the allowance;
     * every other run refuses: `persistgym_validity` for every model, `persistgym_sol_h1`,
       `toggle_pilot` and `replay_probe` (the probes), any other pilot, any sol run and any
@@ -553,6 +611,7 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
             wrong.append("its prompts (templates and task cells not given)")
             n = 0
         else:
+            wrong += _single_turn_pilot_wrong(templates, task_cells)
             n = max(templates[1] - templates[0], 0) * len(task_cells)
         earlier, why = _single_turn_pilot_prompts(results_root)
         if why:
@@ -663,8 +722,9 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
     """Why `harnesses run` (and `single-turn`) must refuse these settings before any paid
     call, or None. In order:
     0. R6's hard stop (`r6_refusal`, while `R6_HARD_STOP`): every run but luna's in
-       `persistgym` and luna's single-turn pilot of at most 10 prompts in all refuses, and so
-       does any model that is not a registered one; the rules below stay as they were for
+       `persistgym` and luna's single-turn pilot of at most 10 prompts in all (CLAUDE.md's
+       pilot rule; R6 change 1 does not list it) refuses, and so does any model that is not
+       a registered one; the rules below stay as they were for
        the runs it lets through (and for every run when it is off);
     1. pilots may use any settings, except a sol pilot at high effort (R3's engagement
        check), which must play the `sol-chain` config in F-r or F-0, and a sol pilot at any

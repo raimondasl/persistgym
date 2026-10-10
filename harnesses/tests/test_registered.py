@@ -79,10 +79,12 @@ def test_the_registered_settings():
     assert len(ALL_TASK_CELLS) == 8 and registered.LUNA_SINGLE_TURN_TASK_CELLS == NONREC
     assert NONREC == ("observed-nonrec-near", "observed-nonrec-far", "derived-nonrec-near",
                       "derived-nonrec-far")
-    # R6 change 1: the hard stop is on, and its pilot allowance is CLAUDE.md's 10
+    # R6 change 1: the hard stop is on; the single-turn pilot, which R6 change 1 does not
+    # list, goes under CLAUDE.md's pilot rule, with its allowance of 10
     assert registered.R6_HARD_STOP is True and registered.LUNA_SINGLE_TURN_PILOT_MAX == 10
     assert registered.R6_STOP.startswith("R6's hard stop (PREREG.md §17.6 (amendment R6) "
                                          "change 1)")
+    assert "under CLAUDE.md's pilot rule (R6 change 1 does not list it)" in registered.R6_STOP
     assert registered.VARIANT_GENERATOR_HASH == VARIANT
     assert registered.rule() == {
         "prereg": "PREREG.md §17.3 (amendment R3)", "model": SOL, "effort": "high",
@@ -583,6 +585,32 @@ def test_r6_lets_lunas_sweep_controls_and_single_turn_pilot_through(tmp_path):
         assert _r6(why) and "its prompts (templates and task cells not given)" in why
 
 
+def test_r6_the_single_turn_pilot_plays_a_template_range_on_the_controls_cells(tmp_path):
+    """The pilot's prompts: a non-empty range of pilot templates from index 0 up (first index
+    < last index + 1) on a non-empty subset of the 4 non-recoverable task cells, none given
+    twice. Anything else refuses, fail closed, though the CLI refuses most of it first."""
+    def pilot(templates, cells):
+        return guard("persistgym_pilot", LUNA, "medium", tmp_path,
+                     registered.LUNA_SINGLE_TURN_CELL, DEFAULT, "pilot", "base",
+                     registered.LUNA_REQUEST, templates, cells)
+
+    assert pilot((0, 1), NONREC) is None
+    assert pilot((3, 5), NONREC[1:3]) is None
+    for templates in ((2, 2), (3, 1), (-1, 1)):
+        why = pilot(templates, NONREC[:1])
+        start, stop = templates
+        assert _r6(why) and why.endswith(f"got a single-turn pilot with pilot templates "
+                                         f"[{start}, {stop}) (an empty range or a negative "
+                                         "index)")
+    rec = next(c for c in ALL_TASK_CELLS if c not in NONREC)
+    for cells in ((), (NONREC[0], NONREC[0]), (NONREC[1], rec), ("no-such-cell",),
+                  ALL_TASK_CELLS):
+        why = pilot((0, 1), cells)
+        assert _r6(why) and why.endswith(
+            f"got a single-turn pilot with task cells {', '.join(cells) or '(none)'} (the "
+            f"control's are {', '.join(NONREC)}, each at most once)")
+
+
 def _pilot_meta(results: Path, name: str, **fields) -> Path:
     """A committed pilot meta.json under `results`: a single-turn pilot of luna unless
     `fields` say otherwise."""
@@ -618,6 +646,35 @@ def test_r6_counts_the_prompts_of_earlier_single_turn_pilots(tmp_path):
     bad.write_text(json.dumps({"cell_or_config": "single-turn", "model_requested": LUNA}),
                    encoding="utf-8")                                       # no n_episodes_run
     assert "cannot count the prompts" in _single_turn_pilot(1, NONREC[:1], tmp_path)
+
+
+def test_r6_an_earlier_pilot_counts_the_prompts_it_planned(tmp_path):
+    """An earlier single-turn pilot counts the larger of the prompts it played
+    (`n_episodes_run`) and those it planned (its meta.json's `config.episode_ids`), so one
+    that stopped early counts in full. A count that is negative or not an integer, or
+    episode_ids that is not a list, refuses until fixed."""
+    ids = [f"pilot-{i:06d}/single_turn" for i in range(8)]
+    _pilot_meta(tmp_path, "stopped", n_episodes_run=1, config={"episode_ids": ids})
+    assert registered._single_turn_pilot_prompts(tmp_path) == (8, None)    # planned > played
+    why = _single_turn_pilot(1, NONREC[:3], tmp_path)                      # 8 + 3 > 10
+    assert _r6(why) and why.endswith("got a single-turn pilot with 3 prompts after 8 in "
+                                     "earlier single-turn pilots")
+    assert _single_turn_pilot(1, NONREC[:2], tmp_path) is None             # 8 + 2 = 10
+    _pilot_meta(tmp_path, "stopped", n_episodes_run=3, config={"episode_ids": ids[:2]})
+    assert registered._single_turn_pilot_prompts(tmp_path) == (3, None)    # played > planned
+    _pilot_meta(tmp_path, "stopped", n_episodes_run=3, config={})
+    assert registered._single_turn_pilot_prompts(tmp_path) == (3, None)    # no episode_ids
+    for fields, says in (({"n_episodes_run": -1}, "n_episodes_run -1 is negative"),
+                         ({"n_episodes_run": "8"}, "n_episodes_run '8' is not an integer"),
+                         ({"n_episodes_run": True}, "n_episodes_run True is not an integer"),
+                         ({"n_episodes_run": 2.0}, "n_episodes_run 2.0 is not an integer"),
+                         ({"config": {"episode_ids": "abc"}},
+                          "config.episode_ids is not a list")):
+        _pilot_meta(tmp_path, "stopped", **fields)
+        _, why = registered._single_turn_pilot_prompts(tmp_path)
+        assert why is not None and why.startswith("cannot count the prompts") and says in why
+        why = _single_turn_pilot(1, NONREC[:1], tmp_path)
+        assert _r6(why) and says in why
 
 
 def test_r6_the_repositorys_own_state():

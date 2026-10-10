@@ -338,21 +338,15 @@ def test_session_state_after_summary():
 
 # --- H3's single-turn control (PREREG §3 H3, §4.3, D36; harnesses/single_turn.py) -----------
 
-SINGLE_TURN_PREAMBLE = ("Console session transcript. Each earlier update is followed by the "
-                        "operator's reply. The last update is the current one and has no reply "
-                        "yet.\n")
-
-
 def _flattened(ep) -> str:
-    """The single-turn prompt rebuilt by hand from the episode (persistgym/DESIGN.md §3,
-    "Position-matched single-turn control"): the preamble, then observations 0..need, each
-    after an update mark, and each before the need step followed by the oracle's routine
-    action after a reply mark."""
-    text = SINGLE_TURN_PREAMBLE
-    for i in range(ep.need_step + 1):
-        text += "\n<<< update >>>\n" + ep.steps[i].observation
-        if i < ep.need_step:
-            text += f"\n<<< operator reply >>>\nACTION: {ep.steps[i].expected_action}"
+    """The single-turn prompt rebuilt by hand from the episode, as PREREG §3 H3 states it
+    (persistgym/DESIGN.md §3, "Position-matched single-turn control"): observations 0..need
+    in order, each before the need step followed by the oracle's routine action as a plain
+    "Agent: <expected action>" line, one newline between pieces; no preamble, no marks, and
+    the need observation (ending with the need question) last."""
+    text = ep.steps[0].observation
+    for i in range(1, ep.need_step + 1):
+        text += f"\nAgent: {ep.steps[i - 1].expected_action}\n{ep.steps[i].observation}"
     return text
 
 
@@ -376,6 +370,19 @@ def test_single_turn_full_request_literal(small_eps):
         "truncation": "disabled",
         "max_output_tokens": 32000,
     }
+    # literally (PREREG §3 H3): o_1, then its routine action as a plain "Agent: ..." line,
+    # then o_2, ...; the message ends with the need-step question
+    prompt = item_text(req.payload["input"][0])
+    assert prompt.startswith("=== console update ")
+    assert prompt.startswith(ep.steps[0].observation + "\nAgent: route(billing)\n"
+                             + ep.steps[1].observation + "\nAgent: route(consent)\n")
+    assert ep.steps[0].observation.endswith("Route it to the team named by its tag: reply "
+                                            "route(<tag>).")
+    assert prompt.endswith("\nAgent: " + ep.steps[ep.need_step - 1].expected_action + "\n"
+                           + ep.need.observation)
+    assert prompt.endswith("Sample LINDEN needs its freezer slot now. Options:\nA) 310\nB) 308"
+                           "\nC) 306\nD) 303\nE) 304\nF) 311\nG) 307\nH) 309\nI) 302\nJ) 305\n"
+                           "Reply store(<letter>) with the letter of the correct option.")
 
 
 def test_single_turn_request_is_f0s_with_the_flattened_prompt(small_eps):

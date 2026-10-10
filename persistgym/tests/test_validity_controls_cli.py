@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from persistgym import tokens
 from persistgym.cli import main, parse_overrides
 from persistgym.config import GeneratorConfig
 from persistgym.controls import score_single_turn, single_turn_control
@@ -215,6 +216,17 @@ def test_reserved_regex():
     assert r.clean("41234 1412 880 ORIONS horion loading-bay")
 
 
+def _flattened(ep, replies) -> str:
+    """PREREG §3 H3, rebuilt by hand: o_1, "Agent: <a_1>", o_2, ..., o_need, one newline
+    between pieces, no preamble or marks; an empty reply writes no line."""
+    pieces = []
+    for i in range(ep.need_step + 1):
+        pieces.append(ep.steps[i].observation)
+        if i < ep.need_step and replies[i]:
+            pieces.append(f"Agent: {replies[i]}")
+    return "\n".join(pieces)
+
+
 def test_single_turn_control(small_eps):
     ep = pick(small_eps, "derived-nonrec-far")
     c = single_turn_control(ep)
@@ -223,21 +235,78 @@ def test_single_turn_control(small_eps):
     for i in range(ep.need_step, ep.n_steps):
         if i > ep.need_step:
             assert ep.steps[i].observation not in c["prompt"]
-    assert c["prompt"].rstrip().endswith(ep.need.event.rstrip())
-    assert len(c["replies"]) == ep.need_step
-    offs = c["component_offsets"]
-    assert set(offs) == {x.comp_id for x in ep.components}
-    for o in offs.values():
-        # flattened offset = content offset + small per-turn separator overhead
-        assert 0 < o["single_turn"] - o["multi_turn_content"] < 30 + 15 * ep.need_step
+    assert c["prompt"].endswith(ep.need.event)  # ends with the need-step question
+    assert c["replies"] == [ep.steps[i].expected_action for i in range(ep.need_step)]
+    assert c["reply_mode"] == "oracle"
+    assert c["prompt"] == _flattened(ep, c["replies"])
+    assert set(c["component_offsets"]) == {x.comp_id for x in ep.components}
     given = single_turn_control(ep, replies=["ok"] * ep.need_step)
     assert given["reply_mode"] == "given"
+    assert given["prompt"] == _flattened(ep, ["ok"] * ep.need_step)
+    none = single_turn_control(ep, mode="none")
+    assert none["reply_mode"] == "none" and "Agent:" not in none["prompt"]
+    assert none["prompt"] == "\n".join(ep.observations[:ep.need_step + 1])
     with pytest.raises(ValueError):
         single_turn_control(ep, replies=["ok"])
     with pytest.raises(ValueError):
         single_turn_control(pick(small_eps, "derived-nonrec-far", "restated"))
     with pytest.raises(ValueError):  # recoverable: the prompt would offer an unservable lookup
         single_turn_control(pick(small_eps, "derived-rec-far"))
+
+
+def _nonrec_base(eps):
+    return [e for e in eps if not e.cell.recoverable and e.variant == "base"]
+
+
+def test_single_turn_prompt_is_prereg_h3s(small_eps):
+    """PREREG §3 H3: one message of o_1..o_need in order, each observation before the need
+    step followed by one plain "Agent: <its expected action>" line, ending with the need-step
+    question; no preamble and no marks. Its lines are the observations' own lines and the
+    reply lines, one newline apart."""
+    for ep in _nonrec_base(small_eps):
+        c = single_turn_control(ep)
+        lines = c["prompt"].splitlines()
+        want = []
+        for i in range(ep.need_step + 1):
+            want += ep.steps[i].observation.splitlines()
+            if i < ep.need_step:
+                want.append(f"Agent: {ep.steps[i].expected_action}")
+        assert lines == want
+        assert lines[0].startswith("=== console update ")              # o_1's first line
+        assert c["prompt"].endswith(ep.need.event)
+        assert sum(x.startswith("Agent: ") for x in lines) == ep.need_step
+        assert "<<<" not in c["prompt"] and "Console session transcript" not in c["prompt"]
+
+
+def test_single_turn_evidence_sits_at_the_multi_turn_observation_token_offset(small_eps,
+                                                                            default_eps):
+    """PREREG §3 H3: "The evidence sits at the same observation-token offset from the need
+    question as in the multi-turn episode." Counted with the project tokenizer on each
+    observation on its own (PREREG §2.1, as obs_tokens), the offset of every evidence
+    component is computed here from the episode's own fields, and the control records the
+    same, measured on its prompt's observation spans and on the episode. In the prompt's own
+    encoding the gap also holds the reply lines between, plus at most one token per step
+    boundary (BPE joins an observation's end with the newline after it)."""
+    for ep in _nonrec_base([*small_eps, *default_eps]):
+        c = single_turn_control(ep)
+        n, enc = ep.need_step, ep.config["tokenizer"]
+        need = ep.steps[n]
+        to_question = tokens.TokenIndex(need.observation, enc).token_at(need.event_start)
+        for comp in (x for x in ep.components if x.step is not None):
+            s = comp.step
+            obs = ep.steps[s].observation
+            at = tokens.TokenIndex(obs, enc).token_at(obs.index(comp.sentence))
+            want = (ep.steps[s].obs_tokens - at + sum(ep.steps[i].obs_tokens
+                                                      for i in range(s + 1, n)) + to_question)
+            o = c["component_offsets"][comp.comp_id]
+            assert o["obs_tokens_to_need"] == o["multi_turn_obs_tokens_to_need"] == want
+            replies = sum(tokens.count(f"Agent: {ep.steps[i].expected_action}", enc)
+                          for i in range(s, n))
+            assert replies <= o["single_turn_to_need"] - want <= replies + (n - s)
+            assert o["single_turn"] + o["single_turn_from_end"] == c["prompt_tokens"]
+            # the evidence sentence starts at its recorded token of the prompt
+            idx = tokens.TokenIndex(c["prompt"], enc)
+            assert idx.token_at(c["prompt"].index(comp.sentence)) == o["single_turn"]
 
 
 def test_single_turn_scoring_matches_env(small_eps):
@@ -248,6 +317,9 @@ def test_single_turn_scoring_matches_env(small_eps):
     assert score_single_turn(c, f"reasoning\nACTION: {verb}({right})")["correct"]
     assert score_single_turn(c, f"ACTION: {verb}({right.lower()})")["correct"]
     assert score_single_turn(c, f"ACTION: {verb}({ep.target_value})")["correct"]
+    # a reply in the prompt's own reply style is the need-verb call (strict parse is off)
+    assert not c["strict_action_parse"]
+    assert score_single_turn(c, f"Agent: {verb}({right})")["correct"]
     r = score_single_turn(c, f"ACTION: {verb}({wrong})")
     assert not r["correct"] and r["outcome"] == "wrong" and r["label"] == wrong
     assert score_single_turn(c, "no idea")["outcome"] == "unparsed"

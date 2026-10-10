@@ -1,8 +1,10 @@
 """The position-matched single-turn control of H3, sent to the API (PREREG §3 H3, §4.3, D36).
 
 `persistgym.controls.single_turn_control` flattens a non-recoverable base episode, from its
-first step through the need step, into one prompt, with the oracle's routine replies between
-the observations (D10), and `score_single_turn` scores a reply as `EpisodeEnv` scores the
+first step through the need step, into one prompt, as PREREG §3 H3 states it (D10): the
+observations in order, each before the need step followed by the oracle's routine action as
+a plain "Agent: <expected action>" line, one newline between pieces, ending with the need
+observation and its question. `score_single_turn` scores a reply as `EpisodeEnv` scores the
 need step. This module sends each such prompt to the model once and scores the reply. CLI:
 `python -m harnesses single-turn` (harnesses/cli.py), guarded as `run` is.
 
@@ -204,7 +206,8 @@ class PromptRun:
     reply_mode: str = "oracle"  # what fills the reply positions (controls.control_replies)
     need_step: int | None = None
     prompt_tokens: int | None = None  # project tokenizer
-    # per component: its token offset in the prompt and in the multi-turn contents
+    # per component: its token in the prompt, and its observation-token offset from the need
+    # question in the prompt and in the multi-turn episode (equal; persistgym.controls)
     component_offsets: dict = field(default_factory=dict)
     exit_reason: str = "DONE"
     error: str | None = None

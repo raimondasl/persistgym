@@ -1,13 +1,36 @@
-"""Position-matched single-turn control (PLAN §5, H3).
+"""Position-matched single-turn control (PLAN §5, H3; PREREG §3 H3, D10).
 
-The same token sequence as the multi-turn episode up to the need step (observations and the
-replies between them) is flattened into one user message, so each component sits at the
-same position relative to the need question but no turn structure is left. The restated-at-
-need control is an Episode variant (`variant="restated"`, see render.py).
+PREREG §3 H3 (Operational): "the system prompt is unchanged. One user message holds o_1..o_n
+in order. Each observation is followed by the oracle's correct routine action, written as a
+plain "Agent: ..." line, and the message ends with the need-step question." So the prompt is
+exactly the observations of steps 0..need of the multi-turn episode, each before the need
+step followed by its reply line, with one newline (`SEP`) between pieces:
 
-Reply positions: by default ('oracle') each earlier reply is the minimal correct reply
-"ACTION: <expected action>". To yoke the control to a real multi-turn run, pass that run's
-replies so every offset matches the run's actual transcript.
+    o_1 \\n Agent: <a_1> \\n o_2 \\n Agent: <a_2> \\n ... \\n o_need
+
+with no preamble and no marks, and nothing after o_need, whose EVENT is the need question.
+One newline is the minimal separator that keeps every line distinct: every observation starts
+with its own "=== console update HH:MM:SS ===" line and ends with its EVENT line, and every
+reply line starts with `AGENT_PREFIX`. The restated-at-need control is an Episode variant
+(`variant="restated"`, see render.py).
+
+Reply lines: by default ('oracle') each step's reply is the oracle's correct routine action,
+the step's `expected_action` (e.g. "Agent: route(loans)"). To yoke the control to a real
+multi-turn run, pass that run's replies; each non-empty one is written after `AGENT_PREFIX`
+in the same place. Mode 'none' (or an empty reply) writes no reply line.
+
+Offsets (`component_offsets`, per evidence component). The observation-token offset of the
+evidence from the need question is the same as in the multi-turn episode: the observations
+are the episode's, byte for byte and in order, and the offset is counted with the project
+tokenizer on each observation on its own, as `obs_tokens` and every planned distance count
+them (PREREG §2.1). It is recorded twice: `obs_tokens_to_need`, measured on the observation
+spans of the prompt, and `multi_turn_obs_tokens_to_need`, from the episode's observations and
+`obs_tokens`; the two must be equal (persistgym/tests). The prompt's own encoding differs
+from that count only between pieces: the reply lines and newlines between the evidence and
+the need question add their tokens (`single_turn_to_need` counts everything), and BPE may
+join an observation's last characters with the newline after it (an observation ending in
+")." gains one token that way in o200k_base). Reply tokens differ from a real run's, since the
+control uses oracle-length replies (§3 H3).
 
 The control is built from non-recoverable base episodes only. A recoverable cell has the
 same observations, and its system prompt offers `lookup`, which a single prompt cannot
@@ -24,24 +47,45 @@ from persistgym import tokens
 from persistgym.env import need_label, parse_action
 from persistgym.episode import Episode
 
-PREAMBLE = ("Console session transcript. Each earlier update is followed by the operator's "
-            "reply. The last update is the current one and has no reply yet.\n")
-UPDATE_MARK = "\n<<< update >>>\n"
-REPLY_MARK = "\n<<< operator reply >>>\n"
+SEP = "\n"
+"""Between the pieces of the prompt (observations and reply lines)."""
+AGENT_PREFIX = "Agent: "
+"""What starts a reply line (PREREG §3 H3: a plain "Agent: ..." line)."""
 
 
 def control_replies(ep: Episode, mode: str | None = None) -> list[str]:
+    """The reply after each step before the need step: the oracle's correct routine action
+    ('oracle', the step's `expected_action`), or none ('none', empty)."""
     mode = mode or ep.config["single_turn_reply_mode"]
     if mode == "oracle":
-        return [f"ACTION: {ep.steps[i].expected_action}" for i in range(ep.need_step)]
+        return [ep.steps[i].expected_action for i in range(ep.need_step)]
     if mode == "none":
         return [""] * ep.need_step
     raise ValueError(f"unknown reply mode {mode!r}")
 
 
+def obs_tokens_to_need(observations: Sequence[str], step: int, at: int, question: int,
+                       enc: str = "o200k_base", counts: Sequence[int] | None = None) -> int:
+    """Observation tokens from character `at` of observation `step` to character `question`
+    of the last observation (the need question), each observation counted on its own with
+    the project tokenizer (PREREG §2.1): the rest of observation `step` from the token that
+    holds `at`, the observations after it whole (`counts[i]`, or counted here), and the last
+    one up to the token that holds `question`."""
+    last = len(observations) - 1
+    if step == last:
+        idx = tokens.TokenIndex(observations[last], enc)
+        return idx.token_at(question) - idx.token_at(at)
+    first = tokens.TokenIndex(observations[step], enc)
+    whole = (counts[i] if counts is not None else tokens.count(observations[i], enc)
+             for i in range(step + 1, last))
+    return (first.n_tokens - first.token_at(at) + sum(whole)
+            + tokens.TokenIndex(observations[last], enc).token_at(question))
+
+
 def single_turn_control(ep: Episode, replies: Sequence[str] | None = None,
                         mode: str | None = None) -> dict:
-    """Flatten steps 0..need of `ep` into one prompt and record component token offsets."""
+    """Flatten steps 0..need of `ep` into one prompt (module docstring) and record each
+    component's offsets."""
     if ep.variant != "base":
         raise ValueError("the single-turn control is built from base episodes")
     if ep.cell.recoverable:
@@ -55,34 +99,38 @@ def single_turn_control(ep: Episode, replies: Sequence[str] | None = None,
         raise ValueError(f"need {n} replies (one per step before need), got {len(replies)}")
     enc = ep.config["tokenizer"]
 
-    pieces = [PREAMBLE]
-    obs_char_start: dict[int, int] = {}
-    pos = len(PREAMBLE)
+    pieces: list[str] = []
+    spans: list[tuple[int, int]] = []  # each observation's characters in the prompt
+    pos = 0
     for i in range(n + 1):
-        pieces.append(UPDATE_MARK)
-        pos += len(UPDATE_MARK)
-        obs_char_start[i] = pos
-        pieces.append(ep.steps[i].observation)
-        pos += len(ep.steps[i].observation)
-        if i < n and (replies[i] or reply_mode == "oracle"):
-            pieces.append(REPLY_MARK + replies[i])
-            pos += len(REPLY_MARK) + len(replies[i])
-    prompt = "".join(pieces)
+        obs = ep.steps[i].observation
+        spans.append((pos, pos + len(obs)))
+        pieces.append(obs)
+        pos += len(obs) + len(SEP)
+        if i < n and replies[i]:
+            line = AGENT_PREFIX + replies[i]
+            pieces.append(line)
+            pos += len(line) + len(SEP)
+    prompt = SEP.join(pieces)
 
-    reply_tokens = [tokens.count(r, enc) for r in replies]
     index = tokens.TokenIndex(prompt, enc)
+    in_prompt = [prompt[a:b] for a, b in spans]
+    question = ep.steps[n].event_start  # the need question, in the need observation
+    need_token = index.token_at(spans[n][0] + question)
+    episode_obs = [ep.steps[i].observation for i in range(n + 1)]
+    counts = [ep.steps[i].obs_tokens for i in range(n + 1)]
     offsets = {}
     for c in ep.components:
         if c.step is None:
             continue
-        obs = ep.steps[c.step].observation
-        k = obs.index(c.sentence)
-        in_obs = tokens.TokenIndex(obs, enc).token_at(k)
-        multi = sum(ep.steps[i].obs_tokens + reply_tokens[i] for i in range(c.step)) + in_obs
-        single = index.token_at(obs_char_start[c.step] + k)
+        k = ep.steps[c.step].observation.index(c.sentence)
+        single = index.token_at(spans[c.step][0] + k)
         offsets[c.comp_id] = {
-            "single_turn": single, "multi_turn_content": multi,
-            "single_turn_from_end": index.n_tokens - single,
+            "single_turn": single, "single_turn_from_end": index.n_tokens - single,
+            "single_turn_to_need": need_token - single,
+            "obs_tokens_to_need": obs_tokens_to_need(in_prompt, c.step, k, question, enc),
+            "multi_turn_obs_tokens_to_need": obs_tokens_to_need(episode_obs, c.step, k,
+                                                                question, enc, counts),
         }
     return {
         "control_id": f"{ep.episode_id.rsplit('/', 1)[0]}/single_turn",

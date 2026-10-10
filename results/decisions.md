@@ -652,3 +652,18 @@ Claude put two options to the researcher:
 **Cost.** Block `3-arc` has spent $77.94: SB26 S1 $13.12, FT09 S2 $3.47 and $13.79, FT09 S1 $6.13, R11L S2 $6.43 and $35.00. The 4 R7 runs are forecast at about $45 each at D27's rule, about $180. That fits the $470 limit; the limit is unchanged.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts R7 and A8, patch 0018 and the regenerated freeze record, the run list and the pilot waiver. It adds no spending approval beyond block `3-arc`'s existing $470. This entry's pull request is $0.
+
+## 2026-10-10: Correction to the closing entry of luna's sweep: one §13 re-run
+**The error.** The entry "luna's sweep closed; the H1/H3 analysis and the researcher's rulings" (merged in PR #55) said that no §13 re-run was pending. That was wrong. Claude had checked only the runs' endings (`COMPLETED`) and exclusion counts (0), not each episode's ending.
+- One episode of the 9,680 had ended `API_ERROR`: `main-000138/derived-nonrec-far/base` in the F-0 run `20261010T055742Z-F-0-gpt-6-luna`.
+- The cause was a Flex 429: "Flex processing is temporarily unavailable".
+- `analysis.persistgym_h1h3` found it on its first run and refused, before computing anything: "1 of 1600 repeat-0 episodes are pending ... §13 re-runs it once". No result of the sweep was read.
+
+**The re-run** (researcher's go-ahead, 2026-10-10: "go ahead"). PREREG §13 re-runs a transport failure once.
+- The run, under block `3-persistgym`: `harnesses run --cell F-0 --model gpt-6-luna --split main --start 138 --n 1 --experiment persistgym --approved-block 3-persistgym --planned-usd 0.5`.
+- Template 138's F-0 episodes in all 8 task cells, the whole template as the luna guard requires: run `20261010T202127Z-F-0-gpt-6-luna`, `COMPLETED`, $0.04 billed.
+- Under harnesses/DESIGN.md §7.8 the first final record of each key counts. So this run supplies only the record of `main-000138/derived-nonrec-far/base`, and its 7 other episodes are duplicates that are dropped.
+
+**The analysis declares it:** `--rerun 20261010T202127Z-F-0-gpt-6-luna=20261010T055742Z-F-0-gpt-6-luna`, with this entry and the closing entry as the `--sweep-closed` reference. The sweep is now closed with this re-run, and nothing else is pending.
+
+**Spend:** block `3-persistgym` $73.75 of $100. This entry's pull request is $0.

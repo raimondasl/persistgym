@@ -667,3 +667,58 @@ Claude put two options to the researcher:
 **The analysis declares it:** `--rerun 20261010T202127Z-F-0-gpt-6-luna=20261010T055742Z-F-0-gpt-6-luna`, with this entry and the closing entry as the `--sweep-closed` reference. The sweep is now closed with this re-run, and nothing else is pending.
 
 **Spend:** block `3-persistgym` $73.75 of $100. This entry's pull request is $0.
+
+## 2026-10-10: H1's model check: the Firth fit's iteration cap, a code defect found after the result was read; both outputs reported (the researcher's decision)
+**What happened.** The FINAL analysis of luna's sweep, `results/persistgym_h1h3/20261010T205230Z/` (commit 313d57d), labelled H1 "inconclusive". The Holm test rejected, but the model check did not agree.
+- Under the ruling of 2026-10-10 ("Firth for H1"), the check reads the W-0 × R coefficient of a Firth-penalized fit of the §9.1 GLM, because the ordinary fit's coefficient is not finite.
+- `firth_fe_logit` returned "the Firth fit did not converge", and the module reads a failed fit as "does not agree".
+
+**The cause: the iteration cap.** The fit's steps use the likelihood's Fisher information, not the Hessian of the penalized log-likelihood, so they converge linearly, not quadratically.
+- On luna's sweep, with 12 of the 16 cells of the GLM at 100%, the fit needed **103 steps** to reach its tolerance (the largest step under 1e-8). The cap was 100.
+- After 100 steps the W-0 × R coefficient was already 7.0862 (7.08616 at convergence), and its last step was 1.4e-8 against the 1e-8 tolerance. Every step was a full step: the fit moved steadily to the same point and never needed step halving. (The fix commit's message says 102 steps; it counted from zero.)
+- On synthetic sweeps of the same shape at 200 templates, the fit needed between 65 and 150 steps in the draws checked.
+
+**Seen before the fix:** everything in the FINAL output, among it H1's and H3's results, the Bayesian GLMM and the sensitivity lines. The fix was made after the result was read, and every report says so.
+
+**Decision (researcher, 2026-10-10):** "fix Firth and report both".
+
+**The fix** (commit 0dbff43, in this PR).
+- `firth_fe_logit`'s `max_iter` goes from 100 to **1,000**. The tolerance, the steps, the rows, the model and the rule are unchanged.
+- A new test, `test_firth_converges_on_a_sweep_at_its_ceiling`, reproduces the failure on a synthetic sweep of luna's shape: the old cap returns None (that case needs 108 steps), and the new one converges to a stationary point of the penalized log-likelihood, written afresh in the test, that no direction tried increases.
+- The analysis tests pass (317).
+- **Independent check** (a separate agent, on the real rows, with no code from `firth_fe_logit`): an exact Newton and trust-region maximisation, with its own analytic gradient and Hessian and the log-determinant by `slogdet`, gave W-0 × R = **7.086161**, against `firth_fe_logit`'s 7.086161 (a difference of 2e-7).
+  - Its penalized log-likelihood at the optimum, -177.5840163, is the same, and its largest gradient there is 4e-13.
+  - The Hessian of minus the penalized log-likelihood is positive definite there (smallest eigenvalue 0.0044), so the point is a strict local maximum. A second start, from a random point, reached the same point.
+  - A third check (L-BFGS-B) reached the same penalized log-likelihood, with slopes within 8e-6.
+
+**The two outputs.** The second, `results/persistgym_h1h3/20261010T214137Z/` (commit 0dbff43), ran with the same inputs, arguments and seeds.
+
+| Output | Firth W-0 × R | H1's model check | H1 | H3 |
+|---|---|---|---|---|
+| `20261010T205230Z`, as computed | did not converge | does not agree | inconclusive | inconclusive |
+| `20261010T214137Z`, with the fix | +7.086 | agrees | **supported** | inconclusive |
+
+- **Everything else is the same**, field by field in `h1h3.json`: Δ_H1, Δ_H3, every interval, the Holm tests, the predictions, the sensitivity lines and the exploratory results. The one exception is the Bayesian GLMM.
+- **The Bayesian GLMM did not reproduce the FINAL's digits.** Its code, seed and data are unchanged.
+  - The FINAL run gave a W-0 × R posterior median of 5.280 (90% [2.980, 7.457]); the corrected run gave 5.253 (90% [2.857, 7.523]). P(> 0) = 1.000 both times.
+  - Four later fits gave 5.253 to every digit: the corrected run, an audit agent's fit and two fits in one scratch process. So the fit is deterministic now, and the cause of the FINAL's different digits was not found.
+  - Each later fit logged 2 divergent transitions after tuning, out of 4,000 draws. The module does not record divergences.
+  - It is a sensitivity model that decides nothing, and it agrees in sign either way.
+- **H3 is unchanged by this fix:** "inconclusive" in both outputs, with its non-inferiority prediction holding. Its model check returned no estimate for a different reason, which Claude has put to the researcher separately: only 1 of the 200 templates has any failure in H3's cells, and the module fits nothing with fewer than 2 such templates.
+
+**Which output counts.** Claude proposes:
+- The corrected output gives H1's confirmatory label: **supported**. The ruling chose Firth's estimate, and the corrected run computes it; the as-computed label came from the iteration cap, not from the data or the rule.
+- Every report of H1 also gives the as-computed label, the cause and that the fix came after the result was read.
+- H3 is not part of this decision.
+
+**Reporting defects found in the review, not fixed here.** None changes a number or a label.
+- When the Firth fit fails, `summary.md` prints "n/a" without the reason; the reason was only in `h1h3.json`.
+- `summary.md` prints "the same sign as the model check" even when the check has no sign. In the FINAL output it says this of the stand-in, the W-n-0 fit and the Bayesian GLMM, when the model check had no sign.
+- The "power_sim emulation" cross-check of the §9.1 GLM did not run independently: power_sim's Newton fit diverged and fell back silently to statsmodels, so it compares statsmodels with itself.
+- The Bayesian GLMM's divergences are not recorded.
+
+Claude proposes fixing these together with H3's question.
+
+**What it does not show.** The fix does not change H1's evidence. The effect, its interval and the Holm test are the same in both outputs; only the label's second condition changes. A reader who discounts any change made after seeing the data should read H1 as in the first output: "inconclusive, the model check failed to converge", with the same effect.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the fix and the proposal above. The researcher may instead keep the as-computed label as H1's confirmatory one, with the corrected run as a labelled sensitivity line. It adds no spending approval. This entry's pull request is $0.

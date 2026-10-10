@@ -929,6 +929,7 @@ def test_main_writes_the_outputs(tmp_path, monkeypatch):
                    "W-n-0 as a third harness level", "Logit scale (§9.3): Penalty_NR",
                    "The rule in force is `firth`",
                    "a Firth-penalized fit of the same model decides: ",
+                   "- Sensitivity lines (the rules not in force, ruling of 2026-10-10",
                    "is read by the rule in force (`firth`)", "the arm coefficient",
                    "power_sim's model (template fixed effects + derived term + arm)",
                    "reading 11 (as implemented, not registered)",
@@ -1082,30 +1083,66 @@ def test_h1_logit_status_plus_inf_and_undefined():
 def test_the_rule_in_force_decides_supported_on_the_toy_sweep(tmp_path, monkeypatch):
     """The toy sweep's F-0 observed-rec-far is 10/10 and its Holm test rejects: H1 is supported
     under the rule in force (Firth's, the researcher's ruling of 2026-10-10) and under the
-    probability-scale rule, and inconclusive under the literal rule."""
+    probability-scale rule, and inconclusive under the literal rule. The rules not in force are
+    reported as sensitivity lines (the ruling), which change no decision."""
     assert hh.H1_SEPARATION_RULE == "firth"               # the ruling, by commit
     sw = toy(tmp_path)
     sw.standard()
     h = sw.compute()
     assert h["h1_separation_rule"] == "firth" and h["h1"]["model_check"]["rule"] == "firth"
-    assert h["glm_9_1_firth"]["estimate"] > 0
-    assert h["h1"]["model_check"]["firth_estimate"] == h["glm_9_1_firth"]["estimate"]
+    fe = h["glm_9_1_firth"]["estimate"]
+    assert fe > 0 and h["h1"]["model_check"]["firth_estimate"] == fe
     assert h["family"]["H1"]["holm_rejects"] and h["family"]["H1"]["model_agrees"]
     assert h["family"]["H1"]["supported"] and h["family"]["H1"]["verdict"] == "supported"
-    assert "The rule in force is `firth`" in "\n".join(hh.summary_lines(h))
+    sens = h["h1"]["model_check_sensitivity"]
+    assert set(sens) == {"literal", "probability-scale"}
+    assert sens["literal"]["agrees"] is False and sens["literal"]["sign"] == -1
+    assert sens["probability-scale"]["agrees"] is True
+    assert h["family"]["H1"]["sensitivity_rules"] == {
+        "literal": {"model_agrees": False, "supported": False, "verdict": hh.MODEL_DISAGREES},
+        "probability-scale": {"model_agrees": True, "supported": True, "verdict": "supported"}}
+    text = "\n".join(hh.summary_lines(h))
+    assert "The rule in force is `firth`" in text
+    assert ("- Sensitivity lines (the rules not in force, ruling of 2026-10-10; they enter no "
+            "decision): rule `literal`: the model check would agree: no, and H1 would be: "
+            f"{hh.MODEL_DISAGREES}; rule `probability-scale`: the model check would agree: yes, "
+            "and H1 would be: supported.") in text
     monkeypatch.setattr(hh, "H1_SEPARATION_RULE", "literal")
     h = sw.compute()
     assert h["h1_separation_rule"] == "literal" and h["h1"]["model_check"]["rule"] == "literal"
     assert h["family"]["H1"]["holm_rejects"] and not h["family"]["H1"]["supported"]
     assert h["family"]["H1"]["verdict"] == hh.MODEL_DISAGREES
-    assert h["glm_9_1_firth"] is None                     # fitted under the Firth rule only
-    assert "The rule in force is `literal`" in "\n".join(hh.summary_lines(h))
+    # the Firth fit is made whenever the logit-scale Delta_H1 is not finite: here its
+    # sensitivity line reads it
+    assert h["glm_9_1_firth"]["estimate"] == fe
+    assert set(h["h1"]["model_check_sensitivity"]) == {"firth", "probability-scale"}
+    assert h["h1"]["model_check_sensitivity"]["firth"]["firth_estimate"] == fe
+    assert h["family"]["H1"]["sensitivity_rules"]["firth"]["verdict"] == "supported"
+    text = "\n".join(hh.summary_lines(h))
+    assert "The rule in force is `literal`" in text and "rule `firth` (Firth's W-0 × R " in text
     monkeypatch.setattr(hh, "H1_SEPARATION_RULE", "probability-scale")
     h = sw.compute()
     assert h["h1"]["model_check"]["rule"] == "probability-scale"
     assert h["family"]["H1"]["supported"] and h["family"]["H1"]["verdict"] == "supported"
-    assert h["glm_9_1_firth"] is None                     # fitted under the Firth rule only
+    assert set(h["family"]["H1"]["sensitivity_rules"]) == {"literal", "firth"}
     assert "The rule in force is `probability-scale`" in "\n".join(hh.summary_lines(h))
+
+
+def test_no_firth_fit_and_no_sensitivity_lines_when_delta_h1_is_finite(tmp_path):
+    """With every H1 cell varying (the toy sweep with F-0 observed-rec-far at 9/10) the
+    ordinary fit decides under every rule: no Firth fit, no sensitivity line."""
+    sw = toy(tmp_path)
+    sw.outcome("F-0", OR, [0] + [1] * 9)
+    sw.standard()
+    h = sw.compute()
+    mc = h["h1"]["model_check"]
+    assert mc["logit_status"] == hh.FINITE and mc["basis"] == "the §9.1 GLM's W-0 x R coefficient"
+    assert h["glm_9_1_firth"] is None and h["h1"]["model_check_sensitivity"] == {}
+    assert h["family"]["H1"]["sensitivity_rules"] == {}
+    assert "Sensitivity lines" not in "\n".join(hh.summary_lines(h))
+    g = hh.glm_91(_random_sweep())
+    assert all(hh.h1_rule_sensitivity(g, Fraction(1, 5), rule) == {}
+               for rule in hh.H1_SEPARATION_RULES)
 
 
 def test_firth_is_add_a_half_on_a_saturated_model():

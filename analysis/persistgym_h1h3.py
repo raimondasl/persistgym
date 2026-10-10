@@ -307,7 +307,9 @@ items 3 and 4 are readings, listed above).
    decides as before. Not in force, kept for the sensitivity lines only: ``"literal"`` (the
    limit's sign: +∞ agrees, -∞ and an undefined sign do not) and ``"probability-scale"`` (the
    model check not applicable; the probability-scale sign is read). The summary names the rule
-   in force.
+   in force and, when the logit-scale Δ_H1 is not finite, reports as sensitivity lines what
+   each other rule would have said: its model check and H1's verdict (`h1_rule_sensitivity`;
+   they enter no decision).
 2. **The harness levels of the §9.1 GLM** (finding S4; was reading 7; as proposed, confirmed by
    the researcher's merge of the 2026-10-10 ruling). PREREG says "harness x
    recoverable x derived x distance terms" without naming the levels. The confirmatory fit uses
@@ -1326,7 +1328,9 @@ def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: in
     information, which keeps every coefficient finite under separation. Newton steps on the
     modified score X'(y - mu + h (1/2 - mu)), h the hat values, with step halving on the
     penalized log-likelihood. Returns (template intercepts, slopes), or None if it does not
-    converge. Used under H1_SEPARATION_RULE = "firth", the researcher's ruling of 2026-10-10."""
+    converge. Used under H1_SEPARATION_RULE = "firth", the researcher's ruling of 2026-10-10.
+    Checked against a direct numerical maximisation of the penalized log-likelihood in the
+    tests (to < 1e-7 on every coefficient)."""
     y = np.asarray(y, float)
     g = int(codes.max()) + 1
     x = np.column_stack([np.eye(g)[codes], np.asarray(z, float)])
@@ -1470,8 +1474,9 @@ def glm_91(prim: pd.DataFrame, harness: tuple[str, ...] = ("W-0",)) -> dict:
 
 def glm_91_firth(prim: pd.DataFrame) -> dict:
     """The W-0 x R coefficient of a Firth-penalized fit of the §9.1 GLM, on the same rows
-    (`firth_fe_logit`): the templates with outcome variation, as in the ordinary fit. Read by
-    H1_SEPARATION_RULE = "firth", the rule in force (the ruling of 2026-10-10)."""
+    (`firth_fe_logit`): the templates with outcome variation, as in the ordinary fit. Fitted
+    when the logit-scale Delta_H1 is not finite; read by H1_SEPARATION_RULE = "firth", the rule
+    in force (the ruling of 2026-10-10), or else by its sensitivity line."""
     sub, z, _ = _glm_91_rows(prim, ("W-0",))
     y = sub["success"].to_numpy(float)
     keep, codes, _ = informative(y, sub["template"].to_numpy())
@@ -1720,6 +1725,17 @@ def h1_model_check(glm: dict, delta, rule: str | None = None,
     return out
 
 
+def h1_rule_sensitivity(glm: dict, delta, in_force: str, firth: dict | None = None) -> dict:
+    """What H1's model check would read under each rule not in force: the sensitivity lines of
+    the ruling of 2026-10-10 (ruled item 1). They enter no decision. Empty when the §9.1 GLM
+    was not fitted or its logit-scale Delta_H1 is finite: every rule then reads the same."""
+    if glm.get("estimate") is None or glm.get("logit_status", FINITE) == FINITE:
+        return {}
+    keys = ("agrees", "sign", "basis", "firth_estimate")
+    return {rule: {k: v for k, v in h1_model_check(glm, delta, rule, firth).items() if k in keys}
+            for rule in H1_SEPARATION_RULES if rule != in_force}
+
+
 def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None) -> dict:
     """§3 H1 on luna (above), with W-n-0 alongside."""
     idx = an.idx
@@ -1749,7 +1765,8 @@ def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None
               standin_sign_disagrees=(st is not None and sign is not None
                                       and _sign(st) != sign))
     out["model_check"] = mc
-    out["scales_disagree_in_sign"] = (delta is not None and delta != 0 and sign not in (None, 0)
+    out["model_check_sensitivity"] = h1_rule_sensitivity(glm, delta, mc["rule"], firth)
+    out["scales_disagree_in_sign"] =(delta is not None and delta != 0 and sign not in (None, 0)
                                       and (delta > 0) != (sign > 0))
     pn_nr, pn_r = (_diff(pt["F-0 NR"], pt["W-n-0 NR"]), _diff(pt["F-0 R"], pt["W-n-0 R"]))
     dn_nr, dn_r = bt["F-0 NR"] - bt["W-n-0 NR"], bt["F-0 R"] - bt["W-n-0 R"]
@@ -1875,6 +1892,13 @@ def family_readings(h1: dict, h3: dict) -> dict:
                  "supported_family_of_4": bool(p3 is not None and four["reject"][1] and m3)}
     out["H1"]["verdict"] = h1_verdict(out["H1"]["supported"], bool(h1.get("kill")),
                                       bool(p1 is not None and two["reject"][0]))
+    out["H1"]["sensitivity_rules"] = {}                  # the rules not in force (ruled item 1)
+    for rule, s in (h1.get("model_check_sensitivity") or {}).items():
+        sup = bool(p1 is not None and two["reject"][0] and s["agrees"])
+        out["H1"]["sensitivity_rules"][rule] = {
+            "model_agrees": s["agrees"], "supported": sup,
+            "verdict": h1_verdict(sup, bool(h1.get("kill")),
+                                  bool(p1 is not None and two["reject"][0]))}
     lo90 = ((h3.get("delta_h3") or {}).get("ci90") or [None])[0]
     out["H3"]["verdict"] = h3_verdict(out["H3"]["supported"], lo90,
                                       bool(p3 is not None and two["reject"][1]))
@@ -2212,8 +2236,9 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
     glm = glm_91(prim)
     glm_wn = glm_91(prim, ("W-0", "W-n-0"))
     standin = h1_standin(prim)
-    firth = (glm_91_firth(prim) if H1_SEPARATION_RULE == "firth"
-             and glm.get("logit_status") != FINITE else None)
+    # the Firth fit, whenever the logit-scale Delta_H1 is not finite: read by the rule in force
+    # ("firth") or, were another rule in force, by its sensitivity line
+    firth = glm_91_firth(prim) if glm.get("logit_status") != FINITE else None
     h1 = h1_reading(an, glm, standin, firth)
     lookups = lookups_reading(an)
     tok = token_ratios(an)
@@ -2382,6 +2407,16 @@ def _h1_lines(h: dict) -> list[str]:
                                f"{_num_s(mc.get('firth_estimate'))}."),
                      "probability-scale": ("the model check is not applicable, and the "
                                            "probability-scale sign is read.")}[mc["rule"]])
+        sens, parts = fam["H1"].get("sensitivity_rules") or {}, []
+        for rule, s in sens.items():
+            fe = (h1.get("model_check_sensitivity") or {}).get(rule, {}).get("firth_estimate")
+            parts.append(f"rule `{rule}`"
+                         + (f" (Firth's W-0 × R {_num_s(fe)})" if rule == "firth" else "")
+                         + f": the model check would agree: {_yes(s['model_agrees'])}, and H1 "
+                         f"would be: {s['verdict']}")
+        if parts:
+            L.append("- Sensitivity lines (the rules not in force, ruling of 2026-10-10; they "
+                     "enter no decision): " + "; ".join(parts) + ".")
     L += [(f"- Logit scale (§9.3): Penalty_NR {pen['penalty_nr_logit']}, Penalty_R "
            f"{pen['penalty_r_logit']}, Δ_H1 {_logit_s(mc['estimate'], mc['logit_status'], g)}."),
           ("- Cross-checks (not decisions): power_sim's emulation of the same fit "

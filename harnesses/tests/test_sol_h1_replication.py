@@ -122,8 +122,9 @@ def test_the_validity_run_is_exactly_registered(tmp_path):
     assert "registered reasoning effort 'high'" in why
     for effort in ("low", "xhigh"):
         assert "registered reasoning effort 'high'" in r4(VAL, effort=effort, root=tmp_path)
-    # luna's validity runs are not R4's and stay free of it
-    assert r4(VAL, LUNA, root=tmp_path, task_cells=OBSERVED + DERIVED) is None
+    # luna's validity runs are not R4's: luna's own guard refuses them (finished; R6)
+    why = r4(VAL, LUNA, root=tmp_path, task_cells=OBSERVED + DERIVED)
+    assert "luna's validity runs are finished" in why and registered.R4_REF not in why
 
 
 def test_the_main_runs_need_the_replications_g1(tmp_path, monkeypatch):

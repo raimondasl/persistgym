@@ -342,6 +342,9 @@ def test_a_non_blinded_run(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv(ALLOW_ENV, "1")
     monkeypatch.setattr(runner, "CLOCK", lambda: 0.0)
     monkeypatch.setattr(paidlock, "holder_alive", lambda info: None)
+    # luna's validity runs ran before R6's guard refused new ones (registered.luna_refusal);
+    # account-run applies no guard
+    monkeypatch.setattr(registered, "check_run_settings", lambda *a, **k: None)
     env = Env(tmp_path, monkeypatch,
               experiments=("persistgym_pilot", "persistgym_validity"))
     normal = _normal(env, VALIDITY_ARGS, experiment="persistgym_validity")

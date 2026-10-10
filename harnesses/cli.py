@@ -48,8 +48,9 @@ are not read). `run` refuses:
   withheld, validity templates 0-19, on the 4 observed task cells only, with D13's request
   settings as above (it needs no G1).
 PREREG §4.6 and §17.6 (amendment R6), gpt-6-luna's main sweep (`registered.luna_refusal`):
-outside persistgym_pilot and persistgym_validity, `run` refuses a gpt-6-luna run other than
-experiment persistgym, in F-0, W-0, W-n-0 or Σ-n-0 (sigma-n-0), on --split main, --variant
+outside persistgym_pilot, `run` refuses a gpt-6-luna run in persistgym_validity (luna's
+validity runs are finished: G1 is recorded on them, and R6 allows no other paid runs) and
+any other run than experiment persistgym, in F-0, W-0, W-n-0 or Σ-n-0 (sigma-n-0), on --split main, --variant
 base (or restated in F-0: the restated-at-need control), on the default generator config,
 with --mode standard, --service-tier flex and no --W (D13, `registered.LUNA_REQUEST`), and
 any such run until `registered.G1_PASSED` records luna's G1 on that config (recorded: the

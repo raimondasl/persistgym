@@ -3,8 +3,8 @@ harnesses/registered.py): `run` and `dry-run` default to the model's registered 
 refuses any other effort outside pilots, a non-pilot sol run off its `sol-chain` config or
 cells, or without an ENGAGED engagement check on that config (and, outside its validity run,
 without G1), a sol pilot at high effort off `sol-chain` or after R3's hard stop, a luna run
-outside its pilots and validity runs other than its main sweep and controls (PREREG §4.6,
-§17.6) or before its G1, and the probes keep their own registered settings. Also: the
+outside its pilots other than its main sweep and controls (PREREG §4.6, §17.6; its validity
+runs are finished) or before its G1, and the probes keep their own registered settings. Also: the
 command examples in the CLI docstring and in PREREG §17.2 and §17.3 parse, and the check's
 runs play block 1's sol pilot templates."""
 
@@ -214,8 +214,9 @@ def test_pilots_may_use_any_settings_but_sol_at_high_effort(tmp_path):
 def test_outside_pilots_only_the_registered_effort(tmp_path, experiment, monkeypatch):
     if experiment == "persistgym_validity":
         for gen in (DEFAULT, VARIANT, "0" * 64):
-            for cell in ("F-r", "W-n-0"):               # luna's validity runs: any config, cell
-                assert guard(experiment, LUNA, "medium", tmp_path, cell, gen) is None
+            for cell in ("F-0", "F-r", "W-n-0"):        # luna's validity runs: finished (R6)
+                why = guard(experiment, LUNA, "medium", tmp_path, cell, gen)
+                assert "luna's validity runs are finished" in why
     else:                                               # luna's main sweep only (luna_refusal)
         why = luna(experiment, "W-n-0", root=tmp_path)
         assert (why is None) is (experiment == "persistgym"), why
@@ -276,10 +277,10 @@ def test_sols_validity_experiment_holds_its_validity_run_only(tmp_path):
                     variant=variant)
         assert "as its validity run only" in why and f"got cell {cell}" in why
         assert f"--split {split}, --variant {variant}" in why
-    # luna's validity runs are not covered (its guard holds its main sweep); sol's main sweep
-    # still waits for G1
-    assert guard("persistgym_validity", LUNA, "medium", tmp_path, "F-r", DEFAULT, "main",
-                 "base") is None
+    # luna's validity runs refuse (finished: G1 recorded; R6); sol's main sweep still waits
+    # for G1
+    assert "luna's validity runs are finished" in guard(
+        "persistgym_validity", LUNA, "medium", tmp_path, "F-r", DEFAULT, "main", "base")
     assert "G1_PASSED" in guard("persistgym", SOL, "high", tmp_path, "F-r", split="validity",
                                 variant="base")
 
@@ -318,7 +319,7 @@ def test_the_r3_hard_stop(tmp_path, monkeypatch):
         why = guard(experiment, SOL, "high", tmp_path)
         assert registered.HARD_STOP in why and "not testable in this task family" in why
     assert registered.hard_stop(tmp_path) is not None
-    assert guard("persistgym_validity", LUNA, "medium", tmp_path, gen=DEFAULT) is None
+    assert luna(root=tmp_path) is None                                  # luna's: not sol's stop
     for p in (tmp_path / "persistgym_pilot").glob(f"*/{registered.CHECK_FILE}"):
         p.unlink()
     _write_check(tmp_path, "a", verdict="UNSCORABLE")
@@ -405,7 +406,7 @@ def test_the_repositorys_own_state_after_r3s_hard_stop():
     """With this checkout's results/ (R2's NOT_ENGAGED file on the default config, and R3's
     NOT_ENGAGED file on the variant, 2026-10-03: R3's hard stop): no further check run, no
     sol pilot above medium and no H2 run of sol, on either config; sol pilots at medium and
-    luna's runs are unaffected, its main sweep included (G1 recorded)."""
+    luna's main sweep (G1 recorded) are unaffected, and luna's validity runs are finished."""
     assert registered.HARD_STOP in registered.hard_stop(RESULTS)
     for cell in ("F-r", "F-0"):
         assert registered.HARD_STOP in guard("persistgym_pilot", SOL, "high", RESULTS, cell)
@@ -417,7 +418,8 @@ def test_the_repositorys_own_state_after_r3s_hard_stop():
     assert registered.HARD_STOP in guard("persistgym", SOL, "high", RESULTS, "F-r",
                                          split="main", variant="base")
     assert "does not engage" in registered.engagement_refusal(RESULTS, SOL, DEFAULT)
-    assert guard("persistgym_validity", LUNA, "medium", RESULTS, gen=DEFAULT) is None
+    assert "luna's validity runs are finished" in guard("persistgym_validity", LUNA, "medium",
+                                                         RESULTS, gen=DEFAULT)
     for cell in registered.LUNA_CELLS:
         assert luna(cell=cell) is None
 
@@ -468,8 +470,8 @@ def test_lunas_main_sweep_and_controls_go():
      "got --mode pro; --W 1000")])
 def test_lunas_main_sweep_refuses_anything_else(changes, got):
     why = luna(**changes)
-    assert why.startswith("outside persistgym_pilot and persistgym_validity, gpt-6-luna runs "
-                          "its main sweep and controls only (PREREG.md §17.6 (amendment R6)")
+    assert why.startswith("outside persistgym_pilot, gpt-6-luna runs its main sweep and "
+                          "controls only (PREREG.md §17.6 (amendment R6)")
     assert got in why and "3d6bc648eaa9" in why
     assert "with --mode standard, --service-tier flex and no --W (D13)" in why
     assert luna(model=f"{LUNA}-2026-10-01", **changes) is not None
@@ -477,24 +479,36 @@ def test_lunas_main_sweep_refuses_anything_else(changes, got):
 
 def test_lunas_main_sweep_needs_g1_on_its_config(monkeypatch):
     """Fail closed: without G1_PASSED on the default config, luna's main sweep refuses; its
-    pilots and validity runs need no G1."""
+    pilots need no G1."""
     monkeypatch.delitem(registered.G1_PASSED, LUNA)
     why = luna()
     assert "only after the researcher has recorded G1" in why and "G1_PASSED" in why
     monkeypatch.setitem(registered.G1_PASSED, LUNA, VARIANT)            # another config
     assert "G1_PASSED" in luna()
-    assert luna("persistgym_validity", split="validity", variant="restated") is None
     assert luna("persistgym_pilot", "F-r", "0" * 64, "pilot") is None
     monkeypatch.setitem(registered.G1_PASSED, LUNA, DEFAULT)
     assert luna() is None
 
 
-def test_lunas_rules_leave_its_validity_runs_and_sols_rules_alone(tmp_path, monkeypatch):
-    """luna in persistgym_validity keeps any cell, split and variant (as before); a luna run
-    in persistgym_sol_h1 is judged by R4 (sol only); sol in persistgym still needs its check
-    and G1 on sol-chain, and luna's G1 is not sol's."""
-    assert luna("persistgym_validity", "W-n-r", "0" * 64, "main", "base",
-                root=tmp_path) is None
+def test_lunas_validity_runs_are_finished_and_sols_rules_unchanged(tmp_path, monkeypatch):
+    """luna's validity runs are finished, with G1 recorded on them, and R6 change 1 allows no
+    other paid runs: persistgym_validity refuses every luna run, whatever its cell, config,
+    split, variant or request settings, and with G1 recorded or not; its pilots stay open.
+    A luna run in persistgym_sol_h1 is judged by R4 (sol only); sol in persistgym still needs
+    its check and G1 on sol-chain, and luna's G1 is not sol's."""
+    for args in (("F-0", DEFAULT, "validity", "restated"),
+                 ("F-0", DEFAULT, "validity", "withheld"),
+                 ("W-n-r", "0" * 64, "main", "base"), ("F-0", DEFAULT, "main", "base")):
+        why = luna("persistgym_validity", *args, root=tmp_path)
+        assert why.startswith("persistgym_validity runs no gpt-6-luna run any more: luna's "
+                              "validity runs are finished and G1 is recorded on them")
+        assert "PREREG.md §17.6 (amendment R6) change 1 allows no other paid runs" in why
+        assert luna("persistgym_validity", *args, model=f"{LUNA}-2026-10-01",
+                    root=tmp_path) == why
+    monkeypatch.delitem(registered.G1_PASSED, LUNA)
+    assert "validity runs are finished" in luna("persistgym_validity", split="validity",
+                                                variant="restated", root=tmp_path)
+    assert luna("persistgym_pilot", "F-0", DEFAULT, "pilot", root=tmp_path) is None
     assert "persistgym_sol_h1 runs sol's H1 replication" in luna("persistgym_sol_h1",
                                                                  root=tmp_path)
     _write_check(tmp_path, "c1")
@@ -592,6 +606,8 @@ VALIDITY = ["run", "--split", "validity", "--variant", "restated", "--experiment
      "got task cells derived-rec-far"),
     (["--cell", "F-0", "--model", LUNA, "--effort", "high"],
      "registered reasoning effort 'medium'"),
+    (["--cell", "F-0", "--model", LUNA], "luna's validity runs are finished"),
+    (["--cell", "F-0", "--model", LUNA, *SMALL_SETS], "luna's validity runs are finished"),
     (["--cell", "F-r", "--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot",
       *SMALL_SETS], "generator preset 'sol-chain' only"),
     (["--cell", "W-n-r", "--model", SOL, "--split", "pilot", "--experiment",
@@ -610,7 +626,6 @@ def test_run_refuses_unregistered_settings_before_the_lock(armed, capsys, args, 
 
 
 @pytest.mark.parametrize(("args", "engaged"), [
-    (["--model", LUNA, *SMALL_SETS], False),
     (["--model", SOL, "--gen-preset", "sol-chain"], True),
     (["--model", SOL, "--split", "pilot", "--experiment", "persistgym_pilot", "--effort",
       "low", *SMALL_SETS], False),

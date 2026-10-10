@@ -59,7 +59,9 @@ SUMMARY_SYSTEM_PROMPT = (
     "Return only the requested summary."
 )
 SUMMARY_TRIGGER_TOKENS = 175_000
-SUMMARY_MAX_OUTPUT_TOKENS = 8_192
+# Output cap of each config's summary requests: S4 keeps ARC's 8,192; patch 0018 (R7) gives
+# S1 and S2 the action requests' 65,536, since thinking counts against the cap.
+SUMMARY_MAX_OUTPUT_TOKENS = {"S1": 65_536, "S2": 65_536, "S4": 8_192}
 # Patch 0017 (D21): every request of every path config asks for the standard tier.
 SERVICE_TIER = "standard"
 TOY_DIR = ap.ARC_DIR / "toy_game"
@@ -214,8 +216,9 @@ def check_run(label: str, result: dict[str, Any], bodies: list[dict[str, Any]]) 
             )
         for body in summaries:
             cap = body.get("generation_config", {}).get("max_output_tokens")
-            if cap != SUMMARY_MAX_OUTPUT_TOKENS:
-                problems.append(f"summary max_output_tokens {cap}")
+            if cap != SUMMARY_MAX_OUTPUT_TOKENS[label]:
+                problems.append(f"summary max_output_tokens {cap}, expected "
+                                f"{SUMMARY_MAX_OUTPUT_TOKENS[label]}")
         position = 0
         for body in bodies:
             if _is_summary(body):

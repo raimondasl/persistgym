@@ -23,12 +23,13 @@
       "0014-Record-the-model-name-each-provider-response-reports.patch",
       "0015-Keep-the-agent-s-own-exit-reason-when-the-swarm-revi.patch",
       "0016-Never-drop-oldest-turns-when-manual_rolling-summariz.patch",
-      "0017-Request-the-standard-service-tier-in-the-Gemini-path.patch"
+      "0017-Request-the-standard-service-tier-in-the-Gemini-path.patch",
+      "0018-Raise-the-rolling-summary-profiles-summary-output-ca.patch"
     ],
-    "sha256": "14e25cc71411eaf5e3ca4cb87e78569061586e0a428477ce5e2fabfe02d631d6"
+    "sha256": "40ec95ec32560f012baace31911803677cfd664224190e38c8d8b479c820d23b"
   },
-  "patched_commit": "67f6dd0d37eccb8f77a7645f0e0e9fc2ea400359",
-  "patched_tree": "5206d039db6761c4f56c932fed716321113360f1",
+  "patched_commit": "b716253e7da484b4eb402420ec511f2ce36229fe",
+  "patched_tree": "ca0a64fe953ccedff5412eec5b62b9c38c2a0d15",
   "profiles": {
     "S0": {
       "config_id": "google-gemini-3-8-flash-high",
@@ -75,7 +76,7 @@
     },
     "S1": {
       "config_id": "google-gemini-3-8-flash-high-rolling-summary",
-      "sha256": "d2f7825fab5411a1218b7a5d20520c5abb5f97d488907176b4391f760e7e54fd",
+      "sha256": "cd475ca08341a24e414f601ecd66de3096fd947c3a41178683bd4473bfba1076",
       "config": {
         "id": "google-gemini-3-8-flash-high-rolling-summary",
         "agent": {
@@ -89,7 +90,7 @@
           "compaction": {
             "strategy": "harness_summary",
             "trigger_tokens": 175000,
-            "summary_max_output_tokens": 8192,
+            "summary_max_output_tokens": 65536,
             "summary_input_headroom_tokens": 8192
           }
         },
@@ -124,7 +125,7 @@
     },
     "S2": {
       "config_id": "google-gemini-3-8-flash-high-rolling-summary-notes-off",
-      "sha256": "2f0dd011bc04963835aa2ac2d28b3229ef61e0e496dbd9d417699a920e796bab",
+      "sha256": "c41dc494a105bedd5a429bedf7301656756d378e1eb9b615ae4a7c6f563c6eb1",
       "config": {
         "id": "google-gemini-3-8-flash-high-rolling-summary-notes-off",
         "agent": {
@@ -139,7 +140,7 @@
           "compaction": {
             "strategy": "harness_summary",
             "trigger_tokens": 175000,
-            "summary_max_output_tokens": 8192,
+            "summary_max_output_tokens": 65536,
             "summary_input_headroom_tokens": 8192
           }
         },

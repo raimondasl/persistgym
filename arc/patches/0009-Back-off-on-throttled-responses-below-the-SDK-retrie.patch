@@ -1,7 +1,7 @@
 From 1c49cf34d02f7ef0113abad849f43074036af3a4 Mon Sep 17 00:00:00 2001
 From: Raimondas Lencevicius <59739769+raimondasl@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 00:25:31 -0400
-Subject: [PATCH 09/17] Back off on throttled responses below the SDK retries
+Subject: [PATCH 09/18] Back off on throttled responses below the SDK retries
 
 The SDKs retry 429/5xx a few times within seconds (google-genai's
 Interactions client: 3 retries at 0.5-8 s), and _request_with_retries then

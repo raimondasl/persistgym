@@ -606,8 +606,8 @@ PLAN §7's rows for Qwen3.6-27B and gpt-oss-120b (extension E1) and DeepSeek V4.
 | Config | Config entry name | `config_hash` (SHA-256) |
 |---|---|---|
 | S0 | `google-gemini-3-8-flash-high` | `615ea035324fdcdb114b00cfcf7eab55c56ea97b5d8808c12ad9097e93992dda` |
-| S1 | `google-gemini-3-8-flash-high-rolling-summary` | `d2f7825fab5411a1218b7a5d20520c5abb5f97d488907176b4391f760e7e54fd` |
-| S2 | `google-gemini-3-8-flash-high-rolling-summary-notes-off` | `2f0dd011bc04963835aa2ac2d28b3229ef61e0e496dbd9d417699a920e796bab` |
+| S1 | `google-gemini-3-8-flash-high-rolling-summary` | `cd475ca08341a24e414f601ecd66de3096fd947c3a41178683bd4473bfba1076` |
+| S2 | `google-gemini-3-8-flash-high-rolling-summary-notes-off` | `c41dc494a105bedd5a429bedf7301656756d378e1eb9b615ae4a7c6f563c6eb1` |
 | S4 | `google-gemini-3-8-flash-high-provider-adapter` | `e7432aafd0ad7a291be197a5634d5cbb6ee0b43edeefda1aebe26d21af54cf08` |
 | S3 (optional) | none: no profile is built or frozen | none; S3 runs only if an amendment first adds and freezes its profile (§0.3, line 13) |
 
@@ -616,10 +616,10 @@ Shared by all four configs:
 | Item | Value |
 |---|---|
 | Upstream harness | `arcprize/arc-agi-3-benchmarking`, pinned at `4ca00e607e3364a501fcbf7d1b7537dd2729cec3` (`4ca00e6`) |
-| Patch series | `arc/patches/0001-*.patch` to `0017-*.patch`, the 17 files listed in `arc/config_freeze.json` |
-| Patch-series SHA-256 | `14e25cc71411eaf5e3ca4cb87e78569061586e0a428477ce5e2fabfe02d631d6` |
-| Patched commit | `67f6dd0d37eccb8f77a7645f0e0e9fc2ea400359` |
-| Patched tree | `5206d039db6761c4f56c932fed716321113360f1` |
+| Patch series | `arc/patches/0001-*.patch` to `0018-*.patch`, the 18 files listed in `arc/config_freeze.json` |
+| Patch-series SHA-256 | `40ec95ec32560f012baace31911803677cfd664224190e38c8d8b479c820d23b` |
+| Patched commit | `b716253e7da484b4eb402420ec511f2ce36229fe` |
+| Patched tree | `ca0a64fe953ccedff5412eec5b62b9c38c2a0d15` |
 
 **Checks behind the record** (PR #21, `arc/README.md`): `apply_patches.py --each` ran the upstream unit tests after every patch: 872 passed after 0017. The only failure was the known flaky upstream test `test_recorder::test_concurrent_recording`, once after 0015 in that run and once in another full-suite run after 0017, both with other test runs loading the machine. It passes on its own, and no patch touches the recorder. The $0 offline runs with a stub model passed for S0, S1, S2 and S4 (`offline_smoke.py --toy`), and so did the launcher's inner modes (`run_path_offline.py`). The paid launcher refuses any run whose patch files, patched commit or tree, or resolved profile hash differ from this record (§12). Since PR #23 it also refuses unless `arc/config_freeze.json` is the same blob in `HEAD` as on `origin/main` and is the record the run loaded; the record's four profile hashes, patch-series SHA-256 and upstream pin, and the patched commit and tree, equal the tables in this section of the frozen PREREG.md on `origin/main` (`arc/prereg_freeze.py`); and `arc/patches` is the same tree in `HEAD` as on `origin/main`, with the patch files the run applies byte-identical to the committed ones. Once this file is on `main`, a root test (`test_the_repository_prereg_table_matches_the_committed_record`) also fails whenever the record and these tables differ.
 

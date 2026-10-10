@@ -268,7 +268,8 @@ def _run(label: str) -> tuple[dict, list[dict]]:
     runtime: dict = {}
     if smoke.EXPECTED[label]["summaries"]:
         bodies.append(
-            _body(smoke.SUMMARY_SYSTEM_PROMPT, [("user_input", "history")], max_out=8_192)
+            _body(smoke.SUMMARY_SYSTEM_PROMPT, [("user_input", "history")],
+                  max_out=smoke.SUMMARY_MAX_OUTPUT_TOKENS[label])
         )
         bodies.append(_body(system, [("user_input", BRIDGE), ("user_input", "obs 3")]))
         runtime = {"compaction_count": 1, "context_trims": 0}
@@ -319,6 +320,10 @@ class TestCheckRun:
             ("S1", lambda r, b: b.pop(2), "no summary request"),
             ("S2", lambda r, b: b[3]["input"].pop(0), "bridge"),
             ("S4", lambda r, b: b[2]["generation_config"].update(max_output_tokens=9), "max_output_tokens"),
+            # Patch 0018 (R7): S1/S2 summaries get 65,536, S4's keep 8,192.
+            ("S1", lambda r, b: b[2]["generation_config"].update(max_output_tokens=8_192), "max_output_tokens 8192, expected 65536"),
+            ("S2", lambda r, b: b[2]["generation_config"].update(max_output_tokens=8_192), "max_output_tokens 8192, expected 65536"),
+            ("S4", lambda r, b: b[2]["generation_config"].update(max_output_tokens=65_536), "max_output_tokens 65536, expected 8192"),
             ("S0", lambda r, b: r["run_meta"].update(exit_reason="AGENT_ERROR"), "exit_reason"),
             ("S1", lambda r, b: r["run_meta"].update(agent_exit_reason="API_ERROR"), "agent_exit_reason"),
             ("S4", lambda r, b: r["run_meta"].pop("reported_models"), "reported_models"),

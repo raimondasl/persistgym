@@ -854,7 +854,10 @@ def luna_decision(power: pd.DataFrame, cap: int = LUNA_T_CAP,
                          "all_larger_T_meet": (bool((df[df.templates >= both][[c1, c3]]
                                                      >= target).all(axis=None))
                                                if both is not None else None)})
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    for col in ("T_h1", "T_h3", "T_both", "T_set"):
+        out[col] = out[col].astype("Int64")  # missing = no T up to the cap meets the target
+    return out
 
 
 def luna_sensitivity_setups(primary: LunaSetup, others: list[LunaSetup],
@@ -991,9 +994,9 @@ def _phase_1a_spent() -> float | None:
 
 def _md_table(df: pd.DataFrame, floatfmt: str = "{:.3f}") -> str:
     def fmt(v):
-        if isinstance(v, float):
-            return "" if np.isnan(v) else floatfmt.format(v)
-        return "" if v is None else str(v)
+        if v is None or (not isinstance(v, str) and pd.isna(v)):
+            return ""
+        return floatfmt.format(v) if isinstance(v, float) else str(v)
     lines = ["| " + " | ".join(df.columns) + " |", "|" + "---|" * len(df.columns)]
     lines += ["| " + " | ".join(fmt(v) for v in row) + " |"
               for row in df.itertuples(index=False)]
@@ -1127,7 +1130,8 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
                 ("`luna_normal_power` computes the test-only power at the worst step another "
                  "way: a normal approximation with the exact variance of one template's "
                  "contribution, integrated over the template intercept. It leaves out the model "
-                 "check and the bootstrap's discreteness. Full table in "
+                 "check and the bootstrap's discreteness, so gaps of a few points are "
+                 "expected (compare the size rows below). Full table in "
                  "`luna_normal_check.csv`."), "", _md_table(both[cols]), ""]
         for name, g in normal.groupby("scenario", sort=False):
             t_unc = g.normal_T_both_uncapped.iloc[0]
@@ -1140,8 +1144,13 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
                 "P_h3_supported_worst_step", "P_h1_unadjusted", "P_h3_unadjusted"]
         out += ["## Sensitivity: the primary scenario with one assumption changed", "",
                 _md_table(sens[cols]), "",
-                ("In the size row both nulls hold at their boundary, so its columns are "
-                 "rejection rates under H0 and should not exceed the nominal level."), ""]
+                ("In the size rows both nulls hold at their boundary, so their columns are "
+                 "rejection rates under H0, to compare with the nominal levels (0.025 at the "
+                 "worst step, 0.05 unadjusted; Monte Carlo SE about "
+                 f"{math.sqrt(0.025 * 0.975 / reps):.3f} and {math.sqrt(0.05 * 0.95 / reps):.3f}). "
+                 "The percentile bootstrap on these discrete outcomes need not hit them "
+                 "exactly; any excess is a property of the registered test, not of this "
+                 "simulation."), ""]
     if cost_per_t is not None:
         source = LUNA_COST_FORECAST.relative_to(REPO_ROOT).as_posix()
         out += ["## Cost and the phase-1a cap",

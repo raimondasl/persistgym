@@ -235,8 +235,9 @@ R6_STOP = (f"R6's hard stop ({R6_REF} change 1): the PersistGym stream's only pa
            f"plus, under CLAUDE.md's pilot rule (R6 change 1 does not list it), the "
            f"single-turn control's pilot (`single-turn --experiment {PILOT_EXPERIMENT} "
            f"--split pilot` with the sweep's request settings on the default config, at most "
-           f"{LUNA_SINGLE_TURN_PILOT_MAX} prompts in all, approved by name in block "
-           "3-persistgym's line); no other paid run, and none after these")
+           f"{LUNA_SINGLE_TURN_PILOT_MAX} prompts in all, under an approval line that lists "
+           f"{PILOT_EXPERIMENT}: block 3-persistgym's); no other paid run, and none after "
+           "these")
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50

@@ -55,10 +55,13 @@ as category counts, which is exact and fast), one-sided bootstrap p-values, Holm
 "supported" = the test rejects and the model check agrees. The decision reading is
 P(supported) at the worst Holm step (one-sided 0.025), the most conservative; the real Holm
 procedure, the unadjusted level and the family of 4 are reported next to it. ``LunaSetup``
-explains how the penalties are set so that Delta_H1 is exactly 10pp. The run also writes the
-template SD measured in luna's validity runs, a one-at-a-time sensitivity table, a
-normal-approximation cross-check (``luna_normal_power``, which also gives the T the rule would
-need without the cap), the cost of each T from the committed forecast, and ``summary.md``.
+explains how the penalties are set so that Delta_H1 is exactly 10pp. The primary scenario's
+template SD is the one measured in luna's validity runs (``LUNA_VALIDITY_SD``, 0.92; §4.2 asks
+for the validity runs' variance), and the T grid runs past the cap to 300, so that the T the
+rule needs without the cap comes from the simulation (``luna_decision``'s ``T_both_uncapped``).
+The run also writes the validity runs' template SD, a one-at-a-time sensitivity table, a
+normal-approximation cross-check (``luna_normal_power``, which runs a few points above the
+simulation), the cost of each T from the committed forecast, and ``summary.md``.
 ``--part all`` still runs parts 1 and 2 only.
 
 Cluster-robust small-sample factor (``--cluster-correction``). The default, ``statsmodels``, is
@@ -496,8 +499,15 @@ def run_h2(reps: int, seed: int, *, templates=(30, 40, 60, 80), boot: int = 2000
 #   f0_dnr  F-0 on derived-far-NR                       st_onr  single-turn, observed-far-NR
 #   st_dnr  single-turn, derived-far-NR
 LUNA_CELLS = ("f0_onr", "w0_onr", "f0_or", "w0_or", "f0_dnr", "st_onr", "st_dnr")
-LUNA_TEMPLATES = tuple(range(50, 201, 10))
+# The grid runs past R6's cap, so that the T the frozen rule needs without the cap is read
+# from the simulation itself (the normal approximation runs a few points high)
+LUNA_TEMPLATES = tuple(range(50, 301, 10))
 LUNA_T_CAP = 200  # R6 change 6
+# PREREG §4.2: "the M1 power re-simulation (§9.8) uses the variance measured in the validity
+# runs". luna's: the ML template SD of its fact-withheld run, validity templates 0-19 x 8
+# task cells (`validity_template_sd`; 95% profile interval 0-2.17; its restated run, 160/160,
+# carries none). The run's luna_validity_sd.csv recomputes it from the committed episodes.
+LUNA_VALIDITY_SD = 0.92
 LUNA_BOOT = 10_000  # PREREG §9.1
 POWER_TARGET = 0.80  # PREREG §4.2
 # PREREG §3 H1's kill reading: point estimate < 10pp and upper 90% bound < 15pp
@@ -530,7 +540,7 @@ class LunaSetup:
     p_f0_obs: float = 0.95  # F-0 on observed-far-NR (and on -R, plus r_shift)
     p_f0_der: float = 0.90  # F-0 on derived-far-NR
     p_w0_nr: float = 0.12  # W-0 on observed-far-NR: the no-memory level
-    sd: float = 1.0  # template random-intercept SD, logit scale
+    sd: float = LUNA_VALIDITY_SD  # template random-intercept SD, logit scale (§4.2)
     r_shift: float = 0.0  # p(F-0, observed-far-R) - p(F-0, observed-far-NR)
     delta_h1: float = 0.10  # true Delta_H1: the kill boundary (§3 H1, §4.2)
     delta_h3: float = 0.0  # true Delta_H3 (§4.2)
@@ -835,11 +845,16 @@ LUNA_READINGS = {
 def luna_decision(power: pd.DataFrame, cap: int = LUNA_T_CAP,
                   target: float = POWER_TARGET) -> pd.DataFrame:
     """For each scenario and reading: the smallest T meeting the target for H1, for H3 and for
-    both, and the T that R6 change 6 then sets (the cap if no T up to it meets the rule)."""
+    both, and the T that R6 change 6 then sets (the cap if no T up to it meets the rule).
+    The `_uncapped` columns are the same smallest counts over the whole simulated grid (up to
+    `T_grid_max`), past the cap: the T the frozen rule would need without R6's cap, missing
+    if no simulated T meets it. They set nothing."""
     rows = []
-    for name, df in power.groupby("scenario", sort=False):
-        df = df[df.templates <= cap]
+    for name, full in power.groupby("scenario", sort=False):
+        df = full[full.templates <= cap]
         for reading, (c1, c3) in LUNA_READINGS.items():
+            uncapped = {f"T_{h}_uncapped": smallest_template_count(full, cols, target)
+                        for h, cols in (("h1", (c1,)), ("h3", (c3,)), ("both", (c1, c3)))}
             both = smallest_template_count(df, (c1, c3), target)
             chosen = both if both is not None else cap
             at = df[df.templates == chosen]
@@ -853,10 +868,12 @@ def luna_decision(power: pd.DataFrame, cap: int = LUNA_T_CAP,
                          # MC noise: does every larger count also meet the target?
                          "all_larger_T_meet": (bool((df[df.templates >= both][[c1, c3]]
                                                      >= target).all(axis=None))
-                                               if both is not None else None)})
+                                               if both is not None else None),
+                         **uncapped, "T_grid_max": int(full.templates.max())})
     out = pd.DataFrame(rows)
-    for col in ("T_h1", "T_h3", "T_both", "T_set"):
-        out[col] = out[col].astype("Int64")  # missing = no T up to the cap meets the target
+    for col in ("T_h1", "T_h3", "T_both", "T_set", "T_h1_uncapped", "T_h3_uncapped",
+                "T_both_uncapped"):
+        out[col] = out[col].astype("Int64")  # missing = no T (up to the cap) meets the target
     return out
 
 
@@ -1024,10 +1041,11 @@ LUNA_WHY = {
          "of its 95% Wilson interval. Chance is 0.10 (K = 10).")),
     "sd": (
         "Template random-intercept SD (logit), shared by a template's 7 cells",
-        ("Primary 1.0 is PLAN §10's value and close to the ML estimate from luna's withheld "
-         "run (table below). Every contrast here is paired within template, so a larger "
-         "shared SD raises power (sensitivity rows); pessimistic 0, the lower end of that "
-         "estimate's 95% interval, leaves the cells independent.")),
+        ("Primary 0.92 is the variance measured in luna's validity runs, as §4.2 asks: the ML "
+         "estimate from its fact-withheld run (table below; the restated run carries none). "
+         "PLAN §10's 1.0 is a sensitivity row. Every contrast here is paired within template, "
+         "so a larger shared SD raises power (sensitivity rows); pessimistic 0, the lower end "
+         "of that estimate's 95% interval, leaves the cells independent.")),
     "r_shift": (
         "F-0 success on observed-far-R minus on -NR",
         ("0: F-0 sees the fact in full history, so lookups should add little. Then W-0's R "
@@ -1096,22 +1114,35 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
                 ("Random-intercept logit on F-0, validity templates 0-19 x 8 task cells "
                  "(`validity_template_sd`; 95% profile-likelihood interval, chi-square 1 df):"),
                 "", _md_table(validity), "",
-                ("Restated-at-need succeeded in every episode, so it carries no variance. The "
-                 "withheld run measures how guesses cluster by template, not how memory "
-                 "success does, and 20 templates leave the interval wide. It is context for "
-                 "the SD assumption, not a measurement of it."), ""]
+                ("Restated-at-need succeeded in every episode, so it carries no variance. §4.2 "
+                 "has the power re-simulation use the variance measured in the validity runs, "
+                 f"so the primary scenario takes the withheld run's estimate "
+                 f"({LUNA_VALIDITY_SD:g}, `LUNA_VALIDITY_SD`). That run measures how guesses "
+                 "cluster by template, not how memory success does, and 20 templates leave "
+                 "the interval wide, so the sensitivity rows vary the SD."), ""]
     out += ["## Result: the template count", "", _md_table(decision.drop(columns=["target"])),
             ""]
     for name in names:
         d = decision[(decision.scenario == name)
                      & (decision.reading == next(iter(LUNA_READINGS)))].iloc[0]
         if d.T_both is None or pd.isna(d.T_both):
-            out.append(f"- **{name}:** no T <= {LUNA_T_CAP} reaches 0.80 for both tests, so R6 "
-                       f"change 6 sets **T = {LUNA_T_CAP}**; achieved power there: H1 "
-                       f"{d.power_h1_at_T_set:.3f}, H3 {d.power_h3_at_T_set:.3f}.")
+            line = (f"- **{name}:** no T <= {LUNA_T_CAP} reaches 0.80 for both tests, so R6 "
+                    f"change 6 sets **T = {LUNA_T_CAP}**; achieved power there: H1 "
+                    f"{d.power_h1_at_T_set:.3f}, H3 {d.power_h3_at_T_set:.3f}.")
         else:
-            out.append(f"- **{name}:** T = {int(d.T_both)} (H1 {d.power_h1_at_T_set:.3f}, "
-                       f"H3 {d.power_h3_at_T_set:.3f}).")
+            line = (f"- **{name}:** T = {int(d.T_both)} (H1 {d.power_h1_at_T_set:.3f}, "
+                    f"H3 {d.power_h3_at_T_set:.3f}).")
+        if pd.notna(d.T_both_uncapped) and d.T_both_uncapped > LUNA_T_CAP:
+            line += (f" Without R6's cap the simulated rule would need **T = "
+                     f"{int(d.T_both_uncapped)}** (`T_both_uncapped`).")
+        elif pd.isna(d.T_both_uncapped):
+            line += (f" Without R6's cap no simulated T up to {d.T_grid_max} reaches 0.80 for "
+                     "both tests.")
+        out.append(line)
+    out += ["", ("The uncapped T is read from this simulation, on its grid of T up to "
+                 f"{int(power.templates.max())}; it sets nothing (R6 change 6 caps T at "
+                 f"{LUNA_T_CAP}). Its curves carry Monte Carlo noise, so a T near the target "
+                 "can move by 10 between runs.")]
     cols = ["scenario", "templates", "P_h1_supported_worst_step", "P_h3_supported_worst_step",
             "P_h1_supported_holm", "P_h3_supported_holm", "P_h1_unadjusted",
             "P_h3_unadjusted", "P_h1_holm4", "P_h3_holm4", "P_h1_kill_fires"]
@@ -1135,9 +1166,11 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
                  "`luna_normal_check.csv`."), "", _md_table(both[cols]), ""]
         for name, g in normal.groupby("scenario", sort=False):
             t_unc = g.normal_T_both_uncapped.iloc[0]
-            out.append(f"- **{name}:** without R6's cap, this approximation reaches 0.80 for both "
-                       "tests at the worst step at "
-                       + (f"about T = {int(t_unc)}." if pd.notna(t_unc) else "no T <= 1000."))
+            out.append(f"- **{name}:** this approximation reaches 0.80 for both tests at the "
+                       "worst step (test only) at "
+                       + (f"about T = {int(t_unc)}" if pd.notna(t_unc) else "no T <= 1000")
+                       + "; it runs above the simulation, so the uncapped T quoted above is "
+                         "the simulation's.")
         out.append("")
     if sens is not None and len(sens):
         cols = ["scenario", "templates", "P_h1_supported_worst_step",
@@ -1157,17 +1190,21 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
                 (f"luna's sweep and controls cost about ${cost_per_t:.4f} billed per template "
                  f"(committed forecast `{source}`, line `{LUNA_COST_LINE}` at T = "
                  f"{LUNA_COST_T}, scaled linearly; rough).")]
-        for t in sorted({int(x) for x in decision.T_set}):
-            line = f"- T = {t}: about ${cost_per_t * t:.2f}"
+        primary = decision[decision.reading == next(iter(LUNA_READINGS))]
+        uncapped = {int(x) for x in primary.T_both_uncapped.dropna() if x > LUNA_T_CAP}
+        for t in sorted({int(x) for x in decision.T_set} | uncapped):
+            line = f"- T = {t}" + (" (without R6's cap)" if t in uncapped else "")
+            line += f": about ${cost_per_t * t:.2f}"
             if spent_1a is not None:
                 line += (f"; phase 1a would reach ${spent_1a + cost_per_t * t:.2f} of its "
                          f"$500 cap (spent ${spent_1a:.2f}, `results/costs.csv`)")
             out.append(line + ".")
         out.append("")
     out += ["## What this does not show",
-            ("- The success levels and the template SD are assumptions, not measurements: no "
-             "main-split episode exists and pilot outcomes are blinded. Power depends mostly "
-             "on them."),
+            ("- The success levels are assumptions, not measurements: no main-split episode "
+             "exists and pilot outcomes are blinded. The template SD is measured, but on the "
+             "fact-withheld validity run (how guesses cluster), with a wide interval. Power "
+             "depends mostly on these."),
             ("- One shared template intercept is the only within-template correlation. Real "
              "cells may correlate less (then power is lower, toward the SD 0 rows) or more."),
             ("- H1's model check uses a GLM on H1's 4 cells, not the full §9.1 model, and only "
@@ -1261,8 +1298,8 @@ def main(argv: list[str] | None = None) -> int:
                       help="bootstrap resamples per simulated sweep (PREREG §9.1: 10,000)")
     luna.add_argument("--luna-sensitivity-templates", default="100,150,200",
                       help="template counts of the one-at-a-time sensitivity rows ('' = none)")
-    luna.add_argument("--luna-sensitivity-sd", default="0.5,1.5,2",
-                      help="extra template SDs for the sensitivity rows")
+    luna.add_argument("--luna-sensitivity-sd", default="0.5,1,1.5,2",
+                      help="extra template SDs for the sensitivity rows (1: PLAN §10's value)")
     luna.add_argument("--luna-validity-glob", default=LUNA_VALIDITY_GLOB,
                       help="luna's validity episodes, for the measured template SD ('' = skip)")
     ap.add_argument("--engine", choices=("fast", "statsmodels"), default="fast",

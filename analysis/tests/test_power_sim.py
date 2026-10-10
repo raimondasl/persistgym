@@ -348,9 +348,11 @@ def test_run_luna_size_at_the_null_boundaries():
 
 def test_luna_decision_picks_the_smallest_T_or_the_cap():
     rows = []
-    for name, p1, p3 in (("a", (0.5, 0.79, 0.81, 0.9), (0.85, 0.9, 0.95, 0.99)),
-                         ("b", (0.3, 0.4, 0.5, 0.6), (0.9, 0.9, 0.9, 0.9))):
-        for t, x1, x3 in zip((170, 180, 190, 200), p1, p3, strict=True):
+    for name, p1, p3 in (("a", (0.5, 0.79, 0.81, 0.9, 0.9, 0.9),
+                          (0.85, 0.9, 0.95, 0.99, 0.99, 0.99)),
+                         ("b", (0.3, 0.4, 0.5, 0.6, 0.7, 0.85), (0.9,) * 6),
+                         ("c", (0.3, 0.4, 0.5, 0.6, 0.7, 0.75), (0.9,) * 6)):
+        for t, x1, x3 in zip((170, 180, 190, 200, 210, 220), p1, p3, strict=True):
             row = {"scenario": name, "templates": t}
             for c1, c3 in ps.LUNA_READINGS.values():
                 row.update({c1: x1, c3: x3})
@@ -359,10 +361,26 @@ def test_luna_decision_picks_the_smallest_T_or_the_cap():
     first = next(iter(ps.LUNA_READINGS))
     a = d[(d.scenario == "a") & (d.reading == first)].iloc[0]
     assert (a.T_h1, a.T_h3, a.T_both, a.T_set, a.T_set_by) == (190, 170, 190, 190, "rule")
-    assert a.all_larger_T_meet
+    assert a.all_larger_T_meet and a.T_both_uncapped == 190 and a.T_grid_max == 220
     b = d[(d.scenario == "b") & (d.reading == first)].iloc[0]
     assert pd.isna(b.T_both) and b.T_set == 200 and b.T_set_by.startswith("cap")
     assert b.power_h1_at_T_set == 0.6 and b.power_h3_at_T_set == 0.9
+    # past the cap: the T the rule would need without it, read from the simulated grid
+    assert (b.T_h1_uncapped, b.T_h3_uncapped, b.T_both_uncapped) == (220, 170, 220)
+    c = d[(d.scenario == "c") & (d.reading == first)].iloc[0]
+    assert pd.isna(c.T_both) and pd.isna(c.T_both_uncapped) and c.T_set == 200
+
+
+def test_lunas_primary_sd_is_the_validity_runs_and_the_grid_runs_past_the_cap():
+    """PREREG §4.2: the re-simulation uses the variance measured in the validity runs
+    (luna's withheld run, 0.92, recomputed from the committed episodes in
+    test_validity_template_sd_on_lunas_committed_runs); the pessimistic scenario keeps SD 0.
+    The grid runs to 300, past R6's cap of 200, which is registered.LUNA_T."""
+    from harnesses import registered
+    assert ps.LUNA_PRIMARY.sd == ps.LUNA_VALIDITY_SD == 0.92
+    assert ps.LUNA_PESSIMISTIC.sd == 0.0
+    assert ps.LUNA_TEMPLATES == tuple(range(50, 301, 10))
+    assert ps.LUNA_T_CAP == registered.LUNA_T == 200 and ps.LUNA_T_CAP in ps.LUNA_TEMPLATES
 
 
 def test_luna_sensitivity_setups():
@@ -410,7 +428,7 @@ def test_validity_template_sd_on_lunas_committed_runs():
     df = ps.validity_template_sd(paths).set_index("variant")
     assert (df.loc["restated", ["episodes", "successes"]] == [160, 160]).all()
     assert (df.loc["withheld", ["episodes", "successes"]] == [160, 19]).all()
-    assert df.loc["withheld", "sd_hat"] == pytest.approx(0.92, abs=0.02)
+    assert df.loc["withheld", "sd_hat"] == pytest.approx(ps.LUNA_VALIDITY_SD, abs=0.005)
 
 
 def test_main_luna_writes_tables_meta_and_summary(tmp_path):
@@ -429,6 +447,11 @@ def test_main_luna_writes_tables_meta_and_summary(tmp_path):
     for heading in ("## Assumptions", "## Result: the template count", "## Power by T",
                     "## Cross-check: normal approximation", "## What this does not show"):
         assert heading in summary
+    decision = pd.read_csv(tmp_path / "luna_decision.csv")
+    assert {"T_both_uncapped", "T_grid_max"} <= set(decision.columns)
+    assert (decision.T_grid_max == 60).all()
+    assert "Without R6's cap no simulated T up to 60 reaches 0.80" in summary
+    assert "The uncapped T is read from this simulation" in summary
 
 
 def test_luna_cli_lists_must_match_the_scenarios():

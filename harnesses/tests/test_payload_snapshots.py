@@ -11,13 +11,24 @@ Synthetic episode: observations of exactly 200 tokens, replies of exactly 50 tok
 * summary: the visible context first exceeds W at step 4 (200 + 4 x 250 = 1200).
 Labels: U<t> observation of turn t, R<t> its reasoning item, A<t> its reply, B<k> the bridge
 holding summary k, Q the summary request.
+
+The last section asserts the one request of H3's position-matched single-turn control
+(harnesses/single_turn.py; PREREG §3 H3, §4.3) on real episodes at the small volume: its whole
+body, and that it is F-0's request with the flattened prompt as its only input item; and the
+same on the registered default config (hash 3d6bc648..., the config luna's sweep plays), with
+a digest of the whole body.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+
+import httpx
+import openai
 import pytest
 
-from harnesses import registered
+from harnesses import registered, single_turn
 from harnesses.cells import CELLS, NOTES_INSTRUCTION
 from harnesses.config import (
     ARC_SUMMARY_BRIDGE_TEMPLATE,
@@ -26,6 +37,8 @@ from harnesses.config import (
     HarnessConfig,
 )
 from harnesses.fake import FakeModel
+from harnesses.items import item_text
+from harnesses.runner import run_episode
 from harnesses.tests.conftest import (
     SYSTEM,
     label_payload,
@@ -37,6 +50,10 @@ from harnesses.tests.conftest import (
     turns,
 )
 from persistgym import tokens
+from persistgym.config import PRESETS
+from persistgym.controls import single_turn_control
+from persistgym.episode import TaskCell
+from persistgym.render import generate
 
 NOTES_SYSTEM = SYSTEM + "\n" + NOTES_INSTRUCTION
 
@@ -327,3 +344,160 @@ def test_session_state_after_summary():
     assert [c["compacted_turns"] for c in session.compactions] == [[0, 4], [4, 7]]
     assert session.bridge == ARC_SUMMARY_BRIDGE_TEMPLATE.format(summary=summary_text(2))
     assert session.start == 7 and session.bridge_no == 2
+
+
+# --- H3's single-turn control (PREREG §3 H3, §4.3, D36; harnesses/single_turn.py) -----------
+
+def _flattened(ep) -> str:
+    """The single-turn prompt rebuilt by hand from the episode, as PREREG §3 H3 states it
+    (persistgym/DESIGN.md §3, "Position-matched single-turn control"): observations 0..need
+    in order, each before the need step followed by the oracle's routine action as a plain
+    "Agent: <expected action>" line, one newline between pieces; no preamble, no marks, and
+    the need observation (ending with the need question) last."""
+    text = ep.steps[0].observation
+    for i in range(1, ep.need_step + 1):
+        text += f"\nAgent: {ep.steps[i - 1].expected_action}\n{ep.steps[i].observation}"
+    return text
+
+
+def test_single_turn_full_request_literal(small_eps):
+    """The complete request body of one single-turn prompt (observed-nonrec-far, main
+    template 0): F-0's settings, the episode's system prompt unchanged, and the flattened
+    prompt as the only input item. No reasoning item and no earlier output is sent."""
+    ep = next(e for e in small_eps if e.cell.id == "observed-nonrec-far")
+    control = single_turn_control(ep)
+    req = single_turn.build_request(control, HarnessConfig(
+        reasoning_effort=registered.registered_effort("gpt-6-luna")))
+    assert req.kind == "step" and req.trace == ["U0"]
+    assert req.payload == {
+        "model": "gpt-6-luna",
+        "instructions": ep.system_prompt,
+        "input": [_user(_flattened(ep))],
+        "reasoning": {"effort": "medium", "mode": "standard", "context": "current_turn"},
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+        "service_tier": "flex",
+        "truncation": "disabled",
+        "max_output_tokens": 32000,
+    }
+    # literally (PREREG §3 H3): o_1, then its routine action as a plain "Agent: ..." line,
+    # then o_2, ...; the message ends with the need-step question
+    prompt = item_text(req.payload["input"][0])
+    assert prompt.startswith("=== console update ")
+    assert prompt.startswith(ep.steps[0].observation + "\nAgent: route(billing)\n"
+                             + ep.steps[1].observation + "\nAgent: route(consent)\n")
+    assert ep.steps[0].observation.endswith("Route it to the team named by its tag: reply "
+                                            "route(<tag>).")
+    assert prompt.endswith("\nAgent: " + ep.steps[ep.need_step - 1].expected_action + "\n"
+                           + ep.need.observation)
+    assert prompt.endswith("Sample LINDEN needs its freezer slot now. Options:\nA) 310\nB) 308"
+                           "\nC) 306\nD) 303\nE) 304\nF) 311\nG) 307\nH) 309\nI) 302\nJ) 305\n"
+                           "Reply store(<letter>) with the letter of the correct option.")
+
+
+class _FirstRequestOnly:
+    """A transport that records the request it gets and fails it, so `run_episode` ends the
+    episode there (API_ERROR): the episode's first request as the harness sends it, without
+    playing a default-volume episode to its end."""
+
+    def __init__(self):
+        self.calls = []
+
+    def send(self, payload):
+        self.calls.append(payload)
+        raise openai.APIConnectionError(
+            request=httpx.Request("POST", "https://example.invalid/v1/responses"))
+
+
+# The registered default config's single-turn request (observed-nonrec-far, main template 0):
+# sha256 of its body as canonical JSON (sorted keys, no spaces, UTF-8), its size and the
+# prompt's token count (o200k_base)
+DEFAULT_SINGLE_TURN_SHA256 = "21eef3b03539d4f7d90c180da9b60eff5e9f0f8f4b9e111780027801da2d4f9c"
+DEFAULT_SINGLE_TURN_BYTES, DEFAULT_SINGLE_TURN_PROMPT_TOKENS = 83_443, 31_647
+
+
+def test_single_turn_full_request_on_the_registered_default_config():
+    """The request luna's sweep sends: on the default generator config (hash 3d6bc648..., the
+    config its G1 is recorded on, `registered.LUNA_GENERATOR_HASH`), observed-nonrec-far, main
+    template 0, at luna's registered settings. Its whole body, as a literal with the flattened
+    prompt rebuilt by hand and as a digest of every byte; and that it is F-0's first request
+    on that episode, as the harness sends it, in every key but `input`."""
+    (_, eps), = generate("main", [0], PRESETS["default"],
+                         [TaskCell.from_id("observed-nonrec-far")], ("base",))
+    (ep,) = eps
+    assert ep.config_hash == registered.LUNA_GENERATOR_HASH == registered.G1_PASSED[
+        "gpt-6-luna"] == "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b"
+    assert (ep.episode_id, ep.need_step, ep.n_steps) == (
+        "main-000000/observed-nonrec-far/base", 20, 21)
+    cfg = HarnessConfig(model="gpt-6-luna",
+                        reasoning_effort=registered.registered_effort("gpt-6-luna"),
+                        reasoning_mode=registered.LUNA_REQUEST["mode"],
+                        service_tier=registered.LUNA_REQUEST["service_tier"])
+    control = single_turn_control(ep)
+    req = single_turn.build_request(control, cfg)
+    assert req.kind == "step" and req.trace == ["U0"]
+    assert req.payload == {
+        "model": "gpt-6-luna",
+        "instructions": ep.system_prompt,
+        "input": [_user(_flattened(ep))],
+        "reasoning": {"effort": "medium", "mode": "standard", "context": "current_turn"},
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+        "service_tier": "flex",
+        "truncation": "disabled",
+        "max_output_tokens": 32000,
+    }
+    body = json.dumps(req.payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    assert len(body) == DEFAULT_SINGLE_TURN_BYTES
+    assert hashlib.sha256(body.encode("utf-8")).hexdigest() == DEFAULT_SINGLE_TURN_SHA256
+    assert control["prompt_tokens"] == DEFAULT_SINGLE_TURN_PROMPT_TOKENS
+    prompt = item_text(req.payload["input"][0])
+    assert prompt.startswith("=== console update 16:48:13 ===\n--- log tail (earlier lines "
+                             "omitted) ---\n")
+    assert prompt.startswith(ep.steps[0].observation + "\nAgent: route(billing)\n"
+                             + ep.steps[1].observation + "\nAgent: route(consent)\n"
+                             + ep.steps[2].observation + "\nAgent: ack(BX-H5N7)\n")
+    assert prompt.count("\nAgent: ") == ep.need_step == 20
+    assert prompt.endswith("--- end of log ---\nEVENT: Sample LINDEN needs its freezer slot "
+                           "now. Options:\nA) 310\nB) 308\nC) 306\nD) 303\nE) 304\nF) 311\n"
+                           "G) 307\nH) 309\nI) 302\nJ) 305\nReply store(<letter>) with the "
+                           "letter of the correct option.")
+    assert req.payload["instructions"].startswith(
+        "You are the operator of the sample-tracking console at the Eastfield biobank.\n")
+    assert NOTES_INSTRUCTION not in req.payload["instructions"]
+    # F-0's first request on the same episode, as the harness sends it
+    first = _FirstRequestOnly()
+    run = run_episode(ep, CELLS["F-0"], cfg, first)
+    assert run.exit_reason == "API_ERROR" and len(first.calls) == 1
+    (f0,) = first.calls
+    assert f0["input"] == [_user(ep.steps[0].observation)]
+    assert req.payload == {**f0, "input": [_user(_flattened(ep))]}
+
+
+def test_single_turn_request_is_f0s_with_the_flattened_prompt(small_eps):
+    """On every non-recoverable base episode (3 templates x 4 task cells): the single-turn
+    request equals F-0's first request as the harness sends it, every key but `input`, whose
+    one user message holds exactly the observations F-0 sends at the need step, in the same
+    order, with the oracle's routine actions between them."""
+    eps = [e for e in small_eps if not e.cell.recoverable]
+    assert len(eps) == 12 and {e.cell.id for e in eps} == set(single_turn.NONREC_TASK_CELLS)
+    for ep in eps:
+        fake = FakeModel()
+        run_episode(ep, CELLS["F-0"], HarnessConfig(), fake)
+        first, at_need = fake.calls[0], fake.calls[ep.need_step]
+        payload = single_turn.build_request(single_turn_control(ep), HarnessConfig()).payload
+        assert payload == {**first, "input": [_user(_flattened(ep))]}
+        assert [item_text(i) for i in at_need["input"] if i.get("role") == "user"] == (
+            ep.observations[:ep.need_step + 1])
+        assert at_need["instructions"] == payload["instructions"] == ep.system_prompt
+        assert NOTES_INSTRUCTION not in payload["instructions"]
+
+
+def test_single_turn_exists_for_nonrecoverable_cells_only(small_eps):
+    """D36: a single prompt cannot serve a lookup, so there is no control, and no request,
+    for a recoverable task cell."""
+    rec = next(e for e in small_eps if e.cell.recoverable)
+    with pytest.raises(ValueError, match="non-recoverable"):
+        single_turn_control(rec)
+    with pytest.raises(ValueError, match="non-recoverable"):
+        single_turn.task_cells([rec.cell.id])

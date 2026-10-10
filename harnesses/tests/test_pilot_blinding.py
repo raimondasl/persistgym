@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from harnesses import blinding, cli, runner
+from harnesses import blinding, cli, registered, runner
 from harnesses.cells import CELLS
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -217,15 +217,25 @@ def test_run_id_cannot_move_episodes_out_of_raw(tmp_path, run_id):
     assert not list(tmp_path.rglob("*"))
 
 
-def test_cli_refuses_a_path_run_id_before_any_transport(monkeypatch, capsys):
+def test_cli_refuses_a_path_run_id_before_any_transport(monkeypatch, capsys, tmp_path):
+    """`run` (a luna pilot, with R6's hard stop off: R6 refuses that pilot first) and
+    `single-turn` (luna's single-turn pilot on the default config, which R6 lets through)
+    refuse a run id that is not a plain folder name before building a transport."""
     def no_transport(*a, **k):
         raise AssertionError("must refuse before building a transport")
     monkeypatch.setattr(cli, "_guarded_transport", no_transport)
-    assert cli.main(["run", "--cell", "F-r", "--n", "1", "--task-cell", "derived-rec-far",
-                     "--gen-set", "W_tokens=6400", "--gen-set", "v_tokens=400",
-                     "--gen-set", "assumed_max_reply_tokens=200",
-                     "--run-id", "../../leak", "--approved-block", "x",
-                     "--planned-usd", "1"]) == 2
+    monkeypatch.setattr(cli, "RESULTS", tmp_path / "results")
+    small = ["--gen-set", "W_tokens=6400", "--gen-set", "v_tokens=400",
+             "--gen-set", "assumed_max_reply_tokens=200"]
+    assert cli.main(["single-turn", "--n", "1", "--run-id", "../../leak",
+                     "--approved-block", "x", "--planned-usd", "1"]) == 2
+    assert "plain folder name" in capsys.readouterr().err
+    run = ["run", "--cell", "F-r", "--n", "1", "--task-cell", "derived-rec-far", *small,
+           "--run-id", "../../leak", "--approved-block", "x", "--planned-usd", "1"]
+    assert cli.main(run) == 2
+    assert capsys.readouterr().err.startswith(f"refused: {registered.R6_STOP}")
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    assert cli.main(run) == 2
     assert "plain folder name" in capsys.readouterr().err
 
 

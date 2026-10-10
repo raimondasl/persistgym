@@ -483,7 +483,10 @@ def test_hidden_values_of_a_variant_template():
 
 # --- the CLI and the guard -------------------------------------------------------------------
 
-def test_reasoning_check_cli_writes_the_report_and_unlocks_sols_runs(tmp_path, capsys):
+def test_reasoning_check_cli_writes_the_report_and_unlocks_sols_runs(tmp_path, capsys,
+                                                                     monkeypatch, pre_r6):
+    """With R6's hard stop off: an ENGAGED check unlocks sol's validity run (R3's rule as
+    registered). With it on, as it is, sol's runs refuse whatever the check says."""
     eps = _eps()
     _runs(tmp_path, eps, lambda cid: _fake(eps, 40))
     results = tmp_path / "results"
@@ -505,13 +508,17 @@ def test_reasoning_check_cli_writes_the_report_and_unlocks_sols_runs(tmp_path, c
     assert "G1_PASSED" in registered.check_run_settings("persistgym", SOL, "high", "F-0",
                                                         variant, results, split="main",
                                                         variant="base")
+    monkeypatch.setattr(registered, "R6_HARD_STOP", True)
+    assert registered.check_run_settings(
+        "persistgym_validity", SOL, "high", "F-0", variant, results, split="validity",
+        variant="restated").startswith(registered.R6_STOP)
     # bad arguments refuse
     assert cli.main([*args[:1], "../x", IDS[1], *args[3:]]) == 2
     assert cli.main([*args[:1], IDS[0], IDS[0], *args[3:]]) == 2
     assert "refused:" in capsys.readouterr().err
 
 
-def test_a_not_engaged_check_keeps_sols_runs_refused(tmp_path, capsys):
+def test_a_not_engaged_check_keeps_sols_runs_refused(tmp_path, capsys, pre_r6):
     eps = _eps()
     _runs(tmp_path, eps, lambda cid: _fake(eps, 5))
     results = tmp_path / "results"

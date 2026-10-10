@@ -37,6 +37,18 @@ from persistgym.episode import Episode
 ACTION_LINE = re.compile(r"ACTION:\s*(.+)", re.IGNORECASE)
 CALL = re.compile(r"([A-Za-z_]+)\s*\(\s*([^()]*?)\s*\)")
 
+OTHER_VERBS = ("route", "alert", "ok", "ack", "lookup")
+"""The verbs an agent may use besides the episode's need verb: the routine steps' and
+`lookup`. With the need verb they are the known verbs of the non-strict parse
+(`known_verbs`)."""
+
+
+def known_verbs(need_verb: str) -> set[str]:
+    """The verbs the non-strict parse reads anywhere in a reply (PREREG D4): `OTHER_VERBS` and
+    the episode's need verb."""
+    return {*OTHER_VERBS, need_verb.lower()}
+
+
 INVALID_REPLY_OUTCOMES = frozenset({"incomplete"})
 """Outcomes a harness may declare with `EpisodeEnv.step(reply, invalid=...)`: the reply is
 scored wrong without being parsed. "incomplete": the response stopped at its output cap
@@ -139,7 +151,7 @@ class EpisodeEnv:
         self.ep = episode
         self.cfg = episode.config
         self._renderer = renderer_for(episode) if episode.lookup.available else None
-        self.known_verbs = {"route", "alert", "ok", "ack", "lookup", episode.need_verb}
+        self.known_verbs = known_verbs(episode.need_verb)
         self.reset()
 
     # ------------------------------------------------------------------

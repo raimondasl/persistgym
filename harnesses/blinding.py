@@ -9,7 +9,11 @@ For an experiment in `BLINDED_EXPERIMENTS`:
   `results/raw/<experiment>/<run_id>/`;
 * the committed `results/<experiment>/<run_id>/` gets `meta.json`, whose `tokens` leave out
   `reasoning_tokens`, and `summary.json` (`run_summary`): errors, latency, cost and the
-  echo-match rates of `reasoning.context` and `reasoning.effort`, nothing else;
+  echo-match rates of `reasoning.context` and `reasoning.effort`, and for a run of H3's
+  single-turn control the kinds of action its replies give (`reply_action_classes`: by the
+  verb alone, never the option), nothing else. The classes bound that arm's pilot success
+  from above; a pilot commits them only as a technical choice the researcher approves in
+  results/decisions.md (2026-10-10 entry; `reply_action_classes`);
 * `meta.json`'s `parallel` (`harnesses.parallel.ParallelPlay.info`) is cut to
   `PARALLEL_FIELDS` (`blinded_parallel`), and the whole block goes to the gitignored
   `results/raw/<experiment>/<run_id>/parallel.json` (`runner.PARALLEL_INFO`), next to the
@@ -78,6 +82,7 @@ from pathlib import Path
 
 from harnesses import registered
 from persistgym.config import PRESET_HASHES
+from persistgym.controls import REPLY_ACTION_CLASSES
 
 BLINDED_EXPERIMENTS = frozenset({"persistgym_pilot"})
 WITHHELD_NOTE = "reasoning_tokens withheld: pilot blinding (PREREG §11)"
@@ -188,9 +193,31 @@ def _echo_match(eps: list[dict]) -> dict:
     return dict(sorted(out.items()))
 
 
-def run_summary(eps: list[dict], *, blinded: bool) -> dict:
-    """The committed summary of one run (one harness cell). Allowlisted fields only."""
-    return {
+def reply_action_classes(eps: list[dict]) -> dict[str, int]:
+    """H3's single-turn control: how many replies the scorer reads as each kind of action
+    (`persistgym.controls.reply_action_class`, by the verb alone: the need verb, a routine or
+    lookup verb, another verb, none), every class listed. A prompt with no reply read (an
+    API error, the run's stop, a stop on an echo mismatch) is in no class; its exit reason is
+    in `errors`. An incomplete reply is classed on its partial text, so the classes do not
+    count incomplete replies apart (an incomplete need step scores 0: an outcome).
+
+    It never says which option a need-verb reply chose or whether that option is right, but
+    it is not free of success: the need-verb count bounds the run's successes from above, and
+    the other classes count prompts that scored 0. For a pilot it therefore bounds the
+    single-turn arm's pilot success from above, which PREREG §11's list of what pilots report
+    does not include. A pilot commits it anyway, as a technical choice the researcher approves
+    in results/decisions.md (2026-10-10 entry), as PR #13's choice is recorded in PREREG §11
+    "As implemented": the pilot's purpose is to check the control's validity (does luna answer
+    the need EVENT of the flattened prompt; harnesses/DESIGN.md §7.7, §11), and that cannot
+    be checked blind. Pilot data are excluded from all analyses (PREREG §11)."""
+    got = Counter(e.get("reply_action_class") for e in eps)
+    return {c: got.get(c, 0) for c in REPLY_ACTION_CLASSES}
+
+
+def run_summary(eps: list[dict], *, blinded: bool, reply_actions: bool = False) -> dict:
+    """The committed summary of one run (one harness cell, or one single-turn control run,
+    which adds `reply_action_classes` with `reply_actions`). Allowlisted fields only."""
+    out = {
         "blinded": blinded,
         "n_episodes": len(eps),
         "errors": _errors(eps),
@@ -198,6 +225,9 @@ def run_summary(eps: list[dict], *, blinded: bool) -> dict:
         "cost_usd": _cost(eps),
         "echo_match": _echo_match(eps),
     }
+    if reply_actions:
+        out["reply_action_classes"] = reply_action_classes(eps)
+    return out
 
 
 # --- the pooled pilot report ---------------------------------------------------------------
@@ -246,15 +276,24 @@ def pool_key(model: str, effort: str, generator_hash: str | None = None) -> str:
     return f"{model} ({', '.join(parts)})" if parts else model
 
 
+SINGLE_TURN_CONTROL = "single_turn"
+"""The `control` of a prompt record of H3's single-turn control (harnesses/single_turn.py)."""
+
+
 def is_left_out(e: dict) -> bool:
     """Whether the pooled report leaves an episode record out: an episode of PREREG §17.4's
-    pilot of sol's H1 replication, sol (or a snapshot or alias of it) at medium effort on the
+    pilot of sol's H1 replication, sol (or a dated snapshot of it) at medium effort on the
     default generator config in W-0 or W-n-0 (`registered.H1_REPLICATION_PILOT_CELLS`).
     Those runs would join block 1's sol pool (F-r and F-0 at medium on the default config),
     which earlier reports have shown, so any report with them would show the window cells'
     reasoning tokens as the difference: one arm's after one run, and the window cells' against
     the full-history cells' after both. They are read from their costs rows and blinded
-    summary.json files only."""
+    summary.json files only.
+    The same holds for a prompt of a pilot of H3's single-turn control (`control`
+    `single_turn`): it is one call, not an episode of a harness cell, and it would join luna's
+    reported pool, showing that arm's reasoning tokens as the difference."""
+    if e.get("control") == SINGLE_TURN_CONTROL:
+        return True
     return (registered.model_family(str(e.get("model"))) == registered.H1_REPLICATION_MODEL
             and _effort(e) == registered.H1_REPLICATION_EFFORT
             and e.get("generator_config_hash") in (None, PRESET_HASHES["default"])
@@ -312,6 +351,8 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
             "runs_left_out": {"run_ids": sorted(left_out),
                               "why": ("PREREG §17.4: the pilot of sol's H1 replication (W-0 "
                                       "and W-n-0, sol at medium on the default config) is "
-                                      "never pooled; read its costs rows and summary.json")},
+                                      "never pooled, nor is a pilot of H3's single-turn "
+                                      "control (PREREG §3 H3); read their costs rows and "
+                                      "summary.json")},
             "rule": ("PREREG §11 pilot blinding: validity levels, pooled tokens, errors, "
                      "latency and cost only; no per-arm success or per-arm reasoning tokens")}

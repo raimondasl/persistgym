@@ -465,3 +465,39 @@ Also new since the 2026-10-06 check:
 **Approval.** The researcher's merge of the pull request that adds this entry adopts R6 and A7 and the code above, records "S1: yes", and approves block `3-arc` up to $470 billed. It approves nothing for `3-persistgym`.
 
 **Spend** (billed): $328.94 in all (phase 0 $20.57, 1a $18.15, 1b $290.22). The researcher's target was about $560. With S1 added (the researcher, 2026-10-09, told it adds about $172), S1 and S2 at the forecast bring the total to about $673-717, and luna to about $709-787. This entry's pull request is $0.
+
+## 2026-10-09: G1 gate for gpt-6-luna (PREREG §4.4, §10.2): Claude proposes GO
+Gate metrics from `uv run python -m analysis.g1` at commit `aeb6d7c` on a clean tree (`results/gates/g1-20261010T001658Z/`). That run includes both $0 audits. The researcher's spot-check findings are committed in the same branch (`results/spotcheck/g1-validity-0-20-3d6bc648/findings.csv`).
+- **LLM rates.** luna's validity runs: F-0, validity templates 0-19 × 8 task cells, default config `3d6bc648…`, medium effort, Flex.
+  - **Restated-at-need:** 160/160 = 100% (gate ≥ 85%): **met**.
+  - **Fact withheld:** 19/160 = 11.9% (gate ≤ 20%, pooled over the 8 task cells; D39): **met**.
+  - No episode was excluded, and every episode ended `DONE`.
+- **Per-cell withheld rates** are reported, not gated (D39): 0-6 of 20 per cell.
+  - derived-nonrec-far stands at 6/20 (30%). Under chance (10%), a single cell reaches 6 or more of 20 with probability 0.011. At least one of 8 cells does so with probability 0.087.
+  - The audits and the spot-check found no shortcut in that cell.
+  - Noted as a descriptive point for the paper, which reports the withheld rate per cell. It changes no rule.
+- **Programmatic oracle and $0 audits** (`persistgym audit`, default preset), on the validity templates 0-19 (480 episodes) and on main templates 0-999 (24,000 episodes):
+  - every check passes;
+  - the key and text oracles score 1.00 on the base and restated renderings;
+  - the highest no-memory baseline is 0.100 (gate ≤ 0.20);
+  - the partial-memory gates pass, with 0 narrowing templates.
+- **Researcher spot-check:** 160 of 160 episodes reviewed, all `no_shortcut`, with 0 possible shortcuts, 0 shortcuts and no notes. PREREG sets no numeric rule here.
+- **Reported only:** gpt-6.1-sol on the default config (R4; its main runs are dropped by R6): restated 80/80, withheld 9/80.
+- **Scoop search:** the search of 2026-10-09, recorded in the R6 entry above. VISTA (arXiv 2610.02200) overlaps partially, so D31 does not fire. A per-component ablation under ARC's harness has not appeared.
+- **Spend to date:** $328.94 billed (phase 0 $20.57, 1a $18.15, 1b $290.22).
+- **Proposal: GO.**
+  - G1 releases luna's main sweep: the replay-off cells and controls, block `3-persistgym`.
+  - Before that block's approval:
+    - the power re-simulation that sets T (R6 change 6: the frozen rule, capped at 200), with W, v and T recorded here;
+    - the $0 code: the repeat-1 option, the single-turn control runner with its payload snapshot test, and a luna guard in `harnesses/registered.py`.
+  - Under R6 change 7, a NO-GO would stop PersistGym, and the paper would report the ARC leg alone.
+- **The researcher makes the go/no-go call.**
+
+## 2026-10-09: G1: GO (researcher)
+In the researcher's words, 2026-10-09, after the G1 metrics above: "G1 - go". The researcher made the call after reviewing the 160 spot-check episodes themself and reading the metrics (PR #53).
+- **Released:** luna's main sweep (block `3-persistgym`), once these are in place:
+  - the power re-simulation sets T (R6 change 6), and W, v and T are recorded here;
+  - the $0 runner code is merged;
+  - the block's own approval line is merged.
+- **Not released:** sol's H1 replication main runs (R6). `REPLICATION_G1_PASSED` stays empty, so those runs still fail closed.
+

@@ -156,3 +156,295 @@ def test_main_writes_tables_and_meta(tmp_path):
     meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
     assert meta["experiment"] == "power_sim" and meta["seeds"] == [ps.DEFAULT_SEED]
     assert sorted(meta["outputs"]) == ["h2_sol_power.csv", "sec10_power.csv"]
+
+
+# --------------------------------------------------------------------------------------------
+# Part 3: luna's H1 and H3
+# --------------------------------------------------------------------------------------------
+def _toy_luna():
+    """4 templates with hand-checkable estimands (see test_luna_estimands_on_toy_data)."""
+    return {k: np.array(v, dtype=float) for k, v in {
+        "f0_onr": [1, 1, 1, 0], "w0_onr": [0, 0, 1, 0], "f0_or": [1, 1, 1, 1],
+        "w0_or": [1, 1, 1, 0], "f0_dnr": [1, 0, 1, 1], "st_onr": [1, 1, 0, 1],
+        "st_dnr": [1, 1, 1, 1]}.items()}
+
+
+def test_luna_estimands_on_toy_data():
+    y = _toy_luna()
+    est = ps.luna_estimates(y)
+    # Penalty_NR = 0.75 - 0.25, Penalty_R = 1.0 - 0.75
+    assert est["penalty_nr"] == pytest.approx(0.50)
+    assert est["penalty_r"] == pytest.approx(0.25)
+    assert est["delta_h1"] == pytest.approx(0.25)
+    # single-turn pooled 7/8, F-0 pooled 6/8 over the 2 NR-far cells
+    assert est["delta_h3"] == pytest.approx(0.125)
+    vals = ps.luna_per_template(y)
+    assert vals.dtype.kind == "i"
+    assert vals[:, 0].tolist() == [1, 1, 0, -1] and vals[:, 1].tolist() == [0, 1, -1, 1]
+    assert vals[:, 0].mean() == pytest.approx(est["delta_h1"])
+    assert vals[:, 1].mean() / 2 == pytest.approx(est["delta_h3"])
+
+
+@pytest.mark.parametrize("setup", [ps.LUNA_PRIMARY, ps.LUNA_PESSIMISTIC,
+                                   ps.LunaSetup(r_shift=0.02, delta_h3=0.03)],
+                         ids=["primary", "pessimistic", "r_shift"])
+def test_luna_levels_give_the_target_deltas_exactly(setup):
+    lv = setup.levels()
+    delta_h1 = (lv["f0_onr"] - lv["w0_onr"]) - (lv["f0_or"] - lv["w0_or"])
+    delta_h3 = (lv["st_onr"] + lv["st_dnr"] - lv["f0_onr"] - lv["f0_dnr"]) / 2
+    assert delta_h1 == pytest.approx(setup.delta_h1, abs=1e-12)
+    assert delta_h3 == pytest.approx(setup.delta_h3, abs=1e-12)
+    # Penalty_NR is fixed by the design (W-0 at the no-memory level on NR)
+    assert lv["w0_onr"] == setup.p_w0_nr
+    assert lv["w0_or"] == pytest.approx(setup.p_w0_nr + setup.delta_h1 + setup.r_shift)
+    with pytest.raises(ValueError):
+        ps.LunaSetup(p_f0_obs=0.99, r_shift=0.02).levels()
+
+
+@pytest.mark.parametrize("setup", [ps.LUNA_PRIMARY, ps.LUNA_PESSIMISTIC],
+                         ids=["primary", "pessimistic"])
+def test_luna_simulation_hits_the_population_targets(setup):
+    y = ps.simulate_luna(60_000, np.random.default_rng(2), setup)
+    for cell, p in setup.levels().items():
+        assert y[cell].mean() == pytest.approx(p, abs=0.008), cell
+    est = ps.luna_estimates(y)
+    assert est["delta_h1"] == pytest.approx(0.10, abs=0.01)
+    assert est["delta_h3"] == pytest.approx(0.0, abs=0.006)
+
+
+def test_luna_simulation_is_seeded():
+    a = ps.simulate_luna(300, np.random.default_rng(4))
+    b = ps.simulate_luna(300, np.random.default_rng(4))
+    assert all((a[k] == b[k]).all() for k in ps.LUNA_CELLS)
+    assert a["f0_onr"].shape == (300,) and set(np.unique(a["w0_or"])) <= {0.0, 1.0}
+    # a scenario with SD 0 draws the same random numbers (the SD only scales them)
+    c = ps.simulate_luna(300, np.random.default_rng(4), ps.LUNA_PESSIMISTIC)
+    assert c["f0_onr"].shape == (300,)
+
+
+def test_category_bootstrap_matches_index_bootstrap():
+    rng = np.random.default_rng(9)
+    vals = np.column_stack([rng.integers(-2, 3, 60), rng.integers(-2, 3, 60)])
+    fast = ps.category_bootstrap_sums(vals, np.random.default_rng(1), 100_000)
+    idx = np.random.default_rng(2).integers(0, 60, size=(100_000, 60))
+    slow = vals[idx].sum(axis=1)
+    assert fast.shape == slow.shape == (100_000, 2)
+    assert fast.mean(axis=0) == pytest.approx(vals.sum(axis=0), abs=0.1)
+    assert fast.mean(axis=0) == pytest.approx(slow.mean(axis=0), abs=0.1)
+    assert fast.std(axis=0) == pytest.approx(slow.std(axis=0), rel=0.02)
+    for q in (0.025, 0.05, 0.5, 0.95, 0.975):
+        assert np.quantile(fast, q, axis=0) == pytest.approx(np.quantile(slow, q, axis=0),
+                                                             abs=1.0)
+
+
+def test_analyse_luna_counts_ties_on_the_null_side():
+    # 20 templates: every cell succeeds, except template 0, where F-0 fails on all 3 of its
+    # cells, W-0 fails on both and the single-turn control succeeds. Delta_H1 is 0 in every
+    # resample (p1 = 1). Delta_H3* = N / 20 with N ~ Binomial(20, 1/20), the copies of
+    # template 0, so P(Delta_H3* >= 5pp) = P(N >= 1) = 1 - 0.95^20.
+    y = {k: np.ones(20) for k in ps.LUNA_CELLS}
+    for k in ("f0_onr", "f0_or", "f0_dnr", "w0_onr", "w0_or"):
+        y[k][0] = 0.0
+    r = ps.analyse_luna(y, np.random.default_rng(3), boot=20_000)
+    assert r["delta_h1"] == 0 and r["delta_h3"] == pytest.approx(0.05)
+    assert r["p1"] == 1.0 and not (r["h1_worst"] or r["h1_holm"] or r["h1_unadj"])
+    assert r["p3"] == pytest.approx(1 - 0.95 ** 20, abs=0.01)
+    assert not r["h3_unadj"] and not r["h3_ci90_within"]
+
+
+def test_holm_reject():
+    assert ps.holm_reject([0.01, 0.04]).tolist() == [True, True]
+    assert ps.holm_reject([0.04, 0.01]).tolist() == [True, True]
+    assert ps.holm_reject([0.02, 0.06]).tolist() == [True, False]
+    assert ps.holm_reject([0.03, 0.04]).tolist() == [False, False]
+    assert ps.holm_reject([0.025, 0.05]).tolist() == [True, True]  # at the levels: rejected
+    # family of 4 with 2 members counted as not rejected: steps 0.0125, then 0.05 / 3
+    assert ps.holm_reject([0.012, 0.016, 1, 1]).tolist() == [True, True, False, False]
+    assert ps.holm_reject([0.013, 0.001, 1, 1]).tolist() == [True, True, False, False]
+    assert ps.holm_reject([0.013, 0.02, 1, 1]).tolist() == [False, False, False, False]
+
+
+def _h1_design(y):
+    t = len(y["f0_onr"])
+    yy = np.concatenate([y["f0_onr"], y["w0_onr"], y["f0_or"], y["w0_or"]])
+    w, r = np.repeat([0.0, 1.0, 0.0, 1.0], t), np.repeat([0.0, 0.0, 1.0, 1.0], t)
+    return ps._informative(yy, np.tile(np.arange(t), 4), np.column_stack([w, r, w * r]))
+
+
+def test_fe_logit_mle_matches_statsmodels_and_its_signs_under_separation():
+    # Away from the ceiling nothing diverges: the two routes give the same estimates.
+    mild = ps.LunaSetup(p_f0_obs=0.7, p_f0_der=0.7, p_w0_nr=0.3)
+    y = ps.simulate_luna(150, np.random.default_rng(5), mild)
+    yk, codes, z, _ = _h1_design(y)
+    fast = ps._fe_logit_mle(yk, codes, z, "fast")
+    ref = ps._fe_logit_mle(yk, codes, z, "statsmodels")
+    assert fast[1] == pytest.approx(ref[1], rel=1e-6, abs=1e-8)
+    assert ps.h1_glm(y) == pytest.approx(ref[1][-1], rel=1e-6)
+    # At the primary levels the W-0 effect often runs off (quasi-separation); the interaction's
+    # sign still agrees with statsmodels whenever it is not an exact 0.
+    rng, separated = np.random.default_rng(6), 0
+    for _ in range(40):
+        yk, codes, z, _ = _h1_design(ps.simulate_luna(50, rng))
+        fast = ps._fe_logit_mle(yk, codes, z, "fast")
+        ref = ps._fe_logit_mle(yk, codes, z, "statsmodels")
+        separated += abs(ref[1][0]) > 15
+        if abs(ref[1][-1]) > 1e-6:
+            assert np.sign(fast[1][-1]) == np.sign(ref[1][-1])
+    assert separated >= 5
+
+
+def test_h1_glm_interaction_has_the_sign_of_delta_h1():
+    # The FE logit's interaction is the logit-scale difference of penalties. With W-0's R level
+    # above its NR level and F-0 equal on R and NR, it is positive whatever the scale.
+    setup = ps.LunaSetup(p_f0_obs=0.7, p_f0_der=0.7, p_w0_nr=0.3, sd=0.0)
+    lv = setup.levels()
+    target = special.logit(lv["w0_or"]) - special.logit(lv["w0_onr"])
+    est = ps.h1_glm(ps.simulate_luna(20_000, np.random.default_rng(7), setup))
+    # with 4 outcomes per template the FE logit overstates logit effects (incidental
+    # parameters), so only the sign and the rough size are checked
+    assert est > 0 and target > 0 and 0.5 * target < est < 3 * target
+
+
+def test_h3_glm_ame_matches_a_statsmodels_computation():
+    setup = ps.LunaSetup(p_f0_obs=0.75, p_f0_der=0.65, p_w0_nr=0.3, delta_h3=0.05)
+    y = ps.simulate_luna(120, np.random.default_rng(8), setup)
+    t = 120
+    yy = np.concatenate([y["f0_onr"], y["f0_dnr"], y["st_onr"], y["st_dnr"]])
+    der, arm = np.repeat([0.0, 1.0, 0.0, 1.0], t), np.repeat([0.0, 0.0, 1.0, 1.0], t)
+    yk, codes, z, g = ps._informative(yy, np.tile(np.arange(t), 4),
+                                      np.column_stack([der, arm]))
+    dummies = np.zeros((len(yk), g))
+    dummies[np.arange(len(yk)), codes] = 1.0
+    res = sm.GLM(yk, np.column_stack([dummies, z]), family=sm.families.Binomial()).fit()
+    alpha, gamma, beta = res.params[:g], res.params[g], res.params[g + 1]
+    ame = sum(special.expit(a + gamma * c + beta) - special.expit(a + gamma * c)
+              for a in alpha for c in (0, 1)) / (2 * t)  # no-variation templates add 0
+    assert ps.h3_glm_ame(y) == pytest.approx(ame, rel=1e-6)
+    assert ps.h3_glm_ame({k: np.ones(30) for k in ps.LUNA_CELLS}) == 0.0
+
+
+def test_run_luna_power_grows_with_T_and_readings_nest():
+    df = ps.run_luna(150, 3, templates=(50, 100, 200), boot=2000)
+    for col in ("P_h1_worst_step", "P_h3_worst_step", "P_h1_unadjusted", "P_h3_unadjusted"):
+        assert (np.diff(df[col]) >= -0.02).all(), col
+        assert df[col].iloc[-1] - df[col].iloc[0] >= 0.15, col
+    # per data set: holm4 rejection => worst-step rejection => Holm rejection => unadjusted
+    for h in ("h1", "h3"):
+        assert (df[f"P_{h}_holm4"] <= df[f"P_{h}_worst_step"]).all()
+        assert (df[f"P_{h}_worst_step"] <= df[f"P_{h}_holm"]).all()
+        assert (df[f"P_{h}_holm"] <= df[f"P_{h}_unadjusted"]).all()
+        assert (df[f"P_{h}_supported_worst_step"] <= df[f"P_{h}_worst_step"]).all()
+    assert df.mean_delta_h1_pp.between(7, 13).all() and df.mean_delta_h3_pp.abs().max() < 2
+    assert df.equals(ps.run_luna(150, 3, templates=(50, 100, 200), boot=2000))
+
+
+def test_run_luna_size_at_the_null_boundaries():
+    null = ps.luna_sensitivity_setups(ps.LUNA_PRIMARY, [])[-1][1]
+    assert null.levels()["st_onr"] == ps.LUNA_PRIMARY.p_f0_obs
+    row = ps.run_luna(300, 4, templates=(100,), boot=2000, setup=null).iloc[0]
+    assert row.P_h1_worst_step <= 0.06 and row.P_h3_worst_step <= 0.06
+    assert row.P_h1_unadjusted <= 0.10 and row.P_h3_unadjusted <= 0.10
+
+
+def test_luna_decision_picks_the_smallest_T_or_the_cap():
+    rows = []
+    for name, p1, p3 in (("a", (0.5, 0.79, 0.81, 0.9), (0.85, 0.9, 0.95, 0.99)),
+                         ("b", (0.3, 0.4, 0.5, 0.6), (0.9, 0.9, 0.9, 0.9))):
+        for t, x1, x3 in zip((170, 180, 190, 200), p1, p3, strict=True):
+            row = {"scenario": name, "templates": t}
+            for c1, c3 in ps.LUNA_READINGS.values():
+                row.update({c1: x1, c3: x3})
+            rows.append(row)
+    d = ps.luna_decision(pd.DataFrame(rows))
+    first = next(iter(ps.LUNA_READINGS))
+    a = d[(d.scenario == "a") & (d.reading == first)].iloc[0]
+    assert (a.T_h1, a.T_h3, a.T_both, a.T_set, a.T_set_by) == (190, 170, 190, 190, "rule")
+    assert a.all_larger_T_meet
+    b = d[(d.scenario == "b") & (d.reading == first)].iloc[0]
+    assert pd.isna(b.T_both) and b.T_set == 200 and b.T_set_by.startswith("cap")
+    assert b.power_h1_at_T_set == 0.6 and b.power_h3_at_T_set == 0.9
+
+
+def test_luna_sensitivity_setups():
+    out = ps.luna_sensitivity_setups(ps.LUNA_PRIMARY, [ps.LUNA_PESSIMISTIC], (0.0, 1.5))
+    labels = [label for label, _ in out]
+    assert len(out) == 4 + 1 + 1  # 4 swapped fields, sd 1.5 (sd 0 is already a swap), null
+    assert [s.sd for _, s in out].count(0.0) == 1
+    assert "size" in labels[-1]
+    null = out[-1][1]
+    assert null.delta_h1 == 0 and null.delta_h3 == null.h3_margin
+
+
+def _write_episodes(path, records):
+    path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+
+
+def test_validity_template_sd(tmp_path):
+    rng = np.random.default_rng(10)
+    a = ps.intercept_for(0.3, 1.0)
+    recs = []
+    for t in range(400):
+        u = rng.normal(0, 1.0)
+        for _ in range(8):
+            recs.append({"variant": "withheld", "template_id": f"v{t}",
+                         "need_correct": bool(rng.random() < special.expit(a + u)),
+                         "excluded": False})
+            recs.append({"variant": "restated", "template_id": f"v{t}", "need_correct": True,
+                         "excluded": False})
+    recs.append({"variant": "withheld", "template_id": "x", "need_correct": True,
+                 "excluded": True})  # excluded episodes are left out
+    _write_episodes(tmp_path / "episodes.jsonl", recs)
+    df = ps.validity_template_sd([tmp_path / "episodes.jsonl"], step=0.02).set_index("variant")
+    restated = df.loc["restated"]
+    assert np.isnan(restated.sd_hat) and "not identified" in restated.note
+    w = df.loc["withheld"]
+    assert w.episodes == 3200 and abs(w.sd_hat - 1.0) < 0.25
+    assert w.sd_ci95_low <= w.sd_hat <= w.sd_ci95_high and w.lr_vs_sd0 > 10
+    assert w.sd_ci95_low <= 1.0 <= w.sd_ci95_high  # covers the truth (this seed)
+
+
+def test_validity_template_sd_on_lunas_committed_runs():
+    paths = sorted(ps.REPO_ROOT.glob(ps.LUNA_VALIDITY_GLOB))
+    if not paths:
+        pytest.skip("luna's validity runs are not in this checkout")
+    df = ps.validity_template_sd(paths).set_index("variant")
+    assert (df.loc["restated", ["episodes", "successes"]] == [160, 160]).all()
+    assert (df.loc["withheld", ["episodes", "successes"]] == [160, 19]).all()
+    assert df.loc["withheld", "sd_hat"] == pytest.approx(0.92, abs=0.02)
+
+
+def test_main_luna_writes_tables_meta_and_summary(tmp_path):
+    args = ["--part", "luna", "--reps", "3", "--luna-boot", "200", "--luna-templates", "50,60",
+            "--luna-sensitivity-templates", "50", "--out-dir", str(tmp_path)]
+    assert ps.main(args) == 0
+    meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
+    assert sorted(meta["outputs"]) == sorted(
+        ["luna_power.csv", "luna_decision.csv", "luna_sensitivity.csv", "luna_validity_sd.csv",
+         "summary.md"])
+    assert [s["name"] for s in meta["config"]["luna_setups"]] == ["primary", "pessimistic"]
+    assert meta["config"]["luna_setups"][1]["sd"] == 0.0
+    power = pd.read_csv(tmp_path / "luna_power.csv")
+    assert len(power) == 4 and set(power.scenario) == {"primary", "pessimistic"}
+    summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    for heading in ("## Assumptions", "## Result: the template count", "## Power by T",
+                    "## What this does not show"):
+        assert heading in summary
+
+
+def test_luna_cli_lists_must_match_the_scenarios():
+    with pytest.raises(SystemExit):
+        ps.main(["--part", "luna", "--luna-names", "a,b,c", "--no-write"])
+    args = ["--part", "luna", "--luna-names", "only", "--luna-p-f0-obs", "0.9",
+            "--luna-p-f0-der", "0.8", "--luna-p-w0-nr", "0.1", "--luna-template-sd", "0.5",
+            "--reps", "2", "--luna-boot", "100", "--luna-templates", "50",
+            "--luna-sensitivity-templates", "", "--luna-validity-glob", "", "--no-write"]
+    assert ps.main(args) == 0
+
+
+def test_h2_holm_steps_option(tmp_path):
+    args = ["--part", "h2", "--reps", "2", "--boot", "50", "--h2-templates", "30",
+            "--h2-holm-steps", "2", "--out-dir", str(tmp_path)]
+    assert ps.main(args) == 0
+    meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
+    assert meta["config"]["h2_setups"][0]["holm_steps"] == 2
+    assert ps.H2Setup().holm_steps == 3  # the default is unchanged for part 2

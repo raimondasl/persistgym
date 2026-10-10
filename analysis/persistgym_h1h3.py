@@ -1,21 +1,27 @@
 """H1 and H3 on gpt-6-luna's PersistGym main sweep, as pre-registered (PREREG §3 H1, §3 H3,
 §2.8, §2.9, §9.1-§9.5, §13 and §15; amendments R2 change 3 and R6 changes 1, 6 and 9).
 
-Run: ``uv run python -m analysis.persistgym_h1h3 [--results-root DIR] [--raw-root DIR]
-[--no-write] [--boot N] [--allow-incomplete] [--rerun RUN=ORIGINAL ...]`` ($0: it reads files
-only). It writes ``<results root>/persistgym_h1h3/<UTC>/h1h3.json``, ``summary.md`` and
-``meta.json``, and prints the summary. It was written and tested on synthetic data only,
-before any outcome of the sweep was read (the researcher's blinding rule of 2026-10-10).
+Run: ``uv run python -m analysis.persistgym_h1h3 --run RUN_ID [--run RUN_ID ...]
+[--rerun RUN=ORIGINAL ...] [--sweep-closed REF] [--results-root DIR] [--raw-root DIR]
+[--no-write] [--boot N] [--no-bayes] [--allow-incomplete]`` ($0: it reads files only). It writes
+``<results root>/persistgym_h1h3/<UTC>/h1h3.json``, ``summary.md`` and ``meta.json``, and prints
+the summary. It was written and tested on synthetic data only, before any outcome of the sweep
+was read (the researcher's blinding rule of 2026-10-10), and revised after two reviews of the
+code (2026-10-10), still blind.
 
 **Inputs.**
 
-* Every folder in ``<results root>/persistgym/`` whose ``meta.json`` is a gpt-6-luna run
-  (the requested model or a dated snapshot of it, `registered.model_family`) of experiment
-  ``persistgym`` on the default generator config (``config.generator_config_hashes`` is
-  exactly ``[registered.LUNA_GENERATOR_HASH]``). Other folders are listed as skipped. A run is
-  one of the 6 run kinds of R6 change 1 (`KINDS`): F-0, W-0, W-n-0 and Σ-n-0 on base
-  episodes, F-0 on the restated-at-need control, and the single-turn control, each at
-  ``repeat_index`` 0 or 1 (a record without the field is repeat 0).
+* The runs named with ``--run`` (harnesses/DESIGN.md §7.8: "the analysis's input list should
+  name every run it reads"): folders of ``<results root>/persistgym/`` whose ``meta.json`` is a
+  gpt-6-luna run (the requested model or a dated snapshot of it, `registered.model_family`) of
+  experiment ``persistgym`` on the default generator config (``config.generator_config_hashes``
+  is exactly ``[registered.LUNA_GENERATOR_HASH]``). A named run that is not found there, or is
+  not such a run, is refused. Every other folder is listed as skipped, with the reason; a luna
+  run that is not named is skipped as "not in the input list", so a forgotten run shows. Without
+  ``--run`` every luna run found is read, and the output is PROVISIONAL. A run is one of the 6
+  run kinds of R6 change 1 (`KINDS`): F-0, W-0, W-n-0 and Σ-n-0 on base episodes, F-0 on the
+  restated-at-need control, and the single-turn control, each at ``repeat_index`` 0 or 1 (a
+  record without the field is repeat 0).
 * ``<results root>/draw/*/draw.json`` for SEED (D15); the bootstrap RNG is
   ``numpy.random.default_rng(SEED + 10)`` (§9.1).
 * The raw transcripts of the window-cell runs,
@@ -23,6 +29,11 @@ before any outcome of the sweep was read (the researcher's blinding rule of 2026
   ``<results root>/raw``), for §2.8's accounting check only.
 * The committed luna power run ``results/power_sim/20261010T030442Z/luna_decision.csv``,
   for the achieved power quoted with the results (§9.4).
+
+**Runtime.** The §2.8 replay reads every line of every window-cell transcript. luna's W-0 and
+W-n-0 transcripts are about 700-760 MB each (gzip), plus about 70 MB per repeat-1 run, so the
+replay alone takes many minutes per run (tens of minutes in all is normal). The Bayesian
+sensitivity fit (below) adds a few minutes; ``--no-bayes`` skips it (PROVISIONAL).
 
 **Episode keys, re-runs and continuations** (harnesses/DESIGN.md §7.8, §7.9; §13). A record is
 keyed on (harness cell, ``episode_id``, ``repeat_index``): every harness cell plays the same
@@ -33,11 +44,23 @@ started (``started_utc``), records in file order. Per key the first *final* reco
 ``ERROR:*`` are not final. Every later record of the key is dropped and listed. A key with two
 ``API_ERROR`` records before its first final one is excluded (§13: a second transport failure),
 and so is one with two and no final record. A key with no final record and fewer than two
-``API_ERROR`` records is *pending* (its re-run or continuation has not landed). A key that
-appears in a later run is accepted only if that run is declared, with ``--rerun RUN=ORIGINAL``,
-as a re-run or continuation of a run that already holds the key; the declarations must match
-the runs listed in ``results/decisions.md`` (§7.8: no tool records the link). An undeclared
-duplicate is refused in any case (exit 2), to be resolved by hand.
+``API_ERROR`` records is *pending* (its re-run or continuation has not landed), unless the sweep
+is closed (``--sweep-closed``, below). A key that appears in a later run is accepted only if
+that run is declared, with ``--rerun RUN=ORIGINAL``, as a re-run or continuation of a run that
+already holds the key; the declarations must match the runs listed in ``results/decisions.md``
+(§7.8: no tool records the link). An undeclared duplicate is refused in any case (exit 2), to
+be resolved by hand.
+
+**A closed sweep** (``--sweep-closed REF``; DESIGN §7.8's last rule). REF names the entry of
+``results/decisions.md`` in which the researcher closed the sweep (no further run will be made);
+it is printed in the summary and written to ``meta.json``. Then a key with no final record is
+excluded, as §7.8 says ("and so is a key with no final record at all (reported with its last
+ending)"), and counted per cell by its last ending; a repeat-0 key of templates 0 to T - 1 that
+no run played is excluded too and counted per cell ("never played"). Both are listed in the
+summary's Deviations section (§13: deviations are listed in every write-up), and the output
+can be FINAL. Two cases still refuse: a key whose last record is a single ``API_ERROR``, whose
+§13 re-run has not been made (§13 re-runs it once; the block's approval covers it), and a run
+kind with no record at all on templates 0 to T - 1 (a missing run, not a closed sweep).
 
 **Exclusions** (§13; R2 change 3, §17.2). A counted record is excluded when the runner marked
 it ``excluded``, ended on an echo mismatch, or (a check of our own) echoed a
@@ -47,12 +70,14 @@ counted per cell, and a cell above 5% is flagged (§13's stop-and-tell rule). Co
 repeat 0 only (§2.9), templates 0 to T - 1 (T = ``registered.LUNA_T`` = 200, R6 change 6).
 
 **Refusal** (exit 2). Without ``--allow-incomplete`` the script refuses while any required
-repeat-0 episode of templates 0 to T - 1 has no record or is pending, in any of the 6 run kinds,
-or a window-cell run's transcript is missing (the accounting check cannot be made). With
-``--allow-incomplete`` it reports what exists, labelled **PROVISIONAL**, with no confirmatory
-claim. ``--boot`` other than 10,000 also labels the output PROVISIONAL (not the registered
-analysis). It refuses in any case on an undeclared duplicate, on a record that does not fit its
-run, and on the §2.8 bug stop.
+repeat-0 episode of templates 0 to T - 1 has no record or is pending, in any of the 6 run kinds
+(with ``--sweep-closed``, only the two cases above), or a window-cell run's transcript is
+missing (the accounting check cannot be made). With ``--allow-incomplete`` it reports what
+exists, labelled **PROVISIONAL**, with no confirmatory claim. Also PROVISIONAL (not the
+registered analysis): ``--boot`` other than 10,000, ``--no-bayes``, and no ``--run`` list. It
+refuses in any case on an undeclared duplicate, on a record that does not fit its run or cannot
+be read (a truncated JSON line, a ``repeat_index`` that is not an integer), on a ``--run`` that
+is not found, and on the §2.8 bug stop.
 
 **The §2.8 accounting check (the bug stop).** Two conditions, on every window-cell (W-0, W-n-0)
 record that reached its need step, in every run read (both repeats, counted or dropped):
@@ -77,48 +102,60 @@ runner records ``need_payload`` before it sends the need step's first call and t
 only after a call returns, so an episode stopped by that very call (``API_ERROR``,
 ``COST_CAP``, ``RUN_STOPPED``, ``ERROR:*``) has no recorded need request: it is skipped, with a
 warning (it is re-run or continued anyway). The same gap in an episode with a final ending is
-a bug.
+a bug. A window-cell record with no ``need_payload.S``: ending ``DONE`` (the episode finished,
+so it played its need step) it is a bug stop; with another final ending (an echo mismatch or
+``MAX_TURNS`` before the need step) it never reached its need step's request, and is counted in
+a warning; with an ending that is not final, it is skipped as above.
 
 **Confirmatory** (§3 H1, §3 H3, §9.1, §9.4; R6 change 9). p(cell) is the mean ``need_correct``
 over the cell's primary episodes.
 
 * **H1.** Penalty_NR = p(F-0, NR) - p(W-0, NR) and Penalty_R = p(F-0, R) - p(W-0, R) on the
   observed-far task cells; Δ_H1 = Penalty_NR - Penalty_R. Test: H0 is Δ_H1 ≤ 0; p1 = the share
-  of bootstrap resamples with Δ_H1* ≤ 0. Model check: the §9.1 confirmatory GLM's logit-scale
-  Δ_H1 is positive (> 1e-8, power_sim's threshold). **Kill** (as written): Δ_H1 < 10pp (point
-  estimate) and the upper bound of its 90% CI < 15pp. **Predictions** (point estimates): the
-  manipulation check Penalty_NR ≥ 25pp; |Penalty_R| ≤ 5pp; the lookups ratio ≥ 1.30 (or, if F-0
-  looked nothing up, the 90% CI of the difference above 0); R_need ≥ 1.30.
+  of bootstrap resamples with Δ_H1* ≤ 0. Model check (§9.4: "the confirmatory GLM estimate has
+  the same sign"): the §9.1 confirmatory GLM's logit-scale Δ_H1 is positive (> 1e-8,
+  power_sim's threshold). When an H1 cell has no outcome variation the logit-scale Δ_H1 is not
+  finite; how the check reads it then is `H1_SEPARATION_RULE` (pending item 1 below). **Kill**
+  (as written): Δ_H1 < 10pp (point estimate) and the upper bound of its 90% CI < 15pp.
+  **Predictions** (point estimates): the manipulation check Penalty_NR ≥ 25pp; |Penalty_R| ≤
+  5pp; the lookups ratio ≥ 1.30 (or, if F-0 looked nothing up, the 90% CI of the difference
+  above 0); R_need ≥ 1.30.
 * **H3.** Δ_H3 = p(single-turn) - p(F-0), both pooled over observed- and derived-nonrec-far.
   Test: H0 is Δ_H3 ≥ 5pp; p3 = the share of resamples with Δ_H3* ≥ 5pp. The prediction holds
   iff the upper bound of the 90% CI is ≤ 5pp (one-sided non-inferiority at 0.05), reported
-  either way. Model check: a binomial GLM with template fixed effects on the H3 cells gives a
-  probability-scale Δ_H3 (average marginal effect of the arm) below 5pp.
+  either way. Model check, as §9.4 registers it: "a binomial GLM with template fixed effects
+  and an arm indicator (single-turn vs multi-turn) on the H3 cells gives a probability-scale
+  Δ_H3 below 5pp" (`h3_glm_literal`; statsmodels, the average marginal effect of the arm,
+  reading 15). power_sim's model, which adds a derived-cell term (``ps.h3_glm_ame``), is a
+  sensitivity analysis only.
 * **Holm** over the family of 2 (H1, H3) at familywise 0.05, the researcher's decision of
   2026-10-06 (R6 change 9); the family of 4, with H2's two tests counted as not rejected
   (p = 1), as a sensitivity analysis. A hypothesis is **supported** only if its Holm test (family
-  of 2) rejects and its model check agrees (§9.4, D26). A result that is neither supported nor
-  killed is called inconclusive (``results/decisions.md``, 2026-10-10).
+  of 2) rejects and its model check agrees (§9.4, D26).
+* **Verdicts.** H1: supported, the kill rule fires (both can hold), or inconclusive
+  (``results/decisions.md``, 2026-10-10: "an H1 or H3 result that is neither supported nor
+  killed is called inconclusive"). H3 has no kill rule: supported; "not supported: the whole 90%
+  CI of Δ_H3 lies above 5pp, against the prediction" (reading 16); or inconclusive. When the
+  Holm test rejects but the model check does not agree, the verdict says so.
 * **Intervals:** template-cluster bootstrap, 10,000 resamples of templates 0 to T - 1 with
   replacement (``rng.integers``), each contrast recomputed from all of the resampled templates'
   episodes in its cells (ratios of sums), percentile 90% and 95% intervals (``numpy.quantile``,
   linear). Every contrast uses the same resamples. Point estimates are exact fractions, so a
   reading on a threshold is judged exactly; a bound or a resample within 1e-9 of a threshold
   counts as equal to it.
-* **GLMs** (§9.1, D25): statsmodels-equivalent binomial GLMs with template fixed effects, fitted
-  by ``analysis.power_sim``'s routines (imported, not copied): templates with no outcome
-  variation are dropped from the GLM only (counted), point estimates by Newton steps with
-  statsmodels' deviance stopping rule (finite under quasi-separation, as statsmodels reports
-  them; `ps._fe_logit_mle`), cluster-robust SEs by template with the G/(G - 1) factor only
-  (`ps.fe_logit(..., correction="clusters")`; not computable when the fit does not converge,
-  for example under quasi-separation, and then reported as such). The §9.1 GLM is fitted on
-  F-0 and W-0, base episodes, all 8 task cells, with the saturated harness x recoverable x
-  derived x distance terms coded so that the reference is (F-0, not recoverable, observed,
-  far): its W-0 x R coefficient is the logit-scale Δ_H1. Both scales are reported (§9.3), and
-  a sign disagreement is flagged. When one of H1's 4 cells has no outcome variation (all 0 or
-  all 1), the logit-scale Δ_H1 is infinite or undefined: the model check still reads the
-  stopping rule's large finite value, as statsmodels reports it, and the output flags it
-  (``logit_delta_h1_finite``), since the data then do not identify the sign.
+* **GLMs** (§9.1, D25). The confirmatory GLM and H3's model check are fitted by ``statsmodels``
+  itself (§9.1: "``statsmodels`` binomial GLM with template dummies and a covariance clustered
+  by template"; `sm_fe_logit`): IRLS with its default stopping rule, template dummies, and the
+  cluster-robust covariance without statsmodels' correction, times G/(G - 1) (§9.1: that factor
+  only). Templates with no outcome variation are dropped from the GLM only (counted). Under
+  quasi-separation statsmodels returns large finite coefficients (its stopping point) and no
+  finite SE; the cell pattern behind it is reported (`logit_status`). ``analysis.power_sim``'s
+  Newton emulation of the same fit (`ps._fe_logit_mle`) is reported next to each estimate as a
+  cross-check, and a sign difference is flagged. The §9.1 GLM is fitted on F-0 and W-0, base
+  episodes, all 8 task cells, with the saturated harness x recoverable x derived x distance
+  terms coded so that the reference is (F-0, not recoverable, observed, far): its W-0 x R
+  coefficient is the logit-scale Δ_H1. Both scales are reported (§9.3), with Wald intervals on
+  the logit scale, and a sign disagreement is flagged.
 
 **Secondary, as registered.**
 
@@ -135,45 +172,63 @@ over the cell's primary episodes.
   ``compacted_between`` (D12; exploratory, §9.10).
 * §9.5 cost outcomes: per task cell, a log-link Poisson GLM (quasi-Poisson variance) with
   template fixed effects and template-clustered covariance (G/(G - 1)), harness indicators
-  against F-0; the ratio is exp(β), with 95% and 90% Wald intervals. Outcomes: provider-reported
-  total tokens, reasoning tokens, lookups, and dollars at list and as the billed estimate.
-  Templates whose outcome is 0 in every row are dropped from the fit (their fixed effect is
-  -inf) and counted. A harness cell with no events at all (for example no lookups) has ratio
-  0 and no interval; with no events in F-0 no ratio is finite and none is reported. Σ-n-0's
-  ratios are exploratory.
-* Every cell's success rate (Σ-n-0 exploratory), exclusions and content failures per cell.
-* If more than one returned model string appears, the H1 and H3 point estimates per string
-  (§6).
+  against F-0 (the comparison is reading 11, not registered); the ratio is exp(β), with 95% and
+  90% Wald intervals. Outcomes: provider-reported total tokens, reasoning tokens, lookups, and
+  dollars at list and as the billed estimate. Templates whose outcome is 0 in every row are
+  dropped from the fit (their fixed effect is -inf) and counted. A harness cell with no events
+  at all (for example no lookups) has ratio 0 and no interval; with no events in F-0 no ratio
+  is finite and none is reported. Σ-n-0's ratios are exploratory.
+* Every cell's success rate (descriptive; Σ-n-0 exploratory), exclusions and content failures
+  per cell.
+* If more than one returned model string appears, Δ_H1 and Δ_H3 per string, with their
+  bootstrap intervals on the same resamples (§6); records whose responses came from more than
+  one string form a group of their own (reading 12).
 
 **Repeats** (§2.9). Repeat 1 only estimates within-template noise: the agreement of the
 outcome between the two plays of each episode, per run kind, descriptive, never in a primary
 result.
 
-**Bayesian GLMM** (§9.1's sensitivity model). Not run: ``bambi`` is not installed, and this
-script adds no dependency. The output says "not run (bambi not installed)". If bambi is
-installed later, the output says that this script has no fit for it.
+**Bayesian GLMM** (§9.1's sensitivity model: "a Bayesian logistic GLMM with template random
+intercepts (e.g. ``bambi``)"; added with ``uv add bambi`` as §9.1 says). `bayesian_glmm` fits
+``success ~ W*R*D*N + (1|template)`` with family ``bernoulli`` on the §9.1 GLM's rows (F-0 and
+W-0, base, 8 task cells, repeat 0), every template kept (random intercepts need no dropping), with
+bambi's default priors, 4 chains of 1,000 draws after 1,000 tuning steps, one core, and seed
+SEED + 11 (reading 21). It reports the posterior of the W-0 x R coefficient (the logit-scale
+Δ_H1): median, 90% and 95% equal-tailed intervals, P(> 0), R-hat and bulk ESS, and whether its
+median's sign matches the confirmatory GLM's. R-hat above 1.01 on any parameter is flagged as
+not converged. It enters no decision.
 
-**As implemented: how this differs from analysis/power_sim.py's luna part** (which sized T).
+**As implemented.**
+
+*How this differs from analysis/power_sim.py's luna part* (which sized T and gave the achieved
+power quoted with the results).
 
 * H1's model check. power_sim stood in for the §9.1 GLM with a smaller model, for the sign only:
-  template fixed effects and W, R and W x R on H1's 4 cells (``ps.h1_glm``). Here the sign comes
-  from the §9.1 confirmatory GLM itself, as §9.4 says. The stand-in is computed too (the same
-  model, generalised to unequal cells; equal to ``ps.h1_glm`` on complete data, tested) and
-  reported; a sign disagreement between the two is flagged.
-* H3's model check is power_sim's (``ps.h3_glm_ame``): template fixed effects, a derived-cell
-  term and the arm, turned into the average marginal effect over every (template, task cell)
-  pair of the H3 cells, a template with no outcome variation adding 0. Here it is generalised
-  to unequal cells (equal to ``ps.h3_glm_ame`` on complete data, tested). §9.4's literal model
-  (template fixed effects and the arm only) is reported next to it as a sensitivity.
+  template fixed effects and W, R and W x R on H1's 4 cells (``ps.h1_glm``), read through the
+  stopping rule under separation. Here the sign comes from the §9.1 confirmatory GLM itself, as
+  §9.4 says, read by `H1_SEPARATION_RULE` when it is not finite. The stand-in is computed too
+  (equal to ``ps.h1_glm`` on complete data, tested) and reported; a sign disagreement between
+  the two is flagged.
+* H3's model check. power_sim used template fixed effects, a derived-cell term and the arm
+  (``ps.h3_glm_ame``). Here the decision uses §9.4's model as registered: template fixed
+  effects and the arm. power_sim's model is reported as a sensitivity analysis (equal to
+  ``ps.h3_glm_ame`` on complete data, tested), and a disagreement about the 5pp bound between
+  the two is flagged.
+* So the achieved power quoted (P(supported) at T = 200: 0.647 and 0.781 in the primary
+  scenario, 0.438 and 0.443 in the pessimistic one) was computed with power_sim's model checks
+  and with F-0 at 0.95 (0.85) in the observed-far cells. If F-0 sits at its ceiling, H1's model
+  check meets separation, and under the literal rule P(supported) is lower than quoted (review
+  of 2026-10-10: with F-0 observed-far at 0.995, it failed in 6 of 40 and in 28 of 100
+  simulated sweeps with a true Δ_H1 near 78pp). The summary says so.
 * The bootstrap. power_sim drew counts of identical per-template integer rows, assuming one
   outcome per template and cell; here templates are drawn by index and each contrast is a ratio
   of sums, which also handles exclusions. With complete data both give the same contrast for
   the same resampled templates (tested); the random draws differ (seed SEED + 10 here).
-* power_sim fitted a model check only when its test rejected at 0.05 (for speed); here both are
+* power_sim fitted a model check only when its test rejected at 0.05 (for speed); here they are
   always fitted. power_sim compared integer sums; here floats are compared with the 1e-9
   tolerance above, on the null side.
 
-**Readings of PREREG made here** (none changes a hypothesis, prediction or threshold).
+*Readings of PREREG made here* (none changes a hypothesis, prediction or threshold).
 
 1. The key of §7.8 is applied per harness cell (above).
 2. ``AGENT_ERROR`` (a Σ-cell summary that failed every attempt) is the episode's own ending, so
@@ -191,30 +246,81 @@ installed later, the output says that this script has no fit for it.
    by lookup.
 6. "A lookup was taken" is ``n_lookups`` ≥ 1 (lookups served; over-cap ones come only after 3
    served ones).
-7. The §9.1 GLM uses H1's harness cells, F-0 and W-0, on all 8 task cells. Σ-n-0 enters no
-   confirmatory test (D12); W-n-0 as a third harness level is a sensitivity fit.
-8. The logit scale of §9.3 comes from the GLMs (Δ_H1: the §9.1 GLM's W-0 x R coefficient; Δ_H3:
-   the arm coefficient of the H3 GLM). Logits of cell means are not used: a cell mean of 0 or
-   1 has none.
+7. (Moved to pending item 2.)
+8. The logit scale of §9.3 comes from the GLMs (Δ_H1: the §9.1 GLM's W-0 x R coefficient, and
+   the penalties from its W-0 and W-0 x R coefficients; Δ_H3: the arm coefficient of §9.4's H3
+   model), with cluster-robust Wald intervals. Logits of cell means are not used: a cell mean
+   of 0 or 1 has none.
 9. One-sided bootstrap p-values count ties on the null side (D26), with the 1e-9 tolerance.
    A resample in which a contrast is undefined (a cell with no episode, or a zero denominator)
    is left out of that contrast's intervals and p-value, and counted.
-10. R_need's N(h, d) uses the episodes whose need phase is complete (``need_phase.complete``);
-    the others are counted and left out. T(h, d) uses every primary episode of the cell.
+10. R_need's N(h, d) uses the episodes whose need phase is complete (``need_phase.complete``)
+    and has a token count; the others are counted and left out (a complete need phase without
+    ``tokens`` is also warned about). T(h, d) uses every primary episode of the cell.
 11. Cost outcomes (§9.5 names no comparison): within each task cell, each harness cell against
-    F-0.
-12. The model-string split (§6) uses the records whose responses all came from one string.
-13. The model check of H1 is the sign of the §9.1 GLM's estimate as statsmodels would report
-    it, also when an H1 cell has no outcome variation and the logit-scale Δ_H1 is not finite;
-    that case is flagged, not overridden (§9.3: interactions can flip sign between scales near
-    ceilings, and the kill rule reads the probability scale).
+    F-0. Labelled as this reading in the summary.
+12. The model-string split (§6) groups records by the set of strings their responses returned:
+    one group per single string, and one for the records whose responses came from more than
+    one string (counted, not dropped).
+13. (Replaced by pending item 1.)
 14. The bootstrap resamples templates 0 to T - 1 (all of them), so a template whose episodes
     were all excluded still counts as a template with no episodes in the cell.
+15. H3's probability-scale Δ_H3 from the GLM is the average marginal effect of the arm over
+    every (template, task cell) pair of the H3 cells, as power_sim computes it: a template with
+    no outcome variation adds 0 (its fixed effect is infinite, so both arms' fitted success is
+    0 or 1; its observed difference is 0 too). That keeps the model's Δ_H3 on the scale of the
+    probability-scale Δ_H3, whose 5pp bound is an average over all templates. The average over
+    the informative templates only is larger in size and is reported next to it.
+16. H3's verdict when it is not supported: "inconclusive", the wording of the decision of
+    2026-10-10, except when the lower bound of the 90% CI of Δ_H3 is above 5pp, where the data
+    go against the prediction and the verdict says "not supported" with that reading. The
+    decision's sentence was written about low power; it does not fit a result that excludes
+    the bound.
+17. ``--sweep-closed``, above: §7.8's exclusion of a key with no final record, applied only
+    when the researcher has closed the sweep; a key whose last record is a single
+    ``API_ERROR`` still needs its §13 re-run.
+18. FINAL needs the ``--run`` input list (DESIGN §7.8).
+19. The §2.8 check's handling of a window-cell record without ``need_payload.S`` (above).
+20. A ``repeat_index`` that is present but not an integer (``null``, a string) is refused, not
+    read as 0: only an absent field means repeat 0 (DESIGN §7.8).
+21. The Bayesian sensitivity model's settings (above) are not registered beyond §9.1's
+    sentence: its terms are the §9.1 GLM's, its priors bambi's defaults, its seed SEED + 11
+    (SEED + 10 is the bootstrap's, SEED + 20 the failure labels', SEED + 30 H4's).
+
+*Pending the researcher's ruling* (PREREG does not settle these; the more conservative reading
+is in force until the researcher records a dated ruling in ``results/decisions.md``, before the
+results are read).
+
+1. **H1's model check when the logit-scale Δ_H1 is not finite** (review finding B2). When an
+   H1 cell (F-0 or W-0 at observed-far, NR or R) has no outcome variation among the GLM's
+   templates, the W-0 x R coefficient has no finite maximum-likelihood value: statsmodels
+   returns its stopping point. The limit's sign follows from which cells are all 0 or all 1:
+   ``logit Δ_H1 = logit p(F-0, NR) - logit p(W-0, NR) - logit p(F-0, R) + logit p(W-0, R)``, so
+   for example F-0 observed-rec-far all 1 gives -∞, W-0 observed-nonrec-far all 0 gives +∞, and
+   cells pushing both ways give ∞ - ∞, an undefined sign. `H1_SEPARATION_RULE` is
+   ``"literal"``: the model check reads the limit's sign (+∞ agrees, -∞ does not: §9.3,
+   "interactions can flip sign between scales near ceilings"), and an undefined sign does not
+   agree; the stopping point is not used for the sign. This is §9.4 read literally, and never
+   more lenient than it. Coded alternatives the researcher can rule for (a one-line change of
+   the constant, by commit): ``"firth"``, the W-0 x R coefficient of a Firth-penalized fit of
+   the same model on the same rows (`firth_fe_logit`), used only when the logit-scale Δ_H1 is
+   not finite; ``"probability-scale"``, the model check is not applicable when an H1 cell has
+   no variation, and "agrees" reads the sign of the probability-scale Δ_H1. The summary names
+   the rule in force.
+2. **The harness levels of the §9.1 GLM** (finding S4; was reading 7). PREREG says "harness x
+   recoverable x derived x distance terms" without naming the levels. The confirmatory fit uses
+   H1's harness cells, F-0 and W-0, on all 8 task cells: Σ-n-0 enters no confirmatory test
+   (D12), and W-n-0 is "reported alongside" H1, not part of its comparison (§3 H1). The fit with
+   W-n-0 as a third level is reported as a sensitivity analysis, with a flag if its W-0 x R
+   coefficient's sign differs.
+3. **A closed sweep** (finding S2): reading 17 above.
+4. **H3's wording** (finding S5): reading 16 above.
 
 **What this does not do.** No failure labels (§9.7; void under R6), no exploratory analysis
 (§9.10), no H2 (stopped under R3) and no sol replication (not run under R6). It does not read
-``results/decisions.md``: the re-run links are passed by hand. It never prints an outcome
-unless it is run, and it should first be run only after the researcher's review.
+``results/decisions.md``: the re-run links, the input list and the closing entry are passed by
+hand. It never prints an outcome unless it is run, and it should first be run only after the
+researcher's review.
 """
 
 from __future__ import annotations
@@ -222,8 +328,9 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
-import importlib.util
+import importlib.metadata
 import json
+import logging
 import math
 import sys
 import warnings
@@ -237,7 +344,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from scipy import special
+from scipy import linalg, special
+from statsmodels.tools import sm_exceptions
 
 from analysis import power_sim as ps
 from common import runmeta
@@ -285,6 +393,20 @@ H3_MARGIN = Fraction(1, 20)                              # §3 H3: 5pp
 GLM_SIGN_EPS = 1e-8                                      # power_sim's "positive" interaction
 ECHO_SHARE_MAX = 0.05                                    # §13
 H2_TESTS_NOT_RUN = 2                                     # the family-of-4 sensitivity
+Z90, Z95 = 1.6448536269514722, 1.959963984540054
+
+H1_SEPARATION_RULES = ("literal", "firth", "probability-scale")
+H1_SEPARATION_RULE = "literal"
+"""How H1's model check reads the §9.1 GLM when the logit-scale Δ_H1 is not finite (pending
+item 1 of the module docstring). "literal" is the more conservative reading, in force until the
+researcher records a dated ruling in results/decisions.md before the results are read; the
+ruling changes this line, by commit, so the rule in force is in the output's git commit."""
+FINITE, PLUS_INF, MINUS_INF, UNDEFINED = "finite", "+inf", "-inf", "undefined"
+
+BAYES_SEED_OFFSET = 11                                   # reading 21
+BAYES_SETTINGS = {"chains": 4, "draws": 1000, "tune": 1000}
+BAYES_FORMULA = "success ~ W*R*D*N + (1|template)"
+RHAT_MAX = 1.01
 
 FINAL_ENDINGS = ("DONE", "MAX_TURNS", "REASONING_CONTEXT_MISMATCH",
                  "REASONING_EFFORT_MISMATCH")
@@ -363,8 +485,12 @@ def _check_record(run_id: str, cell: str, repeat: int, rec: dict) -> None:
     where = f"{run_id}: record {rec.get('episode_id')!r}"
     if rec.get("harness_cell") != cell:
         raise Refusal(f"{where} has harness cell {rec.get('harness_cell')!r}, its run {cell!r}")
-    if int(rec.get("repeat_index", 0)) != repeat:
-        raise Refusal(f"{where} has repeat_index {rec.get('repeat_index')}, its run {repeat}")
+    rep = rec.get("repeat_index", 0)
+    if not isinstance(rep, int) or isinstance(rep, bool):
+        raise Refusal(f"{where} has repeat_index {rep!r}, not an integer (reading 20: only an "
+                      "absent field means repeat 0)")
+    if rep != repeat:
+        raise Refusal(f"{where} has repeat_index {rep}, its run {repeat}")
     if rec.get("generator_config_hash") not in (None, GENERATOR_HASH):
         raise Refusal(f"{where} played generator config {rec.get('generator_config_hash')!r}")
     variant = rec.get("variant")
@@ -376,23 +502,53 @@ def _check_record(run_id: str, cell: str, repeat: int, rec: dict) -> None:
     template_index(rec.get("template_id"))
 
 
-def discover(root: Path) -> tuple[list[Run], list[dict]]:
-    """luna's sweep runs under root/persistgym/, and the folders skipped with the reason."""
+def _read_json(path: Path, what: str):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise Refusal(f"{what}: {path.name} is not valid JSON ({e})") from None
+
+
+def _read_jsonl(path: Path, run_id: str) -> list[dict]:
+    """The records of an episodes.jsonl; a line that is not JSON (a truncated write) refuses."""
+    out = []
+    with open(path, encoding="utf-8") as fh:
+        for i, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                raise Refusal(f"{run_id}: episodes.jsonl line {i} is not valid JSON ({e}); a "
+                              "truncated write? Resolve it by hand") from None
+    return out
+
+
+def discover(root: Path, declared: list[str] | None = None) -> tuple[list[Run], list[dict]]:
+    """luna's sweep runs under root/persistgym/ (only those in `declared`, the --run input
+    list, when it is given), and the folders skipped with the reason."""
     base = root / EXPERIMENT
     if not base.is_dir():
         raise Refusal(f"no {EXPERIMENT}/ folder under {root}")
+    wanted = None if declared is None else set(declared)
+    if declared is not None and len(wanted) != len(declared):
+        raise Refusal("--run names a run twice")
     runs, skipped = [], []
     for folder in sorted(p for p in base.iterdir() if p.is_dir()):
         meta_path = folder / "meta.json"
         if not meta_path.is_file():
             skipped.append({"folder": folder.name, "reason": "no meta.json"})
             continue
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = _read_json(meta_path, folder.name)
         why = _not_ours(meta)
         if why:
             skipped.append({"folder": folder.name, "reason": why})
             continue
         run_id = str(meta.get("run_id") or folder.name)
+        if wanted is not None and run_id not in wanted:
+            skipped.append({"folder": folder.name,
+                            "reason": f"a {MODEL} sweep run not in the input list (--run)"})
+            continue
         ep_path = folder / "episodes.jsonl"
         if not ep_path.is_file():
             raise Refusal(f"{run_id}: a {MODEL} run without episodes.jsonl")
@@ -400,8 +556,7 @@ def discover(root: Path) -> tuple[list[Run], list[dict]]:
         if cell not in (*HARNESS_CELLS, SINGLE_TURN):
             raise Refusal(f"{run_id}: cell {cell!r} is not one of luna's sweep cells")
         repeat = int(meta.get("repeat_index") or 0)
-        with open(ep_path, encoding="utf-8") as fh:
-            records = [json.loads(line) for line in fh if line.strip()]
+        records = _read_jsonl(ep_path, run_id)
         for rec in records:
             _check_record(run_id, cell, repeat, rec)
         try:
@@ -414,6 +569,11 @@ def discover(root: Path) -> tuple[list[Run], list[dict]]:
                         exit_reason=meta.get("exit_reason"),
                         model_returned=list(meta.get("model_returned") or []),
                         records=records, window=_window_settings(meta)))
+    if wanted is not None:
+        missing = sorted(wanted - {r.run_id for r in runs})
+        if missing:
+            raise Refusal(f"--run names run(s) that are not {MODEL} sweep runs on the default "
+                          f"config under {base}: {', '.join(missing)}")
     return runs, skipped
 
 
@@ -464,6 +624,9 @@ class Resolved:
     dropped: list[dict] = field(default_factory=list)
     n_records: int = 0
     n_api_errors: int = 0
+    last_ending: str | None = None     # of the key's last record
+    closed: bool = False               # excluded with no final record: the sweep is closed
+    awaiting_rerun: bool = False       # its last record is a single API_ERROR (§13)
 
 
 def parse_links(pairs: list[str] | None) -> dict[str, str]:
@@ -479,8 +642,11 @@ def parse_links(pairs: list[str] | None) -> dict[str, str]:
     return out
 
 
-def resolve(runs: list[Run], links: dict[str, str]) -> tuple[dict, list[str]]:
-    """Every key's counted record, exclusion or pending state; and warnings."""
+def resolve(runs: list[Run], links: dict[str, str],
+            sweep_closed: bool = False) -> tuple[dict, list[str]]:
+    """Every key's counted record, exclusion or pending state; and warnings. With
+    `sweep_closed`, a key with no final record is excluded (§7.8), unless its last record is a
+    single API_ERROR, whose §13 re-run is still owed (reading 17)."""
     ids = {r.run_id: r for r in runs}
     for run, orig in links.items():
         if run not in ids or orig not in ids:
@@ -523,8 +689,10 @@ def resolve(runs: list[Run], links: dict[str, str]) -> tuple[dict, list[str]]:
                 first = i
                 break
             api += ending == API_ERROR
+        last_run, last = entries[-1]
         r = Resolved(key=key, status="pending", record=None, run_id=None, reason=None,
-                     n_records=len(entries), n_api_errors=api)
+                     n_records=len(entries), n_api_errors=api,
+                     last_ending=last.get("exit_reason"))
         if first is not None and api < 2:
             run_id, rec = entries[first]
             r.record, r.run_id = rec, run_id
@@ -538,8 +706,16 @@ def resolve(runs: list[Run], links: dict[str, str]) -> tuple[dict, list[str]]:
             r.dropped = [{"run_id": x, "exit_reason": y.get("exit_reason")}
                          for x, y in entries[(first if first is not None else len(entries)):]]
         else:
-            r.reason = (f"no final record yet (last ending {entries[-1][1].get('exit_reason')}"
-                        f" in {entries[-1][0]})")
+            r.awaiting_rerun = r.last_ending == API_ERROR
+            if r.awaiting_rerun:
+                r.reason = (f"a transport failure (API_ERROR in {last_run}) not yet re-run: "
+                            "§13 re-runs it once")
+            elif sweep_closed:
+                r.status, r.closed = "excluded", True
+                r.reason = (f"no final record (last ending {r.last_ending} in {last_run}); "
+                            "the sweep is closed (DESIGN §7.8)")
+            else:
+                r.reason = f"no final record yet (last ending {r.last_ending} in {last_run})"
         out[key] = r
     return out, warnings_
 
@@ -555,12 +731,15 @@ def kind_label(cell: str, variant: str) -> str:
             ("F-0", RESTATED): "F-0 restated-at-need"}.get((cell, variant), cell)
 
 
-def completeness(resolved: dict, templates: int) -> list[str]:
-    """Why the repeat-0 sweep is incomplete for templates 0..templates-1 (empty if complete)."""
-    reasons = []
+def completeness(resolved: dict, templates: int,
+                 sweep_closed: bool = False) -> tuple[list[str], list[str]]:
+    """Why the repeat-0 sweep is incomplete for templates 0..templates-1 (empty if complete),
+    and, for a closed sweep, its deviations: the keys excluded with no final record and the
+    keys never played, per run kind (§13: listed in every write-up)."""
+    reasons, deviations = [], []
     for cell, variant in KINDS:
         cells = NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS
-        missing, pending = [], []
+        missing, pending, closed = [], [], Counter()
         for t in range(templates):
             for tc in cells:
                 eid = episode_id_of(cell, variant, t, tc)
@@ -569,15 +748,27 @@ def completeness(resolved: dict, templates: int) -> list[str]:
                     missing.append(eid)
                 elif r.status == "pending":
                     pending.append(f"{eid}: {r.reason}")
+                elif r.closed:
+                    closed[str(r.last_ending)] += 1
         n = templates * len(cells)
         label = kind_label(cell, variant)
-        if missing:
+        if missing and sweep_closed and len(missing) < n:
+            deviations.append(f"{label}: {len(missing)} of {n} repeat-0 episodes were never "
+                              f"played, and the sweep is closed (first: {missing[0]})")
+        elif missing:
             reasons.append(f"{label}: {len(missing)} of {n} repeat-0 episodes have no record "
-                           f"(first: {missing[0]})")
+                           f"(first: {missing[0]})"
+                           + (" (no record at all: a run is missing, not a closed sweep)"
+                              if sweep_closed else ""))
         if pending:
             reasons.append(f"{label}: {len(pending)} of {n} repeat-0 episodes are pending "
                            f"(first: {pending[0]})")
-    return reasons
+        if closed:
+            deviations.append(
+                f"{label}: {sum(closed.values())} of {n} repeat-0 episodes had no final record "
+                "and are excluded, the sweep being closed (DESIGN §7.8); last endings: "
+                + ", ".join(f"{k} {v}" for k, v in sorted(closed.items())))
+    return reasons, deviations
 
 
 # --- the episode table ---------------------------------------------------------------------
@@ -785,9 +976,17 @@ def accounting_check(runs: list[Run], raw_root: Path) -> dict:
         if run.cell not in WINDOW_CELLS:
             continue
         wanted, expect = {}, {}
+        never_reached: Counter = Counter()
         for rec in run.records:
             payload = rec.get("need_payload")
             if not payload or payload.get("S") is None:
+                ending = rec.get("exit_reason")
+                if ending == "DONE":
+                    # a finished episode played its need step, so it must have a payload
+                    bugs.append(f"{run.run_id}: {rec['episode_id']!r}: ended DONE with no "
+                                "need_payload.S, so §2.8's conditions cannot be checked")
+                elif is_final(ending):
+                    never_reached[str(ending)] += 1
                 continue
             need = need_step_of(rec)
             if need is None:
@@ -799,6 +998,11 @@ def accounting_check(runs: list[Run], raw_root: Path) -> dict:
             expect[rec["episode_id"]] = (bool(payload["S"]),
                                          (rec.get("need_info") or {}).get("keep_start"),
                                          rec.get("exit_reason"))
+        if never_reached:
+            warn.append(f"{run.run_id}: {sum(never_reached.values())} episode(s) with a final "
+                        "ending never reached their need step's request (no need_payload), so "
+                        "§2.8's conditions do not apply to them: "
+                        + ", ".join(f"{k} {v}" for k, v in sorted(never_reached.items())))
         if not wanted:
             continue
         path = raw_root / EXPERIMENT / run.run_id / "transcript.jsonl.gz"
@@ -848,17 +1052,22 @@ INTEGER_VALUES = ("success", "n_lookups", "need_tokens", "tokens_total", "reason
 
 
 class Sample:
-    """Per-template sums and counts of one value over a selection of primary episodes."""
+    """Per-template sums and counts of one value over a selection of primary episodes. Rows
+    whose value is missing (NaN) are left out and counted (`n_missing`)."""
 
     def __init__(self, df: pd.DataFrame, templates: int, value: str = "success"):
         t = df["template"].to_numpy(int) if len(df) else np.zeros(0, int)
         v = df[value].to_numpy(float) if len(df) else np.zeros(0)
+        ok = np.isfinite(v)
+        self.n_missing = int((~ok).sum())
+        t, v = t[ok], v[ok]
         self.n = np.bincount(t, minlength=templates).astype(float)
         self.s = np.bincount(t, weights=v, minlength=templates)
-        self.count = len(df)
+        self.count = len(v)
         self.total = float(v.sum())
         self.exact = value in INTEGER_VALUES
         self._boot: np.ndarray | None = None
+        self._boot_idx: np.ndarray | None = None
 
     def point(self) -> Fraction | float | None:
         if self.count == 0:
@@ -868,13 +1077,14 @@ class Sample:
         return self.total / self.count
 
     def boot(self, idx: np.ndarray) -> np.ndarray:
-        """The mean in each resample (NaN where the resample holds no episode)."""
-        if self._boot is None:
+        """The mean in each resample (NaN where the resample holds no episode). Cached for the
+        resamples it was last called with only."""
+        if self._boot is None or self._boot_idx is not idx:
             num, den = self.s[idx].sum(axis=1), self.n[idx].sum(axis=1)
             out = np.full(len(num), np.nan)
             ok = den > 0
             out[ok] = num[ok] / den[ok]
-            self._boot = out
+            self._boot, self._boot_idx = out, idx
         return self._boot
 
 
@@ -973,16 +1183,30 @@ def holm(pvalues: list[float], alpha: float = ALPHA) -> dict:
             "alpha": alpha}
 
 
-def verdict(supported: bool, killed: bool | None = None) -> str:
-    """The wording of `results/decisions.md` (2026-10-10): supported, killed, both, or
-    inconclusive."""
+MODEL_DISAGREES = "inconclusive: the Holm test rejects, but the model check does not agree"
+
+
+def h1_verdict(supported: bool, killed: bool, holm_rejects: bool = False) -> str:
+    """H1 in the wording of `results/decisions.md` (2026-10-10): supported, the kill rule
+    fires, both, or inconclusive (saying so when only the model check stood in the way)."""
     if supported and killed:
         return "supported (Δ_H1 > 0), and the kill rule fires"
     if supported:
         return "supported"
     if killed:
         return "kill rule fires"
-    return "inconclusive"
+    return MODEL_DISAGREES if holm_rejects else "inconclusive"
+
+
+def h3_verdict(supported: bool, lower90: float | None, holm_rejects: bool = False) -> str:
+    """H3 (no kill rule): supported; not supported with the whole 90% CI above 5pp, against
+    the prediction (reading 16); or inconclusive."""
+    if supported:
+        return "supported"
+    if lower90 is not None and lower90 > float(H3_MARGIN) + TOL:
+        return ("not supported: the whole 90% CI of Δ_H3 lies above 5pp, against the "
+                "prediction")
+    return MODEL_DISAGREES if holm_rejects else "inconclusive"
 
 
 # --- GLMs (§9.1, §9.4) ---------------------------------------------------------------------
@@ -1003,41 +1227,137 @@ def _wald(est: float, se: float | None) -> dict:
         return {"se": None, "z": None, "p_two_sided": None, "ci90": None, "ci95": None}
     z = est / se
     return {"se": se, "z": z, "p_two_sided": float(2 * special.ndtr(-abs(z))),
-            "ci90": [est - 1.6448536269514722 * se, est + 1.6448536269514722 * se],
-            "ci95": [est - 1.959963984540054 * se, est + 1.959963984540054 * se]}
+            "ci90": [est - Z90 * se, est + Z90 * se], "ci95": [est - Z95 * se, est + Z95 * se]}
 
 
-def fe_logit_fit(y: np.ndarray, groups: np.ndarray, z: np.ndarray, names: list[str]) -> dict:
-    """A logit with template fixed effects: point estimates (`ps._fe_logit_mle` on the
-    informative templates) and, for the last column, the cluster-robust Wald quantities with
-    the G/(G - 1) factor (`ps.fe_logit(..., correction="clusters")`)."""
+def _sign(x: float) -> int:
+    """The sign of a model estimate, with power_sim's 1e-8 threshold for "positive"."""
+    return 1 if x > GLM_SIGN_EPS else -1 if x < -GLM_SIGN_EPS else 0
+
+
+def sm_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray) -> dict | None:
+    """statsmodels' binomial GLM of y on template dummies (codes 0..G-1) and the columns of z,
+    as §9.1 specifies it: IRLS with statsmodels' defaults, and the covariance clustered by
+    template without statsmodels' small-sample correction, times G/(G - 1) (§9.1, D25).
+    Returns the template intercepts, the slopes, the slopes' covariance (NaN where statsmodels
+    gives none, for example under quasi-separation) and statsmodels' convergence flag; None if
+    the fit fails or a coefficient is not finite."""
+    g = int(codes.max()) + 1
+    dummies = np.zeros((len(y), g))
+    dummies[np.arange(len(y)), codes] = 1.0
+    try:
+        with warnings.catch_warnings(), np.errstate(all="ignore"):
+            warnings.simplefilter("ignore")
+            res = sm.GLM(y, np.column_stack([dummies, z]), family=sm.families.Binomial()).fit(
+                cov_type="cluster", cov_kwds={"groups": codes, "use_correction": False})
+    except (np.linalg.LinAlgError, ValueError, FloatingPointError,
+            sm_exceptions.PerfectSeparationError):
+        return None
+    params = np.asarray(res.params, float)
+    if not np.isfinite(params).all():
+        return None
+    cov = np.asarray(res.cov_params(), float)[g:, g:] * g / (g - 1)
+    return {"alpha": params[:g], "beta": params[g:], "cov": cov,
+            "converged": bool(res.converged)}
+
+
+def _contrast_se(cov: np.ndarray, weights: dict[str, float], names: list[str]) -> float | None:
+    c = np.zeros(len(names))
+    for name, w in weights.items():
+        c[names.index(name)] = w
+    var = float(c @ cov @ c)
+    return math.sqrt(var) if math.isfinite(var) and var > 0 else None
+
+
+def fe_logit_fit(y: np.ndarray, groups: np.ndarray, z: np.ndarray, names: list[str],
+                 contrasts: dict[str, dict[str, float]] | None = None) -> dict:
+    """A logit with template fixed effects on the templates with outcome variation, fitted by
+    statsmodels (`sm_fe_logit`): the coefficients; the last column's estimate with its
+    cluster-robust Wald quantities; each of `contrasts` ({name: {coefficient: weight}}, a linear
+    combination of the coefficients) likewise; and power_sim's Newton emulation of the same fit
+    (`ps._fe_logit_mle`) as a cross-check. The template intercepts are kept under the private
+    key "_alpha" ({template: intercept}), which the output leaves out."""
     y = np.asarray(y, float)
-    keep, codes, _ = informative(y, groups)
+    z = np.asarray(z, float)
+    keep, codes, labels = informative(y, groups)
     out = {"n_rows": len(y), "n_templates": len(pd.unique(groups)),
            "n_templates_informative": int(codes.max() + 1) if len(codes) else 0,
            "n_rows_fitted": int(keep.sum()), "coefficients": None, "target": names[-1],
-           "estimate": None, "se_available": False}
+           "estimate": None, "se_available": False, "fitted_by": "statsmodels GLM (§9.1)",
+           "contrasts": {}, "estimate_emulated": None, "emulated_sign_disagrees": False,
+           **_wald(0.0, None)}
     out["n_templates_dropped"] = out["n_templates"] - out["n_templates_informative"]
     if out["n_templates_informative"] < 2:
         out["note"] = "fewer than 2 templates with outcome variation: no fit"
         return out
-    mle = ps._fe_logit_mle(y[keep], codes, np.asarray(z, float)[keep])
-    if mle is None:
-        out["note"] = "the fit failed"
-        return out
-    out["coefficients"] = dict(zip(names, (float(b) for b in mle[1]), strict=True))
-    out["estimate"] = float(mle[1][-1])
-    fit = ps.fe_logit(y, groups, np.asarray(z, float), "fast", "clusters")
+    fit = sm_fe_logit(y[keep], codes, z[keep])
     if fit is None:
-        out.update(_wald(out["estimate"], None))
-        out["note"] = ("the Newton fit does not converge (for example under "
-                       "quasi-separation), so there is no cluster-robust SE; the point estimate "
-                       "uses statsmodels' deviance stopping rule")
-    else:
-        out["se_available"] = True
-        out.update(_wald(float(fit[0][-1]), float(fit[1][-1])))
-        out["estimate_converged"] = float(fit[0][-1])
+        out["note"] = "the statsmodels fit failed"
+        return out
+    beta, cov = fit["beta"], fit["cov"]
+    out["coefficients"] = dict(zip(names, (float(b) for b in beta), strict=True))
+    out["estimate"] = float(beta[-1])
+    out["converged"] = fit["converged"]
+    out.update(_wald(out["estimate"], _contrast_se(cov, {names[-1]: 1.0}, names)))
+    out["se_available"] = out["se"] is not None
+    if not out["se_available"]:
+        out["note"] = ("statsmodels gives no finite cluster-robust SE (for example under "
+                       "quasi-separation)")
+    for name, weights in (contrasts or {}).items():
+        est = float(sum(w * out["coefficients"][c] for c, w in weights.items()))
+        out["contrasts"][name] = {"estimate": est,
+                                  **_wald(est, _contrast_se(cov, weights, names))}
+    out["_alpha"] = dict(zip(labels.tolist(), (float(a) for a in fit["alpha"]), strict=True))
+    emu = ps._fe_logit_mle(y[keep], codes, z[keep])
+    if emu is not None:
+        out["estimate_emulated"] = float(emu[1][-1])
+        out["emulated_sign_disagrees"] = (_sign(out["estimate"])
+                                          != _sign(out["estimate_emulated"]))
     return out
+
+
+def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: int = 100,
+                   tol: float = 1e-8) -> tuple[np.ndarray, np.ndarray] | None:
+    """Firth's penalized-likelihood logit (Firth 1993; Heinze and Schemper 2002) with template
+    fixed effects: it maximises the log-likelihood plus half the log-determinant of the Fisher
+    information, which keeps every coefficient finite under separation. Newton steps on the
+    modified score X'(y - mu + h (1/2 - mu)), h the hat values, with step halving on the
+    penalized log-likelihood. Returns (template intercepts, slopes), or None if it does not
+    converge. Used only under H1_SEPARATION_RULE = "firth" (pending item 1)."""
+    y = np.asarray(y, float)
+    g = int(codes.max()) + 1
+    x = np.column_stack([np.eye(g)[codes], np.asarray(z, float)])
+
+    def penalized(theta):
+        eta = x @ theta
+        mu = special.expit(eta)
+        w = mu * (1 - mu)
+        ll = -float(np.sum(y * np.logaddexp(0.0, -eta) + (1 - y) * np.logaddexp(0.0, eta)))
+        try:
+            chol = linalg.cho_factor(x.T @ (x * w[:, None]), lower=True)
+        except np.linalg.LinAlgError:
+            return -np.inf, None, mu, w
+        return ll + float(np.sum(np.log(np.diag(chol[0])))), chol, mu, w
+
+    theta = np.zeros(x.shape[1])
+    value, chol, mu, w = penalized(theta)
+    for _ in range(max_iter):
+        if chol is None:
+            return None
+        v = linalg.solve_triangular(chol[0], x.T, lower=True)
+        h = w * np.sum(v * v, axis=0)
+        step = linalg.cho_solve(chol, x.T @ (y - mu + h * (0.5 - mu)))
+        t = 1.0
+        while True:
+            new = penalized(theta + t * step)
+            if new[0] >= value - 1e-10 or t < 1e-8:
+                break
+            t /= 2
+        theta = theta + t * step
+        value, chol, mu, w = new
+        if np.max(np.abs(t * step)) < tol:
+            return (theta[:g], theta[g:]) if np.isfinite(theta).all() else None
+    return None
 
 
 def factorial_design(harness: dict[str, np.ndarray], R: np.ndarray, D: np.ndarray,
@@ -1070,29 +1390,92 @@ def _separation(fitted: pd.DataFrame, by: list[str]) -> list[str]:
     return out
 
 
-def glm_91(prim: pd.DataFrame, harness: tuple[str, ...] = ("W-0",)) -> dict:
-    """§9.1's confirmatory GLM on F-0 and `harness` (base, all 8 task cells): its W-0 x R
-    coefficient is the logit-scale Delta_H1 (reading 7). Also the logit-scale penalties."""
+def logit_status(fitted: pd.DataFrame, parts: list[tuple[str, pd.Series, int]]) -> dict:
+    """Whether a logit-scale contrast is finite, from a GLM's fitted rows (pending item 1).
+    `parts` are (label, row mask, sign of that part's logit in the contrast). A part whose
+    rows are all 1 has logit +inf, all 0 -inf; the contrast is then +inf or -inf when every
+    such part pushes it the same way, and undefined (inf - inf) when they push both ways or a
+    part has no rows. Returns {"status", "no_variation": the parts' descriptions}."""
+    directions, notes = set(), []
+    for label, mask, sign in parts:
+        y = fitted.loc[mask, "success"]
+        if len(y) == 0:
+            directions.add(0)
+            notes.append(f"{label}: no episodes")
+        elif y.nunique() == 1:
+            v = int(y.iloc[0])
+            directions.add(sign if v == 1 else -sign)
+            notes.append(f"{label}: all {v} ({len(y)} episodes)")
+    if 0 in directions or directions == {1, -1}:
+        status = UNDEFINED
+    elif directions == {1}:
+        status = PLUS_INF
+    elif directions == {-1}:
+        status = MINUS_INF
+    else:
+        status = FINITE
+    return {"status": status, "no_variation": notes}
+
+
+def _glm_91_rows(prim: pd.DataFrame, harness: tuple[str, ...]) -> tuple[pd.DataFrame,
+                                                                         np.ndarray, list[str]]:
     sub = prim[(prim.variant == BASE) & prim.cell.isin(("F-0", *harness))]
     z, names = factorial_design({h: (sub.cell == h).to_numpy() for h in harness},
                                 sub.recoverable.to_numpy(bool).astype(float),
                                 (sub.fact == "derived").to_numpy().astype(float),
                                 (sub.distance == "near").to_numpy().astype(float),
                                 target=f"{harness[0]}:R")
-    out = fe_logit_fit(sub["success"].to_numpy(float), sub["template"].to_numpy(), z, names)
+    return sub, z, names
+
+
+def logit_sign(glm: dict) -> int | None:
+    """The sign of a GLM's target coefficient: its estimate's when finite, the limit's when
+    +inf or -inf (`logit_status`), None when undefined or not fitted."""
+    est, status = glm.get("estimate"), glm.get("logit_status", FINITE)
+    if est is None:
+        return None
+    return {FINITE: _sign(est), PLUS_INF: 1, MINUS_INF: -1}.get(status)
+
+
+def glm_91(prim: pd.DataFrame, harness: tuple[str, ...] = ("W-0",)) -> dict:
+    """§9.1's confirmatory GLM on F-0 and `harness` (base, all 8 task cells): its W-0 x R
+    coefficient is the logit-scale Delta_H1 (pending item 2), its W-0 coefficient minus
+    Penalty_NR and W-0 plus W-0 x R minus Penalty_R, on the logit scale. Also whether the
+    logit-scale Delta_H1 is finite, from H1's 4 cells among the fitted rows (`logit_status`)."""
+    sub, z, names = _glm_91_rows(prim, harness)
+    w = harness[0]
+    out = fe_logit_fit(sub["success"].to_numpy(float), sub["template"].to_numpy(), z, names,
+                       contrasts={"penalty_nr_logit": {w: -1.0},
+                                  "penalty_r_logit": {w: -1.0, f"{w}:R": -1.0}})
     out["cells"] = ["F-0", *harness]
     keep, _, _ = informative(sub["success"].to_numpy(float), sub["template"].to_numpy())
     fitted = sub[keep]
     out["no_variation_cells"] = _separation(fitted, ["cell", "task_cell"])
-    out["h1_cells_no_variation"] = _separation(
-        fitted[fitted.cell.isin(("F-0", harness[0]))
-               & fitted.task_cell.isin((OBS_NR_FAR, OBS_R_FAR))], ["cell", "task_cell"])
-    out["logit_delta_h1_finite"] = not out["h1_cells_no_variation"]
-    c = out["coefficients"]
-    w = harness[0]
-    out["penalty_nr_logit"] = None if c is None else -c[w]
-    out["penalty_r_logit"] = None if c is None else -(c[w] + c[f"{w}:R"])
+    status = logit_status(fitted, [
+        (f"{c} {tc}", (fitted.cell == c) & (fitted.task_cell == tc), sign)
+        for c, tc, sign in (("F-0", OBS_NR_FAR, 1), (w, OBS_NR_FAR, -1),
+                            ("F-0", OBS_R_FAR, -1), (w, OBS_R_FAR, 1))])
+    out["logit_status"] = status["status"]
+    out["h1_cells_no_variation"] = status["no_variation"]
+    for name, tc in (("penalty_nr_logit", OBS_NR_FAR), ("penalty_r_logit", OBS_R_FAR)):
+        if name in out["contrasts"]:
+            out["contrasts"][name]["logit_status"] = logit_status(fitted, [
+                (f"{c} {tc}", (fitted.cell == c) & (fitted.task_cell == tc), sign)
+                for c, sign in (("F-0", 1), (w, -1))])["status"]
     return out
+
+
+def glm_91_firth(prim: pd.DataFrame) -> dict:
+    """The W-0 x R coefficient of a Firth-penalized fit of the §9.1 GLM, on the same rows
+    (`firth_fe_logit`; H1_SEPARATION_RULE = "firth" only)."""
+    sub, z, _ = _glm_91_rows(prim, ("W-0",))
+    y = sub["success"].to_numpy(float)
+    keep, codes, _ = informative(y, sub["template"].to_numpy())
+    if not len(codes) or codes.max() + 1 < 2:
+        return {"estimate": None, "note": "fewer than 2 templates with outcome variation"}
+    fit = firth_fe_logit(y[keep], codes, z[keep])
+    return {"estimate": None if fit is None else float(fit[1][-1]),
+            "note": None if fit is not None else "the Firth fit did not converge"}
 
 
 def h1_standin(prim: pd.DataFrame) -> dict:
@@ -1112,43 +1495,79 @@ def h1_standin(prim: pd.DataFrame) -> dict:
             "n_templates_informative": n}
 
 
-def h3_glm(prim: pd.DataFrame, with_derived: bool = True) -> dict:
-    """§9.4's model check for H3 (power_sim's ``ps.h3_glm_ame``, generalised): template fixed
-    effects, a derived-cell term (unless `with_derived` is False: §9.4's literal model) and
-    the arm, on the H3 cells; the average marginal effect of the arm over every (template,
-    task cell) pair present, a template with no outcome variation adding 0; and the arm's
-    logit coefficient."""
-    sub = prim[(((prim.cell == "F-0") & (prim.variant == BASE)) | (prim.cell == SINGLE_TURN))
-               & prim.task_cell.isin(H3_CELLS)]
+def _h3_rows(prim: pd.DataFrame) -> pd.DataFrame:
+    return prim[(((prim.cell == "F-0") & (prim.variant == BASE)) | (prim.cell == SINGLE_TURN))
+                & prim.task_cell.isin(H3_CELLS)]
+
+
+def _ame(pairs: pd.DataFrame, a_of: dict, gamma: float, arm: float) -> dict:
+    """The arm's average marginal effect over every (template, task cell) pair, a template
+    without a fitted intercept (no outcome variation) adding 0 (reading 15), and over the
+    pairs of the fitted templates only."""
+    total, n_fitted = 0.0, 0
+    for t, tc in pairs.itertuples(index=False):
+        if t in a_of:
+            base = a_of[t] + (gamma if tc.startswith("derived") else 0.0)
+            total += float(special.expit(base + arm) - special.expit(base))
+            n_fitted += 1
+    ame = total / len(pairs) if len(pairs) else None
+    inf = total / n_fitted if n_fitted else None
+    return {"ame": ame if ame is not None and math.isfinite(ame) else None,
+            "ame_informative": inf if inf is not None and math.isfinite(inf) else None,
+            "n_pairs": len(pairs), "n_pairs_informative": n_fitted}
+
+
+def h3_glm_literal(prim: pd.DataFrame) -> dict:
+    """§9.4's model check for H3, as registered: a binomial GLM (statsmodels) with template
+    fixed effects and the arm indicator (single-turn vs F-0) on the H3 cells. Its arm
+    coefficient is the logit-scale Delta_H3 (with whether it is finite, `logit_status`), and
+    its average marginal effect the probability-scale one (`_ame`, reading 15)."""
+    sub = _h3_rows(prim)
     arm = (sub.cell == SINGLE_TURN).to_numpy(float)
-    der = (sub.fact == "derived").to_numpy(float)
-    z = np.column_stack([der, arm]) if with_derived else arm[:, None]
-    names = ["derived", "arm"] if with_derived else ["arm"]
     y = sub["success"].to_numpy(float)
     groups = sub["template"].to_numpy()
-    out = fe_logit_fit(y, groups, z, names)
+    out = fe_logit_fit(y, groups, arm[:, None], ["arm"])
+    out["model"] = "§9.4: template fixed effects + arm (statsmodels)"
     pairs = sub[["template", "task_cell"]].drop_duplicates()
-    out["n_pairs"] = len(pairs)
-    keep, codes, labels = informative(y, groups)
+    keep, _, _ = informative(y, groups)
+    fitted = sub[keep]
+    status = logit_status(fitted, [("single-turn", fitted.cell == SINGLE_TURN, 1),
+                                   ("F-0", fitted.cell == "F-0", -1)])
+    out["logit_status"] = status["status"]
+    out["arm_no_variation"] = status["no_variation"]
+    if out["coefficients"] is None:
+        none = out["n_templates_informative"] == 0 and len(pairs)
+        out.update(ame=0.0 if none else None, ame_informative=None, n_pairs=len(pairs),
+                   n_pairs_informative=0)
+        return out
+    out.update(_ame(pairs, out["_alpha"], 0.0, out["estimate"]))
+    return out
+
+
+def h3_glm_powersim(prim: pd.DataFrame) -> dict:
+    """power_sim's model check for H3 (``ps.h3_glm_ame``, generalised to unequal cells): template
+    fixed effects, a derived-cell term and the arm, fitted by power_sim's emulation, and its
+    average marginal effect as in `h3_glm_literal`. A sensitivity analysis here (B1)."""
+    sub = _h3_rows(prim)
+    z = np.column_stack([(sub.fact == "derived").to_numpy(float),
+                         (sub.cell == SINGLE_TURN).to_numpy(float)])
+    y = sub["success"].to_numpy(float)
+    keep, codes, labels = informative(y, sub["template"].to_numpy())
+    pairs = sub[["template", "task_cell"]].drop_duplicates()
     n = int(codes.max() + 1) if len(codes) else 0
+    out = {"model": "power_sim's: template fixed effects + derived term + arm (emulation)",
+           "n_templates_informative": n, "arm_logit": None, "ame": None,
+           "ame_informative": None, "n_pairs": len(pairs)}
     if n < 2:
         out["ame"] = 0.0 if n == 0 and len(pairs) else None
         return out
     mle = ps._fe_logit_mle(y[keep], codes, z[keep])
     if mle is None:
-        out["ame"] = None
         return out
     alpha, beta = mle
-    gamma = float(beta[0]) if with_derived else 0.0
-    arm_b = float(beta[-1])
     a_of = dict(zip(labels.tolist(), alpha.tolist(), strict=True))
-    total = 0.0
-    for t, tc in pairs.itertuples(index=False):
-        if t in a_of:
-            base = a_of[t] + (gamma if tc.startswith("derived") else 0.0)
-            total += float(special.expit(base + arm_b) - special.expit(base))
-    ame = total / len(pairs)
-    out["ame"] = ame if math.isfinite(ame) else None
+    out.update(_ame(pairs, a_of, float(beta[0]), float(beta[1])))
+    out["arm_logit"] = float(beta[1])
     return out
 
 
@@ -1260,7 +1679,44 @@ def rate(s: Sample) -> dict:
             "exact": _exact(s.point())}
 
 
-def h1_reading(an: Analysis, glm: dict, standin: dict) -> dict:
+def h1_model_check(glm: dict, delta, rule: str | None = None,
+                   firth: dict | None = None) -> dict:
+    """§9.4's model check for H1: the §9.1 GLM's logit-scale Delta_H1 is positive. When it is
+    not finite (an H1 cell without outcome variation), `rule` (default `H1_SEPARATION_RULE`,
+    pending item 1) decides: "literal" reads the limit's sign (+inf agrees; -inf and an
+    undefined sign do not), "firth" a Firth-penalized fit's sign (`firth`), and
+    "probability-scale" the probability-scale Delta_H1's sign (`delta`)."""
+    rule = rule or H1_SEPARATION_RULE
+    if rule not in H1_SEPARATION_RULES:
+        raise ValueError(f"unknown H1 separation rule {rule!r}")
+    est, status = glm.get("estimate"), glm.get("logit_status", FINITE)
+    out = {"model": "§9.1 confirmatory GLM (statsmodels), W-0 x R: the logit-scale Δ_H1",
+           "rule": rule, "estimate": est, "logit_status": status,
+           "h1_cells_no_variation": glm.get("h1_cells_no_variation") or []}
+    if est is None:
+        out.update(agrees=False, sign=None, basis="the §9.1 GLM could not be fitted")
+    elif status == FINITE:
+        out.update(agrees=est > GLM_SIGN_EPS, sign=_sign(est),
+                   basis="the §9.1 GLM's W-0 x R coefficient")
+    elif rule == "literal":
+        sign = {PLUS_INF: 1, MINUS_INF: -1}.get(status)
+        out.update(agrees=status == PLUS_INF and est > GLM_SIGN_EPS, sign=sign,
+                   basis=("the sign of the logit-scale Δ_H1's limit, from the cells without "
+                          "outcome variation (rule 'literal'; an undefined sign does not "
+                          "agree)"))
+    elif rule == "firth":
+        fe = (firth or {}).get("estimate")
+        out.update(agrees=fe is not None and fe > GLM_SIGN_EPS,
+                   sign=None if fe is None else _sign(fe), firth_estimate=fe,
+                   basis="a Firth-penalized fit of the §9.1 GLM (rule 'firth')")
+    else:
+        out.update(agrees=delta is not None and delta > 0, sign=None,
+                   basis=("not applicable: an H1 cell has no outcome variation, so the "
+                          "probability-scale sign is read (rule 'probability-scale')"))
+    return out
+
+
+def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None) -> dict:
     """§3 H1 on luna (above), with W-n-0 alongside."""
     idx = an.idx
     s = {"F-0 NR": an.sample("F-0", OBS_NR_FAR), "W-0 NR": an.sample("W-0", OBS_NR_FAR),
@@ -1282,22 +1738,15 @@ def h1_reading(an: Analysis, glm: dict, standin: dict) -> dict:
     out["kill"] = (h1_kill(delta, up90) if delta is not None and up90 is not None else None)
     out["manipulation_check"] = None if pen_nr is None else manipulation_met(pen_nr)
     out["recoverable_within_5pp"] = None if pen_r is None else recoverable_within(pen_r)
-    est = glm.get("estimate")
-    out["model_check"] = {"model": "§9.1 confirmatory GLM, W-0 x R (logit Δ_H1)",
-                          "estimate": est,
-                          "agrees": est is not None and est > GLM_SIGN_EPS,
-                          "standin_estimate": standin.get("estimate"),
-                          "standin_agrees": (standin.get("estimate") is not None
-                                             and standin["estimate"] > GLM_SIGN_EPS)}
-    out["model_check"]["standin_sign_disagrees"] = (
-        est is not None and standin.get("estimate") is not None
-        and (est > GLM_SIGN_EPS) != (standin["estimate"] > GLM_SIGN_EPS))
-    # An H1 cell with no outcome variation makes the logit-scale Delta_H1 infinite or
-    # undefined: the estimate is then the stopping rule's large finite value (flagged, §9.3)
-    out["model_check"]["logit_delta_h1_finite"] = glm.get("logit_delta_h1_finite")
-    out["model_check"]["h1_cells_no_variation"] = glm.get("h1_cells_no_variation") or []
-    out["scales_disagree_in_sign"] = (delta is not None and est is not None and delta != 0
-                                      and (delta > 0) != (est > 0))
+    mc = h1_model_check(glm, delta, firth=firth)
+    sign = mc["sign"]
+    st = standin.get("estimate")
+    mc.update(standin_estimate=st, standin_agrees=st is not None and st > GLM_SIGN_EPS,
+              standin_sign_disagrees=(st is not None and sign is not None
+                                      and _sign(st) != sign))
+    out["model_check"] = mc
+    out["scales_disagree_in_sign"] = (delta is not None and delta != 0 and sign not in (None, 0)
+                                      and (delta > 0) != (sign > 0))
     pn_nr, pn_r = (_diff(pt["F-0 NR"], pt["W-n-0 NR"]), _diff(pt["F-0 R"], pt["W-n-0 R"]))
     dn_nr, dn_r = bt["F-0 NR"] - bt["W-n-0 NR"], bt["F-0 R"] - bt["W-n-0 R"]
     out["w_n_0_alongside"] = {"penalty_nr": summarise(pn_nr, dn_nr),
@@ -1353,45 +1802,58 @@ def token_ratios(an: Analysis) -> dict:
             out["literal"] = {"ratio": summarise(far, _ratio_dist(bt[("W-0", "far")],
                                                                   bt[("F-0", "far")])),
                               "at_least_1_30": None if far is None else ratio_met(far)}
-    left = p[(p.variant == BASE) & p.cell.isin(("F-0", "W-0"))
-             & p.task_cell.isin(tuple(OBS_R.values())) & ~p.need_complete.astype(bool)]
-    out["R_need"]["episodes_left_out_need_phase_incomplete"] = len(left)
+    sel = (p[(p.variant == BASE) & p.cell.isin(("F-0", "W-0"))
+             & p.task_cell.isin(tuple(OBS_R.values()))])
+    complete = sel.need_complete.astype(bool)
+    out["R_need"]["episodes_left_out_need_phase_incomplete"] = int((~complete).sum())
+    out["R_need"]["episodes_left_out_no_tokens"] = int(
+        (complete & ~np.isfinite(sel.need_tokens.to_numpy(float))).sum())
     out["R_need"]["prediction_met"] = out["R_need"]["at_least_1_30"]
     return out
 
 
-def h3_reading(an: Analysis, glm: dict, glm_literal: dict) -> dict:
-    """§3 H3 on luna (above), with the per-cell differences."""
+def h3_reading(an: Analysis, glm: dict, glm_ps: dict) -> dict:
+    """§3 H3 on luna (above), with the per-cell differences. `glm` is §9.4's registered model
+    (`h3_glm_literal`), which decides; `glm_ps` power_sim's (`h3_glm_powersim`), a sensitivity
+    analysis."""
     st, f0 = an.sample(SINGLE_TURN, H3_CELLS), an.sample("F-0", H3_CELLS)
     d = _diff(st.point(), f0.point())
     dist = st.boot(an.idx) - f0.boot(an.idx)
     out = {"cells": {"single-turn": rate(st), "F-0": rate(f0)}, "delta_h3": summarise(d, dist),
            "computable": d is not None,
            "p_one_sided": p_null_ge(dist, float(H3_MARGIN)) if d is not None else None}
-    up90 = (out["delta_h3"]["ci90"] or [None, None])[1]
+    lo90, up90 = out["delta_h3"]["ci90"] or [None, None]
     out["prediction_holds"] = None if up90 is None else h3_holds(up90)
+    out["ci90_above_margin"] = None if lo90 is None else lo90 > float(H3_MARGIN) + TOL
     out["per_cell"] = {}
     for tc in H3_CELLS:
         a, b = an.sample(SINGLE_TURN, tc), an.sample("F-0", tc)
         out["per_cell"][tc] = {"single-turn": rate(a), "F-0": rate(b),
                                "difference": summarise(_diff(a.point(), b.point()),
                                                        a.boot(an.idx) - b.boot(an.idx))}
-    ame = glm.get("ame")
-    out["model_check"] = {"model": "binomial GLM, template FE + derived term + arm, AME "
-                                   "(power_sim's h3_glm_ame)",
-                          "ame": ame, "agrees": ame is not None and ame < float(H3_MARGIN),
-                          "literal_ame": glm_literal.get("ame"),
-                          "literal_agrees": (glm_literal.get("ame") is not None
-                                             and glm_literal["ame"] < float(H3_MARGIN)),
-                          "arm_logit": glm.get("estimate")}
-    out["scales_disagree_in_sign"] = (d is not None and glm.get("estimate") is not None
-                                      and d != 0 and (d > 0) != (glm["estimate"] > 0))
+    ame, est, status = glm.get("ame"), glm.get("estimate"), glm.get("logit_status", FINITE)
+    sign = logit_sign(glm)
+    agrees = ame is not None and ame < float(H3_MARGIN)
+    ps_ame = glm_ps.get("ame")
+    ps_agrees = ps_ame is not None and ps_ame < float(H3_MARGIN)
+    out["model_check"] = {
+        "model": glm.get("model"), "ame": ame, "agrees": agrees,
+        "ame_informative": glm.get("ame_informative"),
+        "n_pairs": glm.get("n_pairs"), "n_pairs_informative": glm.get("n_pairs_informative"),
+        "arm_logit": est, "arm_logit_status": status, "arm_logit_sign": sign,
+        "arm_logit_ci90": glm.get("ci90"), "arm_logit_ci95": glm.get("ci95"),
+        "arm_no_variation": glm.get("arm_no_variation") or [],
+        "powersim_model": glm_ps.get("model"), "powersim_ame": ps_ame,
+        "powersim_agrees": ps_agrees,
+        "powersim_disagrees": ame is not None and ps_ame is not None and ps_agrees != agrees}
+    out["scales_disagree_in_sign"] = (d is not None and d != 0 and sign not in (None, 0)
+                                      and (d > 0) != (sign > 0))
     return out
 
 
 def family_readings(h1: dict, h3: dict) -> dict:
     """Holm over the family of 2 (R6 change 9) and the family-of-4 sensitivity; "supported"
-    (§9.4, D26)."""
+    (§9.4, D26); the verdicts (reading 16)."""
     p1, p3 = h1["p_one_sided"], h3["p_one_sided"]
     two = holm([p1, p3])
     four = holm([p1, p3] + [1.0] * H2_TESTS_NOT_RUN)
@@ -1407,8 +1869,11 @@ def family_readings(h1: dict, h3: dict) -> dict:
     out["H3"] = {"holm_rejects": two["reject"][1], "model_agrees": m3,
                  "supported": bool(p3 is not None and two["reject"][1] and m3),
                  "supported_family_of_4": bool(p3 is not None and four["reject"][1] and m3)}
-    out["H1"]["verdict"] = verdict(out["H1"]["supported"], bool(h1.get("kill")))
-    out["H3"]["verdict"] = verdict(out["H3"]["supported"])
+    out["H1"]["verdict"] = h1_verdict(out["H1"]["supported"], bool(h1.get("kill")),
+                                      bool(p1 is not None and two["reject"][0]))
+    lo90 = ((h3.get("delta_h3") or {}).get("ci90") or [None])[0]
+    out["H3"]["verdict"] = h3_verdict(out["H3"]["supported"], lo90,
+                                      bool(p3 is not None and two["reject"][1]))
     return out
 
 
@@ -1503,33 +1968,34 @@ def cell_table(prim: pd.DataFrame) -> list[dict]:
 
 
 def exclusion_table(resolved: dict, templates: int) -> list[dict]:
-    """Per run kind and task cell, at repeat 0 on templates 0..T-1: keys, exclusions by
-    reason, pending keys and dropped duplicates (§13: counts per cell)."""
-    acc: dict[tuple, Counter] = defaultdict(Counter)
-    for r in resolved.values():
-        cell, eid, repeat = r.key
-        if repeat != 0:
-            continue
-        rec = r.record
-        tmpl, tc, tail = eid.split("/")
-        if template_index(tmpl) >= templates:
-            continue
-        variant = BASE if tail in (BASE, "single_turn") else tail
-        c = acc[(cell, variant, tc)]
-        c["keys"] += 1
-        c["dropped_duplicates"] += len(r.dropped)
-        if r.status == "pending":
-            c["pending"] += 1
-        elif r.status == "excluded":
-            c["excluded_echo" if rec is not None else "excluded_transport"] += 1
+    """Per run kind and task cell, over the repeat-0 keys of templates 0..T-1: keys with a
+    record, keys never played, exclusions by reason (echo, transport, no final record in a
+    closed sweep), pending keys and dropped duplicates (§13: counts per cell)."""
     rows = []
-    for (cell, variant, tc), c in sorted(acc.items()):
-        share = c["excluded_echo"] / c["keys"] if c["keys"] else 0.0
-        rows.append({"kind": kind_label(cell, variant), "cell": cell, "variant": variant,
-                     "task_cell": tc, "keys": c["keys"], "excluded_echo": c["excluded_echo"],
-                     "excluded_transport": c["excluded_transport"], "pending": c["pending"],
-                     "dropped_duplicates": c["dropped_duplicates"],
-                     "echo_share": share, "echo_over_5pct": share > ECHO_SHARE_MAX})
+    for cell, variant in KINDS:
+        for tc in (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
+            c: Counter = Counter()
+            for t in range(templates):
+                r = resolved.get((cell, episode_id_of(cell, variant, t, tc), 0))
+                if r is None:
+                    c["never_played"] += 1
+                    continue
+                c["keys"] += 1
+                c["dropped_duplicates"] += len(r.dropped)
+                if r.status == "pending":
+                    c["pending"] += 1
+                elif r.closed:
+                    c["excluded_no_final"] += 1
+                elif r.status == "excluded":
+                    c["excluded_echo" if r.record is not None else "excluded_transport"] += 1
+            share = c["excluded_echo"] / c["keys"] if c["keys"] else 0.0
+            rows.append({"kind": kind_label(cell, variant), "cell": cell, "variant": variant,
+                         "task_cell": tc, "keys": c["keys"], "never_played": c["never_played"],
+                         "excluded_echo": c["excluded_echo"],
+                         "excluded_transport": c["excluded_transport"],
+                         "excluded_no_final": c["excluded_no_final"], "pending": c["pending"],
+                         "dropped_duplicates": c["dropped_duplicates"],
+                         "echo_share": share, "echo_over_5pct": share > ECHO_SHARE_MAX})
     return rows
 
 
@@ -1552,44 +2018,110 @@ def repeat_agreement(table: pd.DataFrame, templates: int) -> list[dict]:
     return rows
 
 
+MIXED = "more than one string"
+
+
+def deltas(an: Analysis) -> dict:
+    """Delta_H1 and Delta_H3 with their bootstrap intervals, on `an`'s episodes."""
+    s = {k: an.sample(c, tc) for k, (c, tc) in {
+        "f_nr": ("F-0", OBS_NR_FAR), "w_nr": ("W-0", OBS_NR_FAR), "f_r": ("F-0", OBS_R_FAR),
+        "w_r": ("W-0", OBS_R_FAR), "st": (SINGLE_TURN, H3_CELLS), "f3": ("F-0", H3_CELLS)}.items()}
+    pt = {k: v.point() for k, v in s.items()}
+    bt = {k: v.boot(an.idx) for k, v in s.items()}
+    d1 = _diff(_diff(pt["f_nr"], pt["w_nr"]), _diff(pt["f_r"], pt["w_r"]))
+    return {"delta_h1": summarise(d1, (bt["f_nr"] - bt["w_nr"]) - (bt["f_r"] - bt["w_r"])),
+            "delta_h3": summarise(_diff(pt["st"], pt["f3"]), bt["st"] - bt["f3"])}
+
+
 def model_strings(an: Analysis) -> dict:
-    """§6: the returned model strings; if more than one, H1 and H3 point estimates per string
-    (reading 12)."""
+    """§6: the returned model strings; if more than one, Delta_H1 and Delta_H3 per group of
+    records, with bootstrap intervals on the same resamples (reading 12): one group per single
+    string, one for the records whose responses came from more than one string."""
     counts = Counter(an.prim.models)
-    out = {"strings": dict(counts), "split": None}
-    singles = [m for m in counts if m and "|" not in m]
+    out = {"strings": dict(counts), "split": None,
+           "records_with_more_than_one_string": int(sum(v for k, v in counts.items()
+                                                        if "|" in k))}
     if len(counts) <= 1:
         return out
+    group = an.prim.models.map(lambda m: MIXED if "|" in m else (m or "none"))
     split = {}
-    for m in singles:
-        sub = Analysis(an.prim[an.prim.models == m], an.templates, an.idx)
-        f_nr, w_nr = sub.sample("F-0", OBS_NR_FAR).point(), sub.sample("W-0", OBS_NR_FAR).point()
-        f_r, w_r = sub.sample("F-0", OBS_R_FAR).point(), sub.sample("W-0", OBS_R_FAR).point()
-        d1 = _diff(_diff(f_nr, w_nr), _diff(f_r, w_r))
-        d3 = _diff(sub.sample(SINGLE_TURN, H3_CELLS).point(),
-                   sub.sample("F-0", H3_CELLS).point())
-        split[m] = {"episodes": int(counts[m]), "delta_h1": _f(d1), "delta_h3": _f(d3)}
+    for g in sorted(set(group)):
+        sub = Analysis(an.prim[group == g], an.templates, an.idx)
+        split[g] = {"episodes": int((group == g).sum()), **deltas(sub)}
     out["split"] = split
     return out
 
 
 def achieved_power(path: Path = POWER_DECISION) -> list[dict] | None:
     """The achieved power at the worst Holm step quoted with the results (§9.4), from the
-    committed luna power run."""
+    committed luna power run, with each scenario's F-0 level (power_sim's `LunaSetup`)."""
     if not path.is_file():
         return None
+    setups = {s.name: s for s in (ps.LUNA_PRIMARY, ps.LUNA_PESSIMISTIC)}
     with open(path, encoding="utf-8", newline="") as fh:
         rows = [r for r in csv.DictReader(fh) if r.get("reading") == POWER_READING]
     return [{"scenario": r["scenario"], "T_set": int(r["T_set"]),
              "power_h1": float(r["power_h1_at_T_set"]), "power_h3": float(r["power_h3_at_T_set"]),
+             "p_f0_observed_far": (setups[r["scenario"]].p_f0_obs if r["scenario"] in setups
+                                   else None),
              "source": _rel(path)} for r in rows]
 
 
-def bayesian_status() -> str:
-    if importlib.util.find_spec("bambi") is None:
-        return "not run (bambi not installed)"
-    return ("not run (bambi is installed, but this script has no fit for it; add one and its "
-            "tests before reporting it)")
+def bayesian_glmm(prim: pd.DataFrame, seed: int, settings: dict | None = None) -> dict:
+    """§9.1's sensitivity model (above): a Bayesian logistic GLMM with template random
+    intercepts, fitted by bambi on the §9.1 GLM's rows; the posterior of its W-0 x R
+    coefficient. It enters no decision; a failure is reported, not raised."""
+    settings = dict(settings or BAYES_SETTINGS)
+    sub = prim[(prim.variant == BASE) & prim.cell.isin(("F-0", "W-0"))]
+    df = pd.DataFrame({"success": sub["success"].to_numpy(int),
+                       "W": (sub.cell == "W-0").to_numpy(int),
+                       "R": sub.recoverable.to_numpy(bool).astype(int),
+                       "D": (sub.fact == "derived").to_numpy(int),
+                       "N": (sub.distance == "near").to_numpy(int),
+                       "template": [f"t{t}" for t in sub["template"]]})
+    out = {"status": "not run", "model": BAYES_FORMULA, "family": "bernoulli",
+           "priors": "bambi's defaults", "target": "W:R", "seed": seed, **settings,
+           "n_rows": len(df), "n_templates": int(df.template.nunique())}
+    if df.empty or df.success.nunique() < 2:
+        out["note"] = "no outcome variation in the rows: no fit"
+        return out
+    try:
+        import arviz as az
+        import bambi as bmb
+    except ImportError as e:
+        out["note"] = f"bambi is not installed ({e}): run uv sync"
+        return out
+    out["versions"] = {p: importlib.metadata.version(p) for p in ("bambi", "pymc", "arviz")}
+    quiet = [logging.getLogger(n) for n in ("pymc", "bambi", "pytensor")]
+    levels = [lg.level for lg in quiet]
+    try:
+        for lg in quiet:
+            lg.setLevel(logging.ERROR)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model = bmb.Model(BAYES_FORMULA, df, family="bernoulli")
+            idata = model.fit(draws=settings["draws"], tune=settings["tune"],
+                              chains=settings["chains"], cores=1, random_seed=seed,
+                              progressbar=False)
+            post = idata.posterior
+            draws = np.asarray(post["W:R"].values, float)
+            rhat = float(az.rhat(post["W:R"]))
+            ess = float(az.ess(post["W:R"]))
+            rhat_max = max(float(np.nanmax(np.asarray(az.rhat(post[v]), float)))
+                           for v in post.data_vars)
+    except Exception as e:  # noqa: BLE001 - a sensitivity fit's failure is reported
+        out.update(status="failed", note=f"{type(e).__name__}: {e}")
+        return out
+    finally:
+        for lg, lv in zip(quiet, levels, strict=True):
+            lg.setLevel(lv)
+    flat = draws.ravel()
+    out.update(status="fitted", median=float(np.median(flat)), mean=float(flat.mean()),
+               ci90=[float(x) for x in np.quantile(flat, [0.05, 0.95])],
+               ci95=[float(x) for x in np.quantile(flat, [0.025, 0.975])],
+               p_positive=float(np.mean(flat > 0)), rhat=rhat, ess_bulk=ess,
+               rhat_max_all=rhat_max, converged=rhat_max <= RHAT_MAX)
+    return out
 
 
 # --- compute -------------------------------------------------------------------------------
@@ -1607,29 +2139,41 @@ def run_row(run: Run, resolved: dict) -> dict:
             "records_counted": counted, "model_returned": run.model_returned}
 
 
+def _public(d: dict) -> dict:
+    """A GLM's output without its private keys (the template intercepts)."""
+    return {k: v for k, v in d.items() if not k.startswith("_")}
+
+
 def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
             allow_incomplete: bool = False, raw_root: Path | None = None,
             links: dict[str, str] | None = None, templates: int | None = None,
-            power_path: Path | None = None) -> dict:
+            power_path: Path | None = None, runs: list[str] | None = None,
+            sweep_closed: str | None = None, bayes: bool = True) -> dict:
     """H1 and H3 from the files under `root`. Raises Refusal (incomplete without
-    `allow_incomplete`, undeclared duplicates, inconsistent records) or AccountingBug.
-    `templates` defaults to T (`registered.LUNA_T`), read at call time."""
+    `allow_incomplete`, undeclared duplicates, inconsistent records, a `runs` entry not found)
+    or AccountingBug. `templates` defaults to T (`registered.LUNA_T`), read at call time.
+    `runs` is the --run input list (None: every luna run found, PROVISIONAL); `sweep_closed`
+    the decisions.md entry that closed the sweep (--sweep-closed); `bayes` False skips the
+    Bayesian sensitivity fit (PROVISIONAL)."""
     templates = templates or T_REGISTERED
     power_path = power_path or POWER_DECISION
     raw_root = raw_root or root / "raw"
     links = dict(links or {})
+    if sweep_closed is not None and not sweep_closed.strip():
+        raise Refusal("--sweep-closed needs the results/decisions.md entry that closed the sweep")
     seed, draw_path = read_seed(root)
-    runs, skipped = discover(root)
-    if not runs:
+    found, skipped = discover(root, runs)
+    if not found:
         raise Refusal(f"no {MODEL} run of experiment {EXPERIMENT} on the default config under "
                       f"{root}")
-    resolved, warn = resolve(runs, links)
-    incomplete = completeness(resolved, templates)
+    resolved, warn = resolve(found, links, sweep_closed=sweep_closed is not None)
+    incomplete, deviations = completeness(resolved, templates, sweep_closed is not None)
     if incomplete and not allow_incomplete:
         raise Refusal("the repeat-0 sweep is incomplete:\n" + "\n".join(
-            f"  - {x}" for x in incomplete) + "\nWait for the runs, or pass "
-            "--allow-incomplete to see what exists (PROVISIONAL).")
-    check = accounting_check(runs, raw_root)
+            f"  - {x}" for x in incomplete) + "\nWait for the runs (a transport failure needs "
+            "its §13 re-run), close the sweep with --sweep-closed REF if the researcher has "
+            "closed it, or pass --allow-incomplete to see what exists (PROVISIONAL).")
+    check = accounting_check(found, raw_root)
     if check["bugs"]:
         raise AccountingBug(
             "PREREG §2.8's bug stop: window-accounting bug(s), so no result is reported until "
@@ -1647,9 +2191,16 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
     if beyond:
         warn.append(f"records on templates {beyond[0]}..{beyond[-1]} lie outside 0..{templates - 1}"
                     " and are left out")
+    if any(s["reason"].endswith("not in the input list (--run)") for s in skipped):
+        warn.append("luna sweep run(s) found but not in the input list (--run): see Checks")
     provisional = list(incomplete)
+    if runs is None:
+        provisional.append("no input list: the runs read were found, not named with --run "
+                           "(harnesses/DESIGN.md §7.8)")
     if boot != N_BOOT:
         provisional.append(f"--boot {boot}: not the registered 10,000 resamples")
+    if not bayes:
+        provisional.append("--no-bayes: §9.1's Bayesian sensitivity model was not fitted")
     prim = table[(table.repeat == 0) & (table.status == "counted")
                  & (table.template < templates)].reset_index(drop=True)
     idx = resample_indices(templates, seed + BOOT_SEED_OFFSET, boot)
@@ -1657,31 +2208,48 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
     glm = glm_91(prim)
     glm_wn = glm_91(prim, ("W-0", "W-n-0"))
     standin = h1_standin(prim)
-    h1 = h1_reading(an, glm, standin)
+    firth = (glm_91_firth(prim) if H1_SEPARATION_RULE == "firth"
+             and glm.get("logit_status") != FINITE else None)
+    h1 = h1_reading(an, glm, standin, firth)
     lookups = lookups_reading(an)
     tok = token_ratios(an)
-    glm3, glm3_literal = h3_glm(prim), h3_glm(prim, with_derived=False)
-    h3 = h3_reading(an, glm3, glm3_literal)
+    if tok["R_need"]["episodes_left_out_no_tokens"]:
+        warn.append(f"{tok['R_need']['episodes_left_out_no_tokens']} observed-R F-0/W-0 "
+                    "episode(s) have a complete need phase without need_phase.tokens: left out "
+                    "of R_need")
+    glm3, glm3_ps = h3_glm_literal(prim), h3_glm_powersim(prim)
+    h3 = h3_reading(an, glm3, glm3_ps)
     fam = family_readings(h1, h3)
     status = PROVISIONAL if provisional else FINAL
     excl = exclusion_table(resolved, templates)
+    bayes_out = (bayesian_glmm(prim, seed + BAYES_SEED_OFFSET) if bayes else
+                 {"status": "not run", "note": "--no-bayes"})
+    model_sign = h1["model_check"]["sign"]
+    if bayes_out.get("status") == "fitted":
+        bayes_out["sign_disagrees_with_glm"] = (model_sign not in (None, 0)
+                                                and _sign(bayes_out["median"]) != model_sign)
     out = {
         "generated_utc": generated, **git, "prereg_version": runmeta.prereg_version(),
-        "status": status, "provisional_reasons": provisional, "warnings": warn,
+        "status": status, "provisional_reasons": provisional, "deviations": deviations,
+        "sweep_closed": sweep_closed, "warnings": warn,
         "inputs": {"results_root": _rel(root), "raw_root": _rel(raw_root),
-                   "draw_json": _rel(draw_path), "runs": [run_row(r, resolved) for r in
-                                                          sorted(runs, key=lambda x: x.started)],
+                   "draw_json": _rel(draw_path),
+                   "input_list": None if runs is None else list(runs),
+                   "runs": [run_row(r, resolved) for r in sorted(found,
+                                                                 key=lambda x: x.started)],
                    "rerun_links": links, "skipped": skipped},
         "model": MODEL, "generator_config_hash": GENERATOR_HASH, "templates": templates,
         "seed": seed, "bootstrap": {"seed": seed + BOOT_SEED_OFFSET, "resamples": boot,
                                     "method": "percentile", "levels": list(LEVELS)},
+        "h1_separation_rule": H1_SEPARATION_RULE,
         "primary_episodes": len(prim),
         "accounting_check": {k: v for k, v in check.items() if k != "bugs"},
         "h1": h1, "h1_lookups": lookups, "h1_tokens": tok,
         "h1_predictions": h1_predictions(h1, lookups, tok), "h3": h3, "family": fam,
-        "glm_9_1": glm, "glm_9_1_with_w_n_0": glm_wn, "glm_h1_standin": standin,
-        "glm_h3": glm3, "glm_h3_literal": glm3_literal,
-        "bayesian_glmm": bayesian_status(), "achieved_power": achieved_power(power_path),
+        "glm_9_1": _public(glm), "glm_9_1_with_w_n_0": _public(glm_wn),
+        "glm_9_1_firth": firth, "glm_h1_standin": standin,
+        "glm_h3": _public(glm3), "glm_h3_powersim": glm3_ps,
+        "bayesian_glmm": bayes_out, "achieved_power": achieved_power(power_path),
         "accounting": accounting(prim), "cost_outcomes": cost_outcomes(prim),
         "cells": cell_table(prim), "exclusions": excl,
         "echo_cells_over_5pct": [f"{e['kind']} {e['task_cell']}" for e in excl
@@ -1691,6 +2259,11 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
                              "kept_from": r.run_id, "dropped": r.dropped}
                             for r in resolved.values() if r.dropped],
     }
+    wn = logit_sign(glm_wn)
+    out["glm_9_1_with_w_n_0"]["sign"] = wn
+    out["glm_9_1_with_w_n_0"]["sign_disagrees"] = (wn not in (None, 0)
+                                                   and model_sign not in (None, 0)
+                                                   and wn != model_sign)
     return out
 
 
@@ -1731,11 +2304,43 @@ def _word(x, yes: str, no: str) -> str:
     return yes if x else no if x is False else "n/a"
 
 
+def _iv_s(iv) -> str:
+    return "n/a" if iv is None else f"[{iv[0]:.3f}, {iv[1]:.3f}]"
+
+
+def _logit_s(est, status: str = FINITE, wald: dict | None = None) -> str:
+    """A logit-scale estimate: the value with its 90% Wald interval when finite, else its limit
+    (+∞, −∞ or undefined) with the stopping point statsmodels returned."""
+    if est is None:
+        return "n/a"
+    if status == FINITE:
+        iv = (wald or {}).get("ci90")
+        return f"{est:.3f}" + ("" if iv is None else f" (90% CI {_iv_s(iv)})")
+    label = {PLUS_INF: "+∞", MINUS_INF: "−∞"}.get(status, "undefined (∞ − ∞)")
+    return f"{label} (statsmodels stops at {est:.2f})"
+
+
+def _same(disagrees: bool, what: str) -> str:
+    return f"**its sign differs from {what}**" if disagrees else f"the same sign as {what}"
+
+
+def _bayes_line(b: dict) -> str:
+    if b.get("status") != "fitted":
+        return (f"- Bayesian GLMM sensitivity (§9.1): {b.get('status', 'not run')}"
+                f" ({b.get('note') or 'no note'}).")
+    conv = ("" if b["converged"] else
+            f", **not converged** (an R-hat above {RHAT_MAX})")
+    return ("- Bayesian GLMM sensitivity (§9.1; bambi, template random intercepts, every "
+            f"template kept; not a decision): W-0 × R posterior median {b['median']:.3f}, 90% "
+            f"interval {_iv_s(b['ci90'])}, P(> 0) = {b['p_positive']:.3f}; R-hat "
+            f"{b['rhat']:.3f} (largest over the parameters {b['rhat_max_all']:.3f}){conv}, bulk "
+            f"ESS {b['ess_bulk']:.0f}; "
+            f"{_same(bool(b.get('sign_disagrees_with_glm')), 'the model check')}.")
+
+
 def _h1_lines(h: dict) -> list[str]:
     h1, fam, g = h["h1"], h["family"], h["glm_9_1"]
     mc, c = h1["model_check"], h1["cells"]
-    se = (f" (SE {_num_s(g.get('se'))}, 90% CI {_iv_s(g.get('ci90'))})" if g.get("se")
-          else f" ({g.get('note') or 'no cluster-robust SE'})")
     holm1 = _word(fam["H1"]["holm_rejects"], "rejects", "does not reject")
     L = ["### H1: recoverability turns a success penalty into a cost penalty", "",
          "| Cell (observed, far) | F-0 | W-0 | W-n-0 (alongside) |", "|---|---|---|---|",
@@ -1743,22 +2348,50 @@ def _h1_lines(h: dict) -> list[str]:
           f"{_rate_s(c['W-n-0 NR'])} |"),
          (f"| recoverable | {_rate_s(c['F-0 R'])} | {_rate_s(c['W-0 R'])} | "
           f"{_rate_s(c['W-n-0 R'])} |"), "",
-         "| Quantity | Estimate | 90% CI | 95% CI |", "|---|---|---|---|"]
+         "| Quantity (probability scale) | Estimate | 90% CI | 95% CI |", "|---|---|---|---|"]
     for name, key in (("Penalty_NR = p(F-0, NR) − p(W-0, NR)", "penalty_nr"),
                       ("Penalty_R = p(F-0, R) − p(W-0, R)", "penalty_r"),
                       ("**Δ_H1 = Penalty_NR − Penalty_R**", "delta_h1")):
         L.append(f"| {name} | {_pp(h1[key]['estimate'])} | {_ci(h1[key])} | "
                  f"{_ci(h1[key], 'ci95')} |")
+    con = g.get("contrasts") or {}
+    pen = {k: _logit_s((con.get(k) or {}).get("estimate"),
+                       (con.get(k) or {}).get("logit_status", FINITE), con.get(k))
+           for k in ("penalty_nr_logit", "penalty_r_logit")}
     L += ["",
           (f"- One-sided bootstrap test, H0: Δ_H1 ≤ 0: p = {_num_s(h1['p_one_sided'], 4)}. "
            f"Holm (family of 2): {holm1}."),
-          (f"- Model check (§9.1 GLM on F-0 and W-0 × 8 task cells; logit-scale Δ_H1, the "
-           f"W-0 × R coefficient): {_num_s(mc['estimate'])}{se}; agrees (> 0): "
-           f"**{_yes(mc['agrees'])}**. Templates without outcome variation dropped from the "
-           f"GLM: {g.get('n_templates_dropped', 'n/a')}."),
-          (f"- power_sim's stand-in (4 cells; W, R, W × R): {_num_s(mc['standin_estimate'])}; "
-           + ("**its sign disagrees with the §9.1 GLM's**." if mc["standin_sign_disagrees"]
-              else "the same sign.")),
+          ("- Model check (§9.4; the §9.1 GLM, fitted by statsmodels on F-0 and W-0 × 8 task "
+           "cells; the logit-scale Δ_H1 is its W-0 × R coefficient): "
+           f"{_logit_s(mc['estimate'], mc['logit_status'], g)}; agrees (> 0): "
+           f"**{_yes(mc['agrees'])}**, read from {mc['basis']}. Templates without outcome "
+           f"variation dropped from the GLM: {g.get('n_templates_dropped', 'n/a')}.")]
+    if mc["logit_status"] != FINITE:
+        L.append("- **The logit-scale Δ_H1 is not finite:** among the GLM's templates, "
+                 + "; ".join(mc["h1_cells_no_variation"]) + f". The rule in force is "
+                 f"`{mc['rule']}` (`H1_SEPARATION_RULE`; pending the researcher's ruling, "
+                 "module docstring): " + {
+                     "literal": ("the sign of the limit decides; −∞ (an interaction that flips "
+                                 "sign between the scales near a ceiling, §9.3) and an "
+                                 "undefined sign do not agree."),
+                     "firth": ("a Firth-penalized fit of the same model decides: "
+                               f"{_num_s(mc.get('firth_estimate'))}."),
+                     "probability-scale": ("the model check is not applicable, and the "
+                                           "probability-scale sign is read.")}[mc["rule"]])
+    L += [(f"- Logit scale (§9.3): Penalty_NR {pen['penalty_nr_logit']}, Penalty_R "
+           f"{pen['penalty_r_logit']}, Δ_H1 {_logit_s(mc['estimate'], mc['logit_status'], g)}."),
+          ("- Cross-checks (not decisions): power_sim's emulation of the same fit "
+           f"{_num_s(g.get('estimate_emulated'))} "
+           f"({_same(g.get('emulated_sign_disagrees'), 'statsmodels')}); power_sim's stand-in "
+           f"(4 cells; W, R, W × R) {_num_s(mc['standin_estimate'])} "
+           f"({_same(mc['standin_sign_disagrees'], 'the model check')}); the §9.1 GLM with "
+           "W-n-0 as a third harness level (pending item 2), "
+           "W-0 × R "
+           + _logit_s(h["glm_9_1_with_w_n_0"].get("estimate"),
+                      h["glm_9_1_with_w_n_0"].get("logit_status", FINITE),
+                      h["glm_9_1_with_w_n_0"])
+           + f" ({_same(h['glm_9_1_with_w_n_0'].get('sign_disagrees'), 'the model check')})."),
+          _bayes_line(h["bayesian_glmm"]),
           (f"- **H1: {fam['H1']['verdict']}.** Supported needs the Holm test and the model "
            f"check (§9.4): {_yes(fam['H1']['holm_rejects'])} and "
            f"{_yes(fam['H1']['model_agrees'])}."),
@@ -1767,12 +2400,6 @@ def _h1_lines(h: dict) -> list[str]:
            + (': drop the "success vs cost" framing (§3 H1).' if h1["kill"] else "."))]
     if h1["scales_disagree_in_sign"]:
         L.append("- **The probability and logit scales disagree in sign** (§9.3).")
-    if mc.get("h1_cells_no_variation"):
-        L.append("- **The logit-scale Δ_H1 is not finite:** an H1 cell has no outcome "
-                 "variation (" + "; ".join(mc["h1_cells_no_variation"]) + "), so the GLM's "
-                 "W-0 × R value comes from the stopping rule and the data do not identify its "
-                 "sign. The model check reads that value, as statsmodels reports it (§9.4); "
-                 "read \"agrees\" with this in mind.")
     if g.get("no_variation_cells"):
         L.append("- Cells with no outcome variation in the GLM (quasi-separation; their "
                  "coefficients are large and finite only by the stopping rule): "
@@ -1796,9 +2423,11 @@ def _h1_lines(h: dict) -> list[str]:
            f"readings: R_tok {_ratio_s(tk['R_tok']['ratio'])}; the literal ratio "
            f"T(W-0, far) / T(F-0, far) {_ratio_s(tk['literal']['ratio'])} (it cannot reach "
            "1.30 by design, D8). Intervals are 90%.")]
-    left = tk["R_need"]["episodes_left_out_need_phase_incomplete"]
+    left = (tk["R_need"]["episodes_left_out_need_phase_incomplete"]
+            + tk["R_need"].get("episodes_left_out_no_tokens", 0))
     if left:
-        L.append(f"R_need leaves out {left} episode(s) whose need phase is incomplete.")
+        L.append(f"R_need leaves out {left} episode(s) whose need phase is incomplete or has "
+                 "no token count.")
     wn = h1["w_n_0_alongside"]
     L += ["", (f"W-n-0 alongside (not tested): penalty against F-0, NR "
                f"{_pp(wn['penalty_nr']['estimate'])} {_ci(wn['penalty_nr'])}, R "
@@ -1810,21 +2439,34 @@ def _h3_lines(h: dict) -> list[str]:
     h3, fam = h["h3"], h["family"]
     mc3 = h3["model_check"]
     holm3 = _word(fam["H3"]["holm_rejects"], "rejects", "does not reject")
+    holds = _word(h3["prediction_holds"], "holds", "does not hold")
     L = ["### H3: little residual cost of multi-turn structure when the fact survives", "",
          "| Arm (NR, far; observed and derived pooled) | Success |", "|---|---|",
          f"| Single-turn control | {_rate_s(h3['cells']['single-turn'])} |",
          f"| F-0 multi-turn | {_rate_s(h3['cells']['F-0'])} |", "",
          (f"**Δ_H3 = p(single-turn) − p(F-0) = {_pp(h3['delta_h3']['estimate'])}**, 90% CI "
           f"{_ci(h3['delta_h3'])}, 95% CI {_ci(h3['delta_h3'], 'ci95')}."), "",
-         ("- Prediction (90% upper bound ≤ 5pp): "
-          f"**{_word(h3['prediction_holds'], 'holds', 'does not hold')}** (reported either "
-          "way)."),
+         (f"- Prediction (90% upper bound ≤ 5pp, §3 H3): **{holds}** (reported either way)"
+          + ("; the whole 90% CI lies above 5pp." if h3.get("ci90_above_margin") else ".")),
          (f"- One-sided bootstrap test, H0: Δ_H3 ≥ 5pp: p = {_num_s(h3['p_one_sided'], 4)}. "
           f"Holm (family of 2): {holm3}."),
-         ("- Model check (template FE + derived term + arm; probability-scale AME): "
-          f"{_pp(mc3['ame'])}; below 5pp: **{_yes(mc3['agrees'])}**. §9.4's literal model "
-          f"(template FE + arm): {_pp(mc3['literal_ame'])} ({_yes(mc3['literal_agrees'])}). "
-          f"Logit-scale arm coefficient: {_num_s(mc3['arm_logit'])}."),
+         ("- Model check (§9.4, as registered: a statsmodels binomial GLM with template fixed "
+          "effects and the arm on the H3 cells; its probability-scale Δ_H3 is the arm's "
+          f"average marginal effect over all {mc3.get('n_pairs')} (template, task cell) pairs, "
+          "a template without outcome variation adding 0, reading 15): "
+          f"{_pp(mc3['ame'])}; below 5pp: **{_yes(mc3['agrees'])}**. Over the "
+          f"{mc3.get('n_pairs_informative')} pairs of the templates with outcome variation "
+          f"only: {_pp(mc3.get('ame_informative'))}."),
+         ("- Logit scale (§9.3): the arm coefficient "
+          + _logit_s(mc3["arm_logit"], mc3["arm_logit_status"],
+                     {"ci90": mc3.get("arm_logit_ci90")})
+          + (f"; no outcome variation: {'; '.join(mc3['arm_no_variation'])}"
+             if mc3["arm_logit_status"] != FINITE else "") + "."),
+         ("- Sensitivity (not a decision): power_sim's model (template fixed effects + derived "
+          f"term + arm), AME {_pp(mc3['powersim_ame'])}; below 5pp: "
+          f"{_yes(mc3['powersim_agrees'])}"
+          + ("; **it disagrees with the registered model about the 5pp bound**."
+             if mc3["powersim_disagrees"] else ".")),
          (f"- **H3: {fam['H3']['verdict']}.** Supported needs the Holm test and the model "
           f"check (§9.4): {_yes(fam['H3']['holm_rejects'])} and "
           f"{_yes(fam['H3']['model_agrees'])}.")]
@@ -1835,6 +2477,16 @@ def _h3_lines(h: dict) -> list[str]:
          f"difference {_pp(v['difference']['estimate'])} {_ci(v['difference'])}")
         for tc, v in h3["per_cell"].items()) + "."]
     return L
+
+
+def _power_s(power: list[dict]) -> str:
+    return "; ".join(f"{p['scenario']}: H1 {p['power_h1']:.3f}, H3 {p['power_h3']:.3f}"
+                     for p in power)
+
+
+def _f0_levels(power: list[dict]) -> str:
+    return " and ".join(f"{p['p_f0_observed_far']:.2f} ({p['scenario']})" for p in power
+                        if p.get("p_f0_observed_far") is not None)
 
 
 def _family_lines(h: dict) -> list[str]:
@@ -1851,12 +2503,15 @@ def _family_lines(h: dict) -> list[str]:
                "family of 4 counts H2's two tests, not run (R3), as not rejected. Supported in "
                f"the family of 4: H1 {_yes(fam['H1']['supported_family_of_4'])}, H3 "
                f"{_yes(fam['H3']['supported_family_of_4'])}.")]
-    if h["achieved_power"]:
-        L += ["", ("Achieved power at T = 200, worst Holm step (one-sided 0.025), "
-                   f"P(supported), from `{h['achieved_power'][0]['source']}`: "
-                   + "; ".join(f"{p['scenario']}: H1 {p['power_h1']:.3f}, H3 "
-                               f"{p['power_h3']:.3f}" for p in h["achieved_power"]) + ".")]
-    L += ["", f"Bayesian GLMM sensitivity (§9.1): {h['bayesian_glmm']}."]
+    power = h["achieved_power"]
+    if power:
+        L += ["", (f"Achieved power at T = {power[0]['T_set']}, worst Holm step (one-sided "
+                   f"0.025), P(supported), from `{power[0]['source']}`: {_power_s(power)}. "
+                   f"Simulated with F-0 observed-far success at {_f0_levels(power)} and with "
+                   "power_sim's model checks (H1: a 4-cell stand-in read through the stopping "
+                   "rule; H3: template fixed effects + derived term + arm), not the ones used "
+                   "here; with F-0 at its ceiling, H1's model check can fail under the "
+                   "literal rule, so P(supported) may be lower than quoted.")]
     return L
 
 
@@ -1882,8 +2537,10 @@ def _accounting_lines(h: dict) -> list[str]:
                "(§13). Σ-n-0 is exploratory (D12, §9.10); its split by `compacted_between` is "
                "in h1h3.json.")]
     L += ["", "## Cost outcomes (§9.5): ratio to F-0 in the same task cell", "",
-          "Quasi-Poisson log-link GLM with template fixed effects; ratio exp(β) [95% CI].", "",
-          "| Task cell | Outcome | W-0 | W-n-0 | Σ-n-0 (expl.) |", "|---|---|---|---|---|"]
+          ("Quasi-Poisson log-link GLM with template fixed effects (§9.5); ratio exp(β) [95% "
+           "CI]. §9.5 registers the model, not a comparison: each harness cell against F-0 "
+           "within a task cell is this script's reading 11 (as implemented, not registered)."),
+          "", "| Task cell | Outcome | W-0 | W-n-0 | Σ-n-0 (expl.) |", "|---|---|---|---|---|"]
     for r in h["cost_outcomes"]:
         cells = []
         for c in ("W-0", "W-n-0", "Σ-n-0"):
@@ -1903,22 +2560,28 @@ def _accounting_lines(h: dict) -> list[str]:
 
 
 def _tables_lines(h: dict) -> list[str]:
-    L = ["## Success by cell (repeat 0)", "",
+    L = ["## Success by cell (repeat 0; descriptive)", "",
+         ("Descriptive, not tests (§9.10): each cell's success rate. Only the contrasts above "
+          "are registered; the restated-at-need control (the memory-free ceiling, §4.3), the W "
+          "cells' derived and near cells and the Σ-n-0 cells (exploratory, D12) enter no "
+          "registered test here."), "",
          "| Run kind | Task cell | Success | Content failures |", "|---|---|---|---|"]
     for r in h["cells"]:
         cf = ", ".join(f"{k} {v}" for k, v in r["content_failures"].items()) or "-"
         L.append(f"| {r['kind']}{' (expl.)' if r['exploratory'] else ''} | {r['task_cell']} | "
                  f"{_rate_s(r)} | {cf} |")
     ex = [e for e in h["exclusions"] if e["excluded_echo"] or e["excluded_transport"]
-          or e["pending"] or e["dropped_duplicates"]]
+          or e["excluded_no_final"] or e["never_played"] or e["pending"]
+          or e["dropped_duplicates"]]
     L += ["", "## Exclusions and duplicates (§13; DESIGN §7.8)", ""]
     if ex:
-        L += [("| Run kind | Task cell | Keys | Echo excluded | Transport excluded | Pending | "
-               "Dropped duplicates |"), "|---|---|---|---|---|---|---|"]
-        L += [(f"| {e['kind']} | {e['task_cell']} | {e['keys']} | {e['excluded_echo']}"
-               f"{' (**over 5%**)' if e['echo_over_5pct'] else ''} | "
-               f"{e['excluded_transport']} | {e['pending']} | {e['dropped_duplicates']} |")
-              for e in ex]
+        L += [("| Run kind | Task cell | Keys | Never played | Echo excluded | Transport "
+               "excluded | No final record (closed) | Pending | Dropped duplicates |"),
+              "|---|---|---|---|---|---|---|---|---|"]
+        L += [(f"| {e['kind']} | {e['task_cell']} | {e['keys']} | {e['never_played']} | "
+               f"{e['excluded_echo']}{' (**over 5%**)' if e['echo_over_5pct'] else ''} | "
+               f"{e['excluded_transport']} | {e['excluded_no_final']} | {e['pending']} | "
+               f"{e['dropped_duplicates']} |") for e in ex]
     else:
         L.append("None: every repeat-0 key has one final record, and none is excluded.")
     L += ["", "## Repeats (§2.9; descriptive, not in any primary result)", "",
@@ -1931,9 +2594,12 @@ def _tables_lines(h: dict) -> list[str]:
     L += ["", "## Runs", "", ("Model strings returned: " + ", ".join(
         f"`{k or 'none'}` ({v})" for k, v in ms["strings"].items()) + ".")]
     if ms["split"]:
-        L.append("**More than one model string** (§6): per string, " + "; ".join(
-            (f"`{k}`: Δ_H1 {_pp(v['delta_h1'])}, Δ_H3 {_pp(v['delta_h3'])} "
-             f"({v['episodes']} episodes)") for k, v in ms["split"].items()) + ".")
+        L += ["", ("**More than one model string** (§6): Δ_H1 and Δ_H3 per group of records "
+                   "(90% CIs on the same resamples; reading 12)."), "",
+              "| Group | Episodes | Δ_H1 | Δ_H3 |", "|---|---|---|---|"]
+        L += [(f"| `{k}` | {v['episodes']} | {_pp(v['delta_h1']['estimate'])} "
+               f"{_ci(v['delta_h1'])} | {_pp(v['delta_h3']['estimate'])} "
+               f"{_ci(v['delta_h3'])} |") for k, v in ms["split"].items()]
     L += ["", "| Run | Cell | Variants | Repeat | Started | Exit | Records | Counted |",
           "|---|---|---|---|---|---|---|---|"]
     L += [(f"| `{r['run_id']}` | {r['cell']} | {', '.join(r['variants'])} | "
@@ -1950,17 +2616,26 @@ def _tables_lines(h: dict) -> list[str]:
 
 
 def summary_lines(h: dict) -> list[str]:
+    inputs = ("the runs named with --run" if h["inputs"].get("input_list") is not None
+              else "every luna run found (no --run input list)")
     L = ["# H1 and H3 on gpt-6-luna's PersistGym sweep (PREREG §3 H1, §3 H3; R6)", "",
          (f"Computed {h['generated_utc']} at commit {h['git_commit'][:7]} (dirty: "
           f"{h['git_dirty']}) by `uv run python -m analysis.persistgym_h1h3`, from "
-          f"`{h['inputs']['results_root']}`. Templates 0-{h['templates'] - 1}, repeat 0, "
-          f"{h['primary_episodes']} primary episodes. Bootstrap: "
+          f"`{h['inputs']['results_root']}` ({inputs}). Templates 0-{h['templates'] - 1}, "
+          f"repeat 0, {h['primary_episodes']} primary episodes. Bootstrap: "
           f"{h['bootstrap']['resamples']:,} template resamples, percentile intervals, RNG "
-          f"seed SEED + {BOOT_SEED_OFFSET} = {h['bootstrap']['seed']}."), "",
+          f"seed SEED + {BOOT_SEED_OFFSET} = {h['bootstrap']['seed']}. H1's model-check rule "
+          f"for a non-finite logit-scale Δ_H1: `{h['h1_separation_rule']}`."), "",
          f"**Status: {h['status']}.**"]
     if h["provisional_reasons"]:
         L += ["", "Not the registered analysis, so no confirmatory claim is made from it:"]
         L += [f"- {x}" for x in h["provisional_reasons"]]
+    if h.get("sweep_closed") is not None or h.get("deviations"):
+        L += ["", "## Deviations (§13: listed in every write-up)", ""]
+        if h.get("sweep_closed") is not None:
+            L.append(f"- The sweep was closed by the researcher ({h['sweep_closed']}); keys "
+                     "with no final record and keys never played are excluded (DESIGN §7.8).")
+        L += [f"- {x}" for x in h.get("deviations") or []]
     ac = h["accounting_check"]
     if ac["missing_transcripts"]:
         check = ("§2.8 accounting check: the far-distance condition passed; the replay could "
@@ -1975,20 +2650,29 @@ def summary_lines(h: dict) -> list[str]:
     return L
 
 
-def _iv_s(iv) -> str:
-    return "n/a" if iv is None else f"[{iv[0]:.3f}, {iv[1]:.3f}]"
+def _dated(strings) -> bool:
+    """Whether a returned model string is a dated snapshot of luna's (`model_family`)."""
+    return any(s != MODEL and registered.model_family(s) == MODEL for s in strings)
 
 
 def not_shown_lines(h: dict) -> list[str]:
     """"What it does not show", in substance from §15, with this reading's numbers."""
     power = h.get("achieved_power") or []
-    prim = next((p for p in power if p["scenario"] == "primary"), None)
-    strings = ", ".join(f"`{k}`" for k in h["model_strings"]["strings"] if k) or "none"
+    singles = sorted({s for k in h["model_strings"]["strings"] for s in k.split("|") if s})
+    strings = ", ".join(f"`{s}`" for s in singles) or "none"
+    snapshot = ("a dated snapshot among the strings returned" if _dated(singles)
+                else "no dated snapshot")
+    power_s = ""
+    if power:
+        power_s = (f"; the achieved power at the worst Holm step was {_power_s(power)} (H1 at "
+                   "Δ_H1 = 10pp, H3 at Δ_H3 = 0), simulated with F-0 observed-far success at "
+                   f"{_f0_levels(power)} and with power_sim's model checks, so it may overstate "
+                   "P(supported) if F-0 sits at its ceiling (H1's model check, above)")
     return [
         "## What it does not show", "",
-        ("- **Not a model comparison.** One model, gpt-6-luna, at medium effort on Flex, with no "
-         f"dated snapshot (returned: {strings}). Nothing here ranks models or vendors; the "
-         "effects are against task properties (recoverability, distance)."),
+        ("- **Not a model comparison.** One model, gpt-6-luna, at medium effort on Flex, with "
+         f"{snapshot} (returned: {strings}). Nothing here ranks models or vendors; the effects "
+         "are against task properties (recoverability, distance)."),
         ("- **PersistGym is synthetic.** The results are not claimed to transfer to coding "
          "agents, ARC or real tasks. Window effects at S = 0 are mechanical, not findings in "
          "themselves: Penalty_NR is a manipulation check, and the confirmatory quantity is the "
@@ -1996,10 +2680,7 @@ def not_shown_lines(h: dict) -> list[str]:
         ("- **Non-inferiority is not absence.** Where H3's bound holds, it says the "
          "single-prompt arm is at most 5pp ahead at the stated confidence, not that the "
          "multi-turn structure costs nothing. A result that is neither supported nor killed "
-         "is inconclusive, not \"no effect\""
-         + (f"; the achieved power at the worst Holm step was {prim['power_h1']:.2f} for H1 at "
-            f"Δ_H1 = 10pp and {prim['power_h3']:.2f} for H3 (primary scenario)." if prim
-            else ".")),
+         "is inconclusive, not \"no effect\"" + power_s + "."),
         ("- **H3's control favours itself a little.** It uses the oracle's routine replies, so "
          "its evidence-to-need gaps are slightly shorter than with real replies (§3 H3)."),
         ("- **R_need reinterprets PLAN's \"total tokens\"** (D8): it follows need-phase calls "
@@ -2007,8 +2688,8 @@ def not_shown_lines(h: dict) -> list[str]:
          "episode ratio cannot reach 1.30 by design."),
         ("- **P(carried) is a lower bound** (string match misses paraphrased carry), and Σ-cell "
          "results are exploratory (D12)."),
-        ("- **Not run:** H2 (stopped under R3), sol's replication of H1 (R6), the failure labels "
-         f"(R6). The Bayesian GLMM sensitivity: {h['bayesian_glmm']}."),
+        ("- **Not run:** H2 (stopped under R3), sol's replication of H1 (R6), the failure "
+         "labels (R6)."),
         ("- **Costs are period-specific:** provider-reported tokens at the prices checked on "
          "2026-09-29/30, Flex tier.")]
 
@@ -2050,13 +2731,18 @@ def write(out_dir: Path, run_id: str, h: dict, text: str, git: dict) -> Path:
               "templates": h["templates"], "n_boot": h["bootstrap"]["resamples"],
               "bootstrap_seed": h["bootstrap"]["seed"], "levels": list(LEVELS),
               "status": h["status"], "rerun_links": h["inputs"]["rerun_links"],
+              "sweep_closed": h["sweep_closed"], "h1_separation_rule": h["h1_separation_rule"],
+              "bayesian_glmm": {k: h["bayesian_glmm"].get(k) for k in (
+                  "status", "model", "priors", "seed", "chains", "draws", "tune", "versions")},
               "inputs": {k: v for k, v in h["inputs"].items() if k != "runs"}}
     return runmeta.write_meta(
         out_dir, git=git, experiment=OUT_NAME, run_id=run_id, cell_or_config="h1h3",
         config=_clean(config), model_requested=None, model_returned=None,
         reasoning_effort=None, reasoning_context_requested=None,
         reasoning_context_echoed=None, template_id=None, repeat_index=None,
-        seeds={"bootstrap": h["bootstrap"]["seed"]}, started_utc=h["generated_utc"],
+        seeds={"bootstrap": h["bootstrap"]["seed"],
+               "bayesian_glmm": h["seed"] + BAYES_SEED_OFFSET},
+        started_utc=h["generated_utc"],
         finished_utc=runmeta.utc_now(),
         exit_reason="completed" if h["status"] == FINAL else "completed_provisional",
         tokens=None, cost_usd=0.0, raw_transcript_path=None, outputs=list(OUTPUTS),
@@ -2079,6 +2765,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rerun", action="append", metavar="RUN=ORIGINAL",
                     help="declare RUN a re-run or continuation of ORIGINAL, as listed in "
                          "results/decisions.md (harnesses/DESIGN.md §7.8); repeatable")
+    ap.add_argument("--run", action="append", metavar="RUN_ID", dest="runs",
+                    help="a run to read; name every run (harnesses/DESIGN.md §7.8); without "
+                         "any, every luna run found is read and the output is PROVISIONAL")
+    ap.add_argument("--sweep-closed", metavar="REF", default=None,
+                    help="the results/decisions.md entry in which the researcher closed the "
+                         "sweep: keys with no final record, and keys never played, are then "
+                         "excluded (DESIGN §7.8) and listed as deviations")
+    ap.add_argument("--no-bayes", action="store_true",
+                    help="skip §9.1's Bayesian sensitivity fit (PROVISIONAL)")
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -2094,7 +2789,8 @@ def main(argv: list[str] | None = None) -> int:
         git = runmeta.git_state()
         h = compute(root, now.isoformat(timespec="seconds"), git, boot=a.boot,
                     allow_incomplete=a.allow_incomplete,
-                    raw_root=a.raw_root.resolve() if a.raw_root else None, links=links)
+                    raw_root=a.raw_root.resolve() if a.raw_root else None, links=links,
+                    runs=a.runs, sweep_closed=a.sweep_closed, bayes=not a.no_bayes)
     except AccountingBug as e:
         print(f"H1/H3 stopped: {e}", file=sys.stderr)
         return 2

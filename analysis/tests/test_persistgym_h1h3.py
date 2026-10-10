@@ -2,8 +2,10 @@
 §13): every estimand on hand-computed toy data, the bootstrap (its seed, determinism, and its
 agreement with power_sim's per-template contrasts), Holm and "supported", the kill and
 prediction readings at their boundaries, DESIGN §7.8's dedup rule, §13's exclusions, the refusal
-of an incomplete sweep, and §2.8's bug stop, the last both on synthetic transcripts and on real
-episodes played by the harness with the fake model.
+of an incomplete sweep and a closed one, §2.8's bug stop (on synthetic transcripts and on real
+episodes played by the harness with the fake model), the model checks under separation (H1's
+rules, the Firth fit, H3's registered model), the input list, and the Bayesian sensitivity fit
+(once for real on a small sweep; stubbed elsewhere, since it takes seconds per fit).
 
 Every run here is synthetic, in a results root under tmp_path: no test reads luna's real sweep.
 """
@@ -30,6 +32,8 @@ from harnesses.fake import padded_text
 from persistgym.survival import window_keep_start
 
 SEED = 4086943125952605534
+BAYES_STUB = {"status": "not run", "note": "stubbed in tests"}
+BAYES_REAL = hh.bayesian_glmm
 GIT = {"git_commit": "0" * 40, "git_dirty": False}
 HASH = registered.LUNA_GENERATOR_HASH
 T = 10
@@ -43,6 +47,12 @@ ONR, OR, DNR = "observed-nonrec-far", "observed-rec-far", "derived-nonrec-far"
 W_SMALL, SYS_TOKENS, OBS_TOKENS, NEED = 60, 5, 10, 10
 EVIDENCE = {("observed", "near"): [8], ("observed", "far"): [2],
             ("derived", "near"): [7, 8], ("derived", "far"): [1, 2]}
+
+
+@pytest.fixture(autouse=True)
+def _no_bayes_fit(monkeypatch):
+    """The Bayesian sensitivity fit takes seconds; every test but its own stubs it."""
+    monkeypatch.setattr(hh, "bayesian_glmm", lambda prim, seed, settings=None: dict(BAYES_STUB))
 
 
 @cache
@@ -146,6 +156,7 @@ class Sweep:
         self.long_replies: set[tuple[str, str]] = set()  # (cell, episode_id)
         self.turns: dict[tuple[str, str], int] = {}       # (cell, episode_id): turns written
         self.n = 0
+        self.ids: list[str] = []                          # every run written, the input list
 
     def outcome(self, cell, tc, values, variant=BASE):
         assert len(values) == self.T
@@ -172,6 +183,7 @@ class Sweep:
         run_id = f"{started:%Y%m%dT%H%M%SZ}-{name}-gpt-6-luna" + (
             "-repeat1" if repeat else "") + ("" if variant == BASE else f"-{variant}")
         recs = records if records is not None else self.records(cell, variant, repeat=repeat)
+        self.ids.append(run_id)
         folder = self.root / "persistgym" / run_id
         folder.mkdir(parents=True)
         meta = {"experiment": "persistgym", "run_id": run_id, "cell_or_config": cell,
@@ -213,11 +225,13 @@ class Sweep:
         return ids
 
     def compute(self, **kw):
+        kw.setdefault("runs", list(self.ids))
         return hh.compute(self.root, "now", GIT, templates=self.T, **kw)
 
-    def main(self, *args, monkeypatch):
+    def main(self, *args, monkeypatch, named=True):
         monkeypatch.setattr(hh, "T_REGISTERED", self.T)
-        return hh.main(["--results-root", str(self.root), *args])
+        runs = [x for r in self.ids for x in ("--run", r)] if named else []
+        return hh.main(["--results-root", str(self.root), *runs, *args])
 
 
 # The toy H1/H3 sweep (T = 10), hand-computed:
@@ -349,7 +363,9 @@ def test_supported_needs_holm_and_the_model_check():
     h3 = {"p_one_sided": 0.001, "model_check": {"agrees": False}}
     fam = hh.family_readings(h1, h3)
     assert fam["H1"]["supported"] and fam["H1"]["verdict"] == "supported"
-    assert not fam["H3"]["supported"] and fam["H3"]["verdict"] == "inconclusive"
+    assert not fam["H3"]["supported"] and fam["H3"]["verdict"] == hh.MODEL_DISAGREES
+    h3_weak = {"p_one_sided": 0.2, "model_check": {"agrees": True}}
+    assert hh.family_readings(h1, h3_weak)["H3"]["verdict"] == "inconclusive"
     h1["model_check"]["agrees"] = False
     assert hh.family_readings(h1, h3)["H1"]["supported"] is False
     h1 = {"p_one_sided": 0.04, "model_check": {"agrees": True}, "kill": True}
@@ -435,6 +451,7 @@ def _random_sweep(templates=60, seed=1):
 def test_glm_9_1_target_is_the_formula_fits_w_by_r_coefficient():
     df = _random_sweep()
     g = hh.glm_91(df)
+    assert g["fitted_by"].startswith("statsmodels") and g["logit_status"] == hh.FINITE
     keep, _, _ = hh.informative(df.success.to_numpy(float), df.template.to_numpy())
     d = df[keep].assign(W=lambda x: (x.cell == "W-0").astype(float),
                         R=lambda x: x.recoverable.astype(float),
@@ -444,10 +461,21 @@ def test_glm_9_1_target_is_the_formula_fits_w_by_r_coefficient():
     assert g["estimate"] == pytest.approx(fit.params["W:R"], abs=1e-6)
     assert g["coefficients"]["W-0"] == pytest.approx(fit.params["W"], abs=1e-6)
     assert g["se_available"] and g["se"] > 0
-    # the logit penalties follow from the coefficients
-    assert g["penalty_nr_logit"] == pytest.approx(-fit.params["W"], abs=1e-6)
-    assert g["penalty_r_logit"] == pytest.approx(-(fit.params["W"] + fit.params["W:R"]),
-                                                 abs=1e-6)
+    # the SE is the cluster-robust one with the G/(G - 1) factor only: power_sim's 'clusters'
+    sub, z, names = hh._glm_91_rows(df, ("W-0",))
+    ref = ps.fe_logit(sub.success.to_numpy(float), sub.template.to_numpy(), z, "fast",
+                      "clusters")
+    assert g["se"] == pytest.approx(float(ref[1][-1]), rel=1e-5)
+    assert g["estimate_emulated"] == pytest.approx(g["estimate"], abs=1e-6)
+    assert not g["emulated_sign_disagrees"]
+    # the logit penalties follow from the coefficients, with their own Wald intervals
+    con = g["contrasts"]
+    assert con["penalty_nr_logit"]["estimate"] == pytest.approx(-fit.params["W"], abs=1e-6)
+    assert con["penalty_r_logit"]["estimate"] == pytest.approx(
+        -(fit.params["W"] + fit.params["W:R"]), abs=1e-6)
+    assert con["penalty_nr_logit"]["se"] == pytest.approx(float(ref[1][names.index("W-0")]),
+                                                          rel=1e-5)
+    assert con["penalty_r_logit"]["ci90"] is not None
 
 
 def test_model_checks_equal_power_sims_on_complete_data():
@@ -467,8 +495,8 @@ def test_model_checks_equal_power_sims_on_complete_data():
                   "success": int(v)} for i, v in enumerate(y[name])]
     df = pd.DataFrame(rows)
     assert hh.h1_standin(df)["estimate"] == pytest.approx(ps.h1_glm(y), abs=1e-9)
-    assert hh.h3_glm(df)["ame"] == pytest.approx(ps.h3_glm_ame(y), abs=1e-9)
-    lit = hh.h3_glm(df, with_derived=False)
+    assert hh.h3_glm_powersim(df)["ame"] == pytest.approx(ps.h3_glm_ame(y), abs=1e-9)
+    lit = hh.h3_glm_literal(df)
     assert lit["ame"] is not None and lit["coefficients"].keys() == {"arm"}
 
 
@@ -531,11 +559,14 @@ def test_cost_outcomes_and_glms_in_the_toy_sweep(tmp_path):
     assert look["ratios"]["W-0"]["ratio"] == pytest.approx(5.0)
     assert look["ratios"]["W-n-0"]["ratio"] == 0.0 and look["ratios"]["W-n-0"]["note"]
     assert h["glm_9_1"]["estimate"] is not None
-    # F-0 obs-R-far is 10/10: the logit-scale Delta_H1 is not finite, and that is flagged
+    # F-0 obs-R-far is 10/10: the logit-scale Delta_H1 is -inf, so the literal rule does not
+    # agree (pending item 1), whatever statsmodels' stopping point says
     mc = h["h1"]["model_check"]
-    assert mc["logit_delta_h1_finite"] is False
+    assert mc["logit_status"] == hh.MINUS_INF and mc["rule"] == "literal"
     assert mc["h1_cells_no_variation"] == ["F-0 observed-rec-far: all 1 (10 episodes)"]
-    assert h["bayesian_glmm"].startswith("not run")
+    assert mc["agrees"] is False and mc["sign"] == -1
+    assert h["h1"]["scales_disagree_in_sign"]
+    assert h["bayesian_glmm"] == BAYES_STUB
 
 
 # --- keys, re-runs and exclusions (DESIGN §7.8, §13) ------------------------------------------
@@ -875,12 +906,19 @@ def test_main_writes_the_outputs(tmp_path, monkeypatch):
     text = (out / "summary.md").read_text(encoding="utf-8")
     assert h["status"] == hh.FINAL and h["h1"]["delta_h1"]["exact"] == "3/5"
     assert meta["experiment"] == "persistgym_h1h3" and meta["paid_calls"] == 0
-    assert meta["seeds"] == {"bootstrap": SEED + 10} and meta["exit_reason"] == "completed"
+    assert meta["seeds"] == {"bootstrap": SEED + 10, "bayesian_glmm": SEED + 11}
+    assert meta["exit_reason"] == "completed" and meta["config"]["h1_separation_rule"] == "literal"
     assert "git_commit" in meta and len(meta["runs"]) == 6
     for needle in ("## What it does not show", "Not a model comparison", "**Δ_H1 = ",
                    "Holm", "Bayesian GLMM sensitivity (§9.1): not run", "## Repeats",
-                   "§2.8 accounting check: passed on 160 window-cell episodes"):
-        assert needle in text
+                   "§2.8 accounting check: passed on 160 window-cell episodes",
+                   "W-n-0 as a third harness level", "Logit scale (§9.3): Penalty_NR",
+                   "The rule in force is `literal`", "the arm coefficient",
+                   "power_sim's model (template fixed effects + derived term + arm)",
+                   "reading 11 (as implemented, not registered)",
+                   "## Success by cell (repeat 0; descriptive)", "with no dated snapshot",
+                   "(the runs named with --run)"):
+        assert needle in text, needle
 
 
 def test_model_string_split_and_achieved_power(tmp_path):
@@ -891,17 +929,337 @@ def test_model_string_split_and_achieved_power(tmp_path):
                                       "effort_requested": "medium",
                                       "effort_echoed": {"medium": 12},
                                       "models_returned": {"gpt-6-luna-2026-10-20": 12}})
+    sw.fields("F-0", ONR, 1, echo={"context_requested": "current_turn",
+                                   "context_echoed": {"current_turn": 12},
+                                   "effort_requested": "medium", "effort_echoed": {"medium": 12},
+                                   "models_returned": {"gpt-6-luna": 6,
+                                                       "gpt-6-luna-2026-10-20": 6}})
     sw.standard()
     h = sw.compute()
-    assert set(h["model_strings"]["strings"]) == {"gpt-6-luna", "gpt-6-luna-2026-10-20"}
-    assert h["model_strings"]["split"]["gpt-6-luna-2026-10-20"]["episodes"] == 2
+    ms = h["model_strings"]
+    assert set(ms["strings"]) == {"gpt-6-luna", "gpt-6-luna-2026-10-20",
+                                  "gpt-6-luna|gpt-6-luna-2026-10-20"}
+    assert ms["records_with_more_than_one_string"] == 1
+    # one group per single string, and the mixed record as a group of its own (reading 12)
+    assert ms["split"]["gpt-6-luna-2026-10-20"]["episodes"] == 2
+    assert ms["split"][hh.MIXED]["episodes"] == 1
+    main = ms["split"]["gpt-6-luna"]
+    assert main["episodes"] == h["primary_episodes"] - 3
+    assert main["delta_h1"]["ci90"] is not None and main["delta_h3"]["ci90"] is not None
     power = {p["scenario"]: p for p in h["achieved_power"]}
     assert power["primary"]["T_set"] == 200
     assert (power["primary"]["power_h1"], power["primary"]["power_h3"]) == (0.647, 0.781)
+    assert (power["pessimistic"]["power_h1"], power["pessimistic"]["power_h3"]) == (0.4375,
+                                                                                    0.443)
+    assert (power["primary"]["p_f0_observed_far"], power["pessimistic"]["p_f0_observed_far"]) \
+        == (0.95, 0.85)
+    text = "\n".join(hh.summary_lines(h))
+    for needle in ("Achieved power at T = 200", "pessimistic: H1 0.438, H3 0.443",
+                   "F-0 observed-far success at 0.95 (primary) and 0.85 (pessimistic)",
+                   "a dated snapshot among the strings returned", "| `more than one string` | 1 |"):
+        assert needle in text, needle
 
 
-def test_bayesian_status(monkeypatch):
-    monkeypatch.setattr(hh.importlib.util, "find_spec", lambda name: None)
-    assert hh.bayesian_status() == "not run (bambi not installed)"
-    monkeypatch.setattr(hh.importlib.util, "find_spec", lambda name: object())
-    assert "no fit for it" in hh.bayesian_status()
+# --- the Bayesian sensitivity model (§9.1) -------------------------------------------------------
+
+def test_bayesian_glmm_fits_the_9_1_design():
+    """A real, small bambi fit (the fixture stubs it elsewhere): the W-0 x R posterior with its
+    diagnostics, on the §9.1 GLM's rows, every template kept, with the seed given."""
+    df = _random_sweep(templates=12, seed=5)
+    out = BAYES_REAL(df, SEED + 11, {"chains": 2, "draws": 150, "tune": 150})
+    assert out["status"] == "fitted", out.get("note")
+    assert out["n_rows"] == 12 * 2 * 8 and out["n_templates"] == 12
+    assert out["seed"] == SEED + 11 and out["model"] == hh.BAYES_FORMULA
+    assert out["ci90"][0] < out["median"] < out["ci90"][1]
+    assert out["ci95"][0] <= out["ci90"][0] and 0 <= out["p_positive"] <= 1
+    assert out["rhat"] > 0 and out["ess_bulk"] > 0 and isinstance(out["converged"], bool)
+    assert set(out["versions"]) == {"bambi", "pymc", "arviz"}
+    # no outcome variation: nothing to fit
+    flat = df.assign(success=1)
+    assert BAYES_REAL(flat, 1, {"chains": 1, "draws": 10, "tune": 10})["status"] == "not run"
+
+
+def test_skipping_the_bayesian_fit_is_provisional(tmp_path, monkeypatch, capsys):
+    sw = Sweep(tmp_path)
+    sw.standard()
+    h = sw.compute(bayes=False)
+    assert h["status"] == hh.PROVISIONAL and h["bayesian_glmm"]["status"] == "not run"
+    assert any("--no-bayes" in x for x in h["provisional_reasons"])
+    assert sw.main("--no-write", "--no-bayes", monkeypatch=monkeypatch) == 0
+    assert "**Status: PROVISIONAL.**" in capsys.readouterr().out
+
+
+# --- H1's model check when the logit-scale Delta_H1 is not finite (pending item 1) ---------------
+
+def _h1_frame(templates: int, given: dict, seed: int = 0) -> pd.DataFrame:
+    """F-0 and W-0 on the 8 task cells: H1's cells from `given` ({(cell, task cell): outcomes}),
+    every other cell drawn at 0.7, so templates keep their outcome variation."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for t in range(templates):
+        for cell in ("F-0", "W-0"):
+            for tc in hh.TASK_CELLS:
+                fact, rec_word, dist = tc.split("-")
+                v = given.get((cell, tc))
+                rows.append({"cell": cell, "variant": BASE, "task_cell": tc, "fact": fact,
+                             "recoverable": rec_word == "rec", "distance": dist, "template": t,
+                             "success": int(v[t]) if v is not None else int(rng.random() < 0.7)})
+    return pd.DataFrame(rows)
+
+
+def _spread(k: int, n: int, seed: int) -> list[int]:
+    """k ones among n, at random places."""
+    out = np.zeros(n, int)
+    out[np.random.default_rng(seed).choice(n, k, replace=False)] = 1
+    return out.tolist()
+
+
+def test_h1_model_check_rules_when_f0_recoverable_is_at_its_ceiling():
+    """F-0 observed-rec-far all 1 and a large positive Delta_H1 (0.9 - 0.1 - (1 - 0.9) = 0.7):
+    the logit-scale Delta_H1 is -inf, so the literal rule does not agree; the Firth and the
+    probability-scale rules do."""
+    n = 40
+    df = _h1_frame(n, {("F-0", ONR): _spread(36, n, 1), ("W-0", ONR): _spread(4, n, 2),
+                       ("F-0", OR): [1] * n, ("W-0", OR): _spread(36, n, 3)})
+    g = hh.glm_91(df)
+    assert g["logit_status"] == hh.MINUS_INF and g["estimate"] < -5     # the stopping point
+    assert g["h1_cells_no_variation"] == [f"F-0 {OR}: all 1 ({n} episodes)"]
+    delta = Fraction(7, 10)
+    lit = hh.h1_model_check(g, delta, "literal")
+    assert lit["agrees"] is False and lit["sign"] == -1
+    firth = hh.glm_91_firth(df)
+    assert firth["estimate"] is not None and 0 < firth["estimate"] < 10
+    fm = hh.h1_model_check(g, delta, "firth", firth)
+    assert fm["agrees"] is True and fm["firth_estimate"] == firth["estimate"]
+    pm = hh.h1_model_check(g, delta, "probability-scale")
+    assert pm["agrees"] is True and pm["sign"] is None
+    with pytest.raises(ValueError, match="unknown H1 separation rule"):
+        hh.h1_model_check(g, delta, "lenient")
+
+
+def test_h1_logit_status_plus_inf_and_undefined():
+    n = 40
+    # W-0 observed-nonrec-far all 0: +inf, which agrees under the literal rule
+    df = _h1_frame(n, {("F-0", ONR): _spread(36, n, 1), ("W-0", ONR): [0] * n,
+                       ("F-0", OR): _spread(36, n, 4), ("W-0", OR): _spread(30, n, 3)})
+    g = hh.glm_91(df)
+    assert g["logit_status"] == hh.PLUS_INF and g["estimate"] > 0
+    assert hh.h1_model_check(g, Fraction(1, 2), "literal")["agrees"] is True
+    # F-0 all 1 in both observed-far cells: inf - inf, an undefined sign, which never agrees
+    df = _h1_frame(n, {("F-0", ONR): [1] * n, ("W-0", ONR): _spread(4, n, 2),
+                       ("F-0", OR): [1] * n, ("W-0", OR): _spread(36, n, 3)})
+    g = hh.glm_91(df)
+    assert g["logit_status"] == hh.UNDEFINED
+    lit = hh.h1_model_check(g, Fraction(7, 10), "literal")
+    assert lit["agrees"] is False and lit["sign"] is None
+    # with every H1 cell varying, the estimate's own sign decides, whatever the rule
+    g = hh.glm_91(_random_sweep())
+    for rule in hh.H1_SEPARATION_RULES:
+        mc = hh.h1_model_check(g, Fraction(1, 5), rule)
+        assert mc["agrees"] is (g["estimate"] > 0) and mc["basis"].startswith("the §9.1 GLM")
+
+
+def test_the_rule_in_force_decides_supported_on_the_toy_sweep(tmp_path, monkeypatch):
+    """The toy sweep's F-0 observed-rec-far is 10/10 and its Holm test rejects: H1 is
+    inconclusive under the literal rule and supported under the other two."""
+    sw = toy(tmp_path)
+    sw.standard()
+    h = sw.compute()
+    assert h["h1_separation_rule"] == "literal" and h["glm_9_1_firth"] is None
+    assert h["family"]["H1"]["holm_rejects"] and h["family"]["H1"]["verdict"] == hh.MODEL_DISAGREES
+    for rule in ("firth", "probability-scale"):
+        monkeypatch.setattr(hh, "H1_SEPARATION_RULE", rule)
+        h = sw.compute()
+        assert h["h1"]["model_check"]["rule"] == rule
+        assert h["family"]["H1"]["supported"] and h["family"]["H1"]["verdict"] == "supported"
+    assert h["glm_9_1_firth"] is None                     # fitted under the Firth rule only
+
+
+def test_firth_is_add_a_half_on_a_saturated_model():
+    """On a saturated model Firth's estimate is the logit of (successes + 1/2) / (n + 1) in each
+    cell (Firth 1993), finite even for a cell at 10/10."""
+    cells = {(0, 0): (9, 10), (1, 0): (1, 10), (0, 1): (10, 10), (1, 1): (8, 10)}
+    y, w, r = [], [], []
+    for (wi, ri), (s, n) in cells.items():
+        y += [1] * s + [0] * (n - s)
+        w += [wi] * n
+        r += [ri] * n
+    y, w, r = (np.array(v, float) for v in (y, w, r))
+    alpha, beta = hh.firth_fe_logit(y, np.zeros(len(y), int), np.column_stack([w, r, w * r]))
+    lg = {k: np.log((s + 0.5) / (n - s + 0.5)) for k, (s, n) in cells.items()}
+    assert alpha[0] == pytest.approx(lg[(0, 0)], abs=1e-6)
+    assert beta[0] == pytest.approx(lg[(1, 0)] - lg[(0, 0)], abs=1e-6)
+    assert beta[1] == pytest.approx(lg[(0, 1)] - lg[(0, 0)], abs=1e-6)
+    assert beta[2] == pytest.approx(lg[(1, 1)] - lg[(1, 0)] - lg[(0, 1)] + lg[(0, 0)], abs=1e-6)
+
+
+# --- H3's model check: the registered model decides (B1) ----------------------------------------
+
+def _h3_frame(templates: int = 60, seed: int = 7) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    u = rng.normal(0, 0.8, templates)
+    rows = []
+    for t in range(templates):
+        for cell in ("F-0", ST):
+            for tc in (ONR, DNR):
+                fact, _, dist = tc.split("-")
+                eta = 1.4 + u[t] + 0.3 * (cell == ST) - 0.5 * (fact == "derived")
+                rows.append({"cell": cell, "variant": BASE, "task_cell": tc, "fact": fact,
+                             "recoverable": False, "distance": dist, "template": t,
+                             "success": int(rng.random() < 1 / (1 + np.exp(-eta)))})
+    return pd.DataFrame(rows)
+
+
+def test_h3_model_check_is_the_registered_model():
+    df = _h3_frame()
+    lit = hh.h3_glm_literal(df)
+    assert lit["coefficients"].keys() == {"arm"} and lit["logit_status"] == hh.FINITE
+    # statsmodels' formula fit of template FE + arm on the informative templates
+    keep, _, _ = hh.informative(df.success.to_numpy(float), df.template.to_numpy())
+    d = df[keep].assign(arm=lambda x: (x.cell == ST).astype(float))
+    fit = smf.glm("success ~ C(template) + arm", d, family=sm.families.Binomial()).fit()
+    assert lit["estimate"] == pytest.approx(fit.params["arm"], abs=1e-6)
+    # the AME over every (template, task cell) pair, a template without variation adding 0
+    pairs = df[["template", "task_cell"]].drop_duplicates()
+    fitted = pairs[pairs.template.isin(set(d.template))]
+    eff = (fit.predict(fitted.assign(arm=1.0)) - fit.predict(fitted.assign(arm=0.0))).sum()
+    assert lit["ame"] == pytest.approx(eff / len(pairs), abs=1e-6)
+    assert lit["ame_informative"] == pytest.approx(eff / len(fitted), abs=1e-6)
+    assert lit["n_pairs"] == len(pairs) and lit["n_pairs_informative"] == len(fitted)
+    # h3_reading: the registered model decides; power_sim's is reported, and a disagreement
+    # about the 5pp bound is flagged
+    an = hh.Analysis(df, 60, hh.resample_indices(60, 1, 200))
+    r = hh.h3_reading(an, {"ame": 0.07, "estimate": 0.5, "model": "registered"},
+                      {"ame": 0.01, "model": "power_sim's"})
+    mc = r["model_check"]
+    assert mc["agrees"] is False and mc["powersim_agrees"] is True and mc["powersim_disagrees"]
+    ps_model = hh.h3_glm_powersim(df)
+    assert ps_model["ame"] is not None and ps_model["arm_logit"] is not None
+
+
+def test_h3_verdict_when_the_ci_lies_above_the_bound():
+    assert hh.h3_verdict(False, 0.15).startswith("not supported: the whole 90% CI")
+    assert hh.h3_verdict(False, 0.05) == "inconclusive"          # on the bound, not above it
+    assert hh.h3_verdict(False, 0.05 + 1e-12) == "inconclusive"
+    assert hh.h3_verdict(False, -0.2, holm_rejects=True) == hh.MODEL_DISAGREES
+    assert hh.h3_verdict(True, 0.2) == "supported"
+    h1 = {"p_one_sided": 0.5, "model_check": {"agrees": True}, "kill": False}
+    h3 = {"p_one_sided": 1.0, "model_check": {"agrees": False},
+          "delta_h3": {"ci90": [0.15, 0.25]}}
+    assert hh.family_readings(h1, h3)["H3"]["verdict"].startswith("not supported")
+    assert hh.h1_verdict(False, False) == "inconclusive"
+    assert hh.h1_verdict(False, False, holm_rejects=True) == hh.MODEL_DISAGREES
+
+
+# --- a closed sweep (DESIGN §7.8) and the input list -------------------------------------------
+
+def test_a_closed_sweep_excludes_keys_without_a_final_record(tmp_path):
+    sw = Sweep(tmp_path)
+    recs = sw.records("W-n-0", templates=range(T - 2))       # templates 8 and 9 never played
+    for r in recs:
+        if r["template_id"] == "main-000007":
+            r["exit_reason"] = "COST_CAP"
+    sw.standard(skip={("W-n-0", BASE)})
+    sw.run("W-n-0", records=recs)
+    with pytest.raises(hh.Refusal, match="pending"):
+        sw.compute()
+    h = sw.compute(sweep_closed="decisions.md 2026-10-12")
+    assert h["status"] == hh.FINAL and h["sweep_closed"] == "decisions.md 2026-10-12"
+    row = next(e for e in h["exclusions"] if e["kind"] == "W-n-0" and e["task_cell"] == ONR)
+    assert (row["keys"], row["never_played"], row["excluded_no_final"]) == (T - 2, 2, 1)
+    assert any("never played" in d for d in h["deviations"])
+    assert any("last endings: COST_CAP 8" in d for d in h["deviations"])
+    assert h["h1"]["cells"]["W-n-0 NR"]["n"] == T - 3
+    text = "\n".join(hh.summary_lines(h))
+    assert "## Deviations (§13" in text and "decisions.md 2026-10-12" in text
+
+
+def test_a_closed_sweep_still_needs_a_transport_failures_rerun(tmp_path):
+    sw = Sweep(tmp_path)
+    recs = sw.records("F-0")
+    recs[5]["exit_reason"] = "API_ERROR"
+    sw.standard(skip={("F-0", BASE)})
+    sw.run("F-0", records=recs)
+    with pytest.raises(hh.Refusal, match="§13 re-runs it once"):
+        sw.compute(sweep_closed="decisions.md 2026-10-12")
+    # a run kind with no record at all is a missing run, not a closed sweep
+    sw2 = Sweep(tmp_path / "b")
+    sw2.standard(skip={(ST, BASE)})
+    with pytest.raises(hh.Refusal, match="a run is missing"):
+        sw2.compute(sweep_closed="decisions.md 2026-10-12")
+    with pytest.raises(hh.Refusal, match="needs the results/decisions.md entry"):
+        sw2.compute(sweep_closed=" ")
+
+
+def test_the_input_list(tmp_path, monkeypatch, capsys):
+    sw = Sweep(tmp_path)
+    sw.standard()
+    h = sw.compute(runs=None)
+    assert h["status"] == hh.PROVISIONAL
+    assert any("no input list" in x for x in h["provisional_reasons"])
+    assert sw.main("--no-write", monkeypatch=monkeypatch, named=False) == 0
+    assert "**Status: PROVISIONAL.**" in capsys.readouterr().out
+    with pytest.raises(hh.Refusal, match="--run names run"):
+        sw.compute(runs=[*sw.ids, "20261010T235900Z-F-0-gpt-6-luna"])
+    # a run left out of the list is skipped, visibly; read, it would be an undeclared duplicate
+    named = list(sw.ids)
+    extra = sw.run("F-0", records=sw.records("F-0", templates=[0]))
+    h = sw.compute(runs=named)
+    assert h["status"] == hh.FINAL
+    assert {"folder": extra, "reason": "a gpt-6-luna sweep run not in the input list (--run)"} \
+        in h["inputs"]["skipped"]
+    assert any("not in the input list" in w for w in h["warnings"])
+    with pytest.raises(hh.Refusal, match="not declared"):
+        sw.compute()
+
+
+# --- unreadable records, missing values and the bootstrap cache ---------------------------------
+
+def test_unreadable_records_refuse(tmp_path, monkeypatch, capsys):
+    sw = Sweep(tmp_path)
+    ids = sw.standard()
+    path = sw.root / "persistgym" / ids[("F-0", BASE)] / "episodes.jsonl"
+    path.write_text(path.read_text(encoding="utf-8") + '{"episode_id": "main-0000',
+                    encoding="utf-8")
+    with pytest.raises(hh.Refusal, match="line 81 is not valid JSON"):
+        sw.compute()
+    assert sw.main("--no-write", monkeypatch=monkeypatch) == 2
+    assert "not valid JSON" in capsys.readouterr().err
+    sw2 = Sweep(tmp_path / "b")
+    sw2.fields("F-0", ONR, 0, repeat_index=None)
+    sw2.standard()
+    with pytest.raises(hh.Refusal, match="repeat_index None, not an integer"):
+        sw2.compute()
+
+
+def test_a_complete_need_phase_without_tokens_is_left_out(tmp_path):
+    sw = Sweep(tmp_path)
+    sw.fields("F-0", OR, 0, need_phase={"complete": True})
+    sw.standard()
+    h = sw.compute()
+    assert h["h1_tokens"]["R_need"]["n"]["F-0 far"] == T - 1
+    assert h["h1_tokens"]["R_need"]["episodes_left_out_no_tokens"] == 1
+    assert any("without need_phase.tokens" in w for w in h["warnings"])
+
+
+def test_sample_boot_is_cached_per_resample_set():
+    s = hh.Sample(pd.DataFrame({"template": [0, 1], "success": [1, 0]}), 2)
+    assert s.boot(np.array([[0, 0]])).tolist() == [1.0]
+    assert s.boot(np.array([[1, 1]])).tolist() == [0.0]
+    nan = hh.Sample(pd.DataFrame({"template": [0, 1], "need_tokens": [5.0, np.nan]}), 2,
+                    "need_tokens")
+    assert nan.count == 1 and nan.n_missing == 1 and nan.point() == 5
+
+
+def test_a_finished_window_episode_without_a_need_payload_is_a_bug(tmp_path):
+    sw = Sweep(tmp_path)
+    sw.fields("W-0", ONR, 3, need_payload=None)
+    sw.standard()
+    with pytest.raises(hh.AccountingBug, match="ended DONE with no need_payload"):
+        sw.compute()
+    sw2 = Sweep(tmp_path / "b")
+    sw2.fields("W-0", ONR, 3, need_payload=None, exit_reason="MAX_TURNS")
+    sw2.standard()
+    h = sw2.compute()
+    assert any("never reached their need step" in w and "MAX_TURNS 1" in w
+               for w in h["warnings"])

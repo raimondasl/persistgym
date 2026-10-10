@@ -60,7 +60,9 @@ restated-at-need control), on the default generator config, with --mode standard
 2026-10-09).
 R6's hard stop (PREREG §17.6 change 1; `registered.r6_refusal`, while
 `registered.R6_HARD_STOP`): the PersistGym stream's only paid runs left are luna's main sweep
-and controls above and the single-turn control's pilot (at most 10 prompts in all). `run`,
+and controls above, plus the single-turn control's pilot (at most 10 prompts in all), which
+R6 change 1 does not list and the guard allows under CLAUDE.md's pilot rule (block
+3-persistgym's approval line lists persistgym_pilot for it). `run`,
 `single-turn`, `probe-echo` and `probe-replay` refuse every other paid run before the
 paid-run lock: any pilot but that one, persistgym_validity and persistgym_sol_h1 for every
 model, both probes, every sol run, any other experiment, and any model that is neither

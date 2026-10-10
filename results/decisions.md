@@ -600,6 +600,8 @@ Claude put two options to the researcher:
 - **Waiver:** the paid pilot of the two re-frozen configs is waived (R7 change 6).
 - **The driver procedure:** after every run, the driver calls `analysis.checkpoint_c --d20-run`. It starts a re-run only on `rerun_allowed: true`, with the `rerun_seed` that call gives. Otherwise the procedure is as in the block-3 entry above.
 
-**Cost.** Block `3-arc` has spent $42.94 so far: SB26 S1 $13.12, FT09 S2 $3.47 and $13.79, FT09 S1 $6.13, R11L S2 $6.43. The R11L S2 re-run's cost is not yet in. The R7 runs are forecast at about $45 each at D27's rule: 4 or 5 runs, so about $180-225. That fits the $470 limit; the limit is unchanged.
+**Update, 2026-10-10 15:51 ET:** the R11L S2 D19 re-run `20261010T103451Z-S2-r11l-s101` ended `ACTION_BUDGET`, with no summarizer failure in its log, billed $35.00. It stands as R11L S2's counted run, so R11L S2 gets no R7 replacement. The R7 runs are therefore FT09 S2 (the replacement), CD82 S1, CD82 S2 and R11L S1.
+
+**Cost.** Block `3-arc` has spent $77.94: SB26 S1 $13.12, FT09 S2 $3.47 and $13.79, FT09 S1 $6.13, R11L S2 $6.43 and $35.00. The 4 R7 runs are forecast at about $45 each at D27's rule, about $180. That fits the $470 limit; the limit is unchanged.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts R7 and A8, patch 0018 and the regenerated freeze record, the run list and the pilot waiver. It adds no spending approval beyond block `3-arc`'s existing $470. This entry's pull request is $0.

@@ -2,6 +2,8 @@
 
 Command: `uv run python -m analysis.power_sim --part luna --reps 2000`
 
+Re-rendered from the run's saved files by commit 2967472 on 2026-10-10; numbers unchanged.
+
 ## What is simulated
 One luna data set holds, per template, one repeat-0 outcome in each of 7 cells (§2.9: repeats stay out of the primary analyses): F-0 and W-0 on observed-far-R and -NR (H1), and F-0 and the single-turn control on observed- and derived-NR-far (H3). F-0 on observed-NR-far is shared by both tests. Each data set is analysed as §9.1 and §9.4 will analyse the sweep:
 - template-cluster percentile bootstrap on the probability scale with 10,000 resamples, shared by both contrasts (drawn as category counts, which is exact: `category_bootstrap_sums`);

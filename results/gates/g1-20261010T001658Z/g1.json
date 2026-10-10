@@ -1,0 +1,311 @@
+{
+  "generated_utc": "2026-10-10T00:16:58+00:00",
+  "git_commit": "aeb6d7c6af4448891e1261ae3914f1910abe97c0",
+  "git_dirty": false,
+  "prereg_version": "1.0",
+  "model": "gpt-6-luna",
+  "config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+  "luna": {
+    "runs": {
+      "restated": {
+        "run_id": "20261002T084243Z-F-0-gpt-6-luna",
+        "n_episodes": 160,
+        "n_excluded": 0,
+        "exit_reasons": [
+          "DONE"
+        ],
+        "correct": 160,
+        "n": 160,
+        "rate": 1.0,
+        "per_cell": {
+          "derived-nonrec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "derived-nonrec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "derived-rec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "derived-rec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-nonrec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-nonrec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-rec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-rec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          }
+        },
+        "billed_usd": 0.633581295
+      },
+      "withheld": {
+        "run_id": "20261002T095135Z-F-0-gpt-6-luna",
+        "n_episodes": 160,
+        "n_excluded": 0,
+        "exit_reasons": [
+          "DONE"
+        ],
+        "correct": 19,
+        "n": 160,
+        "rate": 0.11875,
+        "per_cell": {
+          "derived-nonrec-far": {
+            "correct": 6,
+            "n": 20,
+            "rate": 0.3
+          },
+          "derived-nonrec-near": {
+            "correct": 1,
+            "n": 20,
+            "rate": 0.05
+          },
+          "derived-rec-far": {
+            "correct": 2,
+            "n": 20,
+            "rate": 0.1
+          },
+          "derived-rec-near": {
+            "correct": 3,
+            "n": 20,
+            "rate": 0.15
+          },
+          "observed-nonrec-far": {
+            "correct": 2,
+            "n": 20,
+            "rate": 0.1
+          },
+          "observed-nonrec-near": {
+            "correct": 2,
+            "n": 20,
+            "rate": 0.1
+          },
+          "observed-rec-far": {
+            "correct": 3,
+            "n": 20,
+            "rate": 0.15
+          },
+          "observed-rec-near": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          }
+        },
+        "billed_usd": 0.7176471675
+      }
+    },
+    "rule": {
+      "restated_min": 0.85,
+      "withheld_max": 0.2,
+      "restated_ok": true,
+      "withheld_ok": true,
+      "pass": true
+    }
+  },
+  "audits": [
+    {
+      "split": "validity",
+      "n_templates": 20,
+      "n_episodes": 480,
+      "rc": 0,
+      "pass": true,
+      "failed_checks": [],
+      "oracles": {
+        "key/base/nonrec": 1.0,
+        "key/base/rec": 1.0,
+        "key/restated/nonrec": 1.0,
+        "key/restated/rec": 1.0,
+        "text/base/nonrec": 1.0,
+        "text/base/rec": 1.0,
+        "text/restated/nonrec": 1.0,
+        "text/restated/rec": 1.0
+      },
+      "oracles_ok": true,
+      "baselines_max": 0.1,
+      "partial_memory_pass": true,
+      "file": "audit_validity.json"
+    },
+    {
+      "split": "main",
+      "n_templates": 1000,
+      "n_episodes": 24000,
+      "rc": 0,
+      "pass": true,
+      "failed_checks": [],
+      "oracles": {
+        "key/base/nonrec": 1.0,
+        "key/base/rec": 1.0,
+        "key/restated/nonrec": 1.0,
+        "key/restated/rec": 1.0,
+        "text/base/nonrec": 1.0,
+        "text/base/rec": 1.0,
+        "text/restated/nonrec": 1.0,
+        "text/restated/rec": 1.0
+      },
+      "oracles_ok": true,
+      "baselines_max": 0.1,
+      "partial_memory_pass": true,
+      "file": "audit_main.json"
+    }
+  ],
+  "audits_pass": true,
+  "spotcheck": {
+    "package": "g1-validity-0-20-3d6bc648",
+    "cells": {
+      "observed-nonrec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "observed-nonrec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "observed-rec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "observed-rec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-nonrec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-nonrec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-rec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-rec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      }
+    },
+    "totals": {
+      "no_shortcut": 160,
+      "possible_shortcut": 0,
+      "shortcut": 0,
+      "unreviewed": 0
+    },
+    "flagged": [],
+    "complete": true
+  },
+  "sol_r4": {
+    "restated": {
+      "run_id": "20261006T182920Z-F-0-gpt-6.1-sol",
+      "n_episodes": 80,
+      "n_excluded": 0,
+      "exit_reasons": [
+        "DONE"
+      ],
+      "correct": 80,
+      "n": 80,
+      "rate": 1.0,
+      "per_cell": {
+        "observed-nonrec-far": {
+          "correct": 20,
+          "n": 20,
+          "rate": 1.0
+        },
+        "observed-nonrec-near": {
+          "correct": 20,
+          "n": 20,
+          "rate": 1.0
+        },
+        "observed-rec-far": {
+          "correct": 20,
+          "n": 20,
+          "rate": 1.0
+        },
+        "observed-rec-near": {
+          "correct": 20,
+          "n": 20,
+          "rate": 1.0
+        }
+      },
+      "billed_usd": 5.0281282
+    },
+    "withheld": {
+      "run_id": "20261006T200237Z-F-0-gpt-6.1-sol",
+      "n_episodes": 80,
+      "n_excluded": 0,
+      "exit_reasons": [
+        "DONE"
+      ],
+      "correct": 9,
+      "n": 80,
+      "rate": 0.1125,
+      "per_cell": {
+        "observed-nonrec-far": {
+          "correct": 1,
+          "n": 20,
+          "rate": 0.05
+        },
+        "observed-nonrec-near": {
+          "correct": 4,
+          "n": 20,
+          "rate": 0.2
+        },
+        "observed-rec-far": {
+          "correct": 2,
+          "n": 20,
+          "rate": 0.1
+        },
+        "observed-rec-near": {
+          "correct": 2,
+          "n": 20,
+          "rate": 0.1
+        }
+      },
+      "billed_usd": 5.18527625
+    }
+  },
+  "spend_by_phase": {
+    "0": 20.5661,
+    "1a": 18.146703000000002,
+    "1b": 290.224383,
+    "2": 0.0
+  }
+}

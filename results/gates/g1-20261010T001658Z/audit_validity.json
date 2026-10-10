@@ -1,0 +1,626 @@
+{
+  "preset": "default",
+  "split": "validity",
+  "indices": [
+    0,
+    20
+  ],
+  "n_templates": 20,
+  "n_episodes": 480,
+  "episodes_per_task_cell": 60,
+  "generator_version": "0.4.0",
+  "config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+  "threshold": 0.2,
+  "checks": {
+    "filler_has_no_reserved_strings": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "routine_events_have_no_reserved_strings": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "observation_tokens_equal_v": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "derived_and_withheld_never_show_target_before_need": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "observed_target_only_at_reveal": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "options_valid_and_distinct": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "options_form_one_evenly_spaced_cluster": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "options_exclude_clue_values": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "distractor_bindings_valid": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "withheld_never_names_target_before_need": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "withheld_stand_ins_equal_length_and_valid": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "near_far_hold_when_recomputed_from_text": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "full_history_context_within_max": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "cells_share_need_step_options_routine_and_distractors": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "chain_records_well_formed_and_resolve": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "chain_hidden_values_never_shown": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "evidence_notice_only_at_evidence_steps": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "lookup_serves_keys_and_refuses_after_cap": {
+      "pass": true,
+      "failed_chunks": []
+    },
+    "correct_letter_balanced": {
+      "pass": true,
+      "detail": {
+        "n_templates": 20,
+        "counts": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "max_dev_pp": 0.0,
+        "chi2_p": null
+      }
+    },
+    "correct_rank_balanced": {
+      "pass": true,
+      "detail": {
+        "n_templates": 20,
+        "counts": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "max_dev_pp": 0.0,
+        "chi2_p": null
+      }
+    },
+    "letter_rank_and_n_clues_exact_within_complete_blocks": {
+      "pass": true,
+      "detail": {
+        "pass": true,
+        "complete_blocks": 2,
+        "incomplete_blocks": [],
+        "bad_blocks": [],
+        "n_clues_per_block": [
+          {
+            "2": 5,
+            "3": 5
+          },
+          {
+            "2": 5,
+            "3": 5
+          }
+        ]
+      }
+    }
+  },
+  "baselines": {
+    "derived_transcript/first_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "derived_transcript/last_seen_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "derived_transcript/median_value_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "derived_transcript/most_frequent_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "need_only/first_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "need_only/last_seen_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "need_only/median_value_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "need_only/most_frequent_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "withheld_transcript/first_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "withheld_transcript/last_seen_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "withheld_transcript/median_value_option": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "withheld_transcript/most_frequent_option": {
+      "accuracy": 0.1,
+      "n": 20
+    }
+  },
+  "prior_label": {
+    "guess": "A",
+    "accuracy": 0.1,
+    "n": 20,
+    "n_calibration": 20
+  },
+  "nearest_to_stand_in_value": {
+    "derived-nonrec-far": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "derived-nonrec-near": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "derived-rec-far": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "derived-rec-near": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "observed-nonrec-far": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "observed-nonrec-near": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "observed-rec-far": {
+      "accuracy": 0.1,
+      "n": 20
+    },
+    "observed-rec-near": {
+      "accuracy": 0.1,
+      "n": 20
+    }
+  },
+  "oracles": {
+    "key/base/nonrec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/base/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/base/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/base/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/restated/nonrec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/restated/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/restated/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/restated/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/withheld/nonrec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/withheld/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/withheld/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "key/withheld/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/base/nonrec": {
+      "accuracy": 0.1,
+      "n": 80
+    },
+    "lookup_no_memory/base/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/base/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/base/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/restated/nonrec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/restated/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/restated/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/restated/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/withheld/nonrec": {
+      "accuracy": 0.1,
+      "n": 80
+    },
+    "lookup_no_memory/withheld/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "lookup_no_memory/withheld/rec": {
+      "accuracy": 0.1,
+      "n": 80
+    },
+    "lookup_no_memory/withheld/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/base/nonrec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/base/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/base/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/base/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/restated/nonrec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/restated/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/restated/rec": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/restated/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/withheld/nonrec": {
+      "accuracy": 0.1,
+      "n": 80
+    },
+    "text/withheld/nonrec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    },
+    "text/withheld/rec": {
+      "accuracy": 0.1,
+      "n": 80
+    },
+    "text/withheld/rec/routine": {
+      "accuracy": 1.0,
+      "n": 80
+    }
+  },
+  "partial_memory": {
+    "derived-nonrec-far": {
+      "chance": 0.1,
+      "threshold": 0.2,
+      "by_n_clues": {
+        "2": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.2,
+          "nearest_to_midrange_accuracy": 0.1,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue1": 0.11523809523809522,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.11523809523809522
+        },
+        "3": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.0,
+          "nearest_to_midrange_accuracy": 0.0,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue0+clue1": 0.12825396825396823,
+            "clue0+clue2": 0.11111111111111112,
+            "clue1": 0.12825396825396823,
+            "clue1+clue2": 0.16507936507936508,
+            "clue2": 0.11111111111111112,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.16507936507936508
+        }
+      },
+      "all": {
+        "n_templates": 20,
+        "narrowing_templates": 0,
+        "narrowing_examples": [],
+        "base_and_rule_options_left_mean": 10.0,
+        "base_and_rule_uniform_accuracy": 0.1,
+        "smallest_above_base_accuracy": 0.1,
+        "nearest_to_midrange_accuracy": 0.05,
+        "generator_aware_bayes": {
+          "clue0": 0.1,
+          "clue0+clue1": 0.12825396825396823,
+          "clue0+clue2": 0.11111111111111112,
+          "clue1": 0.12174603174603175,
+          "clue1+clue2": 0.16507936507936508,
+          "clue2": 0.11111111111111112,
+          "rule_only": 0.1
+        },
+        "generator_aware_bayes_max": 0.16507936507936508
+      },
+      "pass": true
+    },
+    "derived-nonrec-near": {
+      "chance": 0.1,
+      "threshold": 0.2,
+      "by_n_clues": {
+        "2": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.2,
+          "nearest_to_midrange_accuracy": 0.1,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue1": 0.11523809523809522,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.11523809523809522
+        },
+        "3": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.0,
+          "nearest_to_midrange_accuracy": 0.0,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue0+clue1": 0.12825396825396823,
+            "clue0+clue2": 0.11111111111111112,
+            "clue1": 0.12825396825396823,
+            "clue1+clue2": 0.16507936507936508,
+            "clue2": 0.11111111111111112,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.16507936507936508
+        }
+      },
+      "all": {
+        "n_templates": 20,
+        "narrowing_templates": 0,
+        "narrowing_examples": [],
+        "base_and_rule_options_left_mean": 10.0,
+        "base_and_rule_uniform_accuracy": 0.1,
+        "smallest_above_base_accuracy": 0.1,
+        "nearest_to_midrange_accuracy": 0.05,
+        "generator_aware_bayes": {
+          "clue0": 0.1,
+          "clue0+clue1": 0.12825396825396823,
+          "clue0+clue2": 0.11111111111111112,
+          "clue1": 0.12174603174603175,
+          "clue1+clue2": 0.16507936507936508,
+          "clue2": 0.11111111111111112,
+          "rule_only": 0.1
+        },
+        "generator_aware_bayes_max": 0.16507936507936508
+      },
+      "pass": true
+    },
+    "derived-rec-far": {
+      "chance": 0.1,
+      "threshold": 0.2,
+      "by_n_clues": {
+        "2": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.2,
+          "nearest_to_midrange_accuracy": 0.1,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue1": 0.11523809523809522,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.11523809523809522
+        },
+        "3": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.0,
+          "nearest_to_midrange_accuracy": 0.0,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue0+clue1": 0.12825396825396823,
+            "clue0+clue2": 0.11111111111111112,
+            "clue1": 0.12825396825396823,
+            "clue1+clue2": 0.16507936507936508,
+            "clue2": 0.11111111111111112,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.16507936507936508
+        }
+      },
+      "all": {
+        "n_templates": 20,
+        "narrowing_templates": 0,
+        "narrowing_examples": [],
+        "base_and_rule_options_left_mean": 10.0,
+        "base_and_rule_uniform_accuracy": 0.1,
+        "smallest_above_base_accuracy": 0.1,
+        "nearest_to_midrange_accuracy": 0.05,
+        "generator_aware_bayes": {
+          "clue0": 0.1,
+          "clue0+clue1": 0.12825396825396823,
+          "clue0+clue2": 0.11111111111111112,
+          "clue1": 0.12174603174603175,
+          "clue1+clue2": 0.16507936507936508,
+          "clue2": 0.11111111111111112,
+          "rule_only": 0.1
+        },
+        "generator_aware_bayes_max": 0.16507936507936508
+      },
+      "pass": true
+    },
+    "derived-rec-near": {
+      "chance": 0.1,
+      "threshold": 0.2,
+      "by_n_clues": {
+        "2": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.2,
+          "nearest_to_midrange_accuracy": 0.1,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue1": 0.11523809523809522,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.11523809523809522
+        },
+        "3": {
+          "n_templates": 10,
+          "narrowing_templates": 0,
+          "narrowing_examples": [],
+          "base_and_rule_options_left_mean": 10.0,
+          "base_and_rule_uniform_accuracy": 0.1,
+          "smallest_above_base_accuracy": 0.0,
+          "nearest_to_midrange_accuracy": 0.0,
+          "generator_aware_bayes": {
+            "clue0": 0.1,
+            "clue0+clue1": 0.12825396825396823,
+            "clue0+clue2": 0.11111111111111112,
+            "clue1": 0.12825396825396823,
+            "clue1+clue2": 0.16507936507936508,
+            "clue2": 0.11111111111111112,
+            "rule_only": 0.1
+          },
+          "generator_aware_bayes_max": 0.16507936507936508
+        }
+      },
+      "all": {
+        "n_templates": 20,
+        "narrowing_templates": 0,
+        "narrowing_examples": [],
+        "base_and_rule_options_left_mean": 10.0,
+        "base_and_rule_uniform_accuracy": 0.1,
+        "smallest_above_base_accuracy": 0.1,
+        "nearest_to_midrange_accuracy": 0.05,
+        "generator_aware_bayes": {
+          "clue0": 0.1,
+          "clue0+clue1": 0.12825396825396823,
+          "clue0+clue2": 0.11111111111111112,
+          "clue1": 0.12174603174603175,
+          "clue1+clue2": 0.16507936507936508,
+          "clue2": 0.11111111111111112,
+          "rule_only": 0.1
+        },
+        "generator_aware_bayes_max": 0.16507936507936508
+      },
+      "pass": true
+    }
+  },
+  "pass": true
+}

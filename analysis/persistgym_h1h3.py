@@ -115,7 +115,8 @@ over the cell's primary episodes.
   of bootstrap resamples with Δ_H1* ≤ 0. Model check (§9.4: "the confirmatory GLM estimate has
   the same sign"): the §9.1 confirmatory GLM's logit-scale Δ_H1 is positive (> 1e-8,
   power_sim's threshold). When an H1 cell has no outcome variation the logit-scale Δ_H1 is not
-  finite; how the check reads it then is `H1_SEPARATION_RULE` (pending item 1 below). **Kill**
+  finite; how the check reads it then is `H1_SEPARATION_RULE`, ruled ``"firth"`` by the
+  researcher on 2026-10-10 (ruled item 1 below). **Kill**
   (as written): Δ_H1 < 10pp (point estimate) and the upper bound of its 90% CI < 15pp.
   **Predictions** (point estimates): the manipulation check Penalty_NR ≥ 25pp; |Penalty_R| ≤
   5pp; the lookups ratio ≥ 1.30 (or, if F-0 looked nothing up, the 90% CI of the difference
@@ -217,9 +218,11 @@ power quoted with the results).
 * So the achieved power quoted (P(supported) at T = 200: 0.647 and 0.781 in the primary
   scenario, 0.438 and 0.443 in the pessimistic one) was computed with power_sim's model checks
   and with F-0 at 0.95 (0.85) in the observed-far cells. If F-0 sits at its ceiling, H1's model
-  check meets separation, and under the literal rule P(supported) is lower than quoted (review
-  of 2026-10-10: with F-0 observed-far at 0.995, it failed in 6 of 40 and in 28 of 100
-  simulated sweeps with a true Δ_H1 near 78pp). The summary says so.
+  check meets separation. Under the literal rule (not in force) P(supported) would be lower
+  than quoted (review of 2026-10-10: with F-0 observed-far at 0.995, it failed in 6 of 40 and
+  in 28 of 100 simulated sweeps with a true Δ_H1 near 78pp). The rule in force (``"firth"``,
+  ruled 2026-10-10) reads a finite penalized estimate instead; power_sim did not simulate it,
+  so its effect on P(supported) is not known. The summary says so.
 * The bootstrap. power_sim drew counts of identical per-template integer rows, assuming one
   outcome per template and cell; here templates are drawn by index and each contrast is a ratio
   of sums, which also handles exclusions. With complete data both give the same contrast for
@@ -246,7 +249,7 @@ power quoted with the results).
    by lookup.
 6. "A lookup was taken" is ``n_lookups`` ≥ 1 (lookups served; over-cap ones come only after 3
    served ones).
-7. (Moved to pending item 2.)
+7. (Moved to ruled item 2 below.)
 8. The logit scale of §9.3 comes from the GLMs (Δ_H1: the §9.1 GLM's W-0 x R coefficient, and
    the penalties from its W-0 and W-0 x R coefficients; Δ_H3: the arm coefficient of §9.4's H3
    model), with cluster-robust Wald intervals. Logits of cell means are not used: a cell mean
@@ -262,7 +265,7 @@ power quoted with the results).
 12. The model-string split (§6) groups records by the set of strings their responses returned:
     one group per single string, and one for the records whose responses came from more than
     one string (counted, not dropped).
-13. (Replaced by pending item 1.)
+13. (Replaced by ruled item 1 below: ``"firth"``, the researcher's ruling of 2026-10-10.)
 14. The bootstrap resamples templates 0 to T - 1 (all of them), so a template whose episodes
     were all excluded still counts as a template with no episodes in the cell.
 15. H3's probability-scale Δ_H3 from the GLM is the average marginal effect of the arm over
@@ -287,9 +290,9 @@ power quoted with the results).
     sentence: its terms are the §9.1 GLM's, its priors bambi's defaults, its seed SEED + 11
     (SEED + 10 is the bootstrap's, SEED + 20 the failure labels', SEED + 30 H4's).
 
-*Pending the researcher's ruling* (PREREG does not settle these; the more conservative reading
-is in force until the researcher records a dated ruling in ``results/decisions.md``, before the
-results are read).
+*Ruled by the researcher* (PREREG does not settle items 1 and 2; the researcher's ruling of
+2026-10-10 is recorded in ``results/decisions.md``, made before any result of the sweep was read;
+items 3 and 4 are readings, listed above).
 
 1. **H1's model check when the logit-scale Δ_H1 is not finite** (review finding B2). When an
    H1 cell (F-0 or W-0 at observed-far, NR or R) has no outcome variation among the GLM's
@@ -297,17 +300,16 @@ results are read).
    returns its stopping point. The limit's sign follows from which cells are all 0 or all 1:
    ``logit Δ_H1 = logit p(F-0, NR) - logit p(W-0, NR) - logit p(F-0, R) + logit p(W-0, R)``, so
    for example F-0 observed-rec-far all 1 gives -∞, W-0 observed-nonrec-far all 0 gives +∞, and
-   cells pushing both ways give ∞ - ∞, an undefined sign. `H1_SEPARATION_RULE` is
-   ``"literal"``: the model check reads the limit's sign (+∞ agrees, -∞ does not: §9.3,
-   "interactions can flip sign between scales near ceilings"), and an undefined sign does not
-   agree; the stopping point is not used for the sign. This is §9.4 read literally, and never
-   more lenient than it. Coded alternatives the researcher can rule for (a one-line change of
-   the constant, by commit): ``"firth"``, the W-0 x R coefficient of a Firth-penalized fit of
-   the same model on the same rows (`firth_fe_logit`), used only when the logit-scale Δ_H1 is
-   not finite; ``"probability-scale"``, the model check is not applicable when an H1 cell has
-   no variation, and "agrees" reads the sign of the probability-scale Δ_H1. The summary names
-   the rule in force.
-2. **The harness levels of the §9.1 GLM** (finding S4; was reading 7). PREREG says "harness x
+   cells pushing both ways give ∞ - ∞, an undefined sign. **Ruling (2026-10-10):**
+   `H1_SEPARATION_RULE` is ``"firth"``: when the logit-scale Δ_H1 is not finite, the model check
+   reads the W-0 x R coefficient of a Firth-penalized fit of the same model on the same rows
+   (`firth_fe_logit`), the standard remedy for separation; when it is finite, the ordinary fit
+   decides as before. Not in force, kept for the sensitivity lines only: ``"literal"`` (the
+   limit's sign: +∞ agrees, -∞ and an undefined sign do not) and ``"probability-scale"`` (the
+   model check not applicable; the probability-scale sign is read). The summary names the rule
+   in force.
+2. **The harness levels of the §9.1 GLM** (finding S4; was reading 7; as proposed, confirmed by
+   the researcher's merge of the 2026-10-10 ruling). PREREG says "harness x
    recoverable x derived x distance terms" without naming the levels. The confirmatory fit uses
    H1's harness cells, F-0 and W-0, on all 8 task cells: Σ-n-0 enters no confirmatory test
    (D12), and W-n-0 is "reported alongside" H1, not part of its comparison (§3 H1). The fit with
@@ -396,11 +398,12 @@ H2_TESTS_NOT_RUN = 2                                     # the family-of-4 sensi
 Z90, Z95 = 1.6448536269514722, 1.959963984540054
 
 H1_SEPARATION_RULES = ("literal", "firth", "probability-scale")
-H1_SEPARATION_RULE = "literal"
-"""How H1's model check reads the §9.1 GLM when the logit-scale Δ_H1 is not finite (pending
-item 1 of the module docstring). "literal" is the more conservative reading, in force until the
-researcher records a dated ruling in results/decisions.md before the results are read; the
-ruling changes this line, by commit, so the rule in force is in the output's git commit."""
+H1_SEPARATION_RULE = "firth"        # the researcher's ruling of 2026-10-10 (decisions.md)
+"""How H1's model check reads the §9.1 GLM when the logit-scale Δ_H1 is not finite (ruled item
+1 of the module docstring). "firth" is the researcher's ruling of 2026-10-10, recorded in
+results/decisions.md before any result of the sweep was read; it replaced "literal", the more
+conservative reading that was in force until the ruling. The rule is changed only by a commit
+of this line, so the rule in force is in the output's git commit."""
 FINITE, PLUS_INF, MINUS_INF, UNDEFINED = "finite", "+inf", "-inf", "undefined"
 
 BAYES_SEED_OFFSET = 11                                   # reading 21
@@ -1323,7 +1326,7 @@ def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: in
     information, which keeps every coefficient finite under separation. Newton steps on the
     modified score X'(y - mu + h (1/2 - mu)), h the hat values, with step halving on the
     penalized log-likelihood. Returns (template intercepts, slopes), or None if it does not
-    converge. Used only under H1_SEPARATION_RULE = "firth" (pending item 1)."""
+    converge. Used under H1_SEPARATION_RULE = "firth", the researcher's ruling of 2026-10-10."""
     y = np.asarray(y, float)
     g = int(codes.max()) + 1
     x = np.column_stack([np.eye(g)[codes], np.asarray(z, float)])
@@ -1391,7 +1394,7 @@ def _separation(fitted: pd.DataFrame, by: list[str]) -> list[str]:
 
 
 def logit_status(fitted: pd.DataFrame, parts: list[tuple[str, pd.Series, int]]) -> dict:
-    """Whether a logit-scale contrast is finite, from a GLM's fitted rows (pending item 1).
+    """Whether a logit-scale contrast is finite, from a GLM's fitted rows (ruled item 1).
     `parts` are (label, row mask, sign of that part's logit in the contrast). A part whose
     rows are all 1 has logit +inf, all 0 -inf; the contrast is then +inf or -inf when every
     such part pushes it the same way, and undefined (inf - inf) when they push both ways or a
@@ -1439,7 +1442,7 @@ def logit_sign(glm: dict) -> int | None:
 
 def glm_91(prim: pd.DataFrame, harness: tuple[str, ...] = ("W-0",)) -> dict:
     """§9.1's confirmatory GLM on F-0 and `harness` (base, all 8 task cells): its W-0 x R
-    coefficient is the logit-scale Delta_H1 (pending item 2), its W-0 coefficient minus
+    coefficient is the logit-scale Delta_H1 (ruled item 2), its W-0 coefficient minus
     Penalty_NR and W-0 plus W-0 x R minus Penalty_R, on the logit scale. Also whether the
     logit-scale Delta_H1 is finite, from H1's 4 cells among the fitted rows (`logit_status`)."""
     sub, z, names = _glm_91_rows(prim, harness)
@@ -1467,7 +1470,8 @@ def glm_91(prim: pd.DataFrame, harness: tuple[str, ...] = ("W-0",)) -> dict:
 
 def glm_91_firth(prim: pd.DataFrame) -> dict:
     """The W-0 x R coefficient of a Firth-penalized fit of the §9.1 GLM, on the same rows
-    (`firth_fe_logit`; H1_SEPARATION_RULE = "firth" only)."""
+    (`firth_fe_logit`): the templates with outcome variation, as in the ordinary fit. Read by
+    H1_SEPARATION_RULE = "firth", the rule in force (the ruling of 2026-10-10)."""
     sub, z, _ = _glm_91_rows(prim, ("W-0",))
     y = sub["success"].to_numpy(float)
     keep, codes, _ = informative(y, sub["template"].to_numpy())
@@ -1683,9 +1687,9 @@ def h1_model_check(glm: dict, delta, rule: str | None = None,
                    firth: dict | None = None) -> dict:
     """§9.4's model check for H1: the §9.1 GLM's logit-scale Delta_H1 is positive. When it is
     not finite (an H1 cell without outcome variation), `rule` (default `H1_SEPARATION_RULE`,
-    pending item 1) decides: "literal" reads the limit's sign (+inf agrees; -inf and an
-    undefined sign do not), "firth" a Firth-penalized fit's sign (`firth`), and
-    "probability-scale" the probability-scale Delta_H1's sign (`delta`)."""
+    "firth" by the ruling of 2026-10-10, ruled item 1) decides: "literal" reads the limit's
+    sign (+inf agrees; -inf and an undefined sign do not), "firth" a Firth-penalized fit's sign
+    (`firth`), and "probability-scale" the probability-scale Delta_H1's sign (`delta`)."""
     rule = rule or H1_SEPARATION_RULE
     if rule not in H1_SEPARATION_RULES:
         raise ValueError(f"unknown H1 separation rule {rule!r}")
@@ -2369,8 +2373,8 @@ def _h1_lines(h: dict) -> list[str]:
     if mc["logit_status"] != FINITE:
         L.append("- **The logit-scale Δ_H1 is not finite:** among the GLM's templates, "
                  + "; ".join(mc["h1_cells_no_variation"]) + f". The rule in force is "
-                 f"`{mc['rule']}` (`H1_SEPARATION_RULE`; pending the researcher's ruling, "
-                 "module docstring): " + {
+                 f"`{mc['rule']}` (`H1_SEPARATION_RULE`; the researcher's ruling of "
+                 "2026-10-10, module docstring): " + {
                      "literal": ("the sign of the limit decides; −∞ (an interaction that flips "
                                  "sign between the scales near a ceiling, §9.3) and an "
                                  "undefined sign do not agree."),
@@ -2385,7 +2389,7 @@ def _h1_lines(h: dict) -> list[str]:
            f"({_same(g.get('emulated_sign_disagrees'), 'statsmodels')}); power_sim's stand-in "
            f"(4 cells; W, R, W × R) {_num_s(mc['standin_estimate'])} "
            f"({_same(mc['standin_sign_disagrees'], 'the model check')}); the §9.1 GLM with "
-           "W-n-0 as a third harness level (pending item 2), "
+           "W-n-0 as a third harness level (a sensitivity analysis, ruling of 2026-10-10), "
            "W-0 × R "
            + _logit_s(h["glm_9_1_with_w_n_0"].get("estimate"),
                       h["glm_9_1_with_w_n_0"].get("logit_status", FINITE),
@@ -2510,8 +2514,9 @@ def _family_lines(h: dict) -> list[str]:
                    f"Simulated with F-0 observed-far success at {_f0_levels(power)} and with "
                    "power_sim's model checks (H1: a 4-cell stand-in read through the stopping "
                    "rule; H3: template fixed effects + derived term + arm), not the ones used "
-                   "here; with F-0 at its ceiling, H1's model check can fail under the "
-                   "literal rule, so P(supported) may be lower than quoted.")]
+                   "here; with F-0 at its ceiling, H1's model check meets separation and is "
+                   f"read by the rule in force (`{h['h1_separation_rule']}`), which power_sim "
+                   "did not simulate, so P(supported) may differ from the values quoted.")]
     return L
 
 

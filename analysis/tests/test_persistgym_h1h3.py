@@ -23,6 +23,7 @@ import pandas as pd
 import pytest
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from scipy import optimize
 
 from analysis import persistgym_h1h3 as hh
 from analysis import power_sim as ps
@@ -546,7 +547,7 @@ def test_fe_poisson_ratio():
     assert fit5["n_templates_all_zero"] == 1 and fit5["ratios"]["W-0"]["ratio"] > 1
 
 
-def test_cost_outcomes_and_glms_in_the_toy_sweep(tmp_path):
+def test_cost_outcomes_and_glms_in_the_toy_sweep(tmp_path, monkeypatch):
     sw = toy(tmp_path)
     sw.standard()
     h = sw.compute()
@@ -559,14 +560,27 @@ def test_cost_outcomes_and_glms_in_the_toy_sweep(tmp_path):
     assert look["ratios"]["W-0"]["ratio"] == pytest.approx(5.0)
     assert look["ratios"]["W-n-0"]["ratio"] == 0.0 and look["ratios"]["W-n-0"]["note"]
     assert h["glm_9_1"]["estimate"] is not None
-    # F-0 obs-R-far is 10/10: the logit-scale Delta_H1 is -inf, so the literal rule does not
-    # agree (pending item 1), whatever statsmodels' stopping point says
+    # F-0 obs-R-far is 10/10: the logit-scale Delta_H1 is -inf (statsmodels stops far below
+    # 0). The rule in force, Firth's (ruled item 1, 2026-10-10), reads a finite penalized
+    # estimate, which is positive here and so agrees
+    mc = h["h1"]["model_check"]
+    assert mc["logit_status"] == hh.MINUS_INF and mc["rule"] == "firth"
+    assert mc["estimate"] < -5                                  # the stopping point
+    assert mc["h1_cells_no_variation"] == ["F-0 observed-rec-far: all 1 (10 episodes)"]
+    firth = h["glm_9_1_firth"]
+    assert firth["note"] is None and 0 < firth["estimate"] < 10
+    assert mc["firth_estimate"] == firth["estimate"]
+    assert mc["agrees"] is True and mc["sign"] == 1
+    assert not h["h1"]["scales_disagree_in_sign"]
+    assert h["bayesian_glmm"] == BAYES_STUB
+    # the literal rule (not in force) reads the limit's sign: -inf does not agree, whatever
+    # statsmodels' stopping point says, and the scales then disagree in sign
+    monkeypatch.setattr(hh, "H1_SEPARATION_RULE", "literal")
+    h = sw.compute()
     mc = h["h1"]["model_check"]
     assert mc["logit_status"] == hh.MINUS_INF and mc["rule"] == "literal"
-    assert mc["h1_cells_no_variation"] == ["F-0 observed-rec-far: all 1 (10 episodes)"]
     assert mc["agrees"] is False and mc["sign"] == -1
     assert h["h1"]["scales_disagree_in_sign"]
-    assert h["bayesian_glmm"] == BAYES_STUB
 
 
 # --- keys, re-runs and exclusions (DESIGN §7.8, §13) ------------------------------------------
@@ -907,13 +921,15 @@ def test_main_writes_the_outputs(tmp_path, monkeypatch):
     assert h["status"] == hh.FINAL and h["h1"]["delta_h1"]["exact"] == "3/5"
     assert meta["experiment"] == "persistgym_h1h3" and meta["paid_calls"] == 0
     assert meta["seeds"] == {"bootstrap": SEED + 10, "bayesian_glmm": SEED + 11}
-    assert meta["exit_reason"] == "completed" and meta["config"]["h1_separation_rule"] == "literal"
+    assert meta["exit_reason"] == "completed" and meta["config"]["h1_separation_rule"] == "firth"
     assert "git_commit" in meta and len(meta["runs"]) == 6
     for needle in ("## What it does not show", "Not a model comparison", "**Δ_H1 = ",
                    "Holm", "Bayesian GLMM sensitivity (§9.1): not run", "## Repeats",
                    "§2.8 accounting check: passed on 160 window-cell episodes",
                    "W-n-0 as a third harness level", "Logit scale (§9.3): Penalty_NR",
-                   "The rule in force is `literal`", "the arm coefficient",
+                   "The rule in force is `firth`",
+                   "a Firth-penalized fit of the same model decides: ",
+                   "is read by the rule in force (`firth`)", "the arm coefficient",
                    "power_sim's model (template fixed effects + derived term + arm)",
                    "reading 11 (as implemented, not registered)",
                    "## Success by cell (repeat 0; descriptive)", "with no dated snapshot",
@@ -989,7 +1005,7 @@ def test_skipping_the_bayesian_fit_is_provisional(tmp_path, monkeypatch, capsys)
     assert "**Status: PROVISIONAL.**" in capsys.readouterr().out
 
 
-# --- H1's model check when the logit-scale Delta_H1 is not finite (pending item 1) ---------------
+# --- H1's model check when the logit-scale Delta_H1 is not finite (ruled item 1: Firth) ----------
 
 def _h1_frame(templates: int, given: dict, seed: int = 0) -> pd.DataFrame:
     """F-0 and W-0 on the 8 task cells: H1's cells from `given` ({(cell, task cell): outcomes}),
@@ -1031,6 +1047,10 @@ def test_h1_model_check_rules_when_f0_recoverable_is_at_its_ceiling():
     assert firth["estimate"] is not None and 0 < firth["estimate"] < 10
     fm = hh.h1_model_check(g, delta, "firth", firth)
     assert fm["agrees"] is True and fm["firth_estimate"] == firth["estimate"]
+    assert hh.h1_model_check(g, delta, firth=firth) == fm   # Firth's is the default (ruling)
+    # without a Firth fit (none given, or it did not converge) the Firth rule does not agree
+    none = hh.h1_model_check(g, delta, "firth", {"estimate": None, "note": "no"})
+    assert none["agrees"] is False and none["sign"] is None
     pm = hh.h1_model_check(g, delta, "probability-scale")
     assert pm["agrees"] is True and pm["sign"] is None
     with pytest.raises(ValueError, match="unknown H1 separation rule"):
@@ -1060,19 +1080,32 @@ def test_h1_logit_status_plus_inf_and_undefined():
 
 
 def test_the_rule_in_force_decides_supported_on_the_toy_sweep(tmp_path, monkeypatch):
-    """The toy sweep's F-0 observed-rec-far is 10/10 and its Holm test rejects: H1 is
-    inconclusive under the literal rule and supported under the other two."""
+    """The toy sweep's F-0 observed-rec-far is 10/10 and its Holm test rejects: H1 is supported
+    under the rule in force (Firth's, the researcher's ruling of 2026-10-10) and under the
+    probability-scale rule, and inconclusive under the literal rule."""
+    assert hh.H1_SEPARATION_RULE == "firth"               # the ruling, by commit
     sw = toy(tmp_path)
     sw.standard()
     h = sw.compute()
-    assert h["h1_separation_rule"] == "literal" and h["glm_9_1_firth"] is None
-    assert h["family"]["H1"]["holm_rejects"] and h["family"]["H1"]["verdict"] == hh.MODEL_DISAGREES
-    for rule in ("firth", "probability-scale"):
-        monkeypatch.setattr(hh, "H1_SEPARATION_RULE", rule)
-        h = sw.compute()
-        assert h["h1"]["model_check"]["rule"] == rule
-        assert h["family"]["H1"]["supported"] and h["family"]["H1"]["verdict"] == "supported"
+    assert h["h1_separation_rule"] == "firth" and h["h1"]["model_check"]["rule"] == "firth"
+    assert h["glm_9_1_firth"]["estimate"] > 0
+    assert h["h1"]["model_check"]["firth_estimate"] == h["glm_9_1_firth"]["estimate"]
+    assert h["family"]["H1"]["holm_rejects"] and h["family"]["H1"]["model_agrees"]
+    assert h["family"]["H1"]["supported"] and h["family"]["H1"]["verdict"] == "supported"
+    assert "The rule in force is `firth`" in "\n".join(hh.summary_lines(h))
+    monkeypatch.setattr(hh, "H1_SEPARATION_RULE", "literal")
+    h = sw.compute()
+    assert h["h1_separation_rule"] == "literal" and h["h1"]["model_check"]["rule"] == "literal"
+    assert h["family"]["H1"]["holm_rejects"] and not h["family"]["H1"]["supported"]
+    assert h["family"]["H1"]["verdict"] == hh.MODEL_DISAGREES
     assert h["glm_9_1_firth"] is None                     # fitted under the Firth rule only
+    assert "The rule in force is `literal`" in "\n".join(hh.summary_lines(h))
+    monkeypatch.setattr(hh, "H1_SEPARATION_RULE", "probability-scale")
+    h = sw.compute()
+    assert h["h1"]["model_check"]["rule"] == "probability-scale"
+    assert h["family"]["H1"]["supported"] and h["family"]["H1"]["verdict"] == "supported"
+    assert h["glm_9_1_firth"] is None                     # fitted under the Firth rule only
+    assert "The rule in force is `probability-scale`" in "\n".join(hh.summary_lines(h))
 
 
 def test_firth_is_add_a_half_on_a_saturated_model():
@@ -1091,6 +1124,153 @@ def test_firth_is_add_a_half_on_a_saturated_model():
     assert beta[0] == pytest.approx(lg[(1, 0)] - lg[(0, 0)], abs=1e-6)
     assert beta[1] == pytest.approx(lg[(0, 1)] - lg[(0, 0)], abs=1e-6)
     assert beta[2] == pytest.approx(lg[(1, 1)] - lg[(1, 0)] - lg[(0, 1)] + lg[(0, 0)], abs=1e-6)
+
+
+# --- an independent check of firth_fe_logit ------------------------------------------------------
+
+def _minus_penalized(b: np.ndarray, x: np.ndarray, y: np.ndarray) -> float:
+    """Minus Firth's penalized log-likelihood, -(l(b) + 1/2 log det X'WX), written afresh: l as
+    sum(y eta - log(1 + e^eta)) and the determinant by slogdet (firth_fe_logit uses neither)."""
+    eta = x @ b
+    p = 1.0 / (1.0 + np.exp(-eta))
+    sign, logdet = np.linalg.slogdet(x.T @ (x * (p * (1.0 - p))[:, None]))
+    assert sign > 0
+    return -(float(np.sum(y * eta - np.logaddexp(0.0, eta))) + 0.5 * logdet)
+
+
+def _num_grad(f, b: np.ndarray, h: float = 1e-5) -> np.ndarray:
+    e = np.eye(len(b)) * h
+    return np.array([(f(b + e[j]) - f(b - e[j])) / (2 * h) for j in range(len(b))])
+
+
+def _num_hess(f, b: np.ndarray, h: float = 1e-4) -> np.ndarray:
+    k, e = len(b), np.eye(len(b)) * h
+    out = np.empty((k, k))
+    for i in range(k):
+        for j in range(i, k):
+            out[i, j] = out[j, i] = (f(b + e[i] + e[j]) - f(b + e[i] - e[j])
+                                     - f(b - e[i] + e[j]) + f(b - e[i] - e[j])) / (4 * h * h)
+    return out
+
+
+def _firth_direct(y: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """Firth's estimate found by maximising the penalized log-likelihood directly, with no part
+    of firth_fe_logit (no modified score, hat values or Cholesky factor): L-BFGS from 0 on
+    central-difference gradients, then Newton steps on central-difference gradients and
+    Hessians to settle the last digits (L-BFGS alone stops near 1e-7)."""
+    def f(b):
+        return _minus_penalized(b, x, y)
+    res = optimize.minimize(f, np.zeros(x.shape[1]), jac=lambda b: _num_grad(f, b),
+                            method="L-BFGS-B",
+                            options={"maxiter": 5000, "gtol": 1e-10, "ftol": 1e-15})
+    b = res.x
+    for _ in range(3):
+        b = b - np.linalg.solve(_num_hess(f, b), _num_grad(f, b))
+    return b
+
+
+def _firth_case(templates: int, reps: int, eight_cells: bool, separated: bool, seed: int):
+    """y, template codes and slopes for F-0/W-0 x R (x D x N with `eight_cells`), `reps`
+    episodes per template and cell, drawn from a logit with template effects; with `separated`,
+    F-0's recoverable (observed, far) cell is all 1 in every template, as at F-0's ceiling, so
+    the maximum-likelihood W-0 x R coefficient is -inf."""
+    rng = np.random.default_rng(seed)
+    u = rng.normal(0, 0.7, templates)
+    rows = []
+    for t in range(templates):
+        for w in (0, 1):
+            for r in (0, 1):
+                for d, n in ((0, 0), (0, 1), (1, 0), (1, 1)) if eight_cells else ((0, 0),):
+                    eta = 0.8 + u[t] - 1.2 * w + 0.4 * r - 0.3 * d + 0.3 * n + 1.0 * w * r
+                    for _ in range(reps):
+                        f0_r = (w, r, d, n) == (0, 1, 0, 0)
+                        y = 1 if separated and f0_r else int(rng.random() < 1 / (1 + np.exp(-eta)))
+                        rows.append((y, t, w, r, d, n, f0_r))
+    y, codes, w, r, d, n, f0_r = (np.array(c, float) for c in zip(*rows, strict=True))
+    if eight_cells:
+        z, names = hh.factorial_design({"W-0": w}, r, d, n, target="W-0:R")
+    else:
+        z, names = np.column_stack([w, r, w * r]), ["W-0", "R", "W-0:R"]
+    assert names[-1] == "W-0:R"
+    return y, codes.astype(int), z, f0_r.astype(bool)
+
+
+FIRTH_CASES = {"4 cells": (4, 6, False, False, 1), "4 cells, separated": (4, 6, False, True, 2),
+               "8 cells": (3, 5, True, False, 3), "8 cells, separated": (3, 5, True, True, 4)}
+
+
+@pytest.mark.parametrize("case", FIRTH_CASES)
+def test_firth_fe_logit_matches_a_direct_maximisation(case):
+    """firth_fe_logit's Newton fit equals a direct numerical maximisation of l(b) + 1/2 log
+    det(X'WX) on every coefficient, with and without separation; and its estimate is a
+    stationary point and a maximum of the penalized log-likelihood (numerical derivatives)."""
+    y, codes, z, f0_r = _firth_case(*FIRTH_CASES[case])
+    keep, _, _ = hh.informative(y, codes)
+    assert keep.all()                                   # every template has outcome variation
+    fit = hh.firth_fe_logit(y, codes, z)
+    assert fit is not None
+    ours = np.concatenate(fit)
+    x = np.column_stack([np.eye(codes.max() + 1)[codes], z])
+    direct = _firth_direct(y, x)
+    np.testing.assert_allclose(ours, direct, rtol=0, atol=1e-7)
+    assert abs(ours[-1] - direct[-1]) < 1e-7            # the W-0 x R coefficient
+    def f(b):
+        return _minus_penalized(b, x, y)
+    assert np.max(np.abs(_num_grad(f, ours))) < 1e-6
+    assert np.linalg.eigvalsh(_num_hess(f, ours)).min() > 0
+    if "separated" in case:
+        # F-0's recoverable cell is all 1, so the ML W-0 x R coefficient is -inf; Firth's is
+        # finite and moderate
+        assert f0_r.any() and y[f0_r].min() == 1
+        assert hh.logit_status(pd.DataFrame({"success": y}),
+                               [("F-0 R", pd.Series(f0_r), -1)])["status"] == hh.MINUS_INF
+        assert np.isfinite(ours).all() and abs(ours[-1]) < 10
+
+
+def test_glm_91_firth_matches_a_direct_maximisation_on_the_formula_design():
+    """glm_91_firth (the rows, the template dropping and the §9.1 design) against the direct
+    maximisation on statsmodels' formula design of success ~ C(template) + W*R*D*N, on the
+    templates with outcome variation. Firth's estimate is equivariant under a change of basis of
+    the template columns, so the W:R coefficients must agree; F-0 observed-rec-far is all 1."""
+    n = 8
+    df = _h1_frame(n, {("F-0", OR): [1] * n}, seed=5)
+    assert hh.glm_91(df)["logit_status"] == hh.MINUS_INF
+    ours = hh.glm_91_firth(df)
+    assert ours["note"] is None
+    varies = df.groupby("template")["success"].transform("nunique") > 1
+    d = df[varies].assign(W=lambda x: (x.cell == "W-0").astype(float),
+                          R=lambda x: x.recoverable.astype(float),
+                          D=lambda x: (x.fact == "derived").astype(float),
+                          N=lambda x: (x.distance == "near").astype(float))
+    model = smf.glm("success ~ C(template) + W*R*D*N", d, family=sm.families.Binomial())
+    direct = _firth_direct(d["success"].to_numpy(float), np.asarray(model.exog))
+    assert ours["estimate"] == pytest.approx(direct[model.exog_names.index("W:R")], abs=1e-7)
+
+
+def test_firth_approaches_ml_as_n_grows():
+    """Without separation Firth's estimate differs from the ML estimate by O(1/n) (Firth 1993):
+    with the same success shares and k times the episodes, k (Firth - ML) settles to a
+    constant, and at 1,000 episodes a cell the two are within 0.002."""
+    shares = {0: [(7, 10), (3, 10), (8, 10), (6, 10)], 1: [(5, 10), (2, 10), (7, 10), (4, 10)],
+              2: [(9, 10), (4, 10), (9, 10), (8, 10)]}           # (w, r) = 00, 10, 01, 11
+    diffs = {}
+    for k in (1, 10, 100):
+        y, codes, w, r = [], [], [], []
+        for t, cells in shares.items():
+            for (wi, ri), (s, m) in zip(((0, 0), (1, 0), (0, 1), (1, 1)), cells, strict=True):
+                y += [1.0] * (s * k) + [0.0] * ((m - s) * k)
+                codes += [t] * (m * k)
+                w += [wi] * (m * k)
+                r += [ri] * (m * k)
+        w, r = np.array(w, float), np.array(r, float)
+        z = np.column_stack([w, r, w * r])
+        alpha, beta = hh.firth_fe_logit(np.array(y), np.array(codes), z)
+        x = np.column_stack([np.eye(3)[codes], z])
+        ml = sm.GLM(np.array(y), x, family=sm.families.Binomial()).fit(tol=1e-12)
+        diffs[k] = np.concatenate([alpha, beta]) - np.asarray(ml.params)
+    assert np.abs(diffs[1]).max() > np.abs(diffs[10]).max() > np.abs(diffs[100]).max()
+    assert np.abs(diffs[100]).max() < 0.002
+    np.testing.assert_allclose(10 * diffs[10], 100 * diffs[100], rtol=0.05, atol=1e-3)
 
 
 # --- H3's model check: the registered model decides (B1) ----------------------------------------

@@ -20,7 +20,7 @@ import pytest
 
 from common import costs, hold, paidlock, runmeta
 from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
-from harnesses import blinding, cli, registered, runner, single_turn
+from harnesses import blinding, cli, matrix, registered, runner, single_turn
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.items import item_text
@@ -374,7 +374,7 @@ def test_single_turn_cli_repeat_1_plays_the_seeds_divisible_by_10(paid_env):
             "observed-nonrec-far"]
     assert cli.main(args) == 0
     (run_dir,) = (tmp / "results" / "persistgym").iterdir()
-    assert run_dir.name.endswith("-single-turn-rep1-gpt-6-luna")
+    assert run_dir.name.endswith("-single-turn-gpt-6-luna-repeat1")  # as `run` names one
     lines = _lines(run_dir / "episodes.jsonl")
     assert [x["episode_id"] for x in lines] == [
         "main-000000/observed-nonrec-far/single_turn",
@@ -544,3 +544,13 @@ def test_the_control_is_guarded_as_lunas_single_turn_cell(monkeypatch, capsys):
     assert cli.main(MAIN) == 2
     assert seen == [registered.LUNA_SINGLE_TURN_CELL]
     assert "refused: stopped by the test" in capsys.readouterr().err
+
+
+def test_the_repeat_is_the_run_matrixs():
+    """§2.9's repeat subset has one definition: the control's repeat plays the templates a
+    harness run's repeat plays (harnesses/matrix.py)."""
+    assert (single_turn.REPEAT_EVERY, single_turn.REPEAT_SPLIT) == (
+        matrix.REPEAT_EVERY, matrix.REPEAT_SPLIT) == (10, "main")
+    for start, n in ((0, 200), (5, 30), (41, 60)):
+        played = matrix.RunMatrix.full(n, NONREC).repeat("main", start).played
+        assert single_turn.template_indices("main", start, n, 1) == [start + k for k in played]

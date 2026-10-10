@@ -887,8 +887,9 @@ def cmd_single_turn(a) -> int:
     prompts = single_turn.build_prompts(a.split, indices, gen, cells)
     if a.experiment == PILOT_EXPERIMENT and len(prompts) > PILOT_MAX_EPISODES:
         return refuse(f"a pilot is at most {PILOT_MAX_EPISODES} prompts, got {len(prompts)}")
-    tag = single_turn.COMMAND + ("-rep1" if a.repeat_index else "")
-    run_id = a.run_id or _run_id(f"{tag}-{a.model}")
+    # a repeat-1 run's id says so, as `run` names one (PREREG §2.9)
+    run_id = a.run_id or _run_id(f"{single_turn.COMMAND}-{a.model}"
+                                 + (f"-repeat{a.repeat_index}" if a.repeat_index else ""))
     try:
         require_plain_name("--run-id", run_id)
     except ValueError as e:
@@ -1118,7 +1119,8 @@ def build_parser() -> argparse.ArgumentParser:
     s1.add_argument("--experiment", default=PILOT_EXPERIMENT)
     s1.add_argument("--repeat-index", type=int, choices=single_turn.REPEAT_INDICES, default=0,
                     help="1: PREREG §2.9's repeat, on the main templates of [--start, --start "
-                         "+ --n) whose seed is divisible by 10 only")
+                         "+ --n) whose seed is divisible by 10 only, with a run id ending "
+                         "-repeat1")
     s1.add_argument("--parallel", type=int, default=1, metavar="N",
                     help=f"prompts sent at once, 1 to {MAX_PARALLEL} (PREREG §4.6), with spend "
                          "reserved for the prompts in flight, as `run --parallel`")

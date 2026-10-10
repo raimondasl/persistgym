@@ -61,6 +61,7 @@ from harnesses import blinding, runner
 from harnesses.cells import get_cell
 from harnesses.config import HarnessConfig
 from harnesses.items import output_text
+from harnesses.matrix import REPEAT_EVERY, REPEAT_SPLIT
 from harnesses.openai_transport import BudgetExceeded
 from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
 from harnesses.registered import model_family
@@ -92,9 +93,9 @@ REGISTERED_MODELS = ("gpt-6-luna",)
 guard (`registered.check_run_settings` with `registered.LUNA_SINGLE_TURN_CELL`) holds it to
 its registered effort and D13's request settings (`registered.LUNA_REQUEST`)."""
 REPEAT_INDICES = (0, 1)
-REPEAT_SPLIT = "main"
-REPEAT_EVERY = 10
-"""§2.9: main templates whose seed is divisible by 10 also play repeat_index 1."""
+"""§2.9: main templates whose seed is divisible by `REPEAT_EVERY` (10) also play
+repeat_index 1; `REPEAT_EVERY` and `REPEAT_SPLIT` are the run matrix's (harnesses/matrix.py),
+so the control's repeat plays exactly the templates of the harness runs' repeat."""
 TRANSCRIPT = "transcript.jsonl.gz"
 
 

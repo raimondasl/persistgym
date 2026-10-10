@@ -74,7 +74,10 @@ confirmatory model uses is a PREREG choice; the bootstrap contrasts do not depen
 Run: ``uv run python -m analysis.power_sim [--reps 200] [--seed 20260930] [--no-write]``;
 part 3: ``uv run python -m analysis.power_sim --part luna --reps 2000``. A finished part-3
 run's summary.md is re-rendered by the current code from its saved files, with no simulation:
-``uv run python -m analysis.power_sim --rerender-summary results/power_sim/<run_id>``.
+``uv run python -m analysis.power_sim --rerender-summary results/power_sim/<run_id>``. The
+re-rendered file says so below its command: "Re-rendered from the run's saved files by commit
+<short sha> on <UTC date>; numbers unchanged." (or that some numbers differ). Commit the code
+first: the re-render is refused while analysis/power_sim.py has uncommitted changes.
 """
 
 from __future__ import annotations
@@ -82,6 +85,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 import warnings
@@ -1234,13 +1238,41 @@ def luna_summary(power: pd.DataFrame, decision: pd.DataFrame, sens: pd.DataFrame
     return "\n".join(out)
 
 
-def rerender_luna_summary(run_dir: Path) -> str:
+RERENDER_LINE = "Re-rendered from the run's saved files by commit {commit} on {date}; {numbers}."
+"""The line a written re-render adds below the command (``rerender_luna_summary`` with a
+``stamp``). ``numbers`` is ``RERENDER_SAME`` when every number in the text is the one the
+summary it replaces had, in the same order, else ``RERENDER_CHANGED``."""
+RERENDER_SAME = "numbers unchanged"
+RERENDER_CHANGED = "some numbers differ from the summary it replaced (see its git history)"
+RERENDER_RE = re.compile(
+    r"^Re-rendered from the run's saved files by commit (?P<commit>[0-9a-f]{7,40}) on "
+    r"(?P<date>\d{4}-\d{2}-\d{2}); (?P<numbers>" + re.escape(RERENDER_SAME) + "|"
+    + re.escape(RERENDER_CHANGED) + r")\.\n\n", re.MULTILINE)
+
+
+def _unstamped(summary: str) -> str:
+    """A summary.md without the line (and the blank line after it) a re-render added."""
+    return RERENDER_RE.sub("", summary)
+
+
+def _numbers(text: str) -> list[str]:
+    """Every number in a text, in order (digits, with any decimal point or thousands comma
+    between digits)."""
+    return re.findall(r"\d+(?:[.,]\d+)*", text)
+
+
+def rerender_luna_summary(run_dir: Path, stamp: tuple[str, str] | None = None) -> str:
     """summary.md of a finished luna run (``--part luna``), rendered again by this code from
     the run's own files, with no simulation: its CSVs, meta.json's scenarios, run id and end
     time, the command from the summary.md it replaces, the committed cost forecast, and phase
     1a's spend in results/costs.csv's rows logged by the run's end. ValueError for a run that
     is not a luna run or lacks a file. The CSVs hold 6 significant digits, which the summary's
-    3 decimals do not reach."""
+    3 decimals do not reach.
+
+    With ``stamp`` = (short commit, UTC date), the text gets ``RERENDER_LINE`` below the
+    command, in place of any earlier re-render's line: the commit whose code rendered it, the
+    date, and whether every number in the text is the one the summary it replaces had
+    (``_numbers``, compared without either re-render line). Without it, no line is added."""
     meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
     config = meta.get("config") or {}
     if config.get("part") != "luna":
@@ -1257,8 +1289,9 @@ def rerender_luna_summary(run_dir: Path) -> str:
     decision = table("luna_decision", required=True)
     for col in LUNA_DECISION_COUNTS:
         decision[col] = decision[col].astype("Int64")
+    old = _unstamped((run_dir / "summary.md").read_text(encoding="utf-8"))
     command = None
-    for line in (run_dir / "summary.md").read_text(encoding="utf-8").splitlines():
+    for line in old.splitlines():
         if line.startswith("Command: `") and line.endswith("`"):
             command = line.removeprefix("Command: `")[:-1]
             break
@@ -1266,10 +1299,33 @@ def rerender_luna_summary(run_dir: Path) -> str:
         raise ValueError(f"{run_dir / 'summary.md'} names no command")
     setups = [LunaSetup(**s) for s in config["luna_setups"]]
     finished = datetime.fromisoformat(meta["finished_utc"])
-    return luna_summary(table("luna_power", required=True), decision,
+    text = luna_summary(table("luna_power", required=True), decision,
                         table("luna_sensitivity"), table("luna_validity_sd"), setups,
                         meta["run_id"], command, luna_cost_per_template(),
                         _phase_1a_spent(until=finished), table("luna_normal_check"))
+    if stamp is None:
+        return text
+    commit, day = stamp
+    numbers = RERENDER_SAME if _numbers(text) == _numbers(old) else RERENDER_CHANGED
+    head = f"Command: `{command}`\n\n"
+    if head not in text:
+        raise ValueError("the rendered summary has no command line to put the re-render "
+                         "line under")
+    line = RERENDER_LINE.format(commit=commit, date=day, numbers=numbers)
+    return text.replace(head, f"{head}{line}\n\n", 1)
+
+
+def _rerender_stamp() -> tuple[str, str]:
+    """(short commit, UTC date) for a written re-render: the commit checked out, whose code
+    renders it. ValueError when analysis/power_sim.py differs from that commit, since the
+    line would then name code that did not render the text."""
+    from common import runmeta
+
+    if runmeta.run_git("status", "--porcelain", "--", "analysis/power_sim.py"):
+        raise ValueError("analysis/power_sim.py has uncommitted changes: commit it first, so "
+                         "that the re-render line names the code that rendered the summary")
+    return (runmeta.run_git("rev-parse", "--short", "HEAD"),
+            datetime.now(UTC).date().isoformat())
 
 
 # --------------------------------------------------------------------------------------------
@@ -1367,19 +1423,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-write", action="store_true", help="print only")
     ap.add_argument("--rerender-summary", type=Path, default=None, metavar="RUN_DIR",
                     help="re-render a finished luna run's summary.md with this code from its "
-                         "saved files, with no simulation (`rerender_luna_summary`); other "
-                         "options are ignored, and --no-write prints it instead")
+                         "saved files, with no simulation (`rerender_luna_summary`), adding a "
+                         "line naming the commit and date of the re-render (refused while "
+                         "analysis/power_sim.py has uncommitted changes); other options are "
+                         "ignored, and --no-write prints it without that line instead")
     args = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if args.rerender_summary is not None:
-        summary = rerender_luna_summary(args.rerender_summary)
         if args.no_write:
-            print(summary)
-        else:
-            path = args.rerender_summary / "summary.md"
-            path.write_text(summary, encoding="utf-8", newline="\n")
-            print(f"wrote {path}")
+            print(rerender_luna_summary(args.rerender_summary))
+            return 0
+        try:
+            stamp = _rerender_stamp()
+        except ValueError as e:
+            print(f"refused: {e}", file=sys.stderr)
+            return 2
+        summary = rerender_luna_summary(args.rerender_summary, stamp)
+        path = args.rerender_summary / "summary.md"
+        path.write_text(summary, encoding="utf-8", newline="\n")
+        print(f"wrote {path}")
         return 0
 
     started = datetime.now(UTC)

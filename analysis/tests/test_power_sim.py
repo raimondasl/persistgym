@@ -1,4 +1,5 @@
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -459,18 +460,86 @@ def test_main_luna_writes_tables_meta_and_summary(tmp_path):
     assert "0.92 is the variance" not in summary
     # re-rendered from the run's saved files, with no simulation, it is the same summary
     assert ps.rerender_luna_summary(tmp_path) == summary
+
+
+def _stamped(summary: str, commit: str, day: str, numbers: str = ps.RERENDER_SAME) -> str:
+    """`summary` with the re-render line below its command."""
+    line = (f"Re-rendered from the run's saved files by commit {commit} on {day}; "
+            f"{numbers}.")
+    head = "`\n\n## What is simulated"
+    assert summary.count(head) == 1
+    return summary.replace(head, f"`\n\n{line}\n\n## What is simulated")
+
+
+def test_a_written_rerender_names_its_commit_and_date(tmp_path, monkeypatch):
+    """`--rerender-summary` writes the summary with a line below the command: the commit
+    whose code rendered it, the UTC date, and whether every number is the one the summary it
+    replaced had. A second re-render replaces the line; --no-write prints the summary without
+    it; with uncommitted code (`_rerender_stamp` refuses) nothing is written."""
+    args = ["--part", "luna", "--reps", "3", "--luna-boot", "200", "--luna-templates", "50,60",
+            "--luna-sensitivity-templates", "50", "--out-dir", str(tmp_path)]
+    assert ps.main(args) == 0
+    path = tmp_path / "summary.md"
+    summary = path.read_text(encoding="utf-8")
+    monkeypatch.setattr(ps, "_rerender_stamp", lambda: ("abc1234", "2026-10-10"))
     assert ps.main(["--rerender-summary", str(tmp_path)]) == 0
-    assert (tmp_path / "summary.md").read_text(encoding="utf-8") == summary
+    stamped = path.read_text(encoding="utf-8")
+    assert stamped == _stamped(summary, "abc1234", "2026-10-10")
+    assert ("Re-rendered from the run's saved files by commit abc1234 on 2026-10-10; numbers "
+            "unchanged.") in stamped
+    assert ps.rerender_luna_summary(tmp_path) == summary         # the line is not re-read
+    assert ps.rerender_luna_summary(tmp_path, ("abc1234", "2026-10-10")) == stamped
+    monkeypatch.setattr(ps, "_rerender_stamp", lambda: ("def5678", "2026-10-11"))
+    assert ps.main(["--rerender-summary", str(tmp_path)]) == 0
+    again = path.read_text(encoding="utf-8")
+    assert again == _stamped(summary, "def5678", "2026-10-11") and again.count("Re-rendered") == 1
+    # a summary whose numbers the code would change says so
+    path.write_text(summary.replace("0.80", "0.81"), encoding="utf-8", newline="\n")
+    assert ps.rerender_luna_summary(tmp_path, ("abc1234", "2026-10-12")) == _stamped(
+        summary, "abc1234", "2026-10-12", ps.RERENDER_CHANGED)
+    # --no-write prints the summary without the line
+    path.write_text(stamped, encoding="utf-8", newline="\n")
+    assert ps.main(["--rerender-summary", str(tmp_path), "--no-write"]) == 0
+    assert path.read_text(encoding="utf-8") == stamped
+
+    def dirty():
+        raise ValueError("analysis/power_sim.py has uncommitted changes")
+
+    monkeypatch.setattr(ps, "_rerender_stamp", dirty)
+    assert ps.main(["--rerender-summary", str(tmp_path)]) == 2
+    assert path.read_text(encoding="utf-8") == stamped
+
+
+def test_the_rerender_stamp_is_the_checked_out_commit_and_needs_committed_code(monkeypatch):
+    from common import runmeta
+
+    state = {"status": ""}
+
+    def git(*args, **_):
+        return {"status": state["status"], "rev-parse": "abc1234"}[args[0]]
+
+    monkeypatch.setattr(runmeta, "run_git", git)
+    commit, day = ps._rerender_stamp()
+    assert commit == "abc1234" and re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)
+    state["status"] = " M analysis/power_sim.py"
+    with pytest.raises(ValueError, match="uncommitted changes: commit it first"):
+        ps._rerender_stamp()
 
 
 def test_the_committed_luna_run_summary_is_this_codes_rerender():
     """results/power_sim/20261010T030442Z/summary.md (luna's T, R6 change 6) is what this code
     renders from that run's saved files (`--rerender-summary`), so its text is the committed
-    code's; it was re-rendered once after the SD wording was fixed."""
+    code's. It was re-rendered after the SD wording was fixed, and again to add the line that
+    names the commit and date of the re-render, with its numbers unchanged."""
     run = ps.REPO_ROOT / "results" / "power_sim" / "20261010T030442Z"
     if not run.exists():
         pytest.skip("the run is not in this checkout")
-    assert ps.rerender_luna_summary(run) == (run / "summary.md").read_text(encoding="utf-8")
+    committed = (run / "summary.md").read_text(encoding="utf-8")
+    m = ps.RERENDER_RE.search(committed)
+    if m is not None:
+        assert m["numbers"] == ps.RERENDER_SAME
+    stamp = (m["commit"], m["date"]) if m else None
+    assert ps.rerender_luna_summary(run, stamp) == committed
 
 
 def test_rerender_refuses_a_run_that_is_not_lunas(tmp_path):

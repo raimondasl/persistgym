@@ -139,8 +139,9 @@ def task_cells(given: list[str] | None = None) -> list[str]:
 
 def template_indices(split: str, start: int, n: int, repeat_index: int = 0) -> list[int]:
     """The template indices a run plays: [start, start + n) at repeat 0; at repeat 1 (§2.9)
-    those whose seed is divisible by 10, on the main split only. ValueError otherwise, or for
-    indices outside the split's seed range."""
+    those whose seed is divisible by 10, on the main split only. ValueError otherwise, for
+    indices outside the split's seed range, and for a repeat-1 range with no such template
+    (it would play nothing; `run` refuses the same range with the same words)."""
     if repeat_index not in REPEAT_INDICES:
         raise ValueError(f"--repeat-index is 0 or 1 (PREREG §2.9), got {repeat_index}")
     if start < 0 or n < 1:
@@ -152,7 +153,11 @@ def template_indices(split: str, start: int, n: int, repeat_index: int = 0) -> l
     if split != REPEAT_SPLIT:
         raise ValueError(f"repeat 1 plays main templates only (PREREG §2.9), got --split "
                          f"{split}")
-    return [i for i in range(start, start + n) if seed_for(split, i) % REPEAT_EVERY == 0]
+    out = [i for i in range(start, start + n) if seed_for(split, i) % REPEAT_EVERY == 0]
+    if not out:
+        raise ValueError(f"no template of {split} {start}-{start + n - 1} has a seed divisible "
+                         f"by {REPEAT_EVERY}: --repeat-index 1 would play nothing (PREREG §2.9)")
+    return out
 
 
 def build_prompts(split: str, indices: list[int], gen: GeneratorConfig,

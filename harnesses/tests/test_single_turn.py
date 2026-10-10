@@ -3,7 +3,11 @@ model and no network: which prompts a run plays (the 4 non-recoverable task cell
 §2.9's repeat subset), how a reply is scored or excluded, the files a run writes (blinded for
 a pilot), parallel play, and the paid CLI path through the real guarded transport with a
 fake-backed client: its refusals before the paid-run lock, its one costs row, meta.json, run
-plan and lock."""
+plan and lock.
+
+luna's guard (registered.luna_refusal) holds its main runs to the default config, on which
+G1 is recorded; these runs play the small volume, so the paid tests record luna's G1 on the
+small config instead, as test_repeat.py does."""
 
 from __future__ import annotations
 
@@ -16,13 +20,14 @@ import pytest
 
 from common import costs, hold, paidlock, runmeta
 from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
-from harnesses import blinding, cli, runner, single_turn
+from harnesses import blinding, cli, registered, runner, single_turn
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.items import item_text
 from harnesses.openai_transport import ALLOW_ENV, OpenAIResponsesTransport
 from harnesses.tests.conftest import SMALL
 from harnesses.tests.test_registered import _commands
+from harnesses.tests.test_repeat import _luna_g1_on_the_small_config
 from persistgym.controls import single_turn_control
 
 CFG = HarnessConfig()
@@ -92,12 +97,15 @@ def test_template_indices_and_the_repeat_subset():
     assert single_turn.template_indices("main", 0, 30) == list(range(30))
     assert single_turn.template_indices("main", 0, 30, 1) == [0, 10, 20]
     assert single_turn.template_indices("main", 5, 20, 1) == [10, 20]
-    assert single_turn.template_indices("main", 1, 9, 1) == []
     assert single_turn.template_indices("pilot", 0, 2) == [0, 1]
     for args in (("pilot", 0, 10, 1), ("validity", 0, 10, 1), ("main", 0, 10, 2),
                  ("main", 0, 0, 0), ("main", -1, 5, 0), ("main", 49_995, 10, 0)):
         with pytest.raises(ValueError):
             single_turn.template_indices(*args)
+    # a repeat-1 range with no seed divisible by 10 plays nothing: refused in `run`'s words
+    with pytest.raises(ValueError, match=r"main 1-9 has a seed divisible by 10: --repeat-index "
+                                         r"1 would play nothing \(PREREG §2.9\)"):
+        single_turn.template_indices("main", 1, 9, 1)
 
 
 def test_task_cells_are_the_nonrecoverable_ones_in_cell_order():
@@ -298,6 +306,8 @@ def paid_env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "RAW", tmp_path / "raw")
     (tmp_path / "lock").mkdir()
     monkeypatch.setattr(cli, "LOCK_PATH", tmp_path / "lock" / paidlock.lock_name(cli.STREAM))
+    # luna's G1 on the small volume these runs play (the default config's G1 is the real one)
+    assert _luna_g1_on_the_small_config(monkeypatch) == runmeta.config_hash(SMALL.to_dict())
     fakes = []
 
     def transport(**kw):
@@ -435,7 +445,10 @@ PILOT_RUN = ["single-turn", "--n", "1", *SMALL_ARGS, "--approved-block", "3-pers
     ([*MAIN, "--mode", "pro"], "--mode pro"),
     ([*MAIN, "--service-tier", "default"], "--service-tier default"),
     ([*MAIN, "--effort", "high"], "registered reasoning effort 'medium'"),
-    ([*MAIN, "--start", "1", "--n", "9", "--repeat-index", "1"], "nothing to play"),
+    ([*MAIN, "--start", "1", "--n", "9", "--repeat-index", "1"], "would play nothing"),
+    # luna's guard (registered.luna_refusal): its main sweep and controls only
+    ([*MAIN, "--split", "validity"], "got --split validity"),
+    ([*MAIN, "--gen-preset", "sol-chain"], "got generator config"),
     ([*MAIN, "--start", "49999", "--n", "2"], "outside the main range"),
 ])
 def test_single_turn_refuses_before_the_lock(paid_env, monkeypatch, capsys, args, says):
@@ -447,6 +460,28 @@ def test_single_turn_refuses_before_the_lock(paid_env, monkeypatch, capsys, args
     assert cli.main(args) == 2
     err = capsys.readouterr().err
     assert "refused" in err and says in err
+    assert fakes == [] and costs.read_rows(costs_csv) == []
+
+
+def test_single_turn_needs_lunas_g1_on_the_config_it_plays(paid_env, monkeypatch, capsys):
+    """luna's guard holds the control to the config its G1 is recorded on: back on the real
+    one (the default config), the small volume is an unregistered config; and a G1 recorded
+    on another config than the one played refuses (fail closed). Both before the lock."""
+    _, costs_csv, fakes = paid_env
+    small = registered.LUNA_GENERATOR_HASH
+
+    def no_lock(*a, **k):
+        raise AssertionError("must not take the paid-run lock")
+    monkeypatch.setattr(paidlock, "paid_run_lock", no_lock)
+    monkeypatch.setattr(registered, "LUNA_GENERATOR_HASH", registered.DEFAULT_GENERATOR_HASH)
+    assert cli.main(MAIN) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("refused:") and f"got generator config {small[:12]}" in err
+    monkeypatch.setattr(registered, "LUNA_GENERATOR_HASH", small)
+    monkeypatch.setitem(registered.G1_PASSED, "gpt-6-luna", registered.DEFAULT_GENERATOR_HASH)
+    assert cli.main(MAIN) == 2
+    err = capsys.readouterr().err
+    assert "only after the researcher has recorded G1" in err and "G1_PASSED" in err
     assert fakes == [] and costs.read_rows(costs_csv) == []
 
 

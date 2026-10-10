@@ -855,6 +855,8 @@ def cmd_single_turn(a) -> int:
         gen = _gen_config(a.gen_preset, a.gen_set)
     except (TypeError, ValueError) as e:
         return refuse(f"--gen-set: {e}")
+    # what the arguments play, as `run` builds its matrix before its guard: a repeat-1 range
+    # with no seed divisible by 10 refuses here, with `run`'s words
     try:
         cells = single_turn.task_cells(a.task_cell)
         indices = single_turn.template_indices(a.split, a.start, a.n, a.repeat_index)
@@ -872,10 +874,6 @@ def cmd_single_turn(a) -> int:
         templates=(a.start, a.start + a.n))
     if why:
         return refuse(why)
-    if not indices:
-        return refuse(f"no template of {a.split} {a.start}-{a.start + a.n - 1} has a seed "
-                      f"divisible by {single_turn.REPEAT_EVERY}, so repeat 1 has nothing to "
-                      "play (PREREG §2.9)")
     if a.split == "main":
         for w in RunMatrix.full(a.n, cells).block_warnings(a.start):
             print(f"note (D7, incomplete balance block): {w}", file=sys.stderr)

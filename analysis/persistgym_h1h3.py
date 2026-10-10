@@ -1334,7 +1334,7 @@ def firth_fe_logit(y: np.ndarray, codes: np.ndarray, z: np.ndarray, max_iter: in
 
     The steps use the Fisher information of the likelihood, not the Hessian of the penalized
     log-likelihood, so convergence is linear: on luna's sweep, with most cells at 100%, the
-    fit took 102 steps to reach `tol`. The cap was 100 until 2026-10-10, when that sweep's
+    fit took 103 steps to reach `tol`. The cap was 100 until 2026-10-10, when that sweep's
     FINAL analysis (`results/persistgym_h1h3/20261010T205230Z/`) returned "did not converge";
     it is 1,000 since (the researcher's decision of 2026-10-10, results/decisions.md)."""
     y = np.asarray(y, float)

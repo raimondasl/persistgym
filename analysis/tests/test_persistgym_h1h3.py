@@ -1333,10 +1333,10 @@ def _ceiling_case(templates: int = 200, seed: int = 0):
 
 def test_firth_converges_on_a_sweep_at_its_ceiling():
     """The fit's steps converge linearly, and on a sweep with most cells at 100% (luna's shape)
-    they need more than 100 steps: the old cap of 100 returned None ("did not converge") here,
-    as it did on luna's sweep (102 steps). Under the cap of 1,000 the fit converges, to a
-    stationary point and a local maximum of the penalized log-likelihood written afresh
-    (numerical gradient; the penalized log-likelihood rises from it in every direction tried)."""
+    they can need more than 100 steps: this seed's case needs 108, so the old cap of 100 returns
+    None ("did not converge") here, as it did on luna's sweep (103 steps). Under the cap of
+    1,000 the fit converges, to a stationary point of the penalized log-likelihood written
+    afresh (numerical gradient) that no direction tried increases."""
     y, codes, z = _ceiling_case()
     assert hh.firth_fe_logit(y, codes, z, max_iter=100) is None
     fit = hh.firth_fe_logit(y, codes, z)

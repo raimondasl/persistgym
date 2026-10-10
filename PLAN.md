@@ -15,6 +15,7 @@ _**Amended 2026-10-03 (A5):** a pre-registered sol replication of H1, at the res
 _**Amended 2026-10-07 (A6):** action-matched secondary readings for the ARC path study, after block 2's first two runs, in which ARC's 12 h clock bound the Standard config's run but not the Adapter's. The amendment is §21, which points to `PREREG.md` §17.5 (amendment R5); passages it changes are marked **[A6]**._
 
 _**Amended 2026-10-09 (A7):** the minimal path after Checkpoint C's cost rule fired: ARC's S2 on seed 1 (S1 only if decided first) and luna's sweep, then a hard stop, for a project total of about $560; no seed 2, no phase 2, an arXiv preprint before Nov 2. The amendment is §22, which points to `PREREG.md` §17.6 (amendment R6); passages it changes are marked **[A7]**._
+_**Amended 2026-10-10 (A8):** ARC's harness summary request in S1 and S2 gets the same 65,536-token output budget as every step request (it was 8,192, which reasoning at high thinking could fill), and a unit whose counted S1/S2 run was lost to that failure gets one replacement run. The amendment is §23, which points to `PREREG.md` §17.7 (amendment R7)._
 
 ## 1. Summary
 ARC-AGI-3 scores move by 25-45 points between ARC Prize's Standard harness and its Provider Adapter ([GPT-6 Astra](https://arcprize.org/results/openai-gpt-6-astra), [Gemini 3.8 Flash](https://arcprize.org/results/google-gemini-3-8-flash)). Coding-agent success moves by only a few points across harnesses ([HarnessTax](https://arena.ai/blog/coding-agents-harness-tax)). We test whether this is because ARC needs **derived, non-recoverable** state that the Standard harness throws away, while coding state can usually be re-read from disk. The plan has three parts:
@@ -768,3 +769,13 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
   - §20, the replication's main runs and their cost; §21, "the run plan" among the unchanged items.
 - **Unchanged.** The hypotheses, and every prediction and threshold R6 does not name; the frozen ARC configs, the standard tier, the 12 h clock, the action budgets, the $120 guard and hold, D19 and the counted-run rule; K = 150 (§21); luna's cells, controls, repeats, effort and Flex tier; pilot blinding; the phase caps; and the rule that every paid block needs the researcher's approval line.
 - **What it does not show.** One seed per game and config: the FT09 S0 pair (58.17 vs 18.11) shows swings of about 40 RHAE, so shares from 4 units are descriptive and coarse. S0 and S4 ran on Oct 6-9 and S2 runs later, with no dated Gemini snapshot and a latency that has already drifted. Without S1, the notes instruction's own role is not measured. There is no StateCarry evidence, no sol replication of H1, no failure labels and no open-weights run; each is reported as planned, not run. The cut was made for cost after block 2's results had been seen; all 4 games are kept, so no game was chosen on its result.
+
+## 23. Amendment A8 (2026-10-10): the S1/S2 summary budget
+**Why.** In block 3, three S2 runs ended because ARC's harness summary came back empty 4 times: FT09 S2 twice, R11L S2 once. The summary request's 8,192-token output budget includes the model's reasoning at high thinking, and on thinking-heavy games that reasoning can fill it. S2 exists to isolate native replay, so runs lost this way would measure the harness's budget, not the config. The researcher chose to fix it on 2026-10-10 (`results/decisions.md`). `PREREG.md` §17.7 (amendment R7) registers it; this section only points there.
+- **The change:** patch 0018 sets S1's and S2's `summary_max_output_tokens` to 65,536, the budget of every step request. S0 and S4 are unchanged. S4's summaries never came near 8,192 in block 2.
+- **The runs:**
+  - one replacement run per unit whose counted S1/S2 run was lost to the summarizer failure: FT09 S2, and R11L S2 if its re-run is lost too;
+  - then CD82 S1, CD82 S2 and R11L S1 under the new config;
+  - all within block `3-arc`'s $470.
+- **Unchanged:** the hypotheses, the readings, the gates and the budget caps.
+- **What it does not show:** the S1/S2 runs are not all on one summary budget (SB26 S1 and FT09 S1 ran under 8,192), and a replacement replaces a run whose partial play was seen.

@@ -571,3 +571,35 @@ approved_block: 3-persistgym | experiments: persistgym,persistgym_pilot | max_us
 **Approval.** The researcher's merge of the pull request that adds this entry adopts W, v, T and the assumptions above, the near-loss result, the single-turn prompt, the technical choice and the pilot rule. It also approves block `3-persistgym` up to $100 billed.
 
 **Spend** (billed): $328.94 before block 3. Block `3-arc` so far: $16.60 (SB26 S1 $13.12, FT09 S2 $3.47), with the FT09 S2 re-run in progress. This entry's pull request is $0.
+
+## 2026-10-10: Block 3-arc paused; the researcher's option B: the S1/S2 summary budget (PREREG amendment R7, PLAN A8)
+**What happened.** Three S2 runs of block `3-arc` ended `AGENT_ERROR` because ARC's harness summary came back empty 4 times in a row:
+- FT09 S2 `20261010T020247Z-S2-ft09-s1`, at action 49;
+- its D19 re-run `20261010T030159Z-S2-ft09-s101`, at action 112, with 5 levels cleared; it is counted as is under D19;
+- R11L S2 `20261010T084933Z-S2-r11l-s1`, at action 29.
+
+Each summary request has an 8,192-token output budget, and the model's reasoning at high thinking counts against it. The largest output per attempt reached 8,183 tokens.
+- **S1:** SB26 S1 made 33 summaries, all on the first try. FT09 S1 made 7, one of which needed a retry. Both won.
+- **S4 in block 2:** 132 summaries, none needing a retry, at most 3,073 output tokens per attempt.
+
+Claude put two options to the researcher:
+- **A:** continue as registered.
+- **B:** raise the budget by amendment, and replace the runs lost to it.
+
+**Decision (researcher, 2026-10-10):** "go with B for ARC". Claude stopped the block-3 driver between runs at 14:01 ET, without stopping the run in progress. The R11L S2 D19 re-run, seed 101, was left to finish under the pre-R7 config.
+
+**What the merge adopts** (PREREG §17.7, R7; PLAN §23, A8):
+- **Patch 0018:** S1's and S2's `summary_max_output_tokens` goes to 65,536. S0 and S4 are unchanged. The freeze record and §7.1's tables are regenerated:
+  - S1 `cd475ca0…`, S2 `c41dc494…`;
+  - series `40ec95ec…`, patched commit `b716253e…`, tree `ca0a64fe…`.
+- **The replacement rule:** a unit whose counted S1/S2 run ended by the summarizer failure gets one R7 replacement, with seed label replicate + 200 and `--r7-replaces`. Its own D19 re-run, if needed, uses replicate + 300.
+- **Runs, under the R7 config, back to back:**
+  1. FT09 S2, replacing `20261010T030159Z-S2-ft09-s101`;
+  2. R11L S2, only if its seed-101 re-run also ends by the summarizer failure;
+  3. CD82 S1, CD82 S2 and R11L S1, in R6's order.
+- **Waiver:** the paid pilot of the two re-frozen configs is waived (R7 change 6).
+- **The driver procedure:** after every run, the driver calls `analysis.checkpoint_c --d20-run`. It starts a re-run only on `rerun_allowed: true`, with the `rerun_seed` that call gives. Otherwise the procedure is as in the block-3 entry above.
+
+**Cost.** Block `3-arc` has spent $42.94 so far: SB26 S1 $13.12, FT09 S2 $3.47 and $13.79, FT09 S1 $6.13, R11L S2 $6.43. The R11L S2 re-run's cost is not yet in. The R7 runs are forecast at about $45 each at D27's rule: 4 or 5 runs, so about $180-225. That fits the $470 limit; the limit is unchanged.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts R7 and A8, patch 0018 and the regenerated freeze record, the run list and the pilot waiver. It adds no spending approval beyond block `3-arc`'s existing $470. This entry's pull request is $0.

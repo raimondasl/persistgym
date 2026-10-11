@@ -788,3 +788,21 @@ Claude proposes fixing these together with H3's question.
 - **Changes made after seeing the data.** A reader who discounts them should read H1 and H3 as in the first output: "inconclusive", with the same effects.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts the fix, the wording changes and the proposal above. It adds no spending approval. This entry's pull request is $0.
+
+## 2026-10-10: H5 analysis: two rulings proposed before any H5 quantity is computed
+**The analysis:** `analysis/arc_h5.py` in this PR, the pre-registered H5 analysis (PREREG §3 H5, D35, §17.6 change 4), on the published high-effort runs and on our 8 seed-1 counted S0 and S4 runs.
+- It was written and tested on synthetic data only. No H5 quantity has been computed on real data: its real-data tests check the pinned file's hash, count rows per effort, game and harness, and match the 8 counted run IDs.
+- Two independent reviews checked it, one for fidelity to PREREG and one for the statistics, and their findings were applied.
+- Its readings of points PREREG leaves open, and the two places where it differs from the spec it was written from, are listed in the module docstring ("As implemented").
+
+**Proposed rulings** (Claude's, for the researcher):
+1. **The estimator that decides H5** (`PRIMARY_ESTIMATOR = "ml_limit_or_firth"`). PREREG §3 H5 registers a logistic regression, read by maximum likelihood. With one run per game and harness, separation is expected: a game's harness will often have cleared every reached level of a band, or none.
+   - The rule reads the average marginal effects in the limit of the maximum-likelihood fit wherever C = A_deep − A_early is identified there, also under separation. Where C is not identified (or the ML fit fails), that reading or bootstrap resample uses Firth's penalized fit, and each such resample is counted by reason.
+   - This has the form of H1's ruling of 2026-10-10: "When the logit-scale Δ_H1 is finite, the ordinary fit decides as before", with Firth only where it is not.
+   - **The alternative, `"firth"`**, applies Firth's penalty everywhere. It uses one estimator in the point estimate and every resample. But it changes the registered ML estimate even on data without separation, and it gives a game with no outcome variation a non-zero difference. On small synthetic designs of 4 games, the two estimators can give C opposite signs.
+   - Both estimators are reported in every output, and the summary and `meta.json` name the rule in force.
+2. **The bootstrap seed:** SEED + 40, the next free offset (used: +2 and +3 the run orders; +10 the H1/H3 bootstrap; +11 the Bayesian GLMM; +20 the failure labels; +30 H4).
+
+**Next:** once this PR is merged, Claude runs the analysis once. The output is FINAL with 10,000 resamples, the pinned published file and the 8 counted runs. Claude commits it to `results/arc_h5/<UTC>/` and reports to the researcher.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the two rulings above. The researcher may instead choose `"firth"` before the first run (one constant in the module). It adds no spending approval. This entry's pull request is $0.

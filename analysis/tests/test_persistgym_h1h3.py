@@ -581,6 +581,30 @@ def test_cost_outcomes_and_glms_in_the_toy_sweep(tmp_path, monkeypatch):
     assert mc["logit_status"] == hh.MINUS_INF and mc["rule"] == "literal"
     assert mc["agrees"] is False and mc["sign"] == -1
     assert h["h1"]["scales_disagree_in_sign"]
+    # a Firth fit that fails: the model check has no sign, and the summary says why and makes
+    # no sign comparison with it (changed C, 2026-10-10)
+    monkeypatch.setattr(hh, "H1_SEPARATION_RULE", "firth")
+    monkeypatch.setattr(hh, "firth_fe_logit", lambda *a, **k: None)
+    h = sw.compute()
+    assert h["h1"]["model_check"]["sign"] is None and h["h1"]["model_check"]["agrees"] is False
+    text = "\n".join(hh.summary_lines(h))
+    assert "decides: no estimate (the Firth fit did not converge)." in text
+    assert "no sign to compare with the model check" in text
+    assert "the same sign as the model check" not in text
+    # H3 with one template with outcome variation (changed B): the summary says the check is
+    # saturated in it, that power_sim's own check gives no estimate, and that the quoted power
+    # did not simulate this case
+    one = hh.h3_glm_literal(_h3_one_failure())
+    h["glm_h3"] = {k: v for k, v in one.items() if not k.startswith("_")}
+    h["glm_h3_powersim"] = hh.h3_glm_powersim(_h3_one_failure())
+    h["h3"]["model_check"].update(ame=one["ame"], agrees=True,
+                                  ame_informative=one["ame_informative"],
+                                  n_pairs_informative=one["n_pairs_informative"])
+    text = "\n".join(hh.summary_lines(h))
+    assert "With one, the model is saturated in it, so its AME is the observed Δ_H3" in text
+    assert "`ps.h3_glm_ame`), which the simulation used, needs two templates" in text
+    assert "own H3 check gives no estimate" in text
+    assert "may overstate" not in text
 
 
 # --- keys, re-runs and exclusions (DESIGN §7.8, §13) ------------------------------------------
@@ -928,6 +952,7 @@ def test_main_writes_the_outputs(tmp_path, monkeypatch):
                    "§2.8 accounting check: passed on 160 window-cell episodes",
                    "W-n-0 as a third harness level", "Logit scale (§9.3): Penalty_NR",
                    "The rule in force is `firth`",
+                   "**Changed after the FINAL output of 2026-10-10 was read**",
                    "a Firth-penalized fit of the same model decides: ",
                    "- Sensitivity lines (the rules not in force, ruling of 2026-10-10",
                    "is read by the rule in force (`firth`)", "the arm coefficient",
@@ -990,6 +1015,7 @@ def test_bayesian_glmm_fits_the_9_1_design():
     assert out["ci90"][0] < out["median"] < out["ci90"][1]
     assert out["ci95"][0] <= out["ci90"][0] and 0 <= out["p_positive"] <= 1
     assert out["rhat"] > 0 and out["ess_bulk"] > 0 and isinstance(out["converged"], bool)
+    assert isinstance(out["divergences"], int) and out["divergences"] >= 0
     assert set(out["versions"]) == {"bambi", "pymc", "arviz"}
     # no outcome variation: nothing to fit
     flat = df.assign(success=1)
@@ -1310,6 +1336,50 @@ def test_firth_approaches_ml_as_n_grows():
     np.testing.assert_allclose(10 * diffs[10], 100 * diffs[100], rtol=0.05, atol=1e-3)
 
 
+def _ceiling_case(templates: int = 200, seed: int = 0):
+    """y, template codes and the §9.1 design (F-0/W-0 x R x D x N, one episode per template and
+    cell), shaped like a sweep at its ceiling: every cell is all 1 except W-0's
+    not-recoverable far cells (about 7.5% success) and one failure each in F-0
+    derived-nonrec-far and W-0 derived-nonrec-near. Only the templates with outcome variation
+    are kept, as glm_91_firth keeps them."""
+    rng = np.random.default_rng(seed)
+    rows = np.array([(t, w, r, d, n) for t in range(templates) for w in (0, 1) for r in (0, 1)
+                     for d in (0, 1) for n in (0, 1)], float)
+    _, w, r, d, n = rows.T
+    y = np.ones(len(rows))
+    lost = (w == 1) & (r == 0) & (n == 0)
+    y[lost] = (rng.random(int(lost.sum())) > 0.925).astype(float)
+    for one in ((w == 0) & (r == 0) & (d == 1) & (n == 0),
+                (w == 1) & (r == 0) & (d == 1) & (n == 1)):
+        y[rng.choice(np.flatnonzero(one))] = 0.0
+    z, names = hh.factorial_design({"W-0": w}, r, d, n, target="W-0:R")
+    assert names[-1] == "W-0:R"
+    keep, codes, _ = hh.informative(y, rows[:, 0].astype(int))
+    return y[keep], codes, z[keep]
+
+
+def test_firth_converges_on_a_sweep_at_its_ceiling():
+    """The fit's steps converge linearly, and on a sweep with most cells at 100% (luna's shape)
+    they can need more than 100 steps: this seed's case needs 108, so the old cap of 100 returns
+    None ("did not converge") here, as it did on luna's sweep (103 steps). Under the cap of
+    1,000 the fit converges, to a stationary point of the penalized log-likelihood written
+    afresh (numerical gradient) that no direction tried increases."""
+    y, codes, z = _ceiling_case()
+    assert hh.firth_fe_logit(y, codes, z, max_iter=100) is None
+    fit = hh.firth_fe_logit(y, codes, z)
+    assert fit is not None
+    b = np.concatenate(fit)
+    assert np.isfinite(b).all() and 0 < b[-1] < 15                 # W-0 x R: finite, positive
+    x = np.column_stack([np.eye(codes.max() + 1)[codes], z])
+    def f(v):
+        return _minus_penalized(v, x, y)
+    assert np.max(np.abs(_num_grad(f, b))) < 1e-5
+    rng = np.random.default_rng(1)
+    for _ in range(20):
+        u = rng.normal(size=len(b))
+        assert f(b + 1e-3 * u / np.linalg.norm(u)) > f(b)
+
+
 # --- H3's model check: the registered model decides (B1) ----------------------------------------
 
 def _h3_frame(templates: int = 60, seed: int = 7) -> pd.DataFrame:
@@ -1352,6 +1422,63 @@ def test_h3_model_check_is_the_registered_model():
     assert mc["agrees"] is False and mc["powersim_agrees"] is True and mc["powersim_disagrees"]
     ps_model = hh.h3_glm_powersim(df)
     assert ps_model["ame"] is not None and ps_model["arm_logit"] is not None
+
+
+def _h3_one_failure(templates: int = 200, failing: int = 145) -> pd.DataFrame:
+    """H3's cells at the ceiling, as on luna's sweep: every episode succeeds except F-0's
+    derived-nonrec-far episode of template `failing`."""
+    rows = []
+    for t in range(templates):
+        for cell in ("F-0", ST):
+            for tc in (ONR, DNR):
+                fact, _, dist = tc.split("-")
+                rows.append({"cell": cell, "variant": BASE, "task_cell": tc, "fact": fact,
+                             "recoverable": False, "distance": dist, "template": t,
+                             "success": int(not (cell == "F-0" and tc == DNR
+                                                 and t == failing))})
+    return pd.DataFrame(rows)
+
+
+def test_h3_model_check_with_one_template_with_outcome_variation():
+    """One template with outcome variation is enough for the model's point estimate (changed
+    B, 2026-10-10; it used to need two, and H3's check then had no estimate). The arm's logit
+    runs off to +inf (statsmodels' stopping point), and the AME is that template's two pairs'
+    effect over all 2T pairs: 1/(2T), the observed Delta_H3. The Wald quantities need two
+    templates and are absent. With no template varying there is no fit, and the AME is 0."""
+    df = _h3_one_failure()
+    lit = hh.h3_glm_literal(df)
+    assert lit["n_templates_informative"] == 1 and lit["n_pairs_informative"] == 2
+    assert lit["logit_status"] == hh.PLUS_INF and lit["estimate"] > 10
+    assert lit["se"] is None and "point estimates only" in lit["note"]
+    assert lit["ame"] == pytest.approx(1 / 400, abs=1e-7)
+    assert lit["ame_informative"] == pytest.approx(0.5, abs=1e-7)
+    ps_model = hh.h3_glm_powersim(df)
+    assert ps_model["n_templates_informative"] == 1
+    assert ps_model["ame"] == pytest.approx(1 / 400, abs=1e-7)
+    an = hh.Analysis(df, 200, hh.resample_indices(200, 1, 200))
+    mc = hh.h3_reading(an, lit, ps_model)["model_check"]
+    assert mc["agrees"] is True and mc["powersim_agrees"] is True
+    assert mc["n_pairs_informative"] == 2
+    flat = df.assign(success=1)
+    lit0 = hh.h3_glm_literal(flat)
+    assert lit0["coefficients"] is None and lit0["ame"] == 0.0
+    assert lit0["n_pairs_informative"] == 0
+    assert lit0["note"] == "no template with outcome variation: no fit"
+    assert hh.h3_glm_powersim(flat)["ame"] == 0.0
+
+
+def test_emulate_reports_the_route_power_sims_fit_took():
+    """power_sim's emulation (`ps._fe_logit_mle`) falls back to statsmodels when its Newton
+    steps fail, as on a sweep at its ceiling; `emulate` returns the same fit and says which
+    route gave it (changed C, 2026-10-10)."""
+    y, codes, z, _ = _firth_case(*FIRTH_CASES["8 cells"])
+    fit, route = hh.emulate(y, codes, z)
+    assert route == "newton"
+    np.testing.assert_array_equal(fit[1], ps._fe_logit_mle(y, codes, z)[1])
+    y, codes, z = _ceiling_case()
+    fit, route = hh.emulate(y, codes, z)
+    assert route == "statsmodels"
+    np.testing.assert_array_equal(fit[1], ps._fe_logit_mle(y, codes, z)[1])
 
 
 def test_h3_verdict_when_the_ci_lies_above_the_bound():

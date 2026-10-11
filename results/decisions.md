@@ -652,3 +652,139 @@ Claude put two options to the researcher:
 **Cost.** Block `3-arc` has spent $77.94: SB26 S1 $13.12, FT09 S2 $3.47 and $13.79, FT09 S1 $6.13, R11L S2 $6.43 and $35.00. The 4 R7 runs are forecast at about $45 each at D27's rule, about $180. That fits the $470 limit; the limit is unchanged.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts R7 and A8, patch 0018 and the regenerated freeze record, the run list and the pilot waiver. It adds no spending approval beyond block `3-arc`'s existing $470. This entry's pull request is $0.
+
+## 2026-10-10: Correction to the closing entry of luna's sweep: one §13 re-run
+**The error.** The entry "luna's sweep closed; the H1/H3 analysis and the researcher's rulings" (merged in PR #55) said that no §13 re-run was pending. That was wrong. Claude had checked only the runs' endings (`COMPLETED`) and exclusion counts (0), not each episode's ending.
+- One episode of the 9,680 had ended `API_ERROR`: `main-000138/derived-nonrec-far/base` in the F-0 run `20261010T055742Z-F-0-gpt-6-luna`.
+- The cause was a Flex 429: "Flex processing is temporarily unavailable".
+- `analysis.persistgym_h1h3` found it on its first run and refused, before computing anything: "1 of 1600 repeat-0 episodes are pending ... §13 re-runs it once". No result of the sweep was read.
+
+**The re-run** (researcher's go-ahead, 2026-10-10: "go ahead"). PREREG §13 re-runs a transport failure once.
+- The run, under block `3-persistgym`: `harnesses run --cell F-0 --model gpt-6-luna --split main --start 138 --n 1 --experiment persistgym --approved-block 3-persistgym --planned-usd 0.5`.
+- Template 138's F-0 episodes in all 8 task cells, the whole template as the luna guard requires: run `20261010T202127Z-F-0-gpt-6-luna`, `COMPLETED`, $0.04 billed.
+- Under harnesses/DESIGN.md §7.8 the first final record of each key counts. So this run supplies only the record of `main-000138/derived-nonrec-far/base`, and its 7 other episodes are duplicates that are dropped.
+
+**The analysis declares it:** `--rerun 20261010T202127Z-F-0-gpt-6-luna=20261010T055742Z-F-0-gpt-6-luna`, with this entry and the closing entry as the `--sweep-closed` reference. The sweep is now closed with this re-run, and nothing else is pending.
+
+**Spend:** block `3-persistgym` $73.75 of $100. This entry's pull request is $0.
+
+## 2026-10-10: H1's model check: the Firth fit's iteration cap, a code defect found after the result was read; both outputs reported (the researcher's decision)
+**What happened.** The FINAL analysis of luna's sweep, `results/persistgym_h1h3/20261010T205230Z/` (commit 313d57d), labelled H1 "inconclusive". The Holm test rejected, but the model check did not agree.
+- Under the ruling of 2026-10-10 ("Firth for H1"), the check reads the W-0 × R coefficient of a Firth-penalized fit of the §9.1 GLM, because the ordinary fit's coefficient is not finite.
+- `firth_fe_logit` returned "the Firth fit did not converge", and the module reads a failed fit as "does not agree".
+
+**The cause: the iteration cap.** The fit's steps use the likelihood's Fisher information, not the Hessian of the penalized log-likelihood, so they converge linearly, not quadratically.
+- On luna's sweep, with 12 of the 16 cells of the GLM at 100%, the fit needed **103 steps** to reach its tolerance (the largest step under 1e-8). The cap was 100.
+- After 100 steps the W-0 × R coefficient was already 7.0862 (7.08616 at convergence), and its last step was 1.4e-8 against the 1e-8 tolerance. Every step was a full step: the fit moved steadily to the same point and never needed step halving. (The fix commit's message says 102 steps; it counted from zero.)
+- On synthetic sweeps of the same shape at 200 templates, the fit needed between 65 and 150 steps in the draws checked.
+
+**Seen before the fix:** everything in the FINAL output, among it H1's and H3's results, the Bayesian GLMM and the sensitivity lines. The fix was made after the result was read, and every report says so.
+
+**Decision (researcher, 2026-10-10):** "fix Firth and report both".
+
+**The fix** (commit 0dbff43, in this PR).
+- `firth_fe_logit`'s `max_iter` goes from 100 to **1,000**. The tolerance, the steps, the rows, the model and the rule are unchanged.
+- A new test, `test_firth_converges_on_a_sweep_at_its_ceiling`, reproduces the failure on a synthetic sweep of luna's shape: the old cap returns None (that case needs 108 steps), and the new one converges to a stationary point of the penalized log-likelihood, written afresh in the test, that no direction tried increases.
+- The analysis tests pass (317).
+- **Independent check** (a separate agent, on the real rows, with no code from `firth_fe_logit`): an exact Newton and trust-region maximisation, with its own analytic gradient and Hessian and the log-determinant by `slogdet`, gave W-0 × R = **7.086161**, against `firth_fe_logit`'s 7.086161 (a difference of 2e-7).
+  - Its penalized log-likelihood at the optimum, -177.5840163, is the same, and its largest gradient there is 4e-13.
+  - The Hessian of minus the penalized log-likelihood is positive definite there (smallest eigenvalue 0.0044), so the point is a strict local maximum. A second start, from a random point, reached the same point.
+  - A third check (L-BFGS-B) reached the same penalized log-likelihood, with slopes within 8e-6.
+
+**The two outputs.** The second, `results/persistgym_h1h3/20261010T214137Z/` (commit 0dbff43), ran with the same inputs, arguments and seeds.
+
+| Output | Firth W-0 × R | H1's model check | H1 | H3 |
+|---|---|---|---|---|
+| `20261010T205230Z`, as computed | did not converge | does not agree | inconclusive | inconclusive |
+| `20261010T214137Z`, with the fix | +7.086 | agrees | **supported** | inconclusive |
+
+- **Everything else is the same**, field by field in `h1h3.json`: Δ_H1, Δ_H3, every interval, the Holm tests, the predictions, the sensitivity lines and the exploratory results. The one exception is the Bayesian GLMM.
+- **The Bayesian GLMM did not reproduce the FINAL's digits.** Its code, seed and data are unchanged.
+  - The FINAL run gave a W-0 × R posterior median of 5.280 (90% [2.980, 7.457]); the corrected run gave 5.253 (90% [2.857, 7.523]). P(> 0) = 1.000 both times.
+  - Four later fits gave 5.253 to every digit: the corrected run, an audit agent's fit and two fits in one scratch process. So the fit is deterministic now, and the cause of the FINAL's different digits was not found.
+  - Each later fit logged 2 divergent transitions after tuning, out of 4,000 draws. The module does not record divergences.
+  - It is a sensitivity model that decides nothing, and it agrees in sign either way.
+- **H3 is unchanged by this fix:** "inconclusive" in both outputs, with its non-inferiority prediction holding. Its model check returned no estimate for a different reason, which Claude has put to the researcher separately: only 1 of the 200 templates has any failure in H3's cells, and the module fits nothing with fewer than 2 such templates.
+
+**Which output counts.** Claude proposes:
+- The corrected output gives H1's confirmatory label: **supported**. The ruling chose Firth's estimate, and the corrected run computes it; the as-computed label came from the iteration cap, not from the data or the rule.
+- Every report of H1 also gives the as-computed label, the cause and that the fix came after the result was read.
+- H3 is not part of this decision.
+
+**Reporting defects found in the review, not fixed here.** None changes a number or a label.
+- When the Firth fit fails, `summary.md` prints "n/a" without the reason; the reason was only in `h1h3.json`.
+- `summary.md` prints "the same sign as the model check" even when the check has no sign. In the FINAL output it says this of the stand-in, the W-n-0 fit and the Bayesian GLMM, when the model check had no sign.
+- The "power_sim emulation" cross-check of the §9.1 GLM did not run independently: power_sim's Newton fit diverged and fell back silently to statsmodels, so it compares statsmodels with itself.
+- The Bayesian GLMM's divergences are not recorded.
+
+Claude proposes fixing these together with H3's question.
+
+**What it does not show.** The fix does not change H1's evidence. The effect, its interval and the Holm test are the same in both outputs; only the label's second condition changes. A reader who discounts any change made after seeing the data should read H1 as in the first output: "inconclusive, the model check failed to converge", with the same effect.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the fix and the proposal above. The researcher may instead keep the as-computed label as H1's confirmatory one, with the corrected run as a labelled sensitivity line. It adds no spending approval. This entry's pull request is $0.
+
+## 2026-10-10: H3's model check with one template with outcome variation, a code limit found after the result was read; both outputs reported (the researcher's decision); the summary's wording
+**What happened.** H3 read "inconclusive" in the FINAL output and in the Firth-fixed output (`20261010T205230Z`, `20261010T214137Z`). Its Holm test rejected, but its model check had no estimate, which reads as "does not agree".
+- **The check, as §9.4 registers it:** a binomial GLM with template fixed effects and the arm (single-turn vs F-0) on the H3 cells, whose probability-scale Δ_H3 must be below 5pp. That Δ_H3 is the arm's average marginal effect (AME), reading 15.
+- **The data:** the single-turn control scored 400/400 and F-0 399/400. Only template 145 has outcome variation: its F-0 derived-nonrec-far episode failed.
+- **The fit:** `fe_logit_fit` refused any fit with fewer than 2 templates with outcome variation. So no model was fitted, and the check had no estimate.
+
+**The cause.** The two-template minimum is not in PREREG.
+- It came from power_sim's `h3_glm_ame`, where it serves the cluster-robust standard error, whose G/(G − 1) factor needs two clusters.
+- The check reads only the point estimate. §9.1 says only the GLM's sign and point estimate enter a decision.
+- With two or more templates the module already reads statsmodels' point estimate, including its stopping point under separation.
+- With no template varying, the old code gave an AME of 0, which agrees. So the old rule agreed with zero failing templates and did not agree with one.
+- Claude's earlier statement to the researcher, that the model "can't be fitted at all" at the ceiling, was wrong. An audit agent found the guard.
+
+**Seen before the fix:** everything in both earlier outputs. The fix was made after the result was read, and every report says so.
+
+**Decision (researcher, 2026-10-10):** "At the very least H3 should be treated as H1: fix the rule and report both. It is nonsense to report "inconclusive" when the prediction clearly holds."
+
+**The fix** (commit bb188ce, with the review's fixes in 5c41d3e, in this PR).
+- **One template is enough to fit the model** in `fe_logit_fit` and `h3_glm_powersim`. The model, rows, rule and threshold are unchanged.
+- **Still two templates** for the cluster-robust Wald quantities, which are absent with one, and for the Firth fit and the H1 stand-in. Neither of those arises on luna's sweep, where H1's GLM has 194 templates with outcome variation.
+- **New tests:** H3 at the ceiling with one failing template; the emulation's route; a failed Firth fit's summary text; the one-template summary text; and the Bayesian divergences. The new tests fail on the old code. The analysis tests pass (319).
+- **Reviews:** a fidelity review against PREREG and a code review found no blocker. Their findings are applied in 5c41d3e.
+- **Independent check:** a separate agent selected the rows itself and refitted the model three ways: statsmodels through a formula, its own Newton fit, and the analytic limit. With no code from the module, it got:
+  - the AME over all 400 pairs: **1/400 = +0.25pp**, equal to the observed Δ_H3;
+  - the AME over the 2 pairs of template 145: 0.5;
+  - the arm's logit: +∞. statsmodels stops at 20.57; the AME is within 1e-11 of its limit once the logit passes 20.
+  - power_sim's model (with a derived-cell term) gives the same 1/400 in the limit.
+  - The module's values agree to 6e-12.
+- **Sensitivity:** a Firth fit of the same H3 model gives an arm logit of 1.61 (logit of 2.5/3, Firth's add-a-half on the saturated template) and an AME of +0.17pp. So the label does not depend on reading statsmodels' stopping point.
+
+**The summary's wording** (bb188ce and 5c41d3e; the reporting defects listed in the entry above). No number changes.
+- The summary now gives the reason when a fit has no estimate.
+- It says "no sign to compare" where an estimate has no sign. In both earlier outputs the W-n-0 sensitivity fit's line said "the same sign as the model check", although that fit's limit is undefined (∞ − ∞). In the FINAL output the stand-in's and the Bayesian GLMM's lines said the same, although the model check had no sign.
+- It says that power_sim's emulation of the §9.1 GLM fell back to statsmodels, so it is no independent check.
+- It records the Bayesian GLMM's divergent transitions: 2 after tuning, out of 4,000 draws.
+- It says that H3's check is saturated with one template (below), and that power_sim's own H3 check gives no estimate there.
+- The achieved-power caveat no longer claims a direction (it said "may overstate").
+- Its header lists the changes made after the FINAL output was read.
+
+**The three outputs**, with the same inputs, arguments and seeds:
+
+| Output | Commit | H1's model check | H3's model check | H1 | H3 |
+|---|---|---|---|---|---|
+| `20261010T205230Z`, as computed | 313d57d | Firth did not converge | no estimate | inconclusive | inconclusive |
+| `20261010T214137Z`, Firth fix | 0dbff43 | Firth +7.086, agrees | no estimate | **supported** | inconclusive |
+| `20261010T232227Z`, both fixes | 5c41d3e | Firth +7.086, agrees | **+0.25pp**, below 5pp | **supported** | **supported** |
+
+- **Field by field in `h1h3.json`,** the third output differs from the second only in H3's model check and verdict, the new fields and the wording. Δ_H1, Δ_H3, every interval, the Holm tests and the exploratory results are the same in all three. The Bayesian GLMM reproduced the second output's digits.
+- **An intermediate run at bb188ce** (`20261010T223420Z`) had every number of the third and the older wording. It was superseded by the review's wording fixes and is not kept.
+
+**Which output counts.** Claude proposes:
+- The third output, `20261010T232227Z`, gives both confirmatory labels: H1 supported, H3 supported.
+- Every report also gives the as-computed labels ("inconclusive" for both), the two causes and that both fixes came after the result was read.
+- This replaces the proposal in the entry above, which named the second output.
+
+**What it does not show.**
+- **The evidence is unchanged.** Δ_H3 = +0.25pp (1/400), 90% CI [0.0, 0.75]pp, and the Holm test are the same in all three outputs; the summary rounds these to +0.2 and +0.7. Only the label's second condition changes.
+- **H3's model check adds nothing here.** With one template varying, the model is saturated in it, so its AME is the observed Δ_H3 by construction. The check cannot disagree with the bootstrap's point estimate. Its agreement rests on reading 15, made blind, which averages over all 400 pairs; averaged over the informative pairs only, the AME is +50pp.
+- **The quoted achieved power** describes the design's scenarios, not this sweep, and supports neither label.
+  - In power_sim's own scenarios, a review agent's re-simulation (4,000 sweeps per scenario) found no sweep with one or fewer templates varying in H3's cells.
+  - power_sim's own H3 check gives no estimate on luna's data, so the simulated rule would reproduce the as-computed "inconclusive".
+- **Both arms are at the ceiling.** H3 bounds the cost of multi-turn structure at luna's level on these tasks. It cannot see a cost that would appear on harder tasks.
+- **Changes made after seeing the data.** A reader who discounts them should read H1 and H3 as in the first output: "inconclusive", with the same effects.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the fix, the wording changes and the proposal above. It adds no spending approval. This entry's pull request is $0.

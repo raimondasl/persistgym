@@ -806,3 +806,60 @@ Claude proposes fixing these together with H3's question.
 **Next:** once this PR is merged, Claude runs the analysis once. The output is FINAL with 10,000 resamples, the pinned published file and the 8 counted runs. Claude commits it to `results/arc_h5/<UTC>/` and reports to the researcher.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts the two rulings above. The researcher may instead choose `"firth"` before the first run (one constant in the module). It adds no spending approval. This entry's pull request is $0.
+
+## 2026-10-11: H5 results (FINAL), the independent check, and the summary's wording after it
+**The run.** Claude ran `analysis.arc_h5` once on the merged code (PR #58), with the researcher's rulings: `ml_limit_or_firth`, and SEED + 40. The researcher confirmed them in chat ("Rulings are fine").
+- The output is `results/arc_h5/20261011T041028Z/` (commit 93d34f0), FINAL: 10,000 resamples, the pinned published file and the 8 counted seed-1 S0/S4 runs. $0.
+- H5 is descriptive (§9.4). Every verdict is on the point estimate.
+
+**Results** (A_b: the Adapter-minus-Standard average marginal effect in P(clear | reached) in band b; C = A_deep − A_early; 90% game-cluster bootstrap intervals):
+
+| Reading | A_early | A_deep | C | 90% interval of C | Decided by |
+|---|---|---|---|---|---|
+| Published, high effort (registered) | +0.136 | +0.439 | **+0.304** | [+0.164, +0.458] | ML limit (Firth: C = +0.264) |
+| Same, error endings dropped (sensitivity) | +0.136 | +0.357 | **+0.221** | [+0.051, +0.409] | ML limit (Firth: +0.194) |
+| Ours, S0 vs S4, 4 games (registered) | +0.000 | +0.749 | **+0.749** | [+0.667, +1.000] | Firth (ML limit not identified) |
+
+- **Both registered readings are positive, as H5 predicts.** The published reading is positive under both estimators. The verdict is descriptive.
+- **Published raw rates** (cleared/reached):
+  - early: Standard 39/47, Adapter 47/50;
+  - level 3: Standard 11/17, Adapter 21/22;
+  - deep: Standard 15/26, Adapter 63/75.
+- **Ours:** early 8/8 for both. Deep: S0 0/2, S4 11/11.
+- **Ours, the ML limit:** C is not identified there because of CD82. CD82's S0 never reached a deep level, all its other rows were cleared, and S0's only deep rows (FT09 and SB26, level 4) were not. The ML-limit C lies between +0.769 and +1.000 depending on the path, so it is positive on every path.
+- **Exploratory** (§9.10; sign only, no verdict):
+  - published medium effort: C = +0.317 (Firth);
+  - published low effort: C = +0.255 (Firth);
+  - common support, the published games where both harnesses reached a deep level: C = +0.396 (11 games).
+  - All are positive.
+
+**The independent check.** Two separate agents recomputed the readings from the raw files without the module's code: the published `per_run.csv`, and our runs' scorecards.
+- The band and per-level tables agree exactly.
+- Both estimators' A_early, A_deep and C agree to about 1e-7.
+- With the same seed and draw procedure, every bootstrap interval agrees to 8 decimals: the rule in force, Firth's, and the ML limit's over the resamples where it is identified.
+- The count of resamples where the ML limit is not identified agrees: 263 published and 6,255 ours. The error-ending sensitivity's dropped rows and C agree too.
+
+**The summary's wording after the FINAL output.**
+- **What happened:** a wording review of `summary.md` found no overclaim but several omissions.
+- **The change** (commit 5cdc2c4): the module now states these as caveats computed from the data, with tests.
+- **The second output:** `results/arc_h5/20261011T055415Z/` has the same numbers field by field (only metadata and three new fact fields differ: `facts`, `contrast_by_source`, `defined_drawing_game`) and the revised text.
+- **Proposal:** Claude proposes the second output as the one to cite. The first is kept.
+
+**What it does not show** (both outputs; the second states it in its summary):
+- **At most one uncleared row per run.** Levels are played in order, so a run's only uncleared row is the level it stopped on.
+  - In the published runs, all 25 Standard runs stopped on a reached level; 9 Adapter runs won.
+  - So the band rates largely restate where runs stopped and which runs won. The rows are not independent trials.
+- **The logit scale.** On the published runs the logit-scale interaction's 90% intervals include 0 under both estimators: Firth [−0.73, +1.94], ML limit [−0.55, +2.71].
+  - Standard's early-band rate (0.830) leaves less room than its deep-band rate (0.577).
+  - So the published result does not separate "the advantage grows with depth" from "a constant logit-scale advantage, compressed where rates are high".
+- **Not blind.** The published reading is in effect computed on seen data: the operational slice revealed each run's last level, and these are the runs whose gap motivated the study and selected the path games. Our runs were seen before R6.
+- **Our runs are thin and selected.**
+  - C rests on 2 S0 deep rows: FT09 and SB26, level 4, both budget endings.
+  - The replaced FT09 S0 original cleared levels 4 and 5.
+  - The 4 games were chosen as ones where the Adapter helps.
+  - With 4 games there are only 35 distinct resamples.
+- **Extrapolation.** 29% (published) and 23% (ours) of the deep rows are in games where only one harness reached a deep level, through the model's counterfactual.
+- **Error endings.** Four of Standard's 11 published deep failures are inferred error or close endings. Without them C is +0.221.
+- **Conditioning on reached** compares the harnesses over different runs. A_deep is not the effect on clearing a fixed level.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the second output's wording as the one to cite. No number changes. It adds no spending approval. This entry's pull request is $0.

@@ -1,0 +1,91 @@
+{
+  "experiment": "arc_h5",
+  "run_id": "20261011T055425Z",
+  "cell_or_config": "h5",
+  "config": {
+    "prereg": "PREREG.md §3 H5, D35, §17.6 change 4, §17.5 'Not H5'",
+    "bands": {
+      "early": [
+        1,
+        2
+      ],
+      "level_3": [
+        3
+      ],
+      "deep": "levels >= 4"
+    },
+    "registered_effort": "high",
+    "n_boot": 10000,
+    "level": 0.9,
+    "bootstrap_seed": 4086943125952605574,
+    "primary_estimator": "ml_limit_or_firth",
+    "alternative_rule": "firth",
+    "published_per_run_sha256": "ad34bec8bb88de5283e9c823fd75743393a03d961c8766d305201633d6b24d44",
+    "data_sets": [
+      "published",
+      "ours"
+    ],
+    "exploratory": true,
+    "status": "FINAL",
+    "inputs": {
+      "results_root": "results",
+      "published_slice": "results/arc_public_ops/20261001T185155Z",
+      "published_per_run_sha256": "ad34bec8bb88de5283e9c823fd75743393a03d961c8766d305201633d6b24d44",
+      "published_sha256_matches_pinned": true,
+      "draw_json": "results/draw/20261002T033145Z/draw.json",
+      "costs_csv": "results/costs.csv",
+      "arc_path_folders": [
+        "results/arc_path/20261006T144656Z-S4-cd82-s1",
+        "results/arc_path/20261006T171726Z-S0-ft09-s1",
+        "results/arc_path/20261007T133444Z-S4-sb26-s1",
+        "results/arc_path/20261007T143700Z-S0-sb26-s1",
+        "results/arc_path/20261008T013832Z-S0-cd82-s1",
+        "results/arc_path/20261008T134155Z-S0-r11l-s1",
+        "results/arc_path/20261008T212807Z-S4-r11l-s1",
+        "results/arc_path/20261009T020602Z-S4-ft09-s1",
+        "results/arc_path/20261009T030646Z-S0-ft09-s101"
+      ]
+    }
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": {
+    "bootstrap": 4086943125952605574
+  },
+  "started_utc": "2026-10-11T05:54:25+00:00",
+  "finished_utc": "2026-10-11T06:10:23+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "h5.json",
+    "summary.md"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261006T144656Z-S4-cd82-s1",
+    "20261007T133444Z-S4-sb26-s1",
+    "20261007T143700Z-S0-sb26-s1",
+    "20261008T013832Z-S0-cd82-s1",
+    "20261008T134155Z-S0-r11l-s1",
+    "20261008T212807Z-S4-r11l-s1",
+    "20261009T020602Z-S4-ft09-s1",
+    "20261009T030646Z-S0-ft09-s101"
+  ],
+  "config_hash": "2df0b95133a15af93e4104bc69ee8ea2ca2cec828a5fc0d9242a97ed10dde5dd",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "5cdc2c48c92dba61ecf473662908cbf03353ae1a",
+  "git_dirty": false
+}

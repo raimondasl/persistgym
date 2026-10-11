@@ -1251,13 +1251,18 @@ def test_the_summary_sections(full_run):
     text = full_run["text"]
     order = ["# H5 on ARC: the Adapter advantage by level depth",
              "Descriptive only; H5 is outside the Holm family (§9.4).", "**Status: PROVISIONAL.**",
-             "> **Definitions.**", "## Published runs, high effort (registered; not blind)",
+             "> **Definitions.**",
+             "## Published runs, high effort, Gemini 3.8 Flash (registered; not blind)",
              "## Our runs, S0 vs S4 on the 4 path games", "## Exploratory (§9.10)",
              "## Checks", "## What it does not show",
              "written and tested on synthetic data only before its first real run"]
     at = [text.index(s) for s in order]
     assert at == sorted(at)
-    assert "RNG SEED + 40 = " in text and "4 games give only 35 distinct resamples" in text
+    assert "RNG SEED + 40 = " in text and "With 4 games there are 35 distinct resamples" in text
+    assert "games give only" not in text                     # the duplicate line is gone
+    assert "*lcm*, fitted by the limiting conditional model" in text
+    assert "*lcm-extrapolated*" in text and "*separated-extrapolated*" in text
+    assert "-0.000" not in text
     assert "**Verdict** (rule in force `ml_limit_or_firth`" in text
     assert ("> Estimator in force: `ml_limit_or_firth` (the maximum-likelihood limit where C is "
             "identified, else Firth's penalized logit for that reading or resample; the ruling: "
@@ -1269,7 +1274,9 @@ def test_the_summary_sections(full_run):
                   "**Conditioning on reached is selection by the harness.**",
                   "**Extrapolation.**", "**The estimator matters at this size.**",
                   "**Endings.**", "**Our 4 games are selected, so our reading is conditional.**",
-                  "**The data sets overlap.**", "**Descriptive only.**", "**Narrow.**"):
+                  "**The data sets overlap.**", "**Descriptive only.**", "**Narrow.**",
+                  "**At most one uncleared row per run.**", "**Scale.**",
+                  "**Our contrast rests on few rows.**"):
         assert point in text
     shown = text.split("## What it does not show")[1]
     assert "published high-effort gap ≥ 20, both published runs ≤ $60, and a normal " \
@@ -1286,8 +1293,11 @@ def test_unregistered_quantities_are_labelled_exploratory(full_run):
     assert raw and all("(exploratory: no game adjustment, not the registered model" in x
                        for x in raw)
     heads = [x for x in text.splitlines() if x.startswith("| Estimator | A_early")]
-    assert heads and all("| Fraction C ≤ 0 (descriptive, not a test) |" in x for x in heads)
-    assert "(exploratory; H5 registers no such fraction)" in text
+    assert heads and all("| Fraction C ≤ 0 (exploratory; not a test) |" in x for x in heads)
+    assert "(H5 registers no such fraction)" in text
+    for line in ("- Games by deep support (diagnostic, not registered): ",
+                 "Per game (diagnostic, not registered; the rule in force takes its Δs from `"):
+        assert text.count(line) == 2                         # the two registered readings
     assert full_run["h"]["published"]["raw"]["contrast_label"] == h5.RAW_LABEL
     assert h5.RAW_LABEL.startswith("exploratory")
 
@@ -1347,6 +1357,403 @@ def test_the_default_output_folder_and_no_write(tmp_path):
     out = list((fx.root / "arc_h5").iterdir())
     assert len(out) == 1 and {p.name for p in out[0].iterdir()} == {"h5.json", "summary.md",
                                                                     "meta.json"}
+
+
+# --- J. the summary's computed notes (each condition true and false) -----------------------------
+
+THIN = {"G1": (3, 6), "G2": (3, 6), "G3": (2, 2), "G4": (2, 6)}
+"""Shaped like our runs: every early row cleared; Standard's only deep rows (G1 and G2, level 4)
+uncleared; G4's early and deep rows all cleared, and its Standard run reached no deep level, so
+the ML limit leaves G4's Standard-deep counterfactual not identified (+∞ − ∞)."""
+SIX_FT = {**SIX, "G7": (2, 6)}
+"""SIX plus a game whose early and deep rows are all cleared and whose Standard run reached no
+deep level (as FT09 in the published runs)."""
+
+
+def _h(published=None, ours=None, ours_runs=()) -> dict:
+    """The parts of the output `not_shown_lines` reads."""
+    return {"published": published, "ours": ours, "published_exploratory": None,
+            "ours_runs": list(ours_runs)}
+
+
+def test_a_value_that_rounds_to_zero_prints_without_a_minus_sign():
+    assert h5._f(-0.0) == h5._f(-1e-17) == h5._f(-0.0004) == h5._f(0.0) == "+0.000"
+    assert h5._f(-0.0006) == "-0.001" and h5._f(-0.25) == "-0.250"
+    assert h5._f(-0.0, signed=False) == "0.000" and h5._f(None) == "n/a"
+    assert h5._iv([-1e-9, 0.5]) == "[+0.000, +0.500]"
+
+
+def test_the_rules_interval_note_and_the_not_identified_cause_where_the_data_show_them():
+    r = h5.full_reading(spec_of(THIN), SEED, 60, "ml_limit_or_firth", [], sensitivity=True,
+                        common_support=False)
+    assert r["primary"]["source"] == "firth"
+    assert r["facts"]["ml_not_identified"] == [
+        {"game": "G4", "band": "deep", "harness": "standard", "game_rows": "all cleared",
+         "cell_rows": [{"game": "G1", "level": 4, "cleared": 0},
+                       {"game": "G2", "level": 4, "cleared": 0}],
+         "cell_outcome": "all uncleared"}]
+    # the per-estimator counts, recomputed resample by resample in drawn order
+    games = list(THIN)
+    per = h5.game_arrays([x for r_ in runs_of(THIN) for x in h5.level_rows(r_)], games)
+    idx = np.random.default_rng(SEED).integers(0, len(games), size=(60, len(games)))
+    by = {"ml_limit": [], "firth": []}
+    drawn = {g: Counter() for g in games}
+    for row in idx:
+        m = h5.resample_rows(per, games, row)
+        ml = h5.fit_ml_limit(m)
+        src, c = (("ml_limit", ml["contrast"]) if ml["contrast"] is not None or not ml["estimable"]
+                  else ("firth", h5.fit_firth(m)["contrast"]))
+        if c is not None:
+            by[src].append(c)
+            for g in {games[int(i)] for i in row}:
+                drawn[g][src] += 1
+    p = r["bootstrap"]["primary"]
+    for src, v in by.items():
+        assert p["contrast_by_source"][src]["n_defined"] == len(v) > 0
+        assert p["contrast_by_source"][src]["range"] == pytest.approx([min(v), max(v)])
+    assert p["defined_drawing_game"] == {g: {"ml_limit": drawn[g]["ml_limit"],
+                                             "firth": drawn[g]["firth"]} for g in games}
+    assert drawn["G4"]["ml_limit"] == 0 and drawn["G4"]["firth"] == len(by["firth"])
+    text = "\n".join(h5.reading_lines(r))
+    note = h5.mixed_estimator_lines(r)[0]
+    assert text.count(note) == 2                             # the reading and its sensitivity
+    assert (f"of the {len(by['ml_limit']) + len(by['firth'])} resamples where C is defined, "
+            f"{len(by['ml_limit'])} use the ML limit (C = +1.000) and {len(by['firth'])} use "
+            "Firth (C from ") in note
+    assert "Firth is used in exactly the defined resamples that draw G4." in note
+    lo, hi = p["contrast"]["interval"]
+    assert max(by["firth"]) < hi and lo < 1.0                # the ends come from different sides
+    assert (f"its lower end ({h5._f(lo)}) lies only in the range of the Firth resamples and its "
+            f"upper end ({h5._f(hi)}) only in that of the ML-limit resamples") in note
+    own = r["bootstrap"]["estimators"]["firth"]["contrast"]
+    assert (f"The interval of `firth` alone, the estimator of the point estimate (C = "
+            f"{h5._f(r['primary']['contrast'])}), is {h5._iv(own['interval'])}") in note
+    assert ("- Firth decides this reading: C is undefined in the ML limit (not identified in "
+            "the ML limit). The cause is G4. In G4, Standard reached no deep level, so "
+            "Standard's deep prediction there is a counterfactual; G4's early and deep rows are "
+            "all cleared (its game effect goes to +∞ in the ML limit) and Standard's deep rows, "
+            "all in other games (G1 level 4, G2 level 4), are all uncleared (the Standard-deep "
+            "effect goes to −∞), so the counterfactual is ∞ − ∞ and its limit depends on the "
+            "path.") in text
+    n_ml = r["bootstrap"]["estimators"]["ml_limit"]["contrast"]["n_defined"]
+    assert n_ml == len(by["ml_limit"])
+    assert (f"is over the {n_ml} resamples where it identifies C, none of which draws "
+            "G4.") in text
+    assert f"[+1.000, +1.000] (over {n_ml} resamples where it is identified)" in text
+    assert "| statsmodels stopping point (point only; path-dependent; not an estimate) |" in text
+
+
+def test_without_fallbacks_or_separation_the_conditional_notes_are_absent():
+    for rule in ("ml_limit_or_firth", "firth"):
+        r = h5.full_reading(spec_of(SIX), SEED, 30, rule, [], sensitivity=False,
+                            common_support=False)
+        text = "\n".join(h5.reading_lines(r))
+        assert h5.mixed_estimator_lines(r) == [] and h5.not_identified_text(r) is None
+        assert h5.per_game_notes(r) == []
+        assert "estimator is chosen resample by resample" not in text
+        assert "| statsmodels stopping point (point only) |" in text
+        assert "path-dependent; not an estimate" not in text
+        assert "resamples where it is identified" not in text
+        assert r["facts"]["ml_not_identified"] == []
+    assert r["bootstrap"]["primary"]["contrast_by_source"] is None     # rule "firth"
+
+
+def test_a_not_identified_counterfactual_without_the_simple_mechanism_is_stated_plainly():
+    r = {"harnesses": {"standard": "Standard", "provider_adapter": "Adapter"},
+         "bootstrap": None,
+         "facts": {"ml_not_identified": [
+             {"game": "G9", "band": "deep", "harness": "standard", "game_rows": "all cleared",
+              "cell_rows": [{"game": "G1", "level": 4, "cleared": 1},
+                            {"game": "G2", "level": 4, "cleared": 0}], "cell_outcome": "mixed"},
+             {"game": "G8", "band": "deep", "harness": "standard", "game_rows": "mixed",
+              "cell_rows": [], "cell_outcome": "no rows"}]}}
+    text = h5.not_identified_text(r)
+    assert text == ("The cause is G9 and G8. In G9, Standard reached no deep level, so "
+                    "Standard's deep prediction there is a counterfactual; G9's early and deep "
+                    "rows are all cleared (its game effect goes to +∞ in the ML limit), and the "
+                    "counterfactual's limit depends on the path. In G8, Standard reached no deep "
+                    "level, so Standard's deep prediction there is a counterfactual, and its "
+                    "limit depends on the path.")
+    assert "∞ − ∞" not in text
+    r["bootstrap"] = {"estimators": {"ml_limit": {"contrast": {"interval": [0.2, 0.4],
+                                                               "n_defined": 12}}},
+                      "primary": {"defined_drawing_game": {
+                          "G9": {"ml_limit": 0, "firth": 5}, "G8": {"ml_limit": 0, "firth": 3},
+                          "G1": {"ml_limit": 12, "firth": 6}}}}
+    assert h5.not_identified_text(r).endswith(
+        "The ML limit's own interval of C, [+0.200, +0.400], is over the 12 resamples where it "
+        "identifies C, none of which draws any of G9 or G8.")
+    r["bootstrap"]["primary"]["defined_drawing_game"]["G8"]["ml_limit"] = 1
+    assert "none of which" not in h5.not_identified_text(r)
+
+
+def test_the_per_game_notes_follow_the_data():
+    r = h5.full_reading(spec_of(SIX_FT), SEED, 20, "ml_limit_or_firth", [], sensitivity=False,
+                        common_support=False)
+    g7 = next(g for g in r["per_game"] if g["game"] == "G7")["estimators"]
+    assert r["facts"]["game_rows"]["G7"] == "all cleared"
+    assert g7["ml_limit"]["deep"]["delta"] == 0.0 and abs(g7["firth"]["deep"]["delta"]) >= 5e-4
+    notes = h5.per_game_notes(r)
+    assert len(notes) == 1
+    assert notes[0].startswith("In a game whose early and deep rows are all cleared (here G7), "
+                               "the ML limit sends the game's effect to +∞")
+    assert (f"G7 deep {h5._f(g7['firth']['deep']['delta'])} (a counterfactual: Standard reached "
+            "no deep level there)") in notes[0]
+    assert "\n\n" + notes[0] in "\n".join(h5.reading_lines(r))
+    thin = h5.full_reading(spec_of(THIN), SEED, 10, "ml_limit_or_firth", [], sensitivity=False,
+                           common_support=False)
+    notes = h5.per_game_notes(thin)
+    assert notes[0] == ("`ml_limit`'s Δ is n/a for G4 (deep): that counterfactual is not "
+                        "identified in the ML limit (the verdict's notes above).")
+    # the early cells are both all cleared, so both estimators' early Δs are 0: the note says the
+    # Δs differ only in the deep band
+    assert notes[1] == ("Separated cells, whose rows are all of one outcome: Standard early (all "
+                        "cleared), Adapter early (all cleared), Standard deep (all uncleared), "
+                        "Adapter deep (all cleared). The ML limit's predictions for such a cell's "
+                        "rows are that outcome (0 or 1), while Firth keeps them strictly between 0 "
+                        "and 1. The two estimators' per-game Δs differ in the deep band.")
+    text = "\n".join(h5.reading_lines(thin))
+    assert ("Per game (diagnostic, not registered; the rule in force takes its Δs from `firth` "
+            "in this reading):") in text
+    assert ("Per game (diagnostic, not registered; the rule in force takes its Δs from "
+            "`ml_limit` in this reading):") in "\n".join(h5.reading_lines(r))
+
+
+def test_the_uncleared_rows_bullet_counts_each_runs_uncleared_rows():
+    r = h5.full_reading(spec_of(SIX), SEED, 10, "firth", [], sensitivity=False,
+                        common_support=False)
+    f = r["facts"]["runs_by_harness"]
+    # SIX: Standard 1, 3, 4, 0, 5, 2 levels completed; Adapter 4, 2, 0, 6, 3, 5 (6 levels)
+    assert f["standard"] == {"n_runs": 6, "won": 0, "max_uncleared_rows": 1,
+                             "one_uncleared_row": 6, "no_uncleared_row_not_won": 0,
+                             "uncleared_by_band": {"early": 2, "level_3": 1, "deep": 3}}
+    assert f["provider_adapter"] == {"n_runs": 6, "won": 1, "max_uncleared_rows": 1,
+                                     "one_uncleared_row": 5, "no_uncleared_row_not_won": 0,
+                                     "uncleared_by_band": {"early": 1, "level_3": 1,
+                                                           "deep": 3}}
+    text = h5._uncleared_bullet(_h(published=r))
+    assert text.startswith("- **At most one uncleared row per run.** Levels are played in "
+                           "order")
+    assert ("on the published runs, Standard 6 of 6 (2 early, 1 at level 3, 3 deep) and 0 won, "
+            "Adapter 5 of 6 (1 early, 1 at level 3, 3 deep) and 1 won.") in text
+    assert "A_deep partly restates that Adapter won 1 of 6 games and Standard 0." in text
+    assert "stopped on a level they took no action on" not in text
+    amb = h5.full_reading(spec_of(AMB), SEED, 10, "firth", [], sensitivity=False,
+                          common_support=False)
+    assert amb["facts"]["runs_by_harness"]["standard"]["no_uncleared_row_not_won"] == 1  # G8
+    text = h5._uncleared_bullet(_h(published=amb))
+    assert "1 stopped on a level they took no action on" in text
+    both_won = h5.full_reading(spec_of({"G1": (6, 6), "G2": (3, 5)}), SEED, 10, "firth", [],
+                               sensitivity=False, common_support=False)
+    assert "partly restates" not in h5._uncleared_bullet(_h(published=both_won))
+
+
+def _scale_reading(civ, logit: dict, se, sd) -> dict:
+    return {"harnesses": {"standard": "Standard", "provider_adapter": "Adapter"},
+            "raw": {"bands": {"early": {"standard": {"rate": se}},
+                              "deep": {"standard": {"rate": sd}}}},
+            "bootstrap": {"primary": {"contrast": {"interval": civ}},
+                          "estimators": {n: {"logit_interaction": {"interval": iv}}
+                                         for n, iv in logit.items()}}}
+
+
+def test_the_scale_note_is_strong_only_when_cs_interval_excludes_0_and_a_logit_one_does_not():
+    both = {"firth": [-0.728, 1.937], "ml_limit": [-0.545, 2.709]}
+    s = h5._scale_text("published", _scale_reading([0.164, 0.458], both, 0.83, 0.577))
+    assert s.startswith("The published runs: C's 90% interval [+0.164, +0.458] excludes 0, but "
+                        "the logit-scale interaction's 90% intervals include 0 under both "
+                        "estimators (`firth` [-0.728, +1.937]; `ml_limit` [-0.545, +2.709]).")
+    assert ("Standard's early-band raw rate (0.830) is above its deep-band rate (0.577), so an "
+            "early-band difference has less room on the probability scale (at most 0.170 for "
+            "the raw rates) than a deep-band one (at most 0.423).") in s
+    assert "does not separate \"the advantage grows with depth\"" in s
+    s = h5._scale_text("published", _scale_reading([0.164, 0.458], both, 0.5, 0.6))
+    assert "less room" not in s and "does not separate" not in s
+    assert s.endswith("So the probability-scale result is not matched on the logit scale.")
+    one = {"firth": [-0.2, 1.0], "ml_limit": [0.1, 2.0]}
+    s = h5._scale_text("ours", _scale_reading([0.6, 1.0], one, 1.0, 0.0))
+    assert "the logit-scale interaction's 90% interval includes 0 under `firth`" in s
+    ceiling = (" Standard's early-band raw rate (1.000) is above its deep-band rate (0.000), so "
+               "an early-band difference has less room on the probability scale (at most 0.000 "
+               "for the raw rates) than a deep-band one (at most 1.000).")
+    s = h5._scale_text("ours", _scale_reading([0.667, 1.0], {"firth": [3.348, 4.657]}, 1.0, 0.0))
+    assert s == ("Our runs: C's 90% interval [+0.667, +1.000] excludes 0, and the logit-scale "
+                 "interaction's 90% interval (`firth` [+3.348, +4.657]) excludes 0." + ceiling)
+    # the ML limit gives no finite interaction and the cells are separated (our runs' shape):
+    # Firth's interval alone is said not to be logit-scale evidence, and the ceiling applies
+    r = _scale_reading([0.667, 1.0], {"firth": [3.348, 4.657], "ml_limit": None}, 1.0, 0.0)
+    for b, cells in (("early", ((8, 8), (8, 8))), ("deep", ((2, 0), (11, 11)))):
+        for h, (n, c) in zip(("standard", "provider_adapter"), cells, strict=True):
+            r["raw"]["bands"][b][h] = {**r["raw"]["bands"][b].get(h, {}), "reached": n,
+                                       "cleared": c}
+    s = h5._scale_text("ours", r)
+    assert s == ("Our runs: C's 90% interval [+0.667, +1.000] excludes 0, and the logit-scale "
+                 "interaction's 90% interval (`firth` [+3.348, +4.657]) excludes 0. The "
+                 "maximum-likelihood limit gives no finite logit-scale interaction here, so the "
+                 "only logit interval is Firth's, which rests on separated cells (the penalty sets "
+                 "it): it is not logit-scale evidence." + ceiling)
+    s = h5._scale_text("ours", _scale_reading([-0.1, 0.5], {"firth": [-1.0, 1.0]}, 0.9, 0.5))
+    assert "includes 0, and" in s and "does not separate" not in s
+    s = h5._scale_text("ours", _scale_reading([-0.1, 0.5], one, 0.9, 0.5))
+    assert s == ("Our runs: C's 90% interval [-0.100, +0.500] includes 0, and the logit-scale "
+                 "interaction's 90% intervals (`firth` [-0.200, +1.000]; `ml_limit` [+0.100, "
+                 "+2.000]) include 0 under `firth` only. Standard's early-band raw rate (0.900) is "
+                 "above its deep-band rate (0.500), so an early-band difference has less room on "
+                 "the probability scale (at most 0.100 for the raw rates) than a deep-band one (at "
+                 "most 0.500).")
+    assert h5._scale_text("ours", {"bootstrap": None}) is None
+
+
+def test_the_estimator_note_states_which_estimator_decides_each_reading():
+    flip = h5.full_reading(spec_of(FLIP), SEED, 10, "ml_limit_or_firth", [],
+                           sensitivity=False, common_support=False)
+    thin = h5.full_reading(spec_of(THIN), SEED, 30, "ml_limit_or_firth", [],
+                           sensitivity=False, common_support=False)
+    text = h5._estimator_bullet(_h(published=flip, ours=thin))
+    assert "Here they give C opposite signs in the published reading." in text
+    assert (f"The published verdict uses `ml_limit` (C = {h5._f(flip['primary']['contrast'])}; "
+            f"`firth` {h5._f(flip['estimates']['firth']['contrast'])}).") in text
+    assert (f"Our runs' verdict uses `firth` (C = {h5._f(thin['primary']['contrast'])}; "
+            "`ml_limit` leaves C undefined).") in text
+    assert ("Our runs' verdict rests on Firth alone, because the ML limit leaves C undefined "
+            "there.") in text
+    assert thin["primary"]["contrast"] < thin["raw"]["contrast"] == 1.0
+    assert (f"For our runs, Firth's C ({h5._f(thin['primary']['contrast'])}) is below the raw "
+            "pooled contrast (+1.000), and the rule's interval combines the two estimators (the "
+            "note under our runs).") in text
+    six = h5.full_reading(spec_of(SIX), SEED, 10, "ml_limit_or_firth", [], sensitivity=False,
+                          common_support=False)
+    text = h5._estimator_bullet(_h(published=six))
+    assert "Both give C in 1 of the 1 readings, and there they agree in sign." in text
+    assert "rest on Firth alone" not in text and "rests on Firth alone" not in text
+    assert "raw pooled contrast" not in text
+
+
+def test_the_endings_note_counts_standards_deep_failures_that_are_error_endings():
+    runs = runs_of(SIX)
+    i = next(k for k, x in enumerate(runs) if x.game == "G2" and x.harness == "standard")
+    runs[i] = run_levels("G2", "standard", 3, ending="ERROR_OR_CLOSED")   # stopped on level 4
+    spec = h5.Spec("s", "published", True, "high",
+                   {"standard": "Standard", "provider_adapter": "Adapter"}, list(SIX), runs)
+    r = h5.full_reading(spec, SEED, 10, "ml_limit_or_firth", [], sensitivity=True,
+                        common_support=False)
+    deep = [x for x in r["facts"]["standard_deep_rows"] if not x["cleared"]]
+    assert len(deep) == 3 and sum(x["ending_kind"] == "error" for x in deep) == 1
+    sc = r["sensitivity_error_endings"]["primary"]["contrast"]
+    assert h5._endings_extra(_h(published=r)) == (
+        " 1 of Standard's 3 uncleared deep rows in the published runs are levels a run ended on "
+        "by an error ending (ERROR_OR_CLOSED, inferred: G2 level 4), not a budget ending; the "
+        f"error-ending sensitivity drops them (1 row dropped in all) and gives C = {h5._f(sc)} "
+        f"instead of {h5._f(r['primary']['contrast'])}.")
+    six = h5.full_reading(spec_of(SIX), SEED, 10, "ml_limit_or_firth", [], sensitivity=True,
+                          common_support=False)
+    assert h5._endings_extra(_h(published=six)) == (
+        " None of Standard's 3 uncleared deep rows in the published runs ended by an error "
+        "ending.")
+
+
+def test_the_thin_contrast_note_on_our_runs(tmp_path):
+    fx = H5Fixture(tmp_path)
+    orig = fx.run6("FT09", "S0", 5, "TIME_BUDGET", median=500.0)     # a D20 incident
+    rerun = fx.run6("FT09", "S0", 3, "TIME_BUDGET", seed=101, rerun_of=orig)
+    for g, (s0, s4) in {"SB26": (3, 6), "R11L": (2, 2), "CD82": (2, 6)}.items():
+        fx.run6(g, "S0", s0)
+        fx.run6(g, "S4", s4, "GAME_WIN" if s4 == N else "ACTION_BUDGET")
+    fx.run6("FT09", "S4", 6, "GAME_WIN")
+    h = fx.compute(boot=10, exploratory=False)
+    o = h["ours"]
+    assert o["primary"]["source"] == "firth" and abs(o["primary"]["A_early"]) < 5e-4
+    text = h5._thin_ours_bullet(h)
+    assert text.startswith("- **Our contrast rests on few rows.** Neither S0 nor S4 failed an "
+                           "early level (S0 8/8 = 1.000, S4 8/8 = 1.000), so A_early is 0 (at "
+                           "three decimals) and C equals A_deep.")
+    assert ("S0's deep side is 2 rows (FT09 level 4, SB26 level 4), 2 of 2 not cleared, each "
+            "the level its run ended on, by a budget ending (FT09 level 4: TIME_BUDGET, the 12 h "
+            "clock, in a re-run with seed 101; SB26 level 4: ACTION_BUDGET, the action "
+            "budget).") in text
+    assert (f"The replaced FT09 S0 original (`{orig}`, not in H5) completed 5 of 6 levels: it "
+            "cleared levels 4-5, which its counted re-run did not (a fact from the run table; "
+            "H5 registers no reading on originals).") in text
+    assert rerun in h5.counted_runs(h)
+    assert text in "\n".join(h5.not_shown_lines(h))
+    assert "The cause is CD82." in "\n".join(h5.summary_lines(h))
+    # the default design: S0 failed an early level (FT09 level 2) and nothing was replaced
+    fx2 = H5Fixture(tmp_path / "plain")
+    fx2.block6()
+    h2 = fx2.compute(boot=10, exploratory=False)
+    text = h5._thin_ours_bullet(h2)
+    assert "failed an early level" not in text and "replaced" not in text
+    assert text.startswith("- **Our contrast rests on few rows.** S0's deep side is 3 rows "
+                           "(SB26 level 4, R11L level 4, R11L level 5), 2 of 3 not cleared")
+
+
+def test_the_registered_headers_name_the_model_from_the_inputs(tmp_path, pinned):
+    fx = H5Fixture(tmp_path)
+    meta = {"config_id": "google-gemini-3-8-flash-high", "model_requested": "gemini-3.8-flash",
+            "model_returned": ["gemini-3.8-flash"], "reasoning_effort": {"thinking_level": "high"}}
+    for g, (s0, s4) in {"FT09": (1, 4), "SB26": (3, 5), "R11L": (4, 3), "CD82": (2, 6)}.items():
+        for c, lc in (("S4", s4), ("S0", s0)):
+            fx.run6(g, c, lc, "GAME_WIN" if lc == N else "ACTION_BUDGET", meta_extra=meta)
+    pinned(write_slice(fx.root, pub_rows(efforts=("high",))))
+    h = fx.compute(data="both", boot=10, exploratory=False)
+    text = "\n".join(h5.summary_lines(h))
+    assert h["ours"]["facts"]["model"]["names"] == ["Gemini 3.8 Flash"]
+    assert h["ours"]["facts"]["model"]["setting"] == "thinking level high"
+    assert h["published"]["facts"]["model"]["names"] == ["Gemini 3.8 Flash"]
+    assert "\n## Published runs, high effort, Gemini 3.8 Flash (registered; not blind)\n" in text
+    assert ("(ARC config tags `google-gemini-3-8-flash-high`, "
+            "`google-gemini-3-8-flash-high-provider-adapter`)") in text
+    assert ("\n## Our runs, S0 vs S4 on the 4 path games, Gemini 3.8 Flash, thinking level high "
+            "(registered; not blind, R6 change 4)\n") in text
+    assert "The model is not recorded" not in text
+    assert "- **Narrow.** One model (Gemini 3.8 Flash) at high effort;" in text
+    # no model fields in the run folders: the header names none and says so
+    fx2 = H5Fixture(tmp_path / "bare")
+    fx2.block6()
+    h2 = fx2.compute(boot=10, exploratory=False)
+    text = "\n".join(h5.summary_lines(h2))
+    assert ("\n## Our runs, S0 vs S4 on the 4 path games (registered; not blind, R6 change 4)\n"
+            in text)
+    assert "The model is not recorded in the meta.json of 8 of 8 runs." in text
+    assert "- **Narrow.** One model at high effort;" in text
+    # a model string not in MODEL_NAMES is printed as it is
+    runs = [run_levels("G1", "standard", 2), run_levels("G1", "provider_adapter", 3)]
+    runs = [h5.RunLevels(**{**x.__dict__, "label": tag}) for x, tag in
+            zip(runs, ("acme-x1-high", "acme-x1-high-provider-adapter"), strict=True)]
+    assert h5.published_model(runs, "high")["names"] == ["acme-x1"]
+
+
+def test_the_overlap_note_counts_the_shared_games():
+    six = h5.full_reading(spec_of(SIX), SEED, 10, "firth", [], sensitivity=False,
+                          common_support=False)
+    sub = h5.full_reading(spec_of({g: SIX[g] for g in ("G1", "G2", "G5", "G6")}), SEED, 10,
+                          "firth", [], sensitivity=False, common_support=False)
+    sub["data"] = "ours"
+    part = h5.full_reading(spec_of({"G1": SIX["G1"], "Z9": SIX["G5"]}), SEED, 10, "firth", [],
+                           sensitivity=False, common_support=False)
+    for ours, want in ((sub, "The 4 path games are among the 6 published games, so"),
+                       (part, "1 of the 2 path games (G1) are among the 6 published games, so")):
+        shown = "\n".join(h5.not_shown_lines(_h(published=six, ours=ours)))
+        assert f"- **The data sets overlap.** {want} the two readings are not independent." \
+            in shown
+
+
+def test_the_caveats_name_the_published_readings_origin_and_how_our_configs_differ(tmp_path,
+                                                                                    pinned):
+    fx = H5Fixture(tmp_path)
+    pinned(write_slice(fx.root, pub_rows(efforts=("high",))))
+    shown = "\n".join(h5.not_shown_lines(fx.compute(data="published", boot=10,
+                                                    exploratory=False)))
+    assert ("so the published reading is close to a computation on seen data. These are also "
+            "the runs whose Standard-to-Adapter gap motivated this study and selected the path "
+            "games (D14)") in shown
+    assert "Our S0 and S4 also differ" not in shown and "**Our contrast" not in shown
+    fx2 = H5Fixture(tmp_path / "ours")
+    fx2.block6()
+    shown = "\n".join(h5.not_shown_lines(fx2.compute(boot=10, exploratory=False)))
+    assert "close to a computation on seen data" not in shown
+    assert ("Our S0 and S4 also differ from the published runs (S0's thought summaries; "
+            "transport retry, period and possibly the API surface in both; §7.1, §15).") in shown
 
 
 # --- I. this checkout's files: counts and run IDs only (the blind rule) --------------------------

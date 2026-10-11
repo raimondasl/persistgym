@@ -27,7 +27,9 @@ at levels ≥ 4 than at levels 1-2. Tested on the published runs first, then on 
   state cannot block H5: ``discover``, ``check_links`` (inconsistent chains anywhere refuse, S1
   and S2 included; a pilot folder is refused), ``d20_check``, ``rerun_eligible`` and
   ``resolve_unit``. A seed-101 re-run replaces its original (FT09 S0's counted run is its
-  re-run). S1 and S2 runs are not in H5 (R6 change 4) and are listed. ``costs.csv``: the ARC
+  re-run). S1 and S2 runs are not in H5 (R6 change 4) and are listed. From each counted run's
+  ``meta.json`` only `OURS_MODEL_FIELDS` are read besides checkpoint_c's, to name the model
+  and its thinking level in the summary. ``costs.csv``: the ARC
   pilot rows' ``latency_s`` only (D20's yardsticks). ``draw/*/draw.json``: the 4 path games (in
   draw order) and SEED (D15); it is read for SEED even with ``--data published``.
 
@@ -102,7 +104,11 @@ use. With ``--allow-incomplete`` our reading is PROVISIONAL: raw tables only, a 
 re-run's original standing in (flagged), no model, contrast or bootstrap.
 
 **Outputs** are built from allowlists (`TOP_FIELDS`, `READING_FIELDS`, `OURS_RUN_FIELDS`,
-`OUTPUTS`): no transcript path, key, token count or other ``meta.json`` field is copied.
+`OUTPUTS`): no transcript path, key, token count or other ``meta.json`` field is copied
+(beyond the model strings and thinking level of `OURS_MODEL_FIELDS`, in a reading's
+``facts``). The data facts the summary's notes and caveats state (counts, games, values) are
+computed from the output (``facts`` and the bootstrap's per-estimator counts), not written in;
+each conditional note is printed only when its condition holds in the data.
 
 **As implemented.** Claude's readings of PREREG, for the researcher's review; none changes a
 hypothesis, prediction or threshold.
@@ -120,7 +126,9 @@ hypothesis, prediction or threshold.
    Under the ML limit, and so under the rule in force wherever C is identified, a game whose
    reached rows are all cleared, or none, adds exactly 0 wherever its counterfactual is
    identified (H3 reading 15's "adds 0", without a special rule). Firth keeps every game,
-   finite, and gives such a game a small non-zero Δ (the penalty's pull towards 1/2).
+   finite, and gives such a game a non-zero Δ (the penalty's pull towards 1/2), which can be
+   large where the Δ is an extrapolated counterfactual; the summary notes such games under
+   the per-game table.
 4. **Structural absence:** a band in which one harness has no reached row in the reading or
    resample is not estimable; its A_b and C are undefined ("Standard reached no deep level")
    and the verdict reads "cannot be computed". A_early is still reported.
@@ -337,7 +345,17 @@ VERDICT_NOT_POSITIVE = ("not positive: A_deep − A_early ≤ 0 on the point est
                         "H5's prediction (descriptive)")
 CANNOT = "cannot be computed"
 RAW_LABEL = "exploratory: no game adjustment, not the registered model"
-FRACTION_LABEL = "Fraction C ≤ 0 (descriptive, not a test)"
+FRACTION_LABEL = "Fraction C ≤ 0 (exploratory; not a test)"
+DIAGNOSTIC = "diagnostic, not registered"
+ZERO_TOL = 5e-4                            # a value that prints as ±0.000 at 3 decimals
+MODEL_NAMES = {"google-gemini-3-8-flash": "Gemini 3.8 Flash",
+               "gemini-3.8-flash": "Gemini 3.8 Flash"}
+"""Neutral display names for the model strings in the inputs (ARC's config tags without the
+effort and harness suffixes; the API's model string in our runs' meta.json). A string not
+listed is printed as it is."""
+OURS_MODEL_FIELDS = ("config_id", "model_requested", "model_returned", "reasoning_effort")
+"""The only fields read from our runs' meta.json beyond checkpoint_c's: to name the model and
+its thinking level in the summary."""
 
 PUBLISHED_FIELDS = ("game", "game_id", "harness", "effort", "config", "config_matches_variant",
                     "guid", "state", "levels_completed", "level_count", "total_actions",
@@ -354,7 +372,10 @@ READING_FIELDS = ("label", "data", "registered", "effort", "harnesses", "games",
                   "n_runs", "n_rows", "raw", "per_level", "per_game", "deep_support",
                   "extrapolated_share_deep", "estimates", "primary",
                   "other_estimator_sign_agrees", "bootstrap", "sensitivity_error_endings",
-                  "common_support")
+                  "common_support", "facts")
+"""``facts``: what the summary's notes and caveats state about the reading's data (the model,
+runs and their uncleared rows, Standard's deep rows, which games' rows are all of one outcome,
+where the ML limit leaves a counterfactual not identified); diagnostic, not registered."""
 SENSITIVITY_FIELDS = (*READING_FIELDS, "dropped_rows")
 ESTIMATE_FIELDS = ("A_early", "A_deep", "contrast", "logit_interaction", "defined",
                    "why_undefined")
@@ -1272,6 +1293,30 @@ def _summarise(values: list[tuple[float | None, str | None]]) -> dict:
             "undefined_reasons": dict(sorted(reasons.items()))}
 
 
+def _contrast_by_source(results: list[dict]) -> dict:
+    """Under ``ml_limit_or_firth``: how many resamples' C (where defined) came from each
+    estimator, and the range of C among them (the summary's note on the rule's interval)."""
+    out = {}
+    for source in ("ml_limit", "firth"):
+        v = [r["primary"]["contrast"][0] for r in results
+             if r["primary_source"] == source and r["primary"]["contrast"][0] is not None]
+        out[source] = {"n_defined": len(v),
+                       "range": [float(min(v)), float(max(v))] if v else None}
+    return out
+
+
+def _defined_drawing_game(results: list[dict], idx: np.ndarray, games: list[str]) -> dict:
+    """Under ``ml_limit_or_firth``: for each game, the resamples with C defined that drew it at
+    least once, by the estimator that gave their C."""
+    out = {g: {"ml_limit": 0, "firth": 0} for g in games}
+    for k, r in enumerate(results):
+        if r["primary"]["contrast"][0] is None:
+            continue
+        for i in set(idx[k].tolist()):
+            out[games[int(i)]][r["primary_source"]] += 1
+    return out
+
+
 def bootstrap(per: dict[str, tuple[np.ndarray, np.ndarray]], games: list[str], seed: int,
               boot: int, estimators: tuple[str, ...], rule: str,
               progress: Progress | None = None, label: str = "") -> dict:
@@ -1304,6 +1349,8 @@ def bootstrap(per: dict[str, tuple[np.ndarray, np.ndarray]], games: list[str], s
             on = rule == "ml_limit_or_firth"
             s["n_firth_fallback"] = len(fell) if on else None
             s["firth_fallback_reasons"] = dict(sorted(Counter(fell).items())) if on else None
+            s["contrast_by_source"] = _contrast_by_source(results) if on else None
+            s["defined_drawing_game"] = _defined_drawing_game(results, idx, games) if on else None
             out["primary"] = s
         else:
             if name == "firth":
@@ -1426,6 +1473,107 @@ class Spec:
     harnesses: dict[str, str]
     games: list[str]
     runs: list[RunLevels]
+    model: dict | None = None      # `published_model` or `ours_model`; None if not read
+
+
+def _outcome(cleared: list[int]) -> str:
+    if not cleared:
+        return "no rows"
+    return "all cleared" if all(cleared) else "all uncleared" if not any(cleared) else "mixed"
+
+
+def reading_facts(runs: list[RunLevels], rows: list[Row], games: list[str],
+                  per_game: list[dict], model: dict | None) -> dict:
+    """The data facts the summary's notes and caveats state (READING_FIELDS' ``facts``):
+    per harness, its runs, wins and uncleared rows per run (by band); per game, whether its
+    early and deep rows are all cleared, all uncleared or mixed, and which harnesses have rows
+    in each model band; Standard's deep rows with their runs' endings; and each game and band
+    whose ML-limit Δ is not identified, with the absent harness's rows in that band."""
+    rows = [r for r in rows if r.game in games]
+    model_rows = [r for r in rows if r.band in MODEL_BANDS]
+    by_harness = {}
+    for h in HARNESSES:
+        mine = [x for x in runs if x.harness == h and x.game in games]
+        unc = [[r for r in rows if r.run_id == x.run_id and not r.cleared] for x in mine]
+        by_harness[h] = {
+            "n_runs": len(mine),
+            "won": sum(x.levels_completed == x.level_count for x in mine),
+            "max_uncleared_rows": max((len(u) for u in unc), default=0),
+            "one_uncleared_row": sum(len(u) == 1 for u in unc),
+            "no_uncleared_row_not_won": sum(not u and x.levels_completed < x.level_count
+                                            for x, u in zip(mine, unc, strict=True)),
+            "uncleared_by_band": {b: sum(r.band == b for u in unc for r in u) for b in BANDS}}
+    game_rows = {g: _outcome([r.cleared for r in model_rows if r.game == g]) for g in games}
+    present = {g: {b: [h for h in HARNESSES if any(r.game == g and r.band == b and r.harness == h
+                                                   for r in model_rows)]
+                   for b in MODEL_BANDS} for g in games}
+    run_of = {x.run_id: x for x in runs}
+    std_deep = [{"game": r.game, "level": r.level, "cleared": r.cleared,
+                 "ended_here": r.ended_here, "ending": run_of[r.run_id].ending,
+                 "ending_kind": run_of[r.run_id].ending_kind, "run_id": r.run_id}
+                for r in rows if r.harness == "standard" and r.band == "deep"]
+    not_identified = []
+    for g in per_game:
+        ml = g["estimators"].get("ml_limit")
+        for b in MODEL_BANDS if ml else ():
+            if not ml[b]["weight"] or ml[b]["delta"] is not None:
+                continue
+            for h in [h for h in HARNESSES if h not in present[g["game"]][b]] or [None]:
+                cell = [r for r in model_rows if r.harness == h and r.band == b]
+                not_identified.append({
+                    "game": g["game"], "band": b, "harness": h,
+                    "game_rows": game_rows[g["game"]],
+                    "cell_rows": [{"game": r.game, "level": r.level, "cleared": r.cleared}
+                                  for r in cell],
+                    "cell_outcome": _outcome([r.cleared for r in cell])})
+    return {"model": model, "runs_by_harness": by_harness, "game_rows": game_rows,
+            "harnesses_in_band": present, "standard_deep_rows": std_deep,
+            "ml_not_identified": not_identified}
+
+
+def published_model(runs: list[RunLevels], effort: str) -> dict:
+    """The model of the published runs, from their config tags (``per_run.csv``'s ``config``
+    column, e.g. ``google-gemini-3-8-flash-high-provider-adapter``) and effort."""
+    tags = sorted({r.label for r in runs})
+    slugs = {t.removesuffix("-provider-adapter").removesuffix(f"-{effort}") for t in tags}
+    return {"names": sorted({MODEL_NAMES.get(s, s) for s in slugs if s}),
+            "setting": f"{effort} effort", "config_tags": tags,
+            "source": "per_run.csv, config and effort columns"}
+
+
+def _meta_fields(path: Path) -> dict:
+    """`OURS_MODEL_FIELDS` from one run's meta.json ({} if it cannot be read)."""
+    try:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: meta.get(k) for k in OURS_MODEL_FIELDS} if isinstance(meta, dict) else {}
+
+
+def ours_model(ours: Ours) -> dict:
+    """The model and thinking level of our runs in the reading, from their meta.json
+    (`OURS_MODEL_FIELDS` only): the model string the provider returned (else the one
+    requested) and ``reasoning_effort.thinking_level``."""
+    folder = {e.run_id: e.folder for e in ours.entries}
+    names, levels, tags, missing = set(), set(), set(), []
+    for r in ours.runs:
+        m = _meta_fields(folder[r.run_id] / "meta.json") if r.run_id in folder else {}
+        got = m.get("model_returned")
+        models = ([str(x) for x in got if x] if isinstance(got, list) else []) or (
+            [str(m["model_requested"])] if m.get("model_requested") else [])
+        if not models:
+            missing.append(r.run_id)
+        names |= {MODEL_NAMES.get(x, x) for x in models}
+        effort = m.get("reasoning_effort")
+        if isinstance(effort, dict) and effort.get("thinking_level"):
+            levels.add(str(effort["thinking_level"]))
+        if m.get("config_id"):
+            tags.add(str(m["config_id"]))
+    setting = f"thinking level {next(iter(levels))}" if len(levels) == 1 else (
+        "thinking levels " + ", ".join(sorted(levels)) if levels else None)
+    return {"names": sorted(names), "setting": setting, "config_tags": sorted(tags),
+            "runs_without_model": missing,
+            "source": "the runs' meta.json: " + ", ".join(OURS_MODEL_FIELDS)}
 
 
 def _n_rows(rows: list[Row]) -> dict:
@@ -1454,11 +1602,13 @@ def compute_reading(spec: Spec, rows: list[Row], seed: int, boot: int, rule: str
            "raw": raw_rates(rows), "per_level": per_level_table(runs, rows),
            "per_game": None, "deep_support": None, "extrapolated_share_deep": None,
            "estimates": None, "primary": None, "other_estimator_sign_agrees": None,
-           "bootstrap": None, "sensitivity_error_endings": None, "common_support": None}
+           "bootstrap": None, "sensitivity_error_endings": None, "common_support": None,
+           "facts": None}
     fits = {}
     if model:
         fits = {"firth": fit_firth(m), "ml_limit": fit_ml_limit(m)}
     out["per_game"], support = per_game_table(runs, rows, games, m, fits)
+    out["facts"] = reading_facts(runs, rows, games, out["per_game"], spec.model)
     out["deep_support"] = {k: sum(v == k for v in support.values())
                            for k in ("both", "adapter only", "standard only", "neither")}
     one_sided = {g for g, v in support.items() if v in ("adapter only", "standard only")}
@@ -1504,7 +1654,8 @@ def full_reading(spec: Spec, seed: int, boot: int, rule: str, warnings: list[str
         kept = [r for r in rows if not r.ended_by_error]
         sens_spec = Spec(label=f"{spec.label}: error-ending sensitivity", data=spec.data,
                          registered=spec.registered, effort=spec.effort,
-                         harnesses=spec.harnesses, games=spec.games, runs=spec.runs)
+                         harnesses=spec.harnesses, games=spec.games, runs=spec.runs,
+                         model=spec.model)
         sens = compute_reading(sens_spec, kept, seed, boot, rule, warnings, progress=progress)
         ending = {r.run_id: r.ending for r in spec.runs}
         sens["dropped_rows"] = [{"game": r.game, "harness": r.harness, "level": r.level,
@@ -1521,7 +1672,8 @@ def full_reading(spec: Spec, seed: int, boot: int, rule: str, warnings: list[str
         else:
             cs_spec = Spec(label=f"{spec.label}: common support (exploratory)", data=spec.data,
                            registered=False, effort=spec.effort, harnesses=spec.harnesses,
-                           games=both, runs=[r for r in spec.runs if r.game in both])
+                           games=both, runs=[r for r in spec.runs if r.game in both],
+                           model=spec.model)
             cs["reading"] = compute_reading(cs_spec, [r for r in rows if r.game in both], seed,
                                             boot, rule, warnings, progress=progress)
         out["common_support"] = cs
@@ -1643,7 +1795,8 @@ def compute(root: Path, generated: str, git: dict, *, published_dir: Path | None
         spec = Spec(label="published, effort high (registered)", data="published",
                     registered=True, effort=REGISTERED_EFFORT,
                     harnesses={"standard": "Standard", "provider_adapter": "Provider Adapter"},
-                    games=sorted({r.game for r in runs}), runs=runs)
+                    games=sorted({r.game for r in runs}), runs=runs,
+                    model=published_model(runs, REGISTERED_EFFORT))
         published = full_reading(spec, boot_seed, boot, rule, warnings, sensitivity=True,
                                  common_support=exploratory, progress=progress)
         if exploratory:
@@ -1655,7 +1808,8 @@ def compute(root: Path, generated: str, git: dict, *, published_dir: Path | None
                 runs = pub.runs[effort]
                 spec = Spec(label=f"published, effort {effort} (exploratory)", data="published",
                             registered=False, effort=effort, harnesses=published["harnesses"],
-                            games=sorted({r.game for r in runs}), runs=runs)
+                            games=sorted({r.game for r in runs}), runs=runs,
+                            model=published_model(runs, effort))
                 efforts[effort] = full_reading(spec, boot_seed, boot, rule, warnings,
                                                sensitivity=False, common_support=False,
                                                progress=progress)
@@ -1667,7 +1821,7 @@ def compute(root: Path, generated: str, git: dict, *, published_dir: Path | None
         spec = Spec(label="ours, S0 vs S4 on the 4 path games (registered)", data="ours",
                     registered=True, effort=None,
                     harnesses={"standard": "S0", "provider_adapter": "S4"},
-                    games=list(ours.games), runs=list(ours.runs))
+                    games=list(ours.games), runs=list(ours.runs), model=ours_model(ours))
         if complete:
             ours_reading = full_reading(spec, boot_seed, boot, rule, warnings, sensitivity=True,
                                         common_support=exploratory, progress=progress)
@@ -1711,13 +1865,37 @@ ESTIMATOR_NAME = {"firth": "Firth (`firth`)", "ml_limit": "ML limit (`ml_limit`)
 
 
 def _f(v, digits: int = 3, signed: bool = True) -> str:
+    """A number at `digits` decimals; a value that rounds to zero prints as +0.000 (0.000
+    unsigned), never -0.000."""
     if v is None:
         return "n/a"
-    return f"{v:+.{digits}f}" if signed else f"{v:.{digits}f}"
+    s = f"{v:+.{digits}f}" if signed else f"{v:.{digits}f}"
+    if s.startswith("-") and not s.strip("+-0."):
+        s = ("+" if signed else "") + s[1:]
+    return s
 
 
 def _iv(iv, digits: int = 3) -> str:
-    return "n/a" if iv is None else f"[{iv[0]:+.{digits}f}, {iv[1]:+.{digits}f}]"
+    return "n/a" if iv is None else f"[{_f(iv[0], digits)}, {_f(iv[1], digits)}]"
+
+
+def _games_and(names: list[str], word: str = "and") -> str:
+    names = list(names)
+    return (", ".join(names[:-1]) + f" {word} " + names[-1]) if len(names) > 1 else "".join(names)
+
+
+def _row_list(rows: list[dict], cap: int = 6) -> str:
+    """'FT09 level 4, SB26 level 4', or a count past `cap` rows."""
+    if len(rows) > cap:
+        return f"{len(rows)} rows"
+    return ", ".join(f"{x['game']} level {x['level']}" for x in rows)
+
+
+def _model_text(m: dict | None) -> str | None:
+    """'Gemini 3.8 Flash, thinking level high', or None if the inputs do not name the model."""
+    if not m or not m.get("names"):
+        return None
+    return ", ".join(m["names"]) + (f", {m['setting']}" if m.get("setting") else "")
 
 
 def _rate(c: dict) -> str:
@@ -1783,14 +1961,73 @@ def model_lines(r: dict) -> list[str]:
         label = ESTIMATOR_NAME[name] + (f" (`{r['primary']['rule']}`)" if name == "primary"
                                         else "")
         c = None if s is None else s["contrast"]
+        iv = _iv(c and c["interval"])
+        if name == "ml_limit" and e["contrast"] is None and c and c["interval"] is not None:
+            iv += f" (over {c['n_defined']:,} resamples where it is identified)"
         L.append(f"| {label} | {_value(e, 'A_early')} | {_value(e, 'A_deep')} | "
-                 f"{_value(e, 'contrast')} | {_iv(c and c['interval'])} | "
+                 f"{_value(e, 'contrast')} | {iv} | "
                  f"{_pct(s and s['fraction_contrast_le_0'])} | {_left_out(c)} |")
     sm = est["statsmodels_stop"]
-    L.append(f"| {ESTIMATOR_NAME['statsmodels_stop']} (point only) | {_value(sm, 'A_early')} | "
+    what = ("point only; path-dependent; not an estimate" if sm.get("path_dependent")
+            else "point only")
+    L.append(f"| {ESTIMATOR_NAME['statsmodels_stop']} ({what}) | {_value(sm, 'A_early')} | "
              f"{_value(sm, 'A_deep')} | {_value(sm, 'contrast')} | not bootstrapped | n/a | "
              "n/a |")
     return L
+
+
+def _in_range(v: float, rng: list[float] | None) -> bool:
+    return rng is not None and rng[0] - 1e-12 <= v <= rng[1] + 1e-12
+
+
+def mixed_estimator_lines(r: dict) -> list[str]:
+    """Under ``ml_limit_or_firth``, when both estimators gave C in some resamples: the rule's
+    interval combines two estimators (how many resamples each, C's range in each, which end
+    lies in which range, the game whose draw decides the estimator if one does, and the
+    interval of the point estimate's own estimator). Empty otherwise."""
+    bs = r.get("bootstrap")
+    p = bs and bs["primary"]
+    by = p and p.get("contrast_by_source")
+    if not by or not by["ml_limit"]["n_defined"] or not by["firth"]["n_defined"]:
+        return []
+    ml, fi, iv = by["ml_limit"], by["firth"], p["contrast"]["interval"]
+    why = "; ".join(p.get("firth_fallback_reasons") or {}) or "undefined"
+
+    def span(x: dict) -> str:
+        lo, hi = x["range"]
+        return f"C = {_f(lo)}" if _f(lo) == _f(hi) else f"C from {_f(lo)} to {_f(hi)}"
+
+    def use(n: int) -> str:
+        return f"{n:,} use{'s' if n == 1 else ''}"
+
+    text = (f"Under `{p['rule']}` the estimator is chosen resample by resample: of the "
+            f"{p['contrast']['n_defined']:,} resamples where C is defined, "
+            f"{use(ml['n_defined'])} the ML limit ({span(ml)}) and {use(fi['n_defined'])} "
+            f"Firth ({span(fi)}), where the ML limit leaves C undefined ({why}).")
+    drawn = p.get("defined_drawing_game") or {}
+    split = [g for g, n in drawn.items() if n["firth"] == fi["n_defined"] and not n["ml_limit"]]
+    if split:
+        text += (f" Firth is used in exactly the defined resamples that draw {_games_and(split)}"
+                 if len(split) == 1 else
+                 f" Each of {_games_and(split)} is drawn in exactly the defined resamples that "
+                 "use Firth") + "."
+    text += f" The interval {_iv(iv)} therefore combines the two estimators"
+    name = {"ml_limit": "ML-limit", "firth": "Firth"}
+    lo = [s for s in by if _in_range(iv[0], by[s]["range"])]
+    hi = [s for s in by if _in_range(iv[1], by[s]["range"])]
+    if len(lo) == 1 and len(hi) == 1 and lo != hi:
+        text += (f": its lower end ({_f(iv[0])}) lies only in the range of the {name[lo[0]]} "
+                 f"resamples and its upper end ({_f(iv[1])}) only in that of the "
+                 f"{name[hi[0]]} resamples, so its width reflects the switch between "
+                 "estimators as well as resampling")
+    text += "."
+    src = r["primary"]["source"]
+    own = bs["estimators"].get(src, {}).get("contrast")
+    if own and own["interval"] is not None:
+        text += (f" The interval of `{src}` alone, the estimator of the point estimate (C = "
+                 f"{_f(r['primary']['contrast'])}), is {_iv(own['interval'])} over "
+                 f"{own['n_defined']:,} resamples.")
+    return [text]
 
 
 def _bootstrap_line(r: dict) -> str:
@@ -1809,13 +2046,58 @@ def _bootstrap_line(r: dict) -> str:
                  + (" (" + "; ".join(f"{k}: {v:,}" for k, v in why.items()) + ")." if why
                     else "."))
     line += (f" \"{FRACTION_LABEL}\" is the share of the defined resamples with C ≤ 1e-9 "
-             "(exploratory; H5 registers no such fraction).")
+             "(H5 registers no such fraction).")
     fs = bs["estimators"].get("firth")
     if fs and fs["n_line_search"]:
         line += (f" Firth: `persistgym_h1h3.firth_fe_logit` returned no fit in "
                  f"{fs['n_line_search']:,} resamples, and `firth_line_search` gave their "
                  "estimate (the same penalized likelihood).")
     return line
+
+
+_INF = {"all cleared": "+∞", "all uncleared": "−∞"}
+
+
+def not_identified_text(r: dict) -> str | None:
+    """Which game(s) leave the ML limit's AME not identified at the point estimate, and why
+    (from ``facts.ml_not_identified``); the ∞ − ∞ mechanism is stated only where the data show
+    it: the game's early and deep rows all of one outcome and the absent harness's rows in the
+    band all of the other. None if no game does."""
+    items = (r.get("facts") or {}).get("ml_not_identified") or []
+    if not items:
+        return None
+    names = r["harnesses"]
+    parts = []
+    for x in items:
+        who = names.get(x["harness"], "a harness") if x["harness"] else "a harness"
+        s = (f"In {x['game']}, {who} reached no {x['band']} level, so {who}'s {x['band']} "
+             "prediction there is a counterfactual")
+        game_inf, cell_inf = _INF.get(x["game_rows"]), _INF.get(x["cell_outcome"])
+        if game_inf and cell_inf and game_inf != cell_inf:
+            s += (f"; {x['game']}'s early and deep rows are {x['game_rows']} (its game effect "
+                  f"goes to {game_inf} in the ML limit) and {who}'s {x['band']} rows, all in "
+                  f"other games ({_row_list(x['cell_rows'])}), are {x['cell_outcome']} (the "
+                  f"{who}-{x['band']} effect goes to {cell_inf}), so the counterfactual is ∞ − ∞ "
+                  "and its limit depends on the path")
+        elif game_inf:
+            s += (f"; {x['game']}'s early and deep rows are {x['game_rows']} (its game effect "
+                  f"goes to {game_inf} in the ML limit), and the counterfactual's limit depends "
+                  "on the path")
+        else:
+            s += ", and its limit depends on the path"
+        parts.append(s)
+    games = list(dict.fromkeys(x["game"] for x in items))
+    text = f"The cause is {_games_and(games)}. " + ". ".join(parts) + "."
+    bs = r.get("bootstrap")
+    if bs and "ml_limit" in bs["estimators"]:
+        own = bs["estimators"]["ml_limit"]["contrast"]
+        drawn = bs["primary"].get("defined_drawing_game") or {}
+        if (own["interval"] is not None and drawn
+                and all(drawn.get(g, {}).get("ml_limit", 1) == 0 for g in games)):
+            text += (f" The ML limit's own interval of C, {_iv(own['interval'])}, is over the "
+                     f"{own['n_defined']:,} resamples where it identifies C, none of which "
+                     f"draws {'any of ' if len(games) > 1 else ''}{_games_and(games, 'or')}.")
+    return text
 
 
 def verdict_lines(r: dict) -> list[str]:
@@ -1829,8 +2111,9 @@ def verdict_lines(r: dict) -> list[str]:
         L.append(f"Sign of C (rule in force `{p['rule']}`; exploratory, no verdict): "
                  f"**{p['verdict']}**.")
     if p.get("fallback_reason"):
+        cause = not_identified_text(r)
         L.append(f"- Firth decides this reading: C is undefined in the ML limit "
-                 f"({p['fallback_reason']}).")
+                 f"({p['fallback_reason']})." + (f" {cause}" if cause else ""))
     agrees = r["other_estimator_sign_agrees"]
     L.append(f"- The other estimator (`{other}`): C = {_value(est[other], 'contrast')}, sign "
              f"{_sign_word(est[other]['contrast'])}"
@@ -1865,10 +2148,10 @@ def verdict_lines(r: dict) -> list[str]:
                                          if v) or "none") for b in MODEL_BANDS)
     L.append(f"- ML limit: {ml['n_separated_rows']} separated rows; predictions {how}.")
     ds = r["deep_support"]
-    L.append(f"- Games by deep support: both {ds['both']}, Adapter only {ds['adapter only']}, "
-             f"Standard only {ds['standard only']}, neither {ds['neither']}. Share of A_deep's "
-             "rows in games where only one harness reached deep (an extrapolated "
-             f"counterfactual): {_pct(r['extrapolated_share_deep'])}.")
+    L.append(f"- Games by deep support ({DIAGNOSTIC}): both {ds['both']}, Adapter only "
+             f"{ds['adapter only']}, Standard only {ds['standard only']}, neither "
+             f"{ds['neither']}. Share of A_deep's rows in games where only one harness reached "
+             f"deep (an extrapolated counterfactual): {_pct(r['extrapolated_share_deep'])}.")
     return L
 
 
@@ -1908,6 +2191,75 @@ def per_game_lines(r: dict) -> list[str]:
     return L
 
 
+def per_game_notes(r: dict) -> list[str]:
+    """Notes under the per-game table, each shown only when the data call for it: games whose
+    early and deep rows are all of one outcome (the ML limit's Δ is then 0 where identified,
+    Firth's is not); per-game Δs the ML limit leaves not identified; separated cells."""
+    facts, L = r.get("facts") or {}, []
+    have = r["per_game"] and {"firth", "ml_limit"} <= set(r["per_game"][0]["estimators"])
+    if not have:
+        return L
+    names = r["harnesses"]
+    outcome = facts.get("game_rows") or {}
+    present = facts.get("harnesses_in_band") or {}
+    sep, kinds = [], set()
+    for g in r["per_game"]:
+        o = outcome.get(g["game"])
+        if o not in _INF:
+            continue
+        for b in MODEL_BANDS:
+            ml = g["estimators"]["ml_limit"][b]["delta"]
+            fi = g["estimators"]["firth"][b]["delta"]
+            if ml is not None and abs(ml) < ZERO_TOL and fi is not None and abs(fi) >= ZERO_TOL:
+                absent = [names[h] for h in HARNESSES
+                          if h not in present.get(g["game"], {}).get(b, HARNESSES)]
+                sep.append((g["game"], b, fi, absent))
+                kinds.add(o)
+    if sep:
+        games = list(dict.fromkeys(x[0] for x in sep))
+        word = " or ".join(sorted(kinds))
+        inf = " or ".join(_INF[k] for k in sorted(kinds))
+        val = " or ".join({"all cleared": "1", "all uncleared": "0"}[k] for k in sorted(kinds))
+        cases = ", ".join(f"{g} {b} {_f(fi)}" + (f" (a counterfactual: {_games_and(a)} "
+                                                  f"reached no {b} level there)" if a else "")
+                          for g, b, fi, a in sep)
+        L.append(f"In a game whose early and deep rows are {word} (here {_games_and(games)}), "
+                 f"the ML limit sends the game's effect to {inf}, so each of its predictions "
+                 "that the limit identifies, a counterfactual for a harness that did not reach "
+                 f"the band included, is {val}, and its Δ is 0. Firth keeps the game effect "
+                 f"finite and gives a non-zero Δ: {cases}. There the per-game Δ shows how each "
+                 "estimator handles separation, not an observed difference.")
+    gone = facts.get("ml_not_identified") or []
+    if gone:
+        cases = ", ".join(dict.fromkeys(f"{x['game']} ({x['band']})" for x in gone))
+        L.append(f"`ml_limit`'s Δ is n/a for {cases}: that counterfactual is not identified in "
+                 "the ML limit (the verdict's notes above).")
+    cells = _separated_cells(r)
+    if cells:
+        s = (f"Separated cells, whose rows are all of one outcome: {', '.join(cells)}. The ML "
+             "limit's predictions for such a cell's rows are that outcome (0 or 1), while Firth "
+             "keeps them strictly between 0 and 1.")
+        differ = [b for b in MODEL_BANDS if any(
+            g["estimators"]["ml_limit"][b]["delta"] is not None
+            and g["estimators"]["firth"][b]["delta"] is not None
+            and abs(g["estimators"]["ml_limit"][b]["delta"]
+                    - g["estimators"]["firth"][b]["delta"]) >= ZERO_TOL
+            for g in r["per_game"])]
+        if differ:
+            s += (" The two estimators' per-game Δs differ in the "
+                  f"{_games_and(differ)} band{'s' if len(differ) > 1 else ''}.")
+        L.append(s)
+    return L
+
+
+def _separated_cells(r: dict) -> list[str]:
+    """The (harness, band) cells of the model whose reached rows are all of one outcome."""
+    names, raw = r["harnesses"], r["raw"]["bands"]
+    return [f"{names[h]} {b} ({'all cleared' if c['cleared'] else 'all uncleared'})"
+            for b in MODEL_BANDS for h in HARNESSES
+            for c in [raw[b][h]] if c["reached"] and c["cleared"] in (0, c["reached"])]
+
+
 def sensitivity_lines(s: dict) -> list[str]:
     L = [("Same rows minus each reached level a run ended on by an error ending (published "
          "ERROR_OR_CLOSED; ours API_ERROR, AGENT_ERROR, UNKNOWN, SCORECARD_CLOSED); budget "
@@ -1915,12 +2267,13 @@ def sensitivity_lines(s: dict) -> list[str]:
     L += ["Dropped rows: " + ("; ".join(f"{x['game']} {x['harness']} level {x['level']} "
                                         f"({x['ending']})" for x in s["dropped_rows"])
                               if s["dropped_rows"] else "none") + "."]
-    L += [""] + model_lines(s) + [""]
-    L.append(f"Verdict on this sensitivity reading: **{s['primary']['verdict']}**.")
+    L += [""] + model_lines(s)
+    L += [x for m in mixed_estimator_lines(s) for x in ("", m)]
+    L += ["", f"Verdict on this sensitivity reading: **{s['primary']['verdict']}**."]
     return L
 
 
-def reading_lines(r: dict, ours: bool = False) -> list[str]:
+def reading_lines(r: dict) -> list[str]:
     L = raw_lines(r)
     if r["estimates"] is None:
         L += ["", ("**PROVISIONAL:** a unit lacks a counted run, so the model, the contrast and "
@@ -1931,13 +2284,12 @@ def reading_lines(r: dict, ours: bool = False) -> list[str]:
     L += ["", ("Model: `cleared ~ harness × band + game fixed effects` on the early and deep "
               "rows; A_b the average marginal effect over the band's reached rows."), ""]
     L += model_lines(r) + ["", _bootstrap_line(r)]
-    if ours:
-        bs = r["bootstrap"]
-        L.append(f"{bs['n_games']} games give only {bs['distinct_possible']} distinct "
-                 f"resamples ({bs['distinct_drawn']} drawn).")
+    L += [x for m in mixed_estimator_lines(r) for x in ("", m)]
     L += [""] + verdict_lines(r)
     L += ["", "Per level (the registered descriptive table):", ""] + per_level_lines(r)
-    L += ["", "Per game:", ""] + per_game_lines(r)
+    L += ["", (f"Per game ({DIAGNOSTIC}; the rule in force takes its Δs from "
+               f"`{r['primary']['source']}` in this reading):"), ""] + per_game_lines(r)
+    L += [x for m in per_game_notes(r) for x in ("", m)]
     if r["sensitivity_error_endings"] is not None:
         L += ["", "**Error-ending sensitivity** (§3 H5):", ""]
         L += sensitivity_lines(r["sensitivity_error_endings"])
@@ -1948,14 +2300,16 @@ def exploratory_lines(r: dict) -> list[str]:
     L = raw_lines(r)
     if r["estimates"] is None:
         return L
-    L += [""] + model_lines(r) + ["", _bootstrap_line(r), ""]
+    L += [""] + model_lines(r) + ["", _bootstrap_line(r)]
+    L += [x for m in mixed_estimator_lines(r) for x in ("", m)] + [""]
     p = r["primary"]
     other = r["estimates"][_other(p["source"])]["contrast"]
     L.append(f"Sign of C (rule in force `{p['rule']}`; exploratory, no verdict): "
              f"**{p['verdict']}**; the other estimator's sign: {_sign_word(other)}.")
     if p.get("fallback_reason"):
+        cause = not_identified_text(r)
         L.append(f"Firth decides this reading: C is undefined in the ML limit "
-                 f"({p['fallback_reason']}).")
+                 f"({p['fallback_reason']})." + (f" {cause}" if cause else ""))
     ds = r["deep_support"]
     L.append(f"Games by deep support: both {ds['both']}, Adapter only {ds['adapter only']}, "
              f"Standard only {ds['standard only']}, neither {ds['neither']}.")
@@ -1992,7 +2346,16 @@ def _definitions(h: dict) -> list[str]:
             f"`{other}`. Both estimators "
             "(Firth's penalized logit and the maximum-likelihood limit) are shown. "
             f"Bootstrap: games resampled with replacement, RNG SEED + {BOOT_SEED_OFFSET} = "
-            f"{h['bootstrap_seed']}, {h['settings']['n_boot']:,} resamples, percentile 90%.")]
+            f"{h['bootstrap_seed']}, {h['settings']['n_boot']:,} resamples, percentile 90%."),
+            ">",
+            ("> ML-limit predictions (the \"ML limit:\" lines count one per game and harness in "
+            "each band): *lcm*, fitted by the limiting conditional model (the ML fit to the "
+            "rows the limit does not separate); *separated*, a separated pattern's observed "
+            "rate (0 or 1). For a counterfactual (a harness that did not reach the band in "
+            "that game): *lcm-extrapolated*, the limiting conditional model's value; "
+            "*separated-extrapolated*, 0 or 1, where its linear predictor goes to −∞ or +∞ "
+            "along every likelihood-maximizing sequence; *not identified*, where its limit "
+            "depends on the path.")]
 
 
 def _run_table(h: dict) -> list[str]:
@@ -2011,8 +2374,261 @@ def _run_table(h: dict) -> list[str]:
     return L
 
 
+DATA_NAME = {"published": "the published runs", "ours": "our runs"}
+BAND_WORDS = {"early": "early", "level_3": "at level 3", "deep": "deep"}
+BUDGET_WORDS = {"TIME_BUDGET": "the 12 h clock", "ACTION_BUDGET": "the action budget",
+                COST_CAP: "the cost cap"}
+
+
+def _registered(h: dict) -> list[tuple[str, dict]]:
+    return [(k, h[k]) for k in ("published", "ours") if h[k] is not None]
+
+
+def _cap(s: str) -> str:
+    return s[:1].upper() + s[1:]
+
+
+def _uncleared_bullet(h: dict) -> str | None:
+    """How many uncleared rows each run has, by data set and harness (``facts``)."""
+    parts, most, wins = [], 0, []
+    for key, r in _registered(h):
+        f = (r.get("facts") or {}).get("runs_by_harness")
+        if not f:
+            continue
+        per = []
+        for hk in HARNESSES:
+            x = f[hk]
+            most = max(most, x["max_uncleared_rows"])
+            bands = ", ".join(f"{x['uncleared_by_band'][b]} {BAND_WORDS[b]}" for b in BANDS)
+            s = (f"{r['harnesses'][hk]} {x['one_uncleared_row']} of {x['n_runs']} "
+                 f"({bands}) and {x['won']} won")
+            if x["no_uncleared_row_not_won"]:
+                s += (f", {x['no_uncleared_row_not_won']} stopped on a level they took no "
+                      "action on")
+            per.append(s)
+        parts.append(f"on {DATA_NAME[key]}, " + ", ".join(per))
+        s_won, a_won = f["standard"]["won"], f["provider_adapter"]["won"]
+        if s_won != a_won:
+            wins.append(f"on {DATA_NAME[key]}, A_deep partly restates that "
+                        f"{r['harnesses']['provider_adapter']} won {a_won} of "
+                        f"{f['provider_adapter']['n_runs']} games and "
+                        f"{r['harnesses']['standard']} {s_won}")
+    if not parts:
+        return None
+    if most <= 1:
+        head = ("- **At most one uncleared row per run.** Levels are played in order, so a run "
+                "has at most one reached-and-not-cleared row: the level it stopped on. Runs with "
+                "one (by the band of that row): ")
+    else:
+        head = (f"- **Uncleared rows per run.** Some run has {most} reached-and-not-cleared "
+                "rows. Runs with exactly one (by band): ")
+    text = head + "; ".join(parts) + (". P(clear | reached) by band therefore restates where "
+                                      "each run stopped and whether it won, so the rows are "
+                                      "not independent trials")
+    return text + ("; " + "; ".join(wins) if wins else "") + "."
+
+
+def _scale_text(key: str, r: dict) -> str | None:
+    """The probability-scale C against the logit-scale interaction, for one registered
+    reading: the strong version when C's interval excludes 0 and a logit interval includes 0
+    (with the early-band ceiling where Standard's early rate is above its deep rate), else a
+    neutral one."""
+    bs = r.get("bootstrap")
+    civ = bs and bs["primary"]["contrast"]["interval"]
+    if not civ:
+        return None
+    logit = {n: s["logit_interaction"]["interval"] for n, s in bs["estimators"].items()
+             if s["logit_interaction"]["interval"] is not None}
+    incl = {n: iv for n, iv in logit.items() if iv[0] <= 0 <= iv[1]}
+    c_excl = civ[0] > 0 or civ[1] < 0
+    name = _cap(DATA_NAME[key])
+    ivs = "; ".join(f"`{n}` {_iv(iv)}" for n, iv in (incl or logit).items())
+    raw = r["raw"]["bands"]
+    se, sd = raw["early"]["standard"]["rate"], raw["deep"]["standard"]["rate"]
+    ceiling = ""
+    if se is not None and sd is not None and se > sd:
+        std = r["harnesses"]["standard"]
+        ceiling = (f" {std}'s early-band raw rate ({_f(se, signed=False)}) is above its "
+                   f"deep-band rate ({_f(sd, signed=False)}), so an early-band difference has "
+                   f"less room on the probability scale (at most {_f(1 - se, signed=False)} for "
+                   f"the raw rates) than a deep-band one (at most {_f(1 - sd, signed=False)}).")
+    if c_excl and incl:
+        under = ("both estimators" if len(incl) == len(bs["estimators"]) == 2
+                 else ", ".join(f"`{n}`" for n in incl))
+        s = (f"{name}: C's 90% interval {_iv(civ)} excludes 0, but the logit-scale "
+             f"interaction's 90% interval{'s' if len(incl) > 1 else ''} "
+             f"include{'' if len(incl) > 1 else 's'} 0 under {under} ({ivs}).")
+        if ceiling:
+            s += (ceiling + " So this reading does not separate \"the advantage grows with "
+                  "depth\" from \"a constant logit-scale advantage that the probability scale "
+                  "compresses where the rates are higher\".")
+        else:
+            s += " So the probability-scale result is not matched on the logit scale."
+        return s
+    if not logit:
+        return (f"{name}: C's 90% interval is {_iv(civ)}; the logit-scale interaction has no "
+                "interval (not finite)." + ceiling)
+    word = "excludes" if c_excl else "includes"
+    ivs = "; ".join(f"`{n}` {_iv(iv)}" for n, iv in logit.items())
+    many = len(logit) > 1
+    lw = (("include 0" if many else "includes 0") if len(incl) == len(logit) else
+          ("exclude 0" if many else "excludes 0") if not incl else
+          "include 0 under " + ", ".join(f"`{n}`" for n in incl) + " only")
+    s = (f"{name}: C's 90% interval {_iv(civ)} {word} 0, and the logit-scale "
+         f"interaction's 90% interval{'s' if many else ''} ({ivs}) {lw}.")
+    if set(logit) == {"firth"} and "ml_limit" in bs["estimators"] and _separated_cells(r):
+        s += (" The maximum-likelihood limit gives no finite logit-scale interaction here, so "
+              "the only logit interval is Firth's, which rests on separated cells (the penalty "
+              "sets it): it is not logit-scale evidence.")
+    return s + ceiling
+
+
+def _estimator_bullet(h: dict) -> str:
+    """Which estimator decides each reading, whether the two agree in sign, and where the rule
+    rests on Firth alone (computed)."""
+    base = ("- **The estimator matters at this size.** Firth's estimate and the "
+            "maximum-likelihood limit can differ in size and in sign; both are shown, and the "
+            "rule in force is named.")
+    rs = [("our runs' verdict" if k == "ours" else "the published verdict", r, True)
+          for k, r in _registered(h)]
+    x = h["published_exploratory"]
+    for effort, r in ((x or {}).get("efforts") or {}).items():
+        if r is not None:
+            rs.append((f"the {effort}-effort sign", r, False))
+    rs = [(n, r, reg) for n, r, reg in rs if r.get("estimates")]
+    if not rs:
+        return base
+    both = [(n, r) for n, r, _ in rs
+            if r["estimates"]["firth"]["contrast"] is not None
+            and r["estimates"]["ml_limit"]["contrast"] is not None]
+    differ = [n.rsplit(" ", 1)[0] for n, r in both if r["other_estimator_sign_agrees"] is False]
+    out = [base]
+    if both:
+        out.append(f" Here they give C opposite signs in {_games_and(differ)} reading"
+                   f"{'s' if len(differ) > 1 else ''}." if differ else
+                   f" Both give C in {len(both)} of the {len(rs)} readings, and there they "
+                   "agree in sign.")
+    for n, r, reg in rs:
+        if not reg:
+            continue
+        p, est = r["primary"], r["estimates"]
+        o = _other(p["source"])
+        oc = est[o]["contrast"]
+        out.append(f" {_cap(n)} uses `{p['source']}` (C = {_f(p['contrast'])}; `{o}` "
+                   + (_f(oc) if oc is not None else "leaves C undefined") + ").")
+    fell = [n for n, r, _ in rs if r["primary"].get("fallback_reason")]
+    if fell:
+        out.append(f" {_cap(_games_and(fell))} rest{'s' if len(fell) == 1 else ''} on Firth "
+                   "alone, because the ML limit leaves C undefined there.")
+    for n, r, reg in rs:
+        raw = r["raw"]["contrast"]
+        c = r["primary"]["contrast"]
+        if not reg or r["primary"]["source"] != "firth" or raw is None or c is None:
+            continue
+        rel = ("below" if c < raw - ZERO_TOL else "above" if c > raw + ZERO_TOL
+               else "equal to (at three decimals)")
+        name = "our runs" if n.startswith("our") else "the published runs"
+        out.append(f" For {name}, Firth's C ({_f(c)}) is {rel} the raw pooled contrast "
+                   f"({_f(raw)})" + (", and the rule's interval combines the two estimators "
+                                     f"(the note under {name})" if mixed_estimator_lines(r)
+                                     else "") + ".")
+    return "".join(out)
+
+
+def _endings_extra(h: dict) -> str:
+    """How many of Standard's uncleared deep rows are error endings, per data set, and what the
+    error-ending sensitivity gives (computed)."""
+    out = []
+    for key, r in _registered(h):
+        f = r.get("facts") or {}
+        fail = [x for x in f.get("standard_deep_rows") or [] if not x["cleared"]]
+        if not fail:
+            continue
+        err = [x for x in fail if x["ended_here"] and x["ending_kind"] == "error"]
+        std = r["harnesses"]["standard"]
+        if not err:
+            out.append(f" None of {std}'s {len(fail)} uncleared deep rows in {DATA_NAME[key]} "
+                       "ended by an error ending.")
+            continue
+        endings = ", ".join(sorted({x["ending"] for x in err}))
+        s = (f" {len(err)} of {std}'s {len(fail)} uncleared deep rows in {DATA_NAME[key]} are "
+             f"levels a run ended on by an error ending ({endings}"
+             + (", inferred" if key == "published" else "") + f": {_row_list(err)}), not a "
+             "budget ending")
+        sens = r.get("sensitivity_error_endings")
+        c, sc = r["primary"]["contrast"], sens and sens["primary"]["contrast"]
+        if sens and c is not None and sc is not None:
+            n = len(sens["dropped_rows"])
+            s += (f"; the error-ending sensitivity drops them ({n} row{'s' if n != 1 else ''} "
+                  f"dropped in all) and gives C = {_f(sc)} instead of {_f(c)}")
+        out.append(s + ".")
+    return "".join(out)
+
+
+def _thin_ours_bullet(h: dict) -> str | None:
+    """How little our runs' contrast rests on (computed): early failures, S0's deep rows and
+    their endings, and the levels of a replaced original (a fact, not an analysis)."""
+    o = h["ours"]
+    if o is None or not o.get("facts"):
+        return None
+    names, raw = o["harnesses"], o["raw"]["bands"]
+    std, ada = names["standard"], names["provider_adapter"]
+    out = []
+    early = [raw["early"][hk] for hk in HARNESSES]
+    a_early = o["primary"].get("A_early")
+    if all(c["reached"] and c["cleared"] == c["reached"] for c in early):
+        s = (f"Neither {std} nor {ada} failed an early level ({std} {_rate(early[0])}, {ada} "
+             f"{_rate(early[1])})")
+        if a_early is not None and abs(a_early) < ZERO_TOL:
+            s += ", so A_early is 0 (at three decimals) and C equals A_deep"
+        out.append(s + ".")
+    deep = o["facts"]["standard_deep_rows"]
+    runs = {r["run_id"]: r for r in h["ours_runs"]}
+    if not deep:
+        out.append(f"{std} reached no deep level.")
+    else:
+        unc = [x for x in deep if not x["cleared"]]
+        s = (f"{std}'s deep side is {len(deep)} row{'s' if len(deep) != 1 else ''} "
+             f"({_row_list(deep)}), {len(unc)} of {len(deep)} not cleared")
+        ends = [x for x in unc if x["ended_here"]]
+        if ends and len(ends) == len(unc) and len(unc) <= 6:
+            def how(x):
+                run = runs.get(x["run_id"]) or {}
+                rerun = (f", in a re-run with seed {run['seed']}" if run.get("rerun_of")
+                         and run.get("seed") is not None else "")
+                return (f"{x['game']} level {x['level']}: {x['ending']}"
+                        + (f", {BUDGET_WORDS[x['ending']]}" if x["ending"] in BUDGET_WORDS
+                           else "") + rerun)
+            kinds = {x["ending_kind"] for x in ends}
+            what = ("a budget ending" if kinds == {"budget"} else "an error ending"
+                    if kinds == {"error"} else "these endings")
+            s += (f", {'each' if len(ends) > 1 else 'it'} the level its run ended on, by "
+                  f"{what} (" + "; ".join(how(x) for x in ends) + ")")
+        out.append(s + ".")
+    for r in h["ours_runs"]:
+        if not r["replaced_by"] or r["levels_completed"] is None:
+            continue
+        counted = next((runs[i] for i in r["replaced_by"] if i in runs and runs[i]["counted"]),
+                       None)
+        s = (f"The replaced {r['game']} {r['config']} original (`{r['run_id']}`, not in H5) "
+             f"completed {r['levels_completed']} of {r['level_count']} levels")
+        if counted and counted["levels_completed"] is not None:
+            a, b = counted["levels_completed"] + 1, r["levels_completed"]
+            if b >= a:
+                lv = f"level {a}" if a == b else f"levels {a}-{b}"
+                s += f": it cleared {lv}, which its counted re-run did not"
+            else:
+                s += f" (its counted re-run: {counted['levels_completed']})"
+        out.append(s + " (a fact from the run table; H5 registers no reading on originals).")
+    if not out:
+        return None
+    return ("- **Our contrast rests on few rows.** " + " ".join(out) + " One run per game and "
+            "config cannot show whether these rows are stable.")
+
+
 def not_shown_lines(h: dict) -> list[str]:
-    """The caveats; those about one data set are printed only when it was read."""
+    """The caveats; those about one data set are printed only when it was read. Every data
+    fact in them is computed from `h`."""
     pub, ours = h["published"] is not None, h["ours"] is not None
     shares = []
     for name, r in (("published", h["published"]), ("ours", h["ours"])):
@@ -2022,7 +2638,12 @@ def not_shown_lines(h: dict) -> list[str]:
     if pub:
         blind.append("On the published data, the per-game scores, LP85's ending and the "
                      "inferred endings were seen, and the operational slice revealed each run's "
-                     "last level.")
+                     "last level. Each H5 row follows from a run's levels completed and last "
+                     "level reached, which the operational slice revealed, so the published "
+                     "reading is close to a computation on seen data. These are also the runs "
+                     "whose Standard-to-Adapter gap motivated this study and selected the path "
+                     "games (D14), so the published reading is not independent of where the "
+                     "hypothesis came from.")
     if ours:
         blind.append("Our S0 and S4 runs were seen before R6 (§17.6 change 4).")
     L = ["## What it does not show", ""]
@@ -2038,30 +2659,56 @@ def not_shown_lines(h: dict) -> list[str]:
           ("- **Extrapolation.** Part of A_deep rests on games where only one harness reached "
            "deep (share of the deep rows: " + ("; ".join(shares) or "n/a") + "), through the "
            "model's counterfactual for the other harness; the common-support reading is "
-           "exploratory."),
-          ("- **The estimator matters at this size.** Firth's estimate and the "
-           "maximum-likelihood limit can differ in size and in sign; both are shown, and the "
-           "rule in force is named."),
+           "exploratory.")]
+    uncleared = _uncleared_bullet(h)
+    if uncleared:
+        L.append(uncleared)
+    scale = [s for s in (_scale_text(k, r) for k, r in _registered(h)) if s]
+    if scale:
+        L.append("- **Scale.** C is on the probability scale, as registered; the logit-scale "
+                 "interaction is reported with it, and no reading rests on it. " + " ".join(scale))
+    L += [_estimator_bullet(h),
           ("- **Endings.** Published endings are inferred, and ERROR_OR_CLOSED pools errors "
            "with stops from outside the harness. The clock and the action budget leave the "
            "last level in play reached and not cleared when it had an action, so a slower "
-           "pace lowers P(clear | reached) at the last level reached (R5).")]
+           "pace lowers P(clear | reached) at the last level reached (R5)." + _endings_extra(h))]
     if ours:
-        L.append("- **Our 4 games are selected, so our reading is conditional.** The path games "
-                 "were chosen by D14's rule (§7.2): published high-effort gap ≥ 20, both "
+        n = h["ours"]["n_games"]
+        L.append(f"- **Our {n} games are selected, so our reading is conditional.** The path "
+                 "games were chosen by D14's rule (§7.2): published high-effort gap ≥ 20, both "
                  "published runs ≤ $60, and a normal Standard-high ending. They are games where "
                  "the Adapter is known to help, so H5 on our runs is conditional on \"games "
                  "where the Adapter helps\" (§7.2, PLAN §8.3), and the Adapter's advantage there "
-                 "may be larger than on the public set. Our S0 also differs from ARC's Standard "
-                 "(thought summaries, API surface, period; §15).")
+                 "may be larger than on the public set. Our S0 and S4 also differ from the "
+                 "published runs (S0's thought summaries; transport retry, period and possibly "
+                 "the API surface in both; §7.1, §15).")
+        thin = _thin_ours_bullet(h)
+        if thin:
+            L.append(thin)
     if pub and ours:
-        L.append("- **The data sets overlap.** The 4 path games are among the 25 published "
-                 "games, so the two readings are not independent.")
-    L.append("- **Descriptive only.** Percentile intervals"
-             + (", 35 distinct resamples for our 4 games" if ours else "")
+        mine, theirs = h["ours"]["games"], h["published"]["games"]
+        both = [g for g in mine if g in theirs]
+        L.append("- **The data sets overlap.** "
+                 + (f"The {len(mine)} path games are among the {len(theirs)} published games"
+                    if len(both) == len(mine) else
+                    f"{len(both)} of the {len(mine)} path games ({_games_and(both)}) are among "
+                    f"the {len(theirs)} published games" if both else
+                    "The path games were selected from the published runs (D14), though none "
+                    f"of the {len(mine)} is among the {len(theirs)} published games read here")
+                 + ", so the two readings are not independent.")
+    distinct = ""
+    if ours:
+        bs, n = h["ours"]["bootstrap"], h["ours"]["n_games"]
+        k = bs["distinct_possible"] if bs else math.comb(2 * n - 1, n) if n else 0
+        distinct = f", {k:,} distinct resamples for our {n} games"
+    L.append("- **Descriptive only.** Percentile intervals" + distinct
              + ", and no claim of statistical significance (H5 is outside the Holm family); "
              f"\"{FRACTION_LABEL}\" and the raw pooled contrast are exploratory.")
-    L.append("- **Narrow.** One model at high effort; other efforts are exploratory; no other "
+    models = sorted({x for _, r in _registered(h)
+                     for x in ((r.get("facts") or {}).get("model") or {}).get("names") or []})
+    which = ("One model" if len(models) < 2 else "Models") + (
+        f" ({_games_and(models)})" if models else "")
+    L.append(f"- **Narrow.** {which} at high effort; other efforts are exploratory; no other "
              "model was pulled; nothing here compares models.")
     return L
 
@@ -2080,20 +2727,30 @@ def summary_lines(h: dict) -> list[str]:
     p = h["published"]
     if p is not None:
         pinned = h["inputs"]["published_sha256_matches_pinned"]
-        L += ["", "## Published runs, high effort (registered; not blind)", "",
+        pm = (p.get("facts") or {}).get("model")
+        name = _model_text({**pm, "setting": None} if pm else None)
+        tags = ", ".join(f"`{t}`" for t in (pm or {}).get("config_tags") or [])
+        L += ["", (f"## Published runs, high effort{f', {name}' if name else ''} (registered; "
+                   "not blind)"), "",
               (f"{p['n_games']} games, {p['n_runs']} runs (one per game and harness), Standard "
-               "vs Provider Adapter; per_run.csv sha256 "
+               "vs Provider Adapter" + (f" (ARC config tags {tags})" if tags else "")
+               + "; per_run.csv sha256 "
                f"`{h['inputs']['published_per_run_sha256']}`"
                + (" (the pinned file)." if pinned else
                   " (**not the pinned file: PROVISIONAL**).")), ""]
         L += reading_lines(p)
     o = h["ours"]
     if o is not None:
-        L += ["", ("## Our runs, S0 vs S4 on the 4 path games (registered; not blind, R6 change "
-                  "4)"), "",
+        om = (o.get("facts") or {}).get("model")
+        name = _model_text(om)
+        missing = (om or {}).get("runs_without_model") or []
+        L += ["", (f"## Our runs, S0 vs S4 on the {o['n_games']} path games"
+                   f"{f', {name}' if name else ''} (registered; not blind, R6 change 4)"), "",
               (f"Games in draw order: {', '.join(o['games'])}; the counted seed-1 run of each "
-               "(game, config), a re-run replacing its original (§7.5)."), ""]
-        L += reading_lines(o, ours=True)
+               "(game, config), a re-run replacing its original (§7.5)."
+               + (f" The model is not recorded in the meta.json of {len(missing)} of "
+                  f"{o['n_runs']} runs." if missing else "")), ""]
+        L += reading_lines(o)
         L += ["", "Runs (S0 and S4; a replaced original is listed and is not in H5):", ""]
         L += _run_table(h)
     L += ["", "## Exploratory (§9.10)"]

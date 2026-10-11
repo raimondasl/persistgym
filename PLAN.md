@@ -779,3 +779,20 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
   - all within block `3-arc`'s $470.
 - **Unchanged:** the hypotheses, the readings, the gates and the budget caps.
 - **What it does not show:** the S1/S2 runs are not all on one summary budget (SB26 S1 and FT09 S1 ran under 8,192), and a replacement replaces a run whose partial play was seen.
+
+## 24. Amendment A9 (2026-10-11): an exploratory look at failures after a history compaction
+**Why.** H5 found that the Adapter's advantage shows up at deep levels (`results/arc_h5/20261011T055415Z/`). H4 will say which step of the path (summary compaction, notes, native replay) carries the gap. This analysis asks whether the S1/S2 runs, which carry state through harness summaries, tend to stall or fail soon after a compaction, which would tie the two together. The researcher asked for it on 2026-10-11, to run "sometime".
+- **Status:** exploratory (`PREREG.md` §9.10). Report it as exploratory, with no test and no verdict. It enters no hypothesis, gate or kill rule. $0: it reads files we already have.
+- **When:** after block `3-arc` ends, with H4's FINAL analysis, from a committed script.
+- **Data:** every counted S1, S2 and S4 run of the path study, since all three compact history; S0 only drops old turns. Per step it reads the harness logs and recordings in `results/raw/arc_path/<run>/`, read from the main checkout because `results/raw/` is gitignored. Runs replaced under D19 or R7 are reported separately.
+- **Readings** (by config and by band: early levels 1-2, deep levels ≥ 4):
+  - **Clears:** the rate of level clears per action in the first K = 5 actions after each compaction, against all other actions. K = 10 is a sensitivity reading.
+  - **Unusable replies:** the rate of unusable model replies per call in the same windows. These are replies with no parseable action: empty text, a tool call the harness does not serve, or a reply with only thoughts.
+  - **Endings:** where each run ended, measured in actions since its last compaction.
+  - Summarizer failures (the R7 cause) happen at a compaction by definition, so they are listed apart and not counted as "after a compaction".
+- **Seen before this amendment:** the endings, levels and costs of block 3's runs, and the log lines around these endings:
+  - CD82 S1's first try returned empty replies 1-2 actions after its 13th compaction;
+  - its re-run returned unusable replies (spurious tool calls) at action 211, after 31 compactions;
+  - the summarizer failures of R7.
+  - The compaction timing of the other runs has not been tabulated.
+- **What it will not show:** a causal effect of compaction. Compactions come at fixed context sizes, which are also the points where play has gone on longest, so time-into-the-run is confounded with time-since-compaction. There are few runs: about 8 S1/S2 runs and 4 S4 runs.

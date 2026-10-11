@@ -863,3 +863,8 @@ Claude proposes fixing these together with H3's question.
 - **Conditioning on reached** compares the harnesses over different runs. A_deep is not the effect on clearing a fixed level.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts the second output's wording as the one to cite. No number changes. It adds no spending approval. This entry's pull request is $0.
+
+## 2026-10-11: H5 discussed; an exploratory compaction analysis added to the plan (PLAN A9)
+**Decision (researcher, 2026-10-11):** "let's do an exploratory look at whether S1/S2 runs fail soon after a history compaction ... At least put it into the plan." PLAN §24 (A9) defines it before its data are tabulated: the windows, the readings and what has been seen. It is exploratory (§9.10), $0, and runs after block `3-arc` ends, with H4. It changes no hypothesis, run, gate or budget.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts PLAN A9. It adds no spending approval. This entry's pull request is $0.

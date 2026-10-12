@@ -914,3 +914,23 @@ Raw transcripts stay in `results/raw/` (gitignored).
 **Cost.** Block `3-arc`: $217.74 billed of $470. Project total: $620.42 billed. The block is now complete.
 
 **Next:** H4's FINAL analysis with S1 (this PR).
+
+## 2026-10-12: H4 results (FINAL, with S1)
+**The run.** `analysis.arc_h4 --with-s1`, run once on the complete block, output `results/arc_h4/20261012T174002Z/` (commit 0a1fd20, clean). Descriptive (D34): 4 units, one seed each. $0.
+
+**Means over the 4 path games (RHAE):** S0 9.24, S1 63.08, S2 36.32, S4 71.83.
+- **The gap:** G = **62.59**, 90% [29.51, 87.44].
+- **Shares:**
+  - σ_loss = **0.860** [0.541, 1.000]: S0→S1, summary compaction with the notes instruction in place of drop-oldest;
+  - σ_notes = **−0.427** [−0.879, 0.011]: S1→S2, removing the notes instruction lowers RHAE;
+  - σ_replay = **0.567** [0.000, 0.960]: S2→S4, native replay.
+- **Predictions:** A does not hold (σ_notes and σ_replay fail its conditions). **B holds** (σ_replay ≥ 1/2). Which hold: B only.
+- **At K = 150 actions** (secondary): G = 53.95, σ_replay = 0.711.
+
+**What it does not show** (the summary's own list applies; these matter most):
+- **B rests on one run.** With the R7-replaced FT09 S2 run put back (RHAE 71.43 instead of 18.06), σ_replay is 0.354 and B does not hold. Two runs of one unit differed by up to 43 RHAE: FT09 S0 58.17 vs 18.11, and FT09 S2 28.57 vs 71.43. One seed per unit cannot separate a config's effect from run-to-run variation.
+- **The path is not monotone.** S1 (summary plus notes) reaches 63.08, close to S4's 71.83 without native replay. Removing notes drops it to 36.32. The shares sum to 1, so a negative σ_notes inflates σ_loss and σ_replay together.
+- **Time confound and mixed budgets:** the configs ran on different days, and 3 of the 8 counted S1/S2 runs played under the pre-R7 budget.
+- **Before any number goes public,** it is re-derived independently (CLAUDE.md).
+
+**Approval.** No spending. This entry's pull request is $0.

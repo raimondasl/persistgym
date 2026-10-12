@@ -1,0 +1,95 @@
+{
+  "source_url": null,
+  "tags": [
+    "persistgym",
+    "arc_path",
+    "S2",
+    "seed-1",
+    "20261012T150200Z-S2-sb26-s1",
+    "agent",
+    "benchmarkingagent"
+  ],
+  "opaque": null,
+  "card_id": "c83de830-4dd9-4761-bdb4-e42b7149c531",
+  "score": 100.0,
+  "environments": [
+    {
+      "id": "sb26-7fbdac44",
+      "runs": [
+        {
+          "id": null,
+          "guid": "db6ff187-0e82-43da-a8a5-021d83998382",
+          "score": 100.0,
+          "levels_completed": 8,
+          "actions": 175,
+          "resets": 3,
+          "state": "WIN",
+          "completed": true,
+          "level_scores": [
+            115.0,
+            71.99265381083563,
+            112.11072664359862,
+            20.46485260770975,
+            115.0,
+            115.0,
+            115.0,
+            112.11072664359862
+          ],
+          "level_actions": [
+            13,
+            33,
+            17,
+            42,
+            17,
+            19,
+            17,
+            17
+          ],
+          "level_baseline_actions": [
+            18,
+            28,
+            18,
+            19,
+            31,
+            23,
+            58,
+            18
+          ],
+          "number_of_levels": null,
+          "number_of_environments": 0,
+          "message": null
+        }
+      ],
+      "score": 100.0,
+      "actions": 175,
+      "levels_completed": 8,
+      "completed": true,
+      "level_count": 8,
+      "resets": 3
+    }
+  ],
+  "tags_scores": [
+    {
+      "id": "keyboard_click",
+      "guid": null,
+      "score": 100.0,
+      "levels_completed": 8,
+      "actions": 175,
+      "resets": null,
+      "state": null,
+      "completed": null,
+      "level_scores": null,
+      "level_actions": null,
+      "level_baseline_actions": null,
+      "number_of_levels": 8,
+      "number_of_environments": 1,
+      "message": null
+    }
+  ],
+  "competition_mode": false,
+  "total_environments_completed": 1,
+  "total_environments": 1,
+  "total_levels_completed": 8,
+  "total_levels": 8,
+  "total_actions": 175
+}

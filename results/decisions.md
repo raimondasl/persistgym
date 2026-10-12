@@ -899,3 +899,38 @@ Raw transcripts stay in `results/raw/` (gitignored).
 **Next ($0):** H4's FINAL analysis with S1 (`analysis.arc_h4 --with-s1`), the PLAN A9 compaction analysis, and the G2 entry (Oct 21).
 
 **Approval.** No spending; the block is closed. This entry's pull request is $0.
+
+## 2026-10-12: Correction to "Block 3-arc complete": SB26 S2 was missing; it has now run
+**The error.** R7's run list (PREREG §17.7 change 3, PLAN A8 and the R7 decisions entry) said "then the rest of R6's order", but listed only CD82 S1, CD82 S2 and R11L S1.
+- It left out **SB26 S2**, position 5 of R6's order. The block-3 driver had paused after position 4 (R11L S2), so positions 5-8 remained.
+- The R7 driver therefore never ran it, and the entry "Block 3-arc complete" was wrong.
+- H4 found the gap when it refused to compute: "SB26 S2: no seed-1 run yet". R6 requires S2 on all 4 games (§17.6 change 1).
+- This was Claude's error.
+
+**The run** (researcher's go-ahead, 2026-10-12: "yes, please start it"): SB26 S2, seed 1, under the R7 config, within block `3-arc`'s existing approval (R6's 8-run order).
+- Run `20261012T150200Z-S2-sb26-s1`: `GAME_WIN` (8 of 8 levels), $19.48 billed.
+- D20: no re-run.
+
+**Cost.** Block `3-arc`: $217.74 billed of $470. Project total: $620.42 billed. The block is now complete.
+
+**Next:** H4's FINAL analysis with S1 (this PR).
+
+## 2026-10-12: H4 results (FINAL, with S1)
+**The run.** `analysis.arc_h4 --with-s1`, run once on the complete block, output `results/arc_h4/20261012T174002Z/` (commit 0a1fd20, clean). Descriptive (D34): 4 units, one seed each. $0.
+
+**Means over the 4 path games (RHAE):** S0 9.24, S1 63.08, S2 36.32, S4 71.83.
+- **The gap:** G = **62.59**, 90% [29.51, 87.44].
+- **Shares:**
+  - σ_loss = **0.860** [0.541, 1.000]: S0→S1, summary compaction with the notes instruction in place of drop-oldest;
+  - σ_notes = **−0.427** [−0.879, 0.011]: S1→S2, removing the notes instruction lowers RHAE;
+  - σ_replay = **0.567** [0.000, 0.960]: S2→S4, native replay.
+- **Predictions:** A does not hold (σ_notes and σ_replay fail its conditions). **B holds** (σ_replay ≥ 1/2). Which hold: B only.
+- **At K = 150 actions** (secondary): G = 53.95, σ_replay = 0.711.
+
+**What it does not show** (the summary's own list applies; these matter most):
+- **B rests on one run.** With the R7-replaced FT09 S2 run put back (RHAE 71.43 instead of 18.06), σ_replay is 0.354 and B does not hold. Two runs of one unit differed by up to 43 RHAE: FT09 S0 58.17 vs 18.11, and FT09 S2 28.57 vs 71.43. One seed per unit cannot separate a config's effect from run-to-run variation.
+- **The path is not monotone.** S1 (summary plus notes) reaches 63.08, close to S4's 71.83 without native replay. Removing notes drops it to 36.32. The shares sum to 1, so a negative σ_notes inflates σ_loss and σ_replay together.
+- **Time confound and mixed budgets:** the configs ran on different days, and 3 of the 8 counted S1/S2 runs played under the pre-R7 budget.
+- **Before any number goes public,** it is re-derived independently (CLAUDE.md).
+
+**Approval.** No spending. This entry's pull request is $0.

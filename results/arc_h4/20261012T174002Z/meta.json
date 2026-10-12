@@ -1,0 +1,106 @@
+{
+  "experiment": "arc_h4",
+  "run_id": "20261012T174002Z",
+  "cell_or_config": "h4+S1",
+  "config": {
+    "prereg": "PREREG.md §3 H4 as amended by §17.6 change 3 (R6), with §17.5 (R5), §7.5 D19/D20, §17.6 change 5 and R7 (S1 and S2's summary budget)",
+    "r7_summary_budget": 65536,
+    "configs": [
+      "S0",
+      "S1",
+      "S2",
+      "S4"
+    ],
+    "with_s1": true,
+    "replicate": 1,
+    "g_min": 10.0,
+    "n_boot": 10000,
+    "level": 0.9,
+    "bootstrap_seed": 4086943125952605564,
+    "K": 150,
+    "path_games": [
+      "FT09",
+      "SB26",
+      "R11L",
+      "CD82"
+    ],
+    "status": "FINAL",
+    "inputs": {
+      "results_root": "results",
+      "costs_csv": "results/costs.csv",
+      "draw_json": "results/draw/20261002T033145Z/draw.json",
+      "arc_path_folders": [
+        "results/arc_path/20261006T144656Z-S4-cd82-s1",
+        "results/arc_path/20261006T171726Z-S0-ft09-s1",
+        "results/arc_path/20261007T133444Z-S4-sb26-s1",
+        "results/arc_path/20261007T143700Z-S0-sb26-s1",
+        "results/arc_path/20261008T013832Z-S0-cd82-s1",
+        "results/arc_path/20261008T134155Z-S0-r11l-s1",
+        "results/arc_path/20261008T212807Z-S4-r11l-s1",
+        "results/arc_path/20261009T020602Z-S4-ft09-s1",
+        "results/arc_path/20261009T030646Z-S0-ft09-s101",
+        "results/arc_path/20261010T005046Z-S1-sb26-s1",
+        "results/arc_path/20261010T020247Z-S2-ft09-s1",
+        "results/arc_path/20261010T030159Z-S2-ft09-s101",
+        "results/arc_path/20261010T071105Z-S1-ft09-s1",
+        "results/arc_path/20261010T084933Z-S2-r11l-s1",
+        "results/arc_path/20261010T103451Z-S2-r11l-s101",
+        "results/arc_path/20261010T202129Z-S2-ft09-s201",
+        "results/arc_path/20261011T030015Z-S1-cd82-s1",
+        "results/arc_path/20261011T053855Z-S1-cd82-s101",
+        "results/arc_path/20261011T105637Z-S2-cd82-s1",
+        "results/arc_path/20261011T205715Z-S1-r11l-s1",
+        "results/arc_path/20261012T150200Z-S2-sb26-s1"
+      ]
+    }
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": {
+    "bootstrap": 4086943125952605564
+  },
+  "started_utc": "2026-10-12T17:40:02+00:00",
+  "finished_utc": "2026-10-12T17:40:02+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "h4.json",
+    "summary.md"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261006T144656Z-S4-cd82-s1",
+    "20261007T133444Z-S4-sb26-s1",
+    "20261007T143700Z-S0-sb26-s1",
+    "20261008T013832Z-S0-cd82-s1",
+    "20261008T134155Z-S0-r11l-s1",
+    "20261008T212807Z-S4-r11l-s1",
+    "20261009T020602Z-S4-ft09-s1",
+    "20261009T030646Z-S0-ft09-s101",
+    "20261010T005046Z-S1-sb26-s1",
+    "20261010T071105Z-S1-ft09-s1",
+    "20261010T103451Z-S2-r11l-s101",
+    "20261010T202129Z-S2-ft09-s201",
+    "20261011T053855Z-S1-cd82-s101",
+    "20261011T105637Z-S2-cd82-s1",
+    "20261011T205715Z-S1-r11l-s1",
+    "20261012T150200Z-S2-sb26-s1"
+  ],
+  "config_hash": "60dfe1fc5479fd71ee9af40d1a3cfbd7b47305492e342bdb7ba2d5cadcf5e87a",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "0a1fd209b3fc6664d291361f9e38c48752f369b6",
+  "git_dirty": false
+}

@@ -1,0 +1,863 @@
+{
+  "generated_utc": "2026-10-12T18:22:12+00:00",
+  "git_commit": "7a933fd21c10e7d90be610e2a8885720c4701acf",
+  "git_dirty": false,
+  "status": "EXPLORATORY",
+  "plan": "PLAN \u00a724 (A9); PREREG \u00a79.10",
+  "k": 5,
+  "k_sensitivity": 10,
+  "path_games": [
+    "FT09",
+    "SB26",
+    "R11L",
+    "CD82"
+  ],
+  "readings": {
+    "S1": {
+      "runs": [
+        "20261010T071105Z-S1-ft09-s1",
+        "20261010T005046Z-S1-sb26-s1",
+        "20261011T205715Z-S1-r11l-s1",
+        "20261011T053855Z-S1-cd82-s101"
+      ],
+      "compactions": 120,
+      "steps": 758,
+      "k5": {
+        "early": {
+          "window": {
+            "steps": 108,
+            "clears": 4,
+            "calls": 110,
+            "unusable": 2,
+            "clears_per_step": 0.037037037037037035,
+            "unusable_per_call": 0.01818181818181818
+          },
+          "other": {
+            "steps": 66,
+            "clears": 4,
+            "calls": 67,
+            "unusable": 1,
+            "clears_per_step": 0.06060606060606061,
+            "unusable_per_call": 0.014925373134328358
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 273,
+            "clears": 3,
+            "calls": 285,
+            "unusable": 12,
+            "clears_per_step": 0.01098901098901099,
+            "unusable_per_call": 0.042105263157894736
+          },
+          "other": {
+            "steps": 96,
+            "clears": 0,
+            "calls": 97,
+            "unusable": 1,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.010309278350515464
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 156,
+            "clears": 6,
+            "calls": 161,
+            "unusable": 5,
+            "clears_per_step": 0.038461538461538464,
+            "unusable_per_call": 0.031055900621118012
+          },
+          "other": {
+            "steps": 59,
+            "clears": 3,
+            "calls": 60,
+            "unusable": 1,
+            "clears_per_step": 0.05084745762711865,
+            "unusable_per_call": 0.016666666666666666
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 537,
+            "clears": 13,
+            "calls": 556,
+            "unusable": 19,
+            "clears_per_step": 0.024208566108007448,
+            "unusable_per_call": 0.0341726618705036
+          },
+          "other": {
+            "steps": 221,
+            "clears": 7,
+            "calls": 224,
+            "unusable": 3,
+            "clears_per_step": 0.03167420814479638,
+            "unusable_per_call": 0.013392857142857142
+          }
+        }
+      },
+      "k10": {
+        "early": {
+          "window": {
+            "steps": 139,
+            "clears": 5,
+            "calls": 142,
+            "unusable": 3,
+            "clears_per_step": 0.03597122302158273,
+            "unusable_per_call": 0.02112676056338028
+          },
+          "other": {
+            "steps": 35,
+            "clears": 3,
+            "calls": 35,
+            "unusable": 0,
+            "clears_per_step": 0.08571428571428572,
+            "unusable_per_call": 0.0
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 363,
+            "clears": 3,
+            "calls": 376,
+            "unusable": 13,
+            "clears_per_step": 0.008264462809917356,
+            "unusable_per_call": 0.034574468085106384
+          },
+          "other": {
+            "steps": 6,
+            "clears": 0,
+            "calls": 6,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 202,
+            "clears": 7,
+            "calls": 208,
+            "unusable": 6,
+            "clears_per_step": 0.034653465346534656,
+            "unusable_per_call": 0.028846153846153848
+          },
+          "other": {
+            "steps": 13,
+            "clears": 2,
+            "calls": 13,
+            "unusable": 0,
+            "clears_per_step": 0.15384615384615385,
+            "unusable_per_call": 0.0
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 704,
+            "clears": 15,
+            "calls": 726,
+            "unusable": 22,
+            "clears_per_step": 0.02130681818181818,
+            "unusable_per_call": 0.030303030303030304
+          },
+          "other": {
+            "steps": 54,
+            "clears": 5,
+            "calls": 54,
+            "unusable": 0,
+            "clears_per_step": 0.09259259259259259,
+            "unusable_per_call": 0.0
+          }
+        }
+      }
+    },
+    "S2": {
+      "runs": [
+        "20261010T202129Z-S2-ft09-s201",
+        "20261012T150200Z-S2-sb26-s1",
+        "20261010T103451Z-S2-r11l-s101",
+        "20261011T105637Z-S2-cd82-s1"
+      ],
+      "compactions": 142,
+      "steps": 977,
+      "k5": {
+        "early": {
+          "window": {
+            "steps": 120,
+            "clears": 3,
+            "calls": 125,
+            "unusable": 5,
+            "clears_per_step": 0.025,
+            "unusable_per_call": 0.04
+          },
+          "other": {
+            "steps": 60,
+            "clears": 5,
+            "calls": 63,
+            "unusable": 3,
+            "clears_per_step": 0.08333333333333333,
+            "unusable_per_call": 0.047619047619047616
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 363,
+            "clears": 1,
+            "calls": 366,
+            "unusable": 3,
+            "clears_per_step": 0.0027548209366391185,
+            "unusable_per_call": 0.00819672131147541
+          },
+          "other": {
+            "steps": 182,
+            "clears": 1,
+            "calls": 188,
+            "unusable": 6,
+            "clears_per_step": 0.005494505494505495,
+            "unusable_per_call": 0.031914893617021274
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 165,
+            "clears": 5,
+            "calls": 165,
+            "unusable": 0,
+            "clears_per_step": 0.030303030303030304,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 87,
+            "clears": 0,
+            "calls": 87,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 648,
+            "clears": 9,
+            "calls": 656,
+            "unusable": 8,
+            "clears_per_step": 0.013888888888888888,
+            "unusable_per_call": 0.012195121951219513
+          },
+          "other": {
+            "steps": 329,
+            "clears": 6,
+            "calls": 338,
+            "unusable": 9,
+            "clears_per_step": 0.0182370820668693,
+            "unusable_per_call": 0.026627218934911243
+          }
+        }
+      },
+      "k10": {
+        "early": {
+          "window": {
+            "steps": 145,
+            "clears": 6,
+            "calls": 150,
+            "unusable": 5,
+            "clears_per_step": 0.041379310344827586,
+            "unusable_per_call": 0.03333333333333333
+          },
+          "other": {
+            "steps": 35,
+            "clears": 2,
+            "calls": 38,
+            "unusable": 3,
+            "clears_per_step": 0.05714285714285714,
+            "unusable_per_call": 0.07894736842105263
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 524,
+            "clears": 2,
+            "calls": 533,
+            "unusable": 9,
+            "clears_per_step": 0.003816793893129771,
+            "unusable_per_call": 0.016885553470919325
+          },
+          "other": {
+            "steps": 21,
+            "clears": 0,
+            "calls": 21,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 223,
+            "clears": 5,
+            "calls": 223,
+            "unusable": 0,
+            "clears_per_step": 0.02242152466367713,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 29,
+            "clears": 0,
+            "calls": 29,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 892,
+            "clears": 13,
+            "calls": 906,
+            "unusable": 14,
+            "clears_per_step": 0.014573991031390135,
+            "unusable_per_call": 0.01545253863134658
+          },
+          "other": {
+            "steps": 85,
+            "clears": 2,
+            "calls": 88,
+            "unusable": 3,
+            "clears_per_step": 0.023529411764705882,
+            "unusable_per_call": 0.03409090909090909
+          }
+        }
+      }
+    },
+    "S4": {
+      "runs": [
+        "20261009T020602Z-S4-ft09-s1",
+        "20261007T133444Z-S4-sb26-s1",
+        "20261008T212807Z-S4-r11l-s1",
+        "20261006T144656Z-S4-cd82-s1"
+      ],
+      "compactions": 132,
+      "steps": 737,
+      "k5": {
+        "early": {
+          "window": {
+            "steps": 67,
+            "clears": 6,
+            "calls": 67,
+            "unusable": 0,
+            "clears_per_step": 0.08955223880597014,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 36,
+            "clears": 2,
+            "calls": 36,
+            "unusable": 0,
+            "clears_per_step": 0.05555555555555555,
+            "unusable_per_call": 0.0
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 295,
+            "clears": 3,
+            "calls": 295,
+            "unusable": 0,
+            "clears_per_step": 0.010169491525423728,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 39,
+            "clears": 0,
+            "calls": 39,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 228,
+            "clears": 9,
+            "calls": 228,
+            "unusable": 0,
+            "clears_per_step": 0.039473684210526314,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 72,
+            "clears": 2,
+            "calls": 72,
+            "unusable": 0,
+            "clears_per_step": 0.027777777777777776,
+            "unusable_per_call": 0.0
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 590,
+            "clears": 18,
+            "calls": 590,
+            "unusable": 0,
+            "clears_per_step": 0.030508474576271188,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 147,
+            "clears": 4,
+            "calls": 147,
+            "unusable": 0,
+            "clears_per_step": 0.027210884353741496,
+            "unusable_per_call": 0.0
+          }
+        }
+      },
+      "k10": {
+        "early": {
+          "window": {
+            "steps": 76,
+            "clears": 7,
+            "calls": 76,
+            "unusable": 0,
+            "clears_per_step": 0.09210526315789473,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 27,
+            "clears": 1,
+            "calls": 27,
+            "unusable": 0,
+            "clears_per_step": 0.037037037037037035,
+            "unusable_per_call": 0.0
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 332,
+            "clears": 3,
+            "calls": 332,
+            "unusable": 0,
+            "clears_per_step": 0.009036144578313253,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 2,
+            "clears": 0,
+            "calls": 2,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 292,
+            "clears": 10,
+            "calls": 292,
+            "unusable": 0,
+            "clears_per_step": 0.03424657534246575,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 8,
+            "clears": 1,
+            "calls": 8,
+            "unusable": 0,
+            "clears_per_step": 0.125,
+            "unusable_per_call": 0.0
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 700,
+            "clears": 20,
+            "calls": 700,
+            "unusable": 0,
+            "clears_per_step": 0.02857142857142857,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 37,
+            "clears": 2,
+            "calls": 37,
+            "unusable": 0,
+            "clears_per_step": 0.05405405405405406,
+            "unusable_per_call": 0.0
+          }
+        }
+      }
+    }
+  },
+  "replaced": {
+    "S1": {
+      "runs": [
+        "20261011T030015Z-S1-cd82-s1"
+      ],
+      "k5": {
+        "early": {
+          "window": {
+            "steps": 10,
+            "clears": 1,
+            "calls": 10,
+            "unusable": 0,
+            "clears_per_step": 0.1,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 10,
+            "clears": 1,
+            "calls": 12,
+            "unusable": 2,
+            "clears_per_step": 0.1,
+            "unusable_per_call": 0.16666666666666666
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 50,
+            "clears": 0,
+            "calls": 59,
+            "unusable": 9,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.15254237288135594
+          },
+          "other": {
+            "steps": 17,
+            "clears": 0,
+            "calls": 18,
+            "unusable": 1,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.05555555555555555
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 0,
+            "clears": 0,
+            "calls": 0,
+            "unusable": 0,
+            "clears_per_step": null,
+            "unusable_per_call": null
+          },
+          "other": {
+            "steps": 0,
+            "clears": 0,
+            "calls": 0,
+            "unusable": 0,
+            "clears_per_step": null,
+            "unusable_per_call": null
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 60,
+            "clears": 1,
+            "calls": 69,
+            "unusable": 9,
+            "clears_per_step": 0.016666666666666666,
+            "unusable_per_call": 0.13043478260869565
+          },
+          "other": {
+            "steps": 27,
+            "clears": 1,
+            "calls": 30,
+            "unusable": 3,
+            "clears_per_step": 0.037037037037037035,
+            "unusable_per_call": 0.1
+          }
+        }
+      }
+    },
+    "S2": {
+      "runs": [
+        "20261010T020247Z-S2-ft09-s1",
+        "20261010T030159Z-S2-ft09-s101",
+        "20261010T084933Z-S2-r11l-s1"
+      ],
+      "k5": {
+        "early": {
+          "window": {
+            "steps": 22,
+            "clears": 1,
+            "calls": 22,
+            "unusable": 0,
+            "clears_per_step": 0.045454545454545456,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 28,
+            "clears": 4,
+            "calls": 28,
+            "unusable": 0,
+            "clears_per_step": 0.14285714285714285,
+            "unusable_per_call": 0.0
+          }
+        },
+        "level 3": {
+          "window": {
+            "steps": 14,
+            "clears": 1,
+            "calls": 14,
+            "unusable": 0,
+            "clears_per_step": 0.07142857142857142,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 16,
+            "clears": 1,
+            "calls": 16,
+            "unusable": 0,
+            "clears_per_step": 0.0625,
+            "unusable_per_call": 0.0
+          }
+        },
+        "deep": {
+          "window": {
+            "steps": 46,
+            "clears": 0,
+            "calls": 46,
+            "unusable": 0,
+            "clears_per_step": 0.0,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 63,
+            "clears": 2,
+            "calls": 64,
+            "unusable": 1,
+            "clears_per_step": 0.031746031746031744,
+            "unusable_per_call": 0.015625
+          }
+        },
+        "all": {
+          "window": {
+            "steps": 82,
+            "clears": 2,
+            "calls": 82,
+            "unusable": 0,
+            "clears_per_step": 0.024390243902439025,
+            "unusable_per_call": 0.0
+          },
+          "other": {
+            "steps": 107,
+            "clears": 7,
+            "calls": 108,
+            "unusable": 1,
+            "clears_per_step": 0.06542056074766354,
+            "unusable_per_call": 0.009259259259259259
+          }
+        }
+      }
+    }
+  },
+  "endings": [
+    {
+      "run_id": "20261006T144656Z-S4-cd82-s1",
+      "game": "CD82",
+      "config": "S4",
+      "counted": true,
+      "agent_exit_reason": "GAME_WIN",
+      "levels_completed": 6,
+      "last_step": 206,
+      "compactions": 33,
+      "steps_since_last_compaction": 6,
+      "unusable_replies": 0,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261007T133444Z-S4-sb26-s1",
+      "game": "SB26",
+      "config": "S4",
+      "counted": true,
+      "agent_exit_reason": "GAME_WIN",
+      "levels_completed": 8,
+      "last_step": 138,
+      "compactions": 36,
+      "steps_since_last_compaction": 2,
+      "unusable_replies": 0,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261008T212807Z-S4-r11l-s1",
+      "game": "R11L",
+      "config": "S4",
+      "counted": true,
+      "agent_exit_reason": "ACTION_BUDGET",
+      "levels_completed": 2,
+      "last_step": 281,
+      "compactions": 53,
+      "steps_since_last_compaction": 2,
+      "unusable_replies": 0,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261009T020602Z-S4-ft09-s1",
+      "game": "FT09",
+      "config": "S4",
+      "counted": true,
+      "agent_exit_reason": "GAME_WIN",
+      "levels_completed": 6,
+      "last_step": 112,
+      "compactions": 10,
+      "steps_since_last_compaction": 11,
+      "unusable_replies": 0,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261010T005046Z-S1-sb26-s1",
+      "game": "SB26",
+      "config": "S1",
+      "counted": true,
+      "agent_exit_reason": "GAME_WIN",
+      "levels_completed": 8,
+      "last_step": 131,
+      "compactions": 33,
+      "steps_since_last_compaction": 2,
+      "unusable_replies": 0,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261010T020247Z-S2-ft09-s1",
+      "game": "FT09",
+      "config": "S2",
+      "counted": false,
+      "agent_exit_reason": "AGENT_ERROR",
+      "levels_completed": 3,
+      "last_step": 49,
+      "compactions": 3,
+      "steps_since_last_compaction": 9,
+      "unusable_replies": 0,
+      "summary_failure": true
+    },
+    {
+      "run_id": "20261010T030159Z-S2-ft09-s101",
+      "game": "FT09",
+      "config": "S2",
+      "counted": false,
+      "agent_exit_reason": "AGENT_ERROR",
+      "levels_completed": 5,
+      "last_step": 112,
+      "compactions": 9,
+      "steps_since_last_compaction": 10,
+      "unusable_replies": 1,
+      "summary_failure": true
+    },
+    {
+      "run_id": "20261010T071105Z-S1-ft09-s1",
+      "game": "FT09",
+      "config": "S1",
+      "counted": true,
+      "agent_exit_reason": "GAME_WIN",
+      "levels_completed": 6,
+      "last_step": 92,
+      "compactions": 7,
+      "steps_since_last_compaction": 5,
+      "unusable_replies": 1,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261010T084933Z-S2-r11l-s1",
+      "game": "R11L",
+      "config": "S2",
+      "counted": false,
+      "agent_exit_reason": "AGENT_ERROR",
+      "levels_completed": 1,
+      "last_step": 28,
+      "compactions": 6,
+      "steps_since_last_compaction": 3,
+      "unusable_replies": 0,
+      "summary_failure": true
+    },
+    {
+      "run_id": "20261010T103451Z-S2-r11l-s101",
+      "game": "R11L",
+      "config": "S2",
+      "counted": true,
+      "agent_exit_reason": "ACTION_BUDGET",
+      "levels_completed": 2,
+      "last_step": 286,
+      "compactions": 46,
+      "steps_since_last_compaction": 6,
+      "unusable_replies": 3,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261010T202129Z-S2-ft09-s201",
+      "game": "FT09",
+      "config": "S2",
+      "counted": true,
+      "agent_exit_reason": "ACTION_BUDGET",
+      "levels_completed": 3,
+      "last_step": 219,
+      "compactions": 17,
+      "steps_since_last_compaction": 13,
+      "unusable_replies": 1,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261011T030015Z-S1-cd82-s1",
+      "game": "CD82",
+      "config": "S1",
+      "counted": false,
+      "agent_exit_reason": "AGENT_ERROR",
+      "levels_completed": 2,
+      "last_step": 87,
+      "compactions": 13,
+      "steps_since_last_compaction": 3,
+      "unusable_replies": 12,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261011T053855Z-S1-cd82-s101",
+      "game": "CD82",
+      "config": "S1",
+      "counted": true,
+      "agent_exit_reason": "AGENT_ERROR",
+      "levels_completed": 4,
+      "last_step": 210,
+      "compactions": 31,
+      "steps_since_last_compaction": 3,
+      "unusable_replies": 14,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261011T105637Z-S2-cd82-s1",
+      "game": "CD82",
+      "config": "S2",
+      "counted": true,
+      "agent_exit_reason": "ACTION_BUDGET",
+      "levels_completed": 2,
+      "last_step": 297,
+      "compactions": 36,
+      "steps_since_last_compaction": 4,
+      "unusable_replies": 12,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261011T205715Z-S1-r11l-s1",
+      "game": "R11L",
+      "config": "S1",
+      "counted": true,
+      "agent_exit_reason": "ACTION_BUDGET",
+      "levels_completed": 2,
+      "last_step": 325,
+      "compactions": 49,
+      "steps_since_last_compaction": 4,
+      "unusable_replies": 7,
+      "summary_failure": false
+    },
+    {
+      "run_id": "20261012T150200Z-S2-sb26-s1",
+      "game": "SB26",
+      "config": "S2",
+      "counted": true,
+      "agent_exit_reason": "GAME_WIN",
+      "levels_completed": 8,
+      "last_step": 175,
+      "compactions": 43,
+      "steps_since_last_compaction": 2,
+      "unusable_replies": 1,
+      "summary_failure": false
+    }
+  ]
+}

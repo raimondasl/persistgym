@@ -1,0 +1,36 @@
+{
+  "blinded": false,
+  "n_episodes": 80,
+  "errors": {
+    "exit_reasons": {
+      "DONE": 80
+    },
+    "n_excluded": 0,
+    "n_summary_failures": 0,
+    "n_unparsed_routine": 0,
+    "n_incomplete_routine": 0
+  },
+  "latency": {
+    "n_calls": 80,
+    "median_s": 1.625,
+    "p90_s": 2.063,
+    "max_s": 2.75
+  },
+  "cost_usd": {
+    "cost_usd_list": 0.345563,
+    "cost_usd_billed_est": 0.172782
+  },
+  "echo_match": {
+    "single-turn": {
+      "requests": 80,
+      "matched": 80,
+      "effort_matched": 80
+    }
+  },
+  "reply_action_classes": {
+    "need_verb": 80,
+    "routine_verb": 0,
+    "other_verb": 0,
+    "none": 0
+  }
+}

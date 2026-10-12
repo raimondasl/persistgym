@@ -1,0 +1,89 @@
+{
+  "source_url": null,
+  "tags": [
+    "persistgym",
+    "arc_path",
+    "S1",
+    "seed-101",
+    "20261011T053855Z-S1-cd82-s101",
+    "agent",
+    "benchmarkingagent"
+  ],
+  "opaque": null,
+  "card_id": "4db0a51c-a80d-4352-bc54-1df83dc49344",
+  "score": 41.11065439141886,
+  "environments": [
+    {
+      "id": "cd82-fb555c5d",
+      "runs": [
+        {
+          "id": null,
+          "guid": "2ad778ef-8455-4be9-9810-0891aa0517ef",
+          "score": 41.11065439141886,
+          "levels_completed": 4,
+          "actions": 210,
+          "resets": 12,
+          "state": "NOT_FINISHED",
+          "completed": false,
+          "level_scores": [
+            96.46045918367346,
+            115.0,
+            25.621094345374186,
+            115.0,
+            0.0,
+            0.0
+          ],
+          "level_actions": [
+            56,
+            6,
+            81,
+            14,
+            53,
+            0
+          ],
+          "level_baseline_actions": [
+            55,
+            8,
+            41,
+            21,
+            23,
+            23
+          ],
+          "number_of_levels": null,
+          "number_of_environments": 0,
+          "message": null
+        }
+      ],
+      "score": 41.11065439141886,
+      "actions": 210,
+      "levels_completed": 4,
+      "completed": false,
+      "level_count": 6,
+      "resets": 12
+    }
+  ],
+  "tags_scores": [
+    {
+      "id": "keyboard_click",
+      "guid": null,
+      "score": 41.11065439141886,
+      "levels_completed": 4,
+      "actions": 210,
+      "resets": null,
+      "state": null,
+      "completed": null,
+      "level_scores": null,
+      "level_actions": null,
+      "level_baseline_actions": null,
+      "number_of_levels": 6,
+      "number_of_environments": 1,
+      "message": null
+    }
+  ],
+  "competition_mode": false,
+  "total_environments_completed": 0,
+  "total_environments": 1,
+  "total_levels_completed": 4,
+  "total_levels": 6,
+  "total_actions": 210
+}

@@ -934,3 +934,21 @@ Raw transcripts stay in `results/raw/` (gitignored).
 - **Before any number goes public,** it is re-derived independently (CLAUDE.md).
 
 **Approval.** No spending. This entry's pull request is $0.
+
+## 2026-10-12: The PLAN A9 compaction analysis (exploratory)
+**The run.** `analysis.arc_compaction` (new; tested on a synthetic log), run once on the complete block: `results/arc_compaction/20261012T182212Z/` (commit 7a933fd). Exploratory (PREREG §9.10). $0.
+
+**What it shows,** for the counted runs (4 per config):
+- **Compactions are frequent:** one every 6.3 steps in S1, 6.9 in S2 and 5.6 in S4.
+  - So the 5-step window after a compaction covers most steps.
+  - The comparison is with a minority of steps further from one, and at K = 10 that minority is very small.
+- **Unusable replies** (no parseable action):
+  - **S4 had none** in 737 steps.
+  - **S1 had 22.** Per call, they were more frequent in the 5 steps after a compaction (0.034, 19 replies) than elsewhere (0.013, 3 replies).
+  - **S2 had 17,** less frequent after a compaction (0.012) than elsewhere (0.027).
+- **Level clears per step:** no consistent difference between the window and the other steps (S1 0.024 vs 0.032; S2 0.014 vs 0.018; S4 0.031 vs 0.027).
+- **Endings:** the last step of every counted run fell 2-13 steps after its last compaction.
+
+**What it does not show.** No causal effect: time since a compaction is confounded with time into the run and with the level in play. The counts are small (one run per game and config). The endings and some log lines were seen before A9 was written. The one descriptive pattern worth noting for the paper is that unusable replies appeared only in the summary-based configs (S1, S2) and never with native replay (S4). It is labelled exploratory.
+
+**Approval.** No spending. This entry's pull request is $0.

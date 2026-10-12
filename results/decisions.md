@@ -899,3 +899,18 @@ Raw transcripts stay in `results/raw/` (gitignored).
 **Next ($0):** H4's FINAL analysis with S1 (`analysis.arc_h4 --with-s1`), the PLAN A9 compaction analysis, and the G2 entry (Oct 21).
 
 **Approval.** No spending; the block is closed. This entry's pull request is $0.
+
+## 2026-10-12: Correction to "Block 3-arc complete": SB26 S2 was missing; it has now run
+**The error.** R7's run list (PREREG §17.7 change 3, PLAN A8 and the R7 decisions entry) said "then the rest of R6's order", but listed only CD82 S1, CD82 S2 and R11L S1.
+- It left out **SB26 S2**, position 5 of R6's order. The block-3 driver had paused after position 4 (R11L S2), so positions 5-8 remained.
+- The R7 driver therefore never ran it, and the entry "Block 3-arc complete" was wrong.
+- H4 found the gap when it refused to compute: "SB26 S2: no seed-1 run yet". R6 requires S2 on all 4 games (§17.6 change 1).
+- This was Claude's error.
+
+**The run** (researcher's go-ahead, 2026-10-12: "yes, please start it"): SB26 S2, seed 1, under the R7 config, within block `3-arc`'s existing approval (R6's 8-run order).
+- Run `20261012T150200Z-S2-sb26-s1`: `GAME_WIN` (8 of 8 levels), $19.48 billed.
+- D20: no re-run.
+
+**Cost.** Block `3-arc`: $217.74 billed of $470. Project total: $620.42 billed. The block is now complete.
+
+**Next:** H4's FINAL analysis with S1 (this PR).

@@ -1,0 +1,187 @@
+{
+  "experiment": "arc_path",
+  "run_id": "20261011T053855Z-S1-cd82-s101",
+  "cell_or_config": "S1",
+  "config": {
+    "id": "google-gemini-3-8-flash-high-rolling-summary",
+    "agent": {
+      "MAX_ACTIONS_BASELINE_MULTIPLIER": 5.0,
+      "MAX_CONTEXT_LENGTH": 1048576
+    },
+    "runtime": {
+      "sdk": "google-genai",
+      "api": "interactions",
+      "state": "manual_rolling",
+      "compaction": {
+        "strategy": "harness_summary",
+        "trigger_tokens": 175000,
+        "summary_max_output_tokens": 65536,
+        "summary_input_headroom_tokens": 8192
+      }
+    },
+    "client": {
+      "api_key_env": "GOOGLE_API_KEY",
+      "transport_retry": {
+        "status_codes": [
+          429,
+          503
+        ],
+        "initial_delay_seconds": 2.0,
+        "max_delay_seconds": 60.0,
+        "max_wait_seconds": 1800.0,
+        "jitter_ratio": 0.25
+      }
+    },
+    "request": {
+      "model": "gemini-3.8-flash",
+      "store": false,
+      "service_tier": "standard",
+      "generation_config": {
+        "max_output_tokens": 65536,
+        "thinking_level": "high",
+        "thinking_summaries": "auto"
+      }
+    },
+    "pricing": {
+      "input": 0.75,
+      "output": 3.75
+    }
+  },
+  "model_requested": "gemini-3.8-flash",
+  "model_returned": [
+    "gemini-3.8-flash"
+  ],
+  "reasoning_effort": {
+    "thinking_level": "high"
+  },
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": "cd82",
+  "repeat_index": 101,
+  "seeds": {
+    "replicate_seed": 101,
+    "note": "labels the replicate; not sent to the model"
+  },
+  "started_utc": "2026-10-11T05:39:33+00:00",
+  "finished_utc": "2026-10-11T10:56:33+00:00",
+  "exit_reason": "AGENT_ERROR",
+  "agent_exit_reason": "AGENT_ERROR",
+  "tokens": {
+    "input_tokens": 26744455,
+    "cached_input_tokens": 13210385,
+    "output_tokens": 2868652,
+    "reasoning_tokens": 2780105
+  },
+  "cost_usd": {
+    "list": 30.815786,
+    "billed_est": 21.898776,
+    "basis": "billed estimate primary (D23); list = ARC's no-cache accounting",
+    "price_source": "https://ai.google.dev/gemini-api/docs/pricing",
+    "price_source_date": "2026-09-30",
+    "costs_csv_row_appended": true
+  },
+  "raw_transcript_path": "results/raw/arc_path/20261011T053855Z-S1-cd82-s101",
+  "config_freeze": {
+    "labels": [
+      "S1"
+    ],
+    "sha256": {
+      "S1": "cd475ca08341a24e414f601ecd66de3096fd947c3a41178683bd4473bfba1076"
+    },
+    "patch_series_sha256": "40ec95ec32560f012baace31911803677cfd664224190e38c8d8b479c820d23b",
+    "patched_commit": "b716253e7da484b4eb402420ec511f2ce36229fe",
+    "patched_tree": "ca0a64fe953ccedff5412eec5b62b9c38c2a0d15",
+    "pinned_commit": "4ca00e607e3364a501fcbf7d1b7537dd2729cec3"
+  },
+  "service_tier": {
+    "requested": "standard",
+    "served": {
+      "standard": 210
+    }
+  },
+  "latency": {
+    "n_ok_calls": 255,
+    "median_s": 43.281,
+    "p90_s": 190.89,
+    "max_s": 354.89
+  },
+  "n_calls": 255,
+  "n_http_requests": 255,
+  "approved_block": "3-arc",
+  "planned_usd": 120.0,
+  "phase": "1b",
+  "cost_cap_usd": 120.0,
+  "hold_placed": false,
+  "rerun_of": "20261011T030015Z-S1-cd82-s1",
+  "r7_replaces": null,
+  "paid": true,
+  "config_id": "google-gemini-3-8-flash-high-rolling-summary",
+  "game_requested": "cd82",
+  "arc_environment": {
+    "kind": "remote",
+    "base_url": "https://three.arcprize.org"
+  },
+  "requested_service_tier": "standard",
+  "service_tiers_served": {
+    "standard": 210
+  },
+  "reported_models": [
+    "gemini-3.8-flash"
+  ],
+  "n_compactions": 31,
+  "context_trims": 0,
+  "transport_retry": {
+    "policy": {
+      "status_codes": [
+        429,
+        503
+      ],
+      "initial_delay_seconds": 2.0,
+      "max_delay_seconds": 60.0,
+      "max_wait_seconds": 1800.0,
+      "jitter_ratio": 0.25
+    },
+    "throttled_responses": 0,
+    "retries": 0,
+    "wait_seconds": 0.0,
+    "longest_episode_seconds": 0.0,
+    "passed_through": 0,
+    "deadline_passthroughs": 0
+  },
+  "cost_guard": {
+    "max_usd": 120.0,
+    "estimated_cost_usd": 30.815786
+  },
+  "wall_clock_s": 18999.901,
+  "inner_error": null,
+  "interrupted": false,
+  "truncation_limits": {
+    "max_actions": null,
+    "after_summary_turns": null
+  },
+  "unrecorded_usage": null,
+  "outcome": {
+    "scorecard_id": "4db0a51c-a80d-4352-bc54-1df83dc49344",
+    "game_id_served": "cd82-fb555c5d",
+    "n_steps": 210,
+    "action_counter": 210,
+    "truncation": {
+      "max_actions": null,
+      "after_summary_turns": null,
+      "first_summary_before_step": 9,
+      "truncated": false,
+      "reason": null
+    },
+    "outcome": null
+  },
+  "config_hash": "cd475ca08341a24e414f601ecd66de3096fd947c3a41178683bd4473bfba1076",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "a60ceab6a55551bb643de491cc5b79cdb5865d16",
+  "git_dirty": true
+}

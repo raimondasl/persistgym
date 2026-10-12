@@ -1,0 +1,89 @@
+{
+  "source_url": null,
+  "tags": [
+    "persistgym",
+    "arc_path",
+    "S2",
+    "seed-1",
+    "20261010T084933Z-S2-r11l-s1",
+    "agent",
+    "benchmarkingagent"
+  ],
+  "opaque": null,
+  "card_id": "3cc5f7f2-f53a-45a6-ab22-490264880abe",
+  "score": 4.761904761904762,
+  "environments": [
+    {
+      "id": "r11l-495a7899",
+      "runs": [
+        {
+          "id": null,
+          "guid": "4910423f-d2df-4d77-8d3d-e0f2ec934b45",
+          "score": 4.761904761904762,
+          "levels_completed": 1,
+          "actions": 28,
+          "resets": 1,
+          "state": "GAME_OVER",
+          "completed": false,
+          "level_scores": [
+            115.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "level_actions": [
+            7,
+            21,
+            0,
+            0,
+            0,
+            0
+          ],
+          "level_baseline_actions": [
+            22,
+            33,
+            51,
+            26,
+            52,
+            49
+          ],
+          "number_of_levels": null,
+          "number_of_environments": 0,
+          "message": null
+        }
+      ],
+      "score": 4.761904761904762,
+      "actions": 28,
+      "levels_completed": 1,
+      "completed": false,
+      "level_count": 6,
+      "resets": 1
+    }
+  ],
+  "tags_scores": [
+    {
+      "id": "click",
+      "guid": null,
+      "score": 4.761904761904762,
+      "levels_completed": 1,
+      "actions": 28,
+      "resets": null,
+      "state": null,
+      "completed": null,
+      "level_scores": null,
+      "level_actions": null,
+      "level_baseline_actions": null,
+      "number_of_levels": 6,
+      "number_of_environments": 1,
+      "message": null
+    }
+  ],
+  "competition_mode": false,
+  "total_environments_completed": 0,
+  "total_environments": 1,
+  "total_levels_completed": 1,
+  "total_levels": 6,
+  "total_actions": 28
+}

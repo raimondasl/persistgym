@@ -868,3 +868,34 @@ Claude proposes fixing these together with H3's question.
 **Decision (researcher, 2026-10-11):** "let's do an exploratory look at whether S1/S2 runs fail soon after a history compaction ... At least put it into the plan." PLAN §24 (A9) defines it before its data are tabulated: the windows, the readings and what has been seen. It is exploratory (§9.10), $0, and runs after block `3-arc` ends, with H4. It changes no hypothesis, run, gate or budget.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts PLAN A9. It adds no spending approval. This entry's pull request is $0.
+
+## 2026-10-12: Block 3-arc complete; the sweep and block data committed
+**The R7 runs, in order:**
+
+| Run | Run ID | Ending | Levels | Billed | D19 |
+|---|---|---|---|---|---|
+| FT09 S2, the R7 replacement | `20261010T202129Z-S2-ft09-s201` | `ACTION_BUDGET` | 3 of 6 | $21.46 | no re-run |
+| CD82 S1 | `20261011T030015Z-S1-cd82-s1` | `AGENT_ERROR` | 2 of 6 | $9.62 | re-run |
+| CD82 S1, its D19 re-run | `20261011T053855Z-S1-cd82-s101` | `AGENT_ERROR` | 4 of 6 | $21.90 | none further |
+| CD82 S2 | `20261011T105637Z-S2-cd82-s1` | `ACTION_BUDGET` | 2 of 6 | $30.76 | no re-run |
+| R11L S1 | `20261011T205715Z-S1-r11l-s1` | `ACTION_BUDGET` | 2 of 6 | $36.57 | no re-run |
+
+- **No summarizer failure** occurred under the R7 budget.
+- **Both CD82 S1 runs ended `AGENT_ERROR`** because the model returned 4 unusable replies in a row:
+  - the first run: empty text;
+  - the re-run: empty text, or function calls the harness never offered (`developer/display_pixel_diff`, `google.thought`).
+  - This is not the R7 cause, so the re-run is counted as is under D19.
+- **The researcher's pause for a computer restart** (option B, 2026-10-11): Claude stopped the driver while CD82 S2 played, without stopping the run, and resumed it for R11L S1 after the restart.
+
+**Cost.** Block `3-arc`: $198.26 billed of $470 (11 `costs.csv` rows). Project total: $600.94 billed.
+
+**Committed in this PR:**
+- the 13 luna run folders (`results/persistgym/`) and the single-turn pilot;
+- the 11 block-3 ARC run folders (`results/arc_path/`);
+- their `costs.csv` rows.
+
+Raw transcripts stay in `results/raw/` (gitignored).
+
+**Next ($0):** H4's FINAL analysis with S1 (`analysis.arc_h4 --with-s1`), the PLAN A9 compaction analysis, and the G2 entry (Oct 21).
+
+**Approval.** No spending; the block is closed. This entry's pull request is $0.

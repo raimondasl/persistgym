@@ -28,6 +28,8 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "serif"            # close to the paper's Times body
+matplotlib.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif"]
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -84,26 +86,31 @@ def fig1(scores: dict[str, dict[str, float]], out: Path) -> None:
         xo = [xi + (i - 1.5) * 0.05 for xi in x]   # games that tie (e.g. at 100) stay visible
         ax.plot(xo, y, color=SLOTS[i], linewidth=2, marker="o", markersize=7, label=g,
                 markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=3)
-        ax.annotate(g, (3, y[-1]), xytext=(8, (i - 1.5) * 7), textcoords="offset points",
+    ends: dict[float, list[str]] = {}               # games that end at the same score share a label
+    for g, by in scores.items():
+        ends.setdefault(round(by[CONFIGS[-1]], 2), []).append(g)
+    for yv, gs in ends.items():
+        ax.annotate(", ".join(gs), (3.1, yv), xytext=(8, 0), textcoords="offset points",
                     color=INK, fontsize=9, va="center")
     mean = [sum(by[c] for by in scores.values()) / len(scores) for c in CONFIGS]
     ax.plot(x, mean, color=INK, linewidth=2.5, linestyle="--", marker="s", markersize=7,
             label="mean", zorder=4)
     for xi, m in zip(x, mean, strict=True):
-        ax.annotate(f"{m:.1f}", (xi, m), xytext=(0, -14), textcoords="offset points",
-                    ha="center", color=INK, fontsize=8)
+        last = xi == len(CONFIGS) - 1                # the last label goes left, clear of the game labels
+        ax.annotate(f"{m:.1f}", (xi, m), xytext=(-10 if last else 9, -10 if last else 0),
+                    textcoords="offset points", ha="right" if last else "left",
+                    va="center", color=INK, fontsize=8, zorder=5,
+                    bbox={"boxstyle": "round,pad=0.15", "fc": SURFACE, "ec": "none", "alpha": 0.9})
     ax.set_xticks(list(x), ["S0\nStandard", "S1\nsummary + notes", "S2\nsummary", "S4\nAdapter"])
     ax.set_ylabel("RHAE (ARC per-game score)", color=INK_2, fontsize=9)
     ax.set_ylim(-5, 108)
-    ax.set_xlim(-0.3, 3.6)
-    ax.legend(frameon=False, fontsize=8, loc="upper left", labelcolor=INK)
-    ax.set_title("ARC-AGI-3 path: score by harness configuration (4 games, 1 run each)",
-                 color=INK, fontsize=10, loc="left")
+    ax.set_xlim(-0.3, 3.75)
+    ax.legend(frameon=False, fontsize=8, loc="upper left", labelcolor=INK, handlelength=2.6)
     _save(fig, out / "fig1_arc_path")
 
 
 def fig2(h5: dict, out: Path) -> None:
-    bands = (("early", "levels 1-2"), ("level_3", "level 3"), ("deep", "levels ≥ 4"))
+    bands = (("early", "levels 1–2"), ("level_3", "level 3"), ("deep", "levels ≥ 4"))
     fig, axes = plt.subplots(1, 2, figsize=(7.0, 3.4), dpi=200, sharey=True,
                              gridspec_kw={"width_ratios": [1, 1]})
     for ax, key, title in ((axes[0], "published", "Published runs (25 games)"),
@@ -119,7 +126,8 @@ def fig2(h5: dict, out: Path) -> None:
                     xs.append(i + (j - 0.5) * 0.18)
                     ys.append(c["rate"])
                     ax.annotate(f"{c['cleared']}/{c['reached']}", (xs[-1], ys[-1]),
-                                xytext=(0, 8 if j else -14), textcoords="offset points",
+                                xytext=(0, 8 if (j or c["rate"] < 0.1) else -14),
+                                textcoords="offset points",
                                 ha="center", fontsize=7, color=INK_2)
             ax.plot(xs, ys, color=SLOTS[j], linewidth=2, marker="o", markersize=7,
                     markeredgecolor=SURFACE, markeredgewidth=1.5, label=names[h], zorder=3)
@@ -128,8 +136,6 @@ def fig2(h5: dict, out: Path) -> None:
         ax.set_title(title, color=INK, fontsize=9, loc="left")
     axes[0].set_ylabel("P(clear | reached)", color=INK_2, fontsize=9)
     axes[0].legend(frameon=False, fontsize=8, loc="lower left", labelcolor=INK)
-    fig.suptitle("Where the harness gap arises: clear rate by level band", color=INK,
-                 fontsize=10, x=0.01, ha="left")
     _save(fig, out / "fig2_h5_depth")
 
 
@@ -155,8 +161,6 @@ def fig3(h: dict, out: Path) -> None:
     ax.tick_params(length=0)
     for s in ax.spines.values():
         s.set_visible(False)
-    fig.suptitle("PersistGym-lite: success by harness and task cell (gpt-6-luna, 200 templates;"
-                 " chance 10%)", color=INK, fontsize=9, x=0.01, ha="left")
     _save(fig, out / "fig3_persistgym")
 
 

@@ -952,3 +952,16 @@ Raw transcripts stay in `results/raw/` (gitignored).
 **What it does not show.** No causal effect: time since a compaction is confounded with time into the run and with the level in play. The counts are small (one run per game and config). The endings and some log lines were seen before A9 was written. The one descriptive pattern worth noting for the paper is that unusable replies appeared only in the summary-based configs (S1, S2) and never with native replay (S4). It is labelled exploratory.
 
 **Approval.** No spending. This entry's pull request is $0.
+
+## 2026-10-16: Scoop check before posting the preprint (D31); figure legibility
+- **Scoop search, 2026-10-16** (part of the preprint's pre-publication review; read-only, $0):
+  - arXiv, all fields, "ARC-AGI-3", newest first: every abstract dated 2026-09-01 or later (newest 2610.22289, 15 Oct), plus searches for retained reasoning, reasoning replay, compaction and truncation.
+  - `arcprize/arc-agi-3-benchmarking`: PRs #16-#57 (no issues, no discussions); no PR reports ablation results.
+  - ARC Prize blog index: no post since the GPT-6 Astra post of 2026-09-03.
+  - Kaggle ARC Prize 2026 ARC-AGI-3 discussions (harness, compaction, context, truncation): nothing new decomposes the gap.
+  - Vendor posts: OpenAI's two-settings post still reports only the combined effect.
+- **Result: D31 does not fire.** No per-component decomposition of ARC's Standard-to-Adapter gap has been published.
+  - VISTA (arXiv 2610.02200, 2026-10-01; first noted 2026-10-09) adds components one at a time to ARC's official implementation (GPT-5.6 Sol at max effort, 25 public games), including compaction in place of a sliding window and notes files. It reports no reasoning-replay step and does not end at the Provider Adapter. The preprint now cites it and positions against it.
+  - New related work cited: Mehta and Datta, arXiv 2606.22953 (eviction lowers ALFWorld success); Wang et al., arXiv 2609.29875 (when an agent can drop its earlier reasoning).
+  - Upstream PR #56 (merged 2026-10-16) removes the 8,192-token summary output cap from the provider-adapter configs, for the failure amendment R7 addressed. Our runs use the pinned commit 4ca00e6, so the preprint notes it.
+- **Figures.** `analysis/figures.py`: the heatmap's task-cell labels and the H5 count labels go from 7 to 8 pt (the heatmap's in full ink), and PNGs are saved at 300 dpi for print. Same data; the new render is `results/figures/20261017T004752Z/`. The module docstring maps file names to the preprint's figure numbers.

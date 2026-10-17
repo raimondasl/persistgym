@@ -1,6 +1,6 @@
 # PLAN: when does the harness matter?
 
-_Written 2026-09-30 as the hand-off from the `ai-research` scouting repo (idea I-20260929-06). Sources for every outside fact are in `docs/background.md`; the premise checks behind the changes are in `docs/premise-check.md`._
+_Written 2026-09-30. Sources for every outside fact are in `docs/background.md`; the premise checks behind the changes are in `docs/premise-check.md`._
 
 _**Amended 2026-09-30 (A1):** staged low-spend approvals, cost corrections, who gets paid, and new provider facts. The amendment is §16; passages it changes are marked **[A1]**. Where §16 and an earlier section disagree, §16 wins._
 
@@ -287,7 +287,7 @@ StateCarry is a provider-neutral state component for ARC's Standard harness (`ma
 
 **Framing:** we are closing the Standard-to-Adapter gap under ARC's fair-comparison rules, not claiming a new state of the art.
 
-**Crowding on the Kaggle side (found 2026-09-30 while judging a related idea, I-20260929-22).** On the ARC-AGI-3 Kaggle track (offline open models), the common baseline agent "Duck" already turns on `preserve_thinking` with prefix caching. It stores each turn's reasoning, keeps a structured world/goal/action/open-questions block and runs a persistent REPL. At least four public teams are ablating reasoning replay, ledgers, world-model slices and compaction there, with results due before Nov 2. Leaderboard gains on that track come mostly from serving throughput, not memory design.
+**Crowding on the Kaggle side (found 2026-09-30).** On the ARC-AGI-3 Kaggle track (offline open models), the common baseline agent "Duck" already turns on `preserve_thinking` with prefix caching. It stores each turn's reasoning, keeps a structured world/goal/action/open-questions block and runs a persistent REPL. At least four public teams are ablating reasoning replay, ledgers, world-model slices and compaction there, with results due before Nov 2. Leaderboard gains on that track come mostly from serving throughput, not memory design.
 
 StateCarry's niche is different: API models inside ARC's *Standard* harness, measured against the Provider Adapter, with a pre-registered mechanism story from PersistGym. Still, (a) cite Duck and the public Kaggle ablations as prior art for ledger- and replay-style state, (b) don't claim the ledger idea as new, and (c) re-check those teams' posts at G2 and G3 (see §15). **[A7]** With no builder, this crowding is a reason to post the arXiv preprint before Nov 2; the posts are re-checked at G2 and before the preprint goes out (§22).
 
@@ -398,7 +398,7 @@ Cheaper fallbacks, in order:
 4. Fewer sol templates (30). **[A2]** Under D11 option A this means a lower T_d (§17.1). **[A3]** T_d = 210 is not lowered without a further PREREG amendment (§18).
 
 ## 13. Venues
-Dates were checked against the `ai-research` deadlines file (verified 2026-09-29) and the linked pages.
+Dates were checked against the linked pages on 2026-09-29.
 
 | Venue | Deadline | Type | Use here |
 |---|---|---|---|
@@ -416,7 +416,7 @@ Other conditions:
 - The rubric scores Accuracy (from the Kaggle score), Universality, Progress, Theory, Completeness and Novelty. Accuracy would be weak here.
 
 **Decision P on Oct 19:** **[A7]** Skipped: E1 does not run, so no offline open-model agent exists to make a paper eligible (§22).
-- **Go only if all of these hold:** the researcher accepts the licensing and employer-IP implications; the E1 Qwen pipeline works; and there is a clear result worth documenting.
+- **Go only if all of these hold:** the researcher accepts the competition's licensing terms (own code under CC0 or MIT-0); the E1 Qwen pipeline works; and there is a clear result worth documenting.
 - **Otherwise skip.** The default is skip, because the Kaggle port competes with M4 and M5 for the same two weeks.
 - Joining the Kaggle competition, which means accepting its rules, is the researcher's own action and must happen by Oct 26.
 
@@ -446,7 +446,7 @@ The card's old rule, "95% CI of the harness × d slope includes 0", is replaced 
 | **[A1]** Gemini Tier 1 spend cap ($250/month; service pauses for all linked projects until the 1st) | High unless Tier 2 is reached | Researcher moves the billing account to Tier 2 ($100 paid + 3 days) before the seed-1 ARC block; provider-side spend caps back up the stop-and-ask rule (§16.1). |
 | **[A1]** Published "gap" partly reflects Standard runs that crashed (e.g. LP85) | Medium | Operational free analysis infers how each published run ended before the draw; our own S0 re-measures the gap (§16.4). **[A2]** LP85 and SC25 are not used (D14 option A, §17.1). |
 | Results look like a model quirk, not a mechanism | Medium | Two API models plus open weights (E1); claims stated per component and per state type. **[A7]** Weakened: PersistGym's main sweep runs on luna only, with no sol replication and no E1 (§22). |
-| Employer sensitivity (vendor comparisons) | Low | One-off study; no rankings or dashboard; neutral wording; figures by task property; the researcher reviews all public text. |
+| Being read as a vendor comparison | Low | One-off study; no rankings or dashboard; neutral wording; figures by task property; the researcher reviews all public text. |
 | Human time is the bottleneck (labelling, definitions) | Medium | Labelling capped at ~100 transcripts; agents build everything else. **[A7]** No labelling (§22). |
 
 ## 16. Amendment A1 (2026-09-30): staged low-spend approvals and cost corrections

@@ -1,6 +1,6 @@
 # Premise check (2026-09-30)
 
-Before selection, three independent agents checked idea I-20260929-06 ("When does the harness matter? A state-persistence account of harness sensitivity"):
+Before the study started, three independent AI agents checked its premise ("When does the harness matter? A state-persistence account of harness sensitivity"):
 - **arc-facts:** reproduce the ARC numbers, read the harness code, cost the ARC leg, check toggles and prize eligibility.
 - **prior-art:** novelty and scoop risk.
 - **design-review:** hostile review of design, statistics, cost and venues.
@@ -74,7 +74,6 @@ Before selection, three independent agents checked idea I-20260929-06 ("When doe
 - **The external leaderboard check is circular and has n≈10.** Replace it with a within-ARC level-depth analysis.
 - **Proposed hypotheses H1-H5 with numeric predictions and kill rules.** Proposed StateCarry as the constructive phase.
 - **Venues:** AGENT 2027 (Nov 13), the conditional ARC Paper Track, ICLR 2027 workshops or TMLR, and an early preprint.
-- **Employer risk is low** if claims stay about components, not providers, and nothing becomes a standing leaderboard.
 
 ## 4. Where the checks disagree, and what the plan does
 | Topic | What the checks said | Resolution in PLAN.md |
@@ -106,7 +105,7 @@ Before selection, three independent agents checked idea I-20260929-06 ("When doe
 | External leaderboard check is circular | design-review, prior-art | Dropped; replaced by level-depth analysis (H5). |
 | PersistGym as an artifact is only modestly novel | prior-art | The contribution is the design (recoverability × derivedness, crossed templates, survival accounting) plus the StateCarry builder, not the environment alone. |
 | Scoop (ARC Prize, OpenAI, TierFlow, LOCA group) | prior-art, design-review | Free analysis in week 1; preprint target Oct 28; gate G2 re-scopes if a per-component ablation appears. |
-| Employer sensitivity | design-review (from the researcher's I-05 feedback) | One-off mechanism study; no rankings or dashboard; figures by task property; researcher reviews all public text. |
+| Being read as a vendor comparison | design-review | One-off mechanism study; no rankings or dashboard; figures by task property; researcher reviews all public text. |
 | Paper Prize ineligible for an API-only analysis | arc-facts, design-review | Conditional extension E5 only, with an offline open-model Kaggle submission; default skip. |
 
 ## 6. Not verified, or to re-check
@@ -118,8 +117,8 @@ Before selection, three independent agents checked idea I-20260929-06 ("When doe
 - Papers posted in the last few days: arXiv was rate-limited during the prior-art check. Re-run a quick scoop search at each gate.
 
 ## 7. Addendum (2026-09-30): crowding on the ARC Kaggle track
-While judging a separate idea (I-20260929-22: "native-reasoning replay and ledger compaction for an open-weight ARC-AGI-3 agent"), the `ai-research` judge killed it for novelty, for three reasons:
-- **The baseline already has these features.** The common Kaggle baseline agent "Duck" already enables `preserve_thinking` with prefix caching, stores each turn's reasoning, keeps a structured world/goal/action/open-questions block and runs a persistent REPL (the judge cites `configs/inference.json`, `framework/kaggle.py:332` and `tool_agent.py:1892` in that agent's code).
+While assessing a related idea ("native-reasoning replay and ledger compaction for an open-weight ARC-AGI-3 agent"), we found it unlikely to be novel, for three reasons:
+- **The baseline already has these features.** The common Kaggle baseline agent "Duck" already enables `preserve_thinking` with prefix caching, stores each turn's reasoning, keeps a structured world/goal/action/open-questions block and runs a persistent REPL (citing `configs/inference.json`, `framework/kaggle.py:332` and `tool_agent.py:1892` in that agent's code).
 - **Other teams are testing the same arms.** At least four public teams are ablating them (canivel A22, JustAdev742 exp-035 and P30/P31, leejianrong's ledger + world-model slices, Polyphony/Tufa compaction), with results due before Nov 2.
 - **Leaderboard gains don't reward memory design.** Gains on that track come mostly from serving throughput.
 
@@ -128,4 +127,4 @@ While judging a separate idea (I-20260929-22: "native-reasoning replay and ledge
 - Cite Duck and the Kaggle ablations as prior art, and re-check them at G2 and G3.
 - The ARC Paper Track (E5) becomes less attractive: a Kaggle entry would compete directly with these teams.
 
-These Kaggle-team details come from the judge agent and were not independently re-verified. Confirm them before citing.
+These Kaggle-team details come from an AI agent's review and were not independently re-verified. Confirm them before citing.

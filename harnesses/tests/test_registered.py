@@ -795,16 +795,17 @@ def test_lunas_main_sweep_refuses_anything_else(changes, got, pre_r6, monkeypatc
     assert luna(**changes) is not None
 
 
-def test_lunas_main_sweep_needs_g1_on_its_config(monkeypatch):
+def test_lunas_main_sweep_needs_g1_on_its_config(monkeypatch, tmp_path):
     """Fail closed: without G1_PASSED on the default config, luna's main sweep and controls
-    refuse; its single-turn pilot needs no G1."""
+    refuse; its single-turn pilot needs no G1. The pilot is judged against an empty results
+    root, so the real pilot already run (which counts toward the 10-prompt limit) is not read."""
     monkeypatch.delitem(registered.G1_PASSED, LUNA)
     why = luna()
     assert "only after the researcher has recorded G1" in why and "G1_PASSED" in why
     assert "G1_PASSED" in luna(cell=registered.LUNA_SINGLE_TURN_CELL)
     monkeypatch.setitem(registered.G1_PASSED, LUNA, VARIANT)            # another config
     assert "G1_PASSED" in luna()
-    assert _single_turn_pilot(2) is None
+    assert _single_turn_pilot(2, root=tmp_path) is None
     monkeypatch.setitem(registered.G1_PASSED, LUNA, DEFAULT)
     assert luna() is None
 

@@ -11,6 +11,9 @@ Run: ``uv run python -m analysis.figures [--results-root DIR] [--out-dir DIR]`` 
 3. ``fig3_persistgym``: success rate by harness cell and task cell, repeat 0
    (``results/persistgym_h1h3/<H1H3_OUTPUT>/h1h3.json``, its cell table).
 
+The preprint numbers them in reading order: its Figure 1 is ``fig3_persistgym``, Figure 2
+``fig1_arc_path`` and Figure 3 ``fig2_h5_depth``.
+
 Colors: the categorical slots 1-4 of the reference palette, validated (light mode, all checks
 pass; aqua and yellow are below 3:1 contrast, so every line is labelled directly); the heatmap is
 one blue ramp, light to dark. The figures plot effects against configurations and task
@@ -128,7 +131,7 @@ def fig2(h5: dict, out: Path) -> None:
                     ax.annotate(f"{c['cleared']}/{c['reached']}", (xs[-1], ys[-1]),
                                 xytext=(0, 8 if (j or c["rate"] < 0.1) else -14),
                                 textcoords="offset points",
-                                ha="center", fontsize=7, color=INK_2)
+                                ha="center", fontsize=8, color=INK_2)
             ax.plot(xs, ys, color=SLOTS[j], linewidth=2, marker="o", markersize=7,
                     markeredgecolor=SURFACE, markeredgewidth=1.5, label=names[h], zorder=3)
         ax.set_xticks(range(len(bands)), [lbl for _, lbl in bands])
@@ -157,7 +160,7 @@ def fig3(h: dict, out: Path) -> None:
     ax.set_yticks(range(len(rows)), [label[k] for k in rows], fontsize=8, color=INK)
     ax.set_xticks(range(len(TASK_CELLS)),
                   [t.replace("-nonrec-", "\nnot recov.\n").replace("-rec-", "\nrecov.\n")
-                   for t in TASK_CELLS], fontsize=7, color=INK_2)
+                   for t in TASK_CELLS], fontsize=8, color=INK)
     ax.tick_params(length=0)
     for s in ax.spines.values():
         s.set_visible(False)
@@ -166,7 +169,7 @@ def fig3(h: dict, out: Path) -> None:
 
 def _save(fig, stem: Path) -> None:
     fig.tight_layout()
-    fig.savefig(stem.with_suffix(".png"), facecolor=SURFACE)
+    fig.savefig(stem.with_suffix(".png"), facecolor=SURFACE, dpi=300)  # print resolution
     fig.savefig(stem.with_suffix(".pdf"), facecolor=SURFACE)
     plt.close(fig)
 

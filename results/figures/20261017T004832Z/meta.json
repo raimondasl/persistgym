@@ -1,0 +1,45 @@
+{
+  "experiment": "figures",
+  "run_id": "20261017T004832Z",
+  "cell_or_config": "preprint",
+  "config": {
+    "h5_output": "20261011T055415Z",
+    "h1h3_output": "20261010T232227Z",
+    "arc": "arc_h4.load"
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": null,
+  "started_utc": "2026-10-17T00:48:32+00:00",
+  "finished_utc": "2026-10-17T00:48:34+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "fig1_arc_path.png",
+    "fig1_arc_path.pdf",
+    "fig2_h5_depth.png",
+    "fig2_h5_depth.pdf",
+    "fig3_persistgym.png",
+    "fig3_persistgym.pdf",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [],
+  "config_hash": "54ce05dea25a2086206a4892698b7f907f82a1e5ebe0d88b62df952374178597",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "b4563e217008aedca92d33b583ff95eee331717c",
+  "git_dirty": false
+}

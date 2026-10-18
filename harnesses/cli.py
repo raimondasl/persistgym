@@ -66,7 +66,8 @@ R6 change 1 does not list and the guard allows under CLAUDE.md's pilot rule (blo
 `single-turn`, `probe-echo` and `probe-replay` refuse every other paid run before the
 paid-run lock: any pilot but that one, persistgym_validity and persistgym_sol_h1 for every
 model, both probes, every sol run, any other experiment, and any model that is neither
-gpt-6-luna nor gpt-6.1-sol (or a dated snapshot of one, -YYYY-MM-DD). So every command below
+gpt-6-luna nor gpt-6.1-sol (or a dated snapshot of one, -YYYY-MM-DD; claude-haiku-5-5 is
+refused by R8's guard until R8 is in effect, below). So every command below
 but luna's main-sweep and single-turn commands refuses now; they are kept as the record of
 what was registered (R3's engagement check found NOT_ENGAGED on 2026-10-03 too, so R3's hard
 stop refuses its check, validity and main-sweep commands as well).
@@ -197,6 +198,35 @@ persistgym_pilot, any model but gpt-6-luna and any request settings but its regi
 effort and D13's --mode standard and --service-tier flex, and whatever luna's guard refuses
 for its main runs (above: the 4 non-recoverable task cells exactly, the main split, main
 templates 0-199, the default config, G1).
+
+PREREG §17.8 (amendment R8, not yet written or merged): claude-haiku-5-5's replication of H1
+and H3 on Anthropic's Messages API (harnesses/wire.py, harnesses/anthropic_transport.py; the
+model string chooses the API). `registered.R8_IN_EFFECT` is False, so `run` and `single-turn`
+refuse every claude-haiku-5-5 paid run before the paid-run lock (`registered.haiku_refusal`),
+its pilots and validity run included, and the probes refuse every model off OpenAI's
+Responses API. This works now, at $0:
+    uv run python -m harnesses dry-run --model claude-haiku-5-5 --cell W-0 \
+        --task-cell observed-nonrec-far
+Once R8 is in effect (with --approved-block and amounts from its approval line), the rules
+`haiku_refusal` holds these runs to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
+pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
+restated, then withheld; the main runs of F-0, W-0 and W-n-0 on all 8 task cells (and F-0
+--variant restated, and each again at --repeat-index 1), and the single-turn control, on main
+templates 0-199, only once `registered.HAIKU_G1_PASSED` records its G1; all at --effort medium
+on the default config with --mode standard and --service-tier standard (the default on a
+claude-* model) and no --W:
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell W-0 \
+        --model claude-haiku-5-5 --split pilot --start 0 --n 1 --experiment persistgym_pilot \
+        --approved-block "<block>" --planned-usd <usd>
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+        --model claude-haiku-5-5 --split validity --start 0 --n 20 --variant restated \
+        --experiment persistgym_validity --approved-block "<block>" --planned-usd <usd>
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell F-0 \
+        --model claude-haiku-5-5 --split main --start 0 --n 200 --experiment persistgym_haiku \
+        --approved-block "<block>" --planned-usd <usd> --parallel 16
+    PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses single-turn \
+        --model claude-haiku-5-5 --split main --start 0 --n 200 --experiment persistgym_haiku \
+        --approved-block "<block>" --planned-usd <usd> --parallel 16
 """
 
 from __future__ import annotations
@@ -223,6 +253,7 @@ from harnesses import (
     registered,
     single_turn,
 )
+from harnesses.anthropic_transport import AnthropicMessagesTransport
 from harnesses.cells import CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -233,8 +264,10 @@ from harnesses.openai_transport import (
     OpenAIResponsesTransport,
     PaidCallsNotAllowed,
 )
+from harnesses.paid_transport import PaidTransport
 from harnesses.parallel import MAX_PARALLEL
 from harnesses.runner import RAW, RESULTS, require_plain_name, run_batch, run_episode
+from harnesses.wire import MESSAGES_SERVICE_TIER, RESPONSES, UnsupportedOnWire, wire_for
 from persistgym.config import PRESETS, GeneratorConfig
 from persistgym.episode import TaskCell
 from persistgym.render import generate
@@ -345,16 +378,27 @@ def cmd_dry_run(a) -> int:
     ep = next(e for _, eps in generate(a.split, [a.start], gen, [TaskCell.from_id(a.task_cell)],
                                        (a.variant,)) for e in eps)
     events: list[dict] = []
-    run = run_episode(ep, cell, _harness_config(a), FakeModel(), recorder=events.append)
+    try:
+        run = run_episode(ep, cell, _harness_config(a), FakeModel(), recorder=events.append)
+    except UnsupportedOnWire as e:  # e.g. a summary cell on the Messages wire
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
     print(f"{ep.episode_id} under {cell.cell_id}: need step {ep.need_step}, "
           f"{run.n_requests} requests, exit {run.exit_reason}")
     print("  labels: U<t> observation of turn t, R<t>/A<t> its reasoning item and reply, "
           "B<k> summary bridge k, Q summary request")
     for e in events:
+        p = e["payload"]
+        if wire_for(p["model"]) is RESPONSES:
+            settings = (f"reasoning.context={p['reasoning']['context']} "
+                        f"reasoning.effort={p['reasoning']['effort']} ")
+        else:  # the Messages wire (PREREG §17.8, pending): no reasoning.context to send
+            settings = (f"thinking={p['thinking']['type']} "
+                        f"output_config.effort={p['output_config']['effort']} "
+                        f"max_tokens={p['max_tokens']} "
+                        f"cache_control={(p.get('cache_control') or {}).get('type')} ")
         print(f"  #{e['request_index']:02d} {e['kind']:<7} step={e['pending_step']:>2} "
-              f"reasoning.context={e['payload']['reasoning']['context']} "
-              f"reasoning.effort={e['payload']['reasoning']['effort']} "
-              f"{' '.join(e['trace'])}")
+              f"{settings}{' '.join(e['trace'])}")
     print(f"payload S at need: {run.need_payload and run.need_payload['S']}; designed S "
           f"(obs only): {run.designed['S_window_obs_only']}")
     return 0
@@ -362,10 +406,12 @@ def cmd_dry_run(a) -> int:
 
 def _guarded_transport(a, model: str, experiment: str, planned_usd: float | None,
                        held: paidlock.HeldLock):
+    """The model's paid transport (`harnesses.wire.wire_for`: OpenAI's Responses API, or
+    Anthropic's Messages API for claude-*), or None after printing why it refused."""
+    cls = OpenAIResponsesTransport if wire_for(model) is RESPONSES else AnthropicMessagesTransport
     try:
-        return OpenAIResponsesTransport(model=model, approved_block=a.approved_block,
-                                        experiment=experiment, planned_usd=planned_usd,
-                                        paid_lock=held)
+        return cls(model=model, approved_block=a.approved_block, experiment=experiment,
+                   planned_usd=planned_usd, paid_lock=held)
     except PaidCallsNotAllowed as e:
         print(f"refused: {e}", file=sys.stderr)
         return None
@@ -392,7 +438,7 @@ def _with_paid_lock(run_id: str, what: str, body: Callable[[paidlock.HeldLock], 
         return 2
 
 
-def _check_accounted(transport: OpenAIResponsesTransport, run_id: str) -> None:
+def _check_accounted(transport: PaidTransport, run_id: str) -> None:
     """After a paid run: if it made calls whose costs.csv row was not appended, the lock
     stays held with the reason (the transport's `keep_lock_if_unaccounted`), and the operator
     is told."""
@@ -530,6 +576,9 @@ def _probe_run(a, kind: str) -> int:
     # before the paid-run lock, as `run` checks its settings
     why = next(filter(None, (registered.r6_refusal(experiment, model, None, RESULTS)
                              for model in a.model)), None) or _probe_args(a, kind)
+    # the probes send Responses requests (reasoning.context): never to another API
+    why = why or next((f"the probes run on OpenAI's Responses API only, got {model}"
+                       for model in a.model if wire_for(model) is not RESPONSES), None)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2
@@ -766,6 +815,7 @@ def _run_defaults() -> dict:
     """`run`'s default for every argument in RUN_ARGS but --cell (--effort: None, the
     model's registered effort)."""
     d = vars(build_parser().parse_args(["run", "--cell", "F-0"]))
+    d["service_tier"] = default_service_tier(d["model"])  # flex: account-run is OpenAI's only
     return {k: d[k] for k in RUN_ARGS if k != "cell"}
 
 
@@ -968,7 +1018,9 @@ def build_parser() -> argparse.ArgumentParser:
                   "as amended by R2, §17.2)" if effort_default is None
                   else f"default: {effort_default}"))
         add("--mode", default="standard")
-        add("--service-tier", default="flex")
+        add("--service-tier", default=None,
+            help=(f"default: flex ({MESSAGES_SERVICE_TIER} on a claude-* model, which sends "
+                  "none: harnesses/wire.py)"))
         add("--milestone", default="M0")
         if not account:
             add("--run-id", default=None)
@@ -1157,7 +1209,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         a.model = list(probes.ECHO_CHECK_MODELS)
     if a.cmd in ("run", "dry-run", "single-turn") and a.effort is None:
         a.effort = registered.registered_effort(a.model)
+    if getattr(a, "service_tier", "given") is None:
+        a.service_tier = default_service_tier(a.model if isinstance(a.model, str) else "")
     return a
+
+
+def default_service_tier(model: str) -> str:
+    """--service-tier's default: flex (D13) on OpenAI's Responses API, `standard` on the
+    Messages API (recorded as requested; no service_tier field is sent)."""
+    return "flex" if wire_for(model) is RESPONSES else MESSAGES_SERVICE_TIER
 
 
 def main(argv: list[str] | None = None) -> int:

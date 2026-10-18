@@ -79,7 +79,7 @@ from harnesses.matrix import REPEAT_EVERY, REPEAT_SPLIT
 from harnesses.paid_transport import BudgetExceeded
 from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
 from harnesses.pricing import add_counts
-from harnesses.registered import model_family
+from harnesses.registered import HAIKU_EXPERIMENT, HAIKU_MODEL, model_family
 from harnesses.session import HarnessSession, Request
 from harnesses.wire import wire_for
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, GeneratorConfig
@@ -101,13 +101,20 @@ NONREC_TASK_CELLS = tuple(c.id for c in ALL_CELLS if not c.recoverable)
 """The 4 task cells the control exists for (PREREG §4.3, D36): a single prompt cannot serve
 the lookup a recoverable cell offers."""
 PILOT_EXPERIMENT = "persistgym_pilot"
-EXPERIMENTS = ("persistgym", PILOT_EXPERIMENT)
-"""The control runs in luna's main sweep (`persistgym`, PREREG §4.6 row 1, §17.6) and in a
-pilot (≤ 10 prompts, CLAUDE.md), nowhere else."""
+EXPERIMENTS = ("persistgym", PILOT_EXPERIMENT, HAIKU_EXPERIMENT)
+"""The control runs in luna's main sweep (`persistgym`, PREREG §4.6 row 1, §17.6), in
+claude-haiku-5-5's replication (`persistgym_haiku`, PREREG §17.8, amendment R8, not yet
+merged: refused until `registered.R8_IN_EFFECT`) and in a pilot (≤ 10 prompts, CLAUDE.md),
+nowhere else."""
 REGISTERED_MODELS = ("gpt-6-luna",)
-"""PREREG §3 H3: H3 is luna's. Outside pilots no other model runs the control, and luna's
-guard (`registered.check_run_settings` with `registered.LUNA_SINGLE_TURN_CELL`) holds it to
-its registered effort and D13's request settings (`registered.LUNA_REQUEST`)."""
+"""PREREG §3 H3: H3 is luna's. Outside pilots no other model runs the control in luna's
+sweep, and luna's guard (`registered.check_run_settings` with
+`registered.LUNA_SINGLE_TURN_CELL`) holds it to its registered effort and D13's request
+settings (`registered.LUNA_REQUEST`)."""
+EXPERIMENT_MODELS = {"persistgym": REGISTERED_MODELS, HAIKU_EXPERIMENT: (HAIKU_MODEL,)}
+"""The models each non-pilot experiment runs the control on: luna's sweep luna only, the
+Haiku replication claude-haiku-5-5 only (R8, pending; `registered.haiku_refusal` holds it to
+R8's settings)."""
 REPEAT_INDICES = (0, 1)
 """§2.9: main templates whose seed is divisible by `REPEAT_EVERY` (10) also play
 repeat_index 1; `REPEAT_EVERY` and `REPEAT_SPLIT` are the run matrix's (harnesses/matrix.py),
@@ -546,8 +553,10 @@ def settings_refusal(*, experiment: str, model: str, split: str,
     top of `registered.check_run_settings` (the registered effort, and luna's guard: its G1,
     the main split, the default config and D13's request settings). The control runs only
     under `EXPERIMENTS`; repeat 1 only on main templates (§2.9); and outside pilots only on
-    `REGISTERED_MODELS` (H3 is luna's, §3 H3). --mode and --service-tier are checked by
-    luna's guard (`registered.LUNA_REQUEST`), as for luna's main runs."""
+    its experiment's models (`EXPERIMENT_MODELS`: in `persistgym` luna's `REGISTERED_MODELS`,
+    H3 is luna's, §3 H3; in `persistgym_haiku` claude-haiku-5-5, R8, pending). --mode and
+    --service-tier are checked by luna's guard (`registered.LUNA_REQUEST`), as for luna's
+    main runs, and by R8's (`registered.HAIKU_REQUEST`)."""
     if experiment not in EXPERIMENTS:
         return (f"the single-turn control runs under --experiment {' or '.join(EXPERIMENTS)} "
                 f"only (PREREG §4.6, D36), got {experiment!r}")
@@ -558,7 +567,9 @@ def settings_refusal(*, experiment: str, model: str, split: str,
                 f"is divisible by {REPEAT_EVERY}), got --split {split}")
     if experiment == PILOT_EXPERIMENT:
         return None
-    if model_family(model) not in REGISTERED_MODELS:
-        return (f"{experiment} runs the single-turn control on {', '.join(REGISTERED_MODELS)} "
-                f"only (PREREG §3 H3), got {model}")
+    models = EXPERIMENT_MODELS[experiment]
+    if model_family(model) not in models:
+        return (f"{experiment} runs the single-turn control on {', '.join(models)} "
+                f"only (PREREG §3 H3{'' if experiment == 'persistgym' else ', §17.8'}), "
+                f"got {model}")
     return None

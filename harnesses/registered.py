@@ -74,6 +74,18 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   Its pilot (W-0 and W-n-0, `H1_REPLICATION_PILOT_CELLS`) runs as any sol pilot at medium
   does, and the pooled pilot report leaves it out (`harnesses.blinding.is_left_out`).
 
+* R8 (§17.8, not yet written or merged), claude-haiku-5-5's replication of H1 and H3 on
+  Anthropic's Messages API (`harnesses.wire.MessagesWire`): `R8_IN_EFFECT` is False, so every
+  Haiku paid run refuses (`haiku_refusal`, `R8_STOP`), its pilots and validity run included.
+  The rules it will apply once the researcher's R8 pull request sets it True, in R4's
+  pattern: Haiku at `medium` on the default config with R8's request settings
+  (`HAIKU_REQUEST`); pilots of `HAIKU_PILOT_CELLS` (the single-turn pilot at most 10 prompts,
+  counted over Haiku's own); a validity run of exactly `VALIDITY_RUN` on validity templates
+  0-19, with no G1; and main runs and controls in `HAIKU_EXPERIMENT` (`persistgym_haiku`):
+  F-0, W-0 and W-n-0 as the full matrix on all 8 task cells, the single-turn control on its
+  4, main templates 0 to `HAIKU_T` - 1, base episodes or the restated-at-need control in F-0,
+  after `HAIKU_G1_PASSED` (empty: fail closed).
+
 `check_run_settings` is the guard `harnesses run` and `harnesses single-turn` apply before
 they take the paid-run lock: first R6's hard stop (`r6_refusal`); then, for the runs it lets
 through (and for every run with it off), the earlier rules: pilots (`persistgym_pilot`) may
@@ -112,8 +124,11 @@ R4_REF = "PREREG.md §17.4 (amendment R4)"
 PILOT_EXPERIMENT = "persistgym_pilot"
 VALIDITY_EXPERIMENT = "persistgym_validity"
 
-REGISTERED_EFFORT: dict[str, str] = {"gpt-6-luna": "medium", "gpt-6.1-sol": "high"}
-"""PREREG §6 (D13) as amended by R2 (§17.2): sol at high, luna at medium."""
+REGISTERED_EFFORT: dict[str, str] = {"gpt-6-luna": "medium", "gpt-6.1-sol": "high",
+                                     "claude-haiku-5-5": "medium"}
+"""PREREG §6 (D13) as amended by R2 (§17.2): sol at high, luna at medium; claude-haiku-5-5 at
+medium (`output_config.effort`; PREREG §17.8, amendment R8, not yet merged: every Haiku paid
+run refuses until `R8_IN_EFFECT`)."""
 DEFAULT_EFFORT = "medium"
 """The effort of a model not in `REGISTERED_EFFORT` (the documented default, D13)."""
 
@@ -238,6 +253,59 @@ R6_STOP = (f"R6's hard stop ({R6_REF} change 1): the PersistGym stream's only pa
            f"{LUNA_SINGLE_TURN_PILOT_MAX} prompts in all, under an approval line that lists "
            f"{PILOT_EXPERIMENT}: block 3-persistgym's); no other paid run, and none after "
            "these")
+
+# --- R8 (PREREG §17.8, not yet written or merged): claude-haiku-5-5's replication of H1/H3 ---
+R8_REF = "PREREG.md §17.8 (amendment R8, not yet merged)"
+R8_IN_EFFECT = False
+"""Whether amendment R8 (PREREG §17.8) is in effect. False: every claude-haiku-5-5 paid run
+refuses, pilots and validity runs included (`haiku_refusal`), fail closed. Only the pull
+request that adds R8 to PREREG.md, merged by the researcher, sets it True (with its own tests
+of the rules below); tests monkeypatch it."""
+HAIKU_MODEL = "claude-haiku-5-5"
+"""Anthropic's Messages API (`harnesses.wire.MessagesWire`); a fixed model id with no dated
+snapshot, so the returned model string is the pin."""
+HAIKU_EXPERIMENT = "persistgym_haiku"
+"""R8: the experiment of the Haiku replication's main runs and controls (its pilots run in
+`persistgym_pilot`, its validity run in `persistgym_validity`)."""
+HAIKU_EFFORT = "medium"
+"""R8: `output_config.effort` medium, luna's D13 effort (Haiku 5.5's default, sent
+explicitly)."""
+HAIKU_GENERATOR_HASH = DEFAULT_GENERATOR_HASH
+"""R8: the default generator config, the one luna plays: the same episodes as luna's."""
+HAIKU_CELLS = ("F-0", "W-0", "W-n-0")
+"""R8: the replay-off cells the Messages wire sends (no Σ cell, no replay-on cell)."""
+HAIKU_SINGLE_TURN_CELL = LUNA_SINGLE_TURN_CELL
+"""The single-turn control's cell id, as for luna (`harnesses single-turn`)."""
+HAIKU_RUN = {"split": ("main",), "variant": ("base", "restated")}
+"""R8's main runs: main templates, base episodes, and the restated-at-need control in F-0."""
+HAIKU_RESTATED_CELL = "F-0"
+HAIKU_REQUEST = {"mode": "standard", "service_tier": "standard", "W": None}
+"""R8's request settings as `run` takes them (--mode, --service-tier, --W): mode standard
+(recorded, not sent), the standard tier (recorded as requested; no service_tier field is
+sent, and the tier served is read from `usage.service_tier`), the episode's own W."""
+HAIKU_TASK_CELLS = tuple(c.id for c in ALL_CELLS)
+"""R8: all 8 task cells, as luna (H3 needs the derived non-recoverable cells, R_need the near
+ones), as the full matrix (`HAIKU_MATRIX`)."""
+HAIKU_SINGLE_TURN_TASK_CELLS = tuple(c.id for c in ALL_CELLS if not c.recoverable)
+HAIKU_T = 200
+"""R8: luna's T, main templates 0-199 (the same episodes as luna's sweep)."""
+HAIKU_MATRIX = "full"
+HAIKU_VALIDITY_TEMPLATES = 20
+"""R8: the validity run plays validity templates 0-19 (the spot-check package's)."""
+HAIKU_PILOT_CELLS = ("F-0", "W-0", "W-n-0", LUNA_SINGLE_TURN_CELL)
+"""R8: the cells of Haiku's pilots (CLAUDE.md: every new model and request type is piloted)."""
+HAIKU_SINGLE_TURN_PILOT_MAX = 10
+"""CLAUDE.md: Haiku's single-turn pilots are at most 10 prompts in all, counted over Haiku's
+single-turn pilots only (`_single_turn_pilot_prompts`)."""
+HAIKU_EXPERIMENTS = (PILOT_EXPERIMENT, VALIDITY_EXPERIMENT, HAIKU_EXPERIMENT)
+HAIKU_G1_PASSED: dict[str, str] = {}
+"""Model -> the generator config hash on which the researcher recorded the Haiku
+replication's G1 gate as passed. Set only by the researcher's G1 decision PR under R8; empty,
+the main runs refuse (fail closed)."""
+R8_STOP = (f"{HAIKU_MODEL} runs only under {R8_REF}, which is not in effect "
+           "(harnesses/registered.py R8_IN_EFFECT): every paid run of it refuses, its pilots "
+           "and its validity run included, until the researcher merges the pull request that "
+           "adds R8")
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
@@ -524,12 +592,13 @@ def _planned_prompts(meta: dict) -> int:
     return max(played, len(planned))
 
 
-def _single_turn_pilot_prompts(results_root: Path) -> tuple[int, str | None]:
-    """The prompts earlier single-turn pilots of luna played or planned
-    (`_planned_prompts` of each results/persistgym_pilot/*/meta.json whose `cell_or_config`
-    is the control's cell and whose model is luna), and why they cannot be counted (an
-    unreadable meta.json, or a count in it that is negative or not an integer), or None.
-    meta.json is a pilot's committed, blinded file: no outcome is read.
+def _single_turn_pilot_prompts(results_root: Path,
+                               model: str = LUNA_MODEL) -> tuple[int, str | None]:
+    """The prompts earlier single-turn pilots of `model` (luna, or claude-haiku-5-5 under
+    R8) played or planned (`_planned_prompts` of each results/persistgym_pilot/*/meta.json
+    whose `cell_or_config` is the control's cell and whose model is `model`), and why they
+    cannot be counted (an unreadable meta.json, or a count in it that is negative or not an
+    integer), or None. meta.json is a pilot's committed, blinded file: no outcome is read.
 
     Only `results_root`, this checkout's results/, is read. A single-turn pilot whose
     meta.json is only in another checkout or worktree, or was never written, does not count
@@ -540,7 +609,7 @@ def _single_turn_pilot_prompts(results_root: Path) -> tuple[int, str | None]:
             meta = json.loads(path.read_text(encoding="utf-8"))
             if meta.get("cell_or_config") != LUNA_SINGLE_TURN_CELL:
                 continue
-            if model_family(str(meta.get("model_requested"))) == LUNA_MODEL:
+            if model_family(str(meta.get("model_requested"))) == model:
                 total += _planned_prompts(meta)
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             return total, (f"cannot count the prompts of earlier single-turn pilots: {path} "
@@ -589,6 +658,10 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
       this run's (`templates` x `task_cells`) with those earlier ones played or planned in
       this checkout's results/ (`_single_turn_pilot_prompts`). Any of these left as None
       refuses. So a pilot of another request cannot use up the allowance;
+    * claude-haiku-5-5 (R8, PREREG §17.8, not yet merged): every run refuses while
+      `R8_IN_EFFECT` is False (`R8_STOP`); once it is True, its runs in R8's three
+      experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new dated
+      amendment R6 change 1 asks for, and every other Haiku run refuses;
     * every other run refuses: `persistgym_validity` for every model, `persistgym_sol_h1`,
       `toggle_pilot` and `replay_probe` (the probes), any other pilot, any sol run and any
       other experiment."""
@@ -599,6 +672,11 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
         return (f"{R6_STOP}; got model {model}, which is not a registered model (the "
                 f"registered ones: {', '.join(REGISTERED_EFFORT)}, or a dated snapshot "
                 "-YYYY-MM-DD of one)")
+    if family == HAIKU_MODEL:
+        if not R8_IN_EFFECT:
+            return f"{R8_STOP}; got --experiment {experiment}"
+        if experiment in HAIKU_EXPERIMENTS and cell is not None:
+            return None
     if family == LUNA_MODEL and experiment == LUNA_EXPERIMENT:
         return None
     if family == LUNA_MODEL and experiment == PILOT_EXPERIMENT and cell == LUNA_SINGLE_TURN_CELL:
@@ -714,6 +792,125 @@ def luna_refusal(experiment: str, cell: str, generator_hash: str, *, split: str,
     return None
 
 
+def _haiku_templates_wrong(templates: tuple[int, int] | None, stop: int, what: str) -> list[str]:
+    """`templates` (the run's first index and last index + 1) within [0, `stop`) of `what`
+    (main or validity); None (not given) is wrong."""
+    if templates is None:
+        return [f"{what} templates (not given)"]
+    start, end = templates
+    if 0 <= start < end <= stop:
+        return []
+    return [f"{what} templates {start}-{end - 1}"]
+
+
+def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator_hash: str,
+                  results_root: Path, *, split: str, variant: str,
+                  task_cells: tuple[str, ...] | None = None, request: dict | None = None,
+                  templates: tuple[int, int] | None = None,
+                  matrix: str | None = None) -> str | None:
+    """Why a paid run of claude-haiku-5-5 must refuse, or None (PREREG §17.8, amendment R8,
+    not yet merged; fail closed). While `R8_IN_EFFECT` is False every Haiku run refuses
+    (`R8_STOP`). Once it is True, in the R4 pattern, every Haiku run is in R8's experiments
+    (`HAIKU_EXPERIMENTS`) at --effort medium on the default generator config with R8's request
+    settings (`HAIKU_REQUEST`), and:
+    * a pilot (`persistgym_pilot`): a cell of `HAIKU_PILOT_CELLS` on pilot templates, base
+      episodes, on a non-empty set of `HAIKU_TASK_CELLS`; a single-turn pilot at most
+      `HAIKU_SINGLE_TURN_PILOT_MAX` prompts with every earlier single-turn pilot of Haiku
+      (`_single_turn_pilot_prompts`), on the control's task cells;
+    * its validity run (`persistgym_validity`): exactly `VALIDITY_RUN` (F-0 on the validity
+      split, restated or withheld) on validity templates 0-19 and task cells of
+      `HAIKU_TASK_CELLS`; it needs no G1;
+    * its main runs and controls (`persistgym_haiku`): a cell of `HAIKU_CELLS` as the full
+      matrix (`HAIKU_MATRIX`) on all 8 task cells, or the single-turn control on its 4, on
+      main templates 0 to `HAIKU_T` - 1, base episodes or the restated-at-need control in F-0
+      (`HAIKU_RUN`), and only once `HAIKU_G1_PASSED` records Haiku's G1 on the default config.
+    `task_cells`, `request`, `templates` and, for a main harness-cell run, `matrix` left as
+    None refuse. The engagement checks, R3's and R6's rules for the OpenAI models, and luna's
+    and sol's G1 are never read for Haiku."""
+    if not R8_IN_EFFECT:
+        return f"{R8_STOP}; got --experiment {experiment}, cell {cell}"
+    single = cell == HAIKU_SINGLE_TURN_CELL
+    wrong = [what for what, bad in (
+        (f"--experiment {experiment}", experiment not in HAIKU_EXPERIMENTS),
+        (f"model {model}", model_family(model) != HAIKU_MODEL),
+        (f"--effort {effort}", effort != HAIKU_EFFORT),
+        (f"generator config {generator_hash[:12]}", generator_hash != HAIKU_GENERATOR_HASH))
+        if bad]
+    wrong += _request_wrong(request, HAIKU_REQUEST)
+    cells_given = tuple(task_cells) if task_cells is not None else None
+    if experiment == PILOT_EXPERIMENT:
+        wrong += [what for what, bad in (
+            (f"cell {cell}", cell not in HAIKU_PILOT_CELLS),
+            (f"--split {split}", split != "pilot"),
+            (f"--variant {variant}", variant != "base")) if bad]
+        if not single and (not cells_given or not set(cells_given) <= set(HAIKU_TASK_CELLS)):
+            wrong.append(f"task cells {', '.join(cells_given or ()) or '(none given)'}")
+        if single:
+            if templates is None or cells_given is None:
+                wrong.append("its prompts (templates and task cells not given)")
+                n = 0
+            else:
+                wrong += _single_turn_pilot_wrong(templates, cells_given)
+                n = max(templates[1] - templates[0], 0) * len(cells_given)
+            earlier, why = _single_turn_pilot_prompts(results_root, HAIKU_MODEL)
+            if why:
+                return f"{R8_REF}: {why}"
+            if earlier + n > HAIKU_SINGLE_TURN_PILOT_MAX:
+                wrong.append(f"{n} prompts" + (f" after {earlier} in earlier single-turn "
+                                               "pilots of Haiku" if earlier else ""))
+        if wrong:
+            return (f"a {HAIKU_MODEL} pilot ({R8_REF}) runs a cell of "
+                    f"{', '.join(HAIKU_PILOT_CELLS)} at --effort {HAIKU_EFFORT} on the default "
+                    f"generator config, --split pilot, --variant base, with --mode standard, "
+                    f"--service-tier standard and no --W, and a single-turn pilot at most "
+                    f"{HAIKU_SINGLE_TURN_PILOT_MAX} prompts in all; got " + "; ".join(wrong))
+        return None
+    if experiment == VALIDITY_EXPERIMENT:
+        got = {"cell": cell, "split": split, "variant": variant}
+        wrong += [f"{'cell' if k == 'cell' else '--' + k} {got[k]}"
+                  for k in ("cell", "split", "variant") if got[k] not in VALIDITY_RUN[k]]
+        if not cells_given or not set(cells_given) <= set(HAIKU_TASK_CELLS):
+            wrong.append(f"task cells {', '.join(cells_given or ()) or '(none given)'}")
+        wrong += _haiku_templates_wrong(templates, HAIKU_VALIDITY_TEMPLATES, "validity")
+        if wrong:
+            return (f"{VALIDITY_EXPERIMENT} runs {HAIKU_MODEL}'s validity run only ({R8_REF}): "
+                    f"cell F-0, --split validity, --variant restated or withheld, validity "
+                    f"templates 0-{HAIKU_VALIDITY_TEMPLATES - 1}, at --effort {HAIKU_EFFORT} on "
+                    f"the default generator config, with --mode standard, --service-tier "
+                    f"standard and no --W; got " + "; ".join(wrong))
+        return None
+    wrong += [what for what, bad in (
+        (f"cell {cell}", cell not in (*HAIKU_CELLS, HAIKU_SINGLE_TURN_CELL)),
+        (f"--split {split}", split not in HAIKU_RUN["split"]),
+        (f"--variant {variant}", variant not in HAIKU_RUN["variant"]),
+        (f"--variant {variant} in cell {cell}",
+         variant == "restated" and cell != HAIKU_RESTATED_CELL)) if bad]
+    if cell in (*HAIKU_CELLS, HAIKU_SINGLE_TURN_CELL):
+        want = HAIKU_SINGLE_TURN_TASK_CELLS if single else HAIKU_TASK_CELLS
+        if not single and matrix != HAIKU_MATRIX:
+            wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
+                          None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+        if cells_given is None:
+            wrong.append("task cells (not given)")
+        elif sorted(cells_given) != sorted(want):
+            wrong.append(f"task cells {', '.join(cells_given) or '(none)'}")
+    wrong += _haiku_templates_wrong(templates, HAIKU_T, "main")
+    if wrong:
+        return (f"{experiment} runs {HAIKU_MODEL}'s main runs and controls only ({R8_REF}): "
+                f"--experiment {HAIKU_EXPERIMENT}, a cell of {', '.join(HAIKU_CELLS)} on all 8 "
+                f"task cells (the full matrix) or the single-turn control on its 4, --split "
+                f"main, main templates 0-{HAIKU_T - 1}, --variant base, or restated in cell "
+                f"{HAIKU_RESTATED_CELL}, at --effort {HAIKU_EFFORT} on the default generator "
+                f"config, with --mode standard, --service-tier standard and no --W; got "
+                + "; ".join(wrong))
+    if HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
+        return (f"{experiment} runs {HAIKU_MODEL} only after the researcher has recorded the "
+                f"Haiku replication's G1 gate as passed on generator config "
+                f"{generator_hash[:12]} (harnesses/registered.py HAIKU_G1_PASSED, set by its "
+                f"G1 decision PR; {R8_REF})")
+    return None
+
+
 def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        generator_hash: str, results_root: Path, *, split: str,
                        variant: str, task_cells: tuple[str, ...] | None = None,
@@ -749,13 +946,20 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
     5. in `persistgym_validity`, a model in `ENGAGEMENT_REQUIRED` runs exactly a validity
        run (`VALIDITY_RUN`: cell F-0, `split` validity, `variant` restated or withheld);
     6. such a model needs an ENGAGED check on that config (`engagement_refusal`);
-    7. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config."""
+    7. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config.
+    R8. claude-haiku-5-5 (PREREG §17.8, not yet merged) is judged by `haiku_refusal` alone,
+       right after step 0 and before the pilot rules, so its pilots are held to R8 too; while
+       `R8_IN_EFFECT` is False every Haiku run refuses (with R6's hard stop off as well)."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)
     if why:
         return why
     family = model_family(model)
+    if family == HAIKU_MODEL:
+        return haiku_refusal(experiment, model, effort, cell, generator_hash, results_root,
+                             split=split, variant=variant, task_cells=task_cells,
+                             request=request, templates=templates, matrix=matrix)
     sol = family in ENGAGEMENT_REQUIRED
     if experiment == PILOT_EXPERIMENT:
         if not (sol and effort in ABOVE_DEFAULT_EFFORT):

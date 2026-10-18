@@ -529,7 +529,7 @@ PILOT_RUN = ["single-turn", "--n", "1", *SMALL_ARGS, "--approved-block", "3-pers
     ([*PILOT_RUN, "--split", "main"], "--split pilot only"),
     ([*PILOT_RUN, "--experiment", "persistgym"], "pilot data"),
     ([*PILOT_RUN, "--experiment", "persistgym_validity", "--split", "validity"],
-     "persistgym or persistgym_pilot only"),
+     "persistgym or persistgym_pilot or persistgym_haiku only"),
     ([*PILOT_RUN, "--parallel", "17"], "--parallel is 1 to 16"),
     ([*PILOT_RUN, "--gen-set", "W_tokens"], "--gen-set"),
     ([*PILOT_RUN, "--run-id", "../x"], "plain folder name"),
@@ -609,7 +609,8 @@ def test_the_docstring_command_is_lunas_registered_control():
     """harnesses/cli.py's single-turn command: luna at its registered effort and D13's
     settings, the main split from template 0, the 4 non-recoverable task cells, persistgym,
     repeat 0, and it passes the settings guard."""
-    (argv,) = [c for c in _commands(cli.__doc__) if c[0] == "single-turn"]
+    (argv,) = [c for c in _commands(cli.__doc__) if c[0] == "single-turn"
+               and "gpt-6-luna" in c]  # (the other is claude-haiku-5-5's, R8)
     a = cli.parse_args(argv)
     assert (a.model, a.effort, a.mode, a.service_tier) == ("gpt-6-luna", "medium", "standard",
                                                            "flex")

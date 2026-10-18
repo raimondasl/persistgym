@@ -215,12 +215,12 @@ The paid runs (with --approved-block and amounts from R8's approval line, which 
 persistgym_haiku: the Anthropic transport refuses any other block, its pilots too), under the
 rules `haiku_refusal` holds them to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
-restated, then withheld; the main runs of F-0, W-0 and W-n-0 on all 8 task cells (and F-0
---variant restated, and each again at --repeat-index 1), and the single-turn control, on main
-templates 0-199, only once `registered.HAIKU_G1_PASSED` records its G1 (empty until the
-researcher's G1 decision PR, so the main runs refuse); all at --effort medium on the default
-config with --mode standard and --service-tier standard (the default on a claude-* model) and
-no --W:
+restated, then withheld; the main runs of `registered.HAIKU_CELLS` on all 8 task cells (F-0
+and W-0: R8's size record drops W-n-0; and F-0 --variant restated, and each again at
+--repeat-index 1), and the single-turn control, on main templates 0 to `HAIKU_T` - 1 (0-199),
+only once `registered.HAIKU_G1_PASSED` records its G1 (set by the researcher's G1 GO of
+2026-10-18); all at --effort medium on the default config with --mode standard and
+--service-tier standard (the default on a claude-* model) and no --W:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell W-0 \
         --model claude-haiku-5-5 --split pilot --start 0 --n 1 --experiment persistgym_pilot \
         --approved-block "<block>" --planned-usd <usd>

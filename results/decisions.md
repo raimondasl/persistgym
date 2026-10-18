@@ -992,3 +992,92 @@ Raw transcripts stay in `results/raw/` (gitignored).
 approved_block: 4-haiku | experiments: persistgym_pilot,persistgym_validity,persistgym_haiku | max_usd: 180
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R8 (`PREREG.md` §17.8) and PLAN A10, the decisions above, and the token-count result. It also approves block `4-haiku` up to $180 billed.
+
+## 2026-10-18: Haiku's pilots and validity runs (block 4-haiku)
+Run in R8's order (`PREREG.md` §17.8) under block `4-haiku`, each with Claude Code's own `ANTHROPIC_BASE_URL` unset (`env -u ANTHROPIC_BASE_URL uv run --env-file .env ...`), committed in `db26eb7`. Every run completed and played all its episodes, with none excluded.
+
+| Run | What | Calls | Billed |
+|---|---|---|---|
+| `20261018T043551Z-F-0-claude-haiku-5-5` | F-0 pilot, pilot template 0 × 8 task cells | 192 | $0.098302 |
+| `20261018T043926Z-W-0-claude-haiku-5-5` | W-0 pilot, the same episodes | 194 | $0.340280 |
+| `20261018T044223Z-W-n-0-claude-haiku-5-5` | W-n-0 pilot, the same episodes | 194 | $0.351242 |
+| `20261018T044546Z-single-turn-claude-haiku-5-5` | single-turn pilot, pilot templates 0-1 × the 4 non-recoverable task cells | 8 | $0.037280 |
+| `20261018T044721Z-F-0-claude-haiku-5-5` | validity, restated, templates 0-19 × 8 task cells | 3,848 | $2.000525 |
+| `20261018T045130Z-F-0-claude-haiku-5-5` | validity, withheld, the same templates | 3,998 | $2.158346 |
+
+- **Served:** the standard tier and the global geo on all 8,434 calls. The largest prompt was 63,737 Haiku tokens, and no call was over 100,000. So R8's stop on tier or geo did not fire.
+- **Single-turn pilot rule** (2026-10-10, kept by R8): 8 of 8 replies are of the need-verb class, so the single-turn main runs may proceed.
+- **Near losses** (`uv run python -m analysis.near_loss --model claude-haiku-5-5`): 0 of the 8 near window episodes of the W-0 and W-n-0 pilots lost their evidence. That is under 2%, so R8's stop did not fire.
+- **Replies with no visible text:** 1 of the 8,434 responses was empty, and none was whitespace-only.
+- **Block spend:** $4.985975 of $180.
+
+## 2026-10-18: Haiku's G1 metrics (R8)
+`uv run python -m analysis.g1 --model claude-haiku-5-5` at `843dd83`, clean tree (`results/gates/g1-claude-haiku-5-5-20261018T050534Z/`):
+- **Restated:** 160/160 = 100.0%, against the gate of at least 85%: met.
+- **Withheld:** 0/160 = 0.0%, against the gate of at most 20%: met. 0 excluded in either run.
+- **Oracle and $0 audits:** pass on validity templates 0-19 (480 episodes) and main templates 0-999 (24,000 episodes). The highest no-memory baseline is 0.100, against the gate of at most 0.20.
+- **Spot-check:** 160 no shortcut, 0 possible, 0 shortcut. This is the package of luna's G1 (`results/spotcheck/g1-validity-0-20-3d6bc648/`), on the same config and templates.
+- **Spend to date:** phase 1a $96.88 of its $500 cap; all phases $625.41.
+
+## 2026-10-18: Haiku's G1: GO (researcher)
+In the researcher's words, 2026-10-18, after the G1 metrics above: "G1 go".
+- **Released:** Haiku's main runs and controls in block `4-haiku`, through the pull request that adds this entry. `HAIKU_G1_PASSED` records claude-haiku-5-5 on the default config, `3d6bc648...`.
+
+## 2026-10-18: Haiku's size record (R8)
+R8's size rule, applied before any main episode by `uv run python -m analysis.haiku_forecast` at `ecd0632`, clean tree (`results/haiku_forecast/20261018T070826Z/`). The script recorded `results/costs.csv` with sha256 `2eaf86372a46...`. That is the hash of the Windows working copy, whose six `4-haiku` rows end in CRLF (`common.costs` appends them so). The committed file, stored with LF, hashes to `53cef5472211...`. The rows' values are the same in both. The same holds for the six run `meta.json` files the forecast pins: their recorded hashes are of CRLF working copies, and their content is the same as the committed files'. The script was built and reviewed adversarially. The reviewer's read-only run on this ledger, at `814b1d8`, gave the same numbers and outcome. The review fixes in `92bc12c` changed none of them: they added input checks and exact arithmetic, and report the pilot basis below.
+- **R** = $180 − $4.985975 = $175.014025, so 0.85 R = $148.761921.
+- **F(T = 200, with W-n-0)** = $200.247190, which is over 0.85 R.
+- **F(T = 200, without W-n-0)** = $122.973950, which fits.
+- **Outcome (step 2): W-n-0 does not run, and T = 200.**
+  - The pull request that adds this entry sets `HAIKU_CELLS` to F-0 and W-0 and keeps `HAIKU_T` at 200. Neither changes after this.
+  - W-n-0 is reported as "pre-registered, not run (budget)". Its pilot ran.
+- **F's lines,** at repeat 0 plus repeat 1:
+
+  | Line | Episodes | Cost per episode | Total | Basis |
+  |---|---|---|---|---|
+  | F-0 | 1,760 | $0.012503 | $22.01 | the restated validity run |
+  | W-0 | 1,760 | $0.042535 | $74.86 | its pilot |
+  | F-0 restated | 1,760 | $0.012503 | $22.01 | the restated validity run |
+  | single-turn | 880 prompts | $0.00466 per prompt | $4.10 | its pilot |
+
+- **F-0's basis.** The script costs F-0 from the restated validity run, as item 2 of this log's 2026-10-18 R8 entry has it ("the pilots' and validity runs' costs"). R8's own words are "from the pilots' `costs.csv` rows". The script's basis was chosen after both validity rows were in the ledger. On F-0's pilot row instead, F is $199.49 with W-n-0 and $122.22 without, which gives the same outcome.
+- **Sensitivity** (reported only):
+  - With every cost per episode × 1.25, F without W-n-0 is $153.72, and the rule would give T = 190.
+  - The outcome fits with every cost per episode up to × 1.210.
+  - On luna, the main runs came out 0.8% to 7.7% above their pilot rows.
+  - W-0's pilot followed F-0's on the same episodes, so it may have read F-0's cache. Its estimate may be a little low.
+- **Independent check.**
+  - Claude re-derived F by hand from the six rows, to the cent.
+  - The reviewer also scaled luna's main-run costs by Haiku's and luna's pilot cost ratios. That gave F about $127 without W-n-0 and about $210 with it, and the same outcome.
+
+## 2026-10-18: The analysis commit (R8), and one harness fix before any main episode
+- **The analysis.** `analysis/persistgym_h1h3.py` reads Haiku's main runs with `--model claude-haiku-5-5`; luna's profile is the default and is unchanged.
+  - It was built in `e2024f9`, reviewed adversarially, fixed in `2a0fda4`, and reworded in `ecd0632` (below).
+  - **The analysis commit is `753f492`.** Its analysis code, and the registered values that code reads at call time (`HAIKU_CELLS`, `HAIKU_T`), are those of `f79921c`, where the regression below ran. Since `f79921c` only tests and docstrings have changed. At `f79921c`, 7 Haiku analysis tests failed because they assumed W-n-0 was among Haiku's cells. `753f492` pins those tests to R8's three cells and checks the repository's two. Later commits in the pull request that adds this entry change neither the analysis code nor those values.
+  - Three choices from the review read R8 strictly:
+    - Reasoning tokens are reported as unavailable for any harness cell and task cell with an episode that does not report them. No cell is fitted on part of its episodes.
+    - An episode stopped by the request-side check is excluded and listed as a deviation, even if a continuation replays it.
+    - Power is read only from a `power_sim` table made from Haiku's validity runs. Otherwise it is reported as unavailable.
+- **luna regression** (R8: "the extended code must reproduce every number and label of luna's cited output"):
+  - `uv run python -m analysis.persistgym_h1h3_regression` reproduced `results/persistgym_h1h3/20261010T232227Z/` with 0 differences at `2a0fda4` (`results/persistgym_h1h3_regression/20261018T063002Z/`) and again at `f79921c` (`results/persistgym_h1h3_regression/20261018T071235Z/`).
+  - The comparison ignores only the run's own identity fields: times, run id, git state and SDK versions. It also ignores how the input paths are spelled, since they are absolute in the cited output and relative to the repository in the re-run. The paths are compared once resolved, and the config hash differs only because of that spelling.
+- **The harness fix** (`ecd0632`):
+  - A whitespace-only reply goes back as `(no reply)`, as an empty one does, because the API rejects a whitespace-only text block. The harness had counted its whitespace toward W. R8 says that a turn with no visible text adds 0 tokens toward W, and the harness now counts it so (`MessagesWire.kept_reply`; `harnesses/DESIGN.md` §13).
+  - None of the 8,434 pilot and validity responses was whitespace-only, so no run is affected.
+
+## 2026-10-18: Haiku's main runs: the plan
+In R8's order, one at a time, in the PersistGym stream, each with `--parallel 16` and Claude Code's `ANTHROPIC_BASE_URL` unset. Each run's `--planned-usd` is about 1.5 times its forecast, rounded up to whole dollars (so single-turn at repeat 1 gets $1), and each run stops at it.
+
+| Run | Forecast | `--planned-usd` |
+|---|---|---|
+| F-0, repeat 0 (1,600 episodes) | $20.01 | 30 |
+| W-0, repeat 0 (1,600) | $68.06 | 102 |
+| F-0 restated, repeat 0 (1,600) | $20.01 | 30 |
+| single-turn, repeat 0 (800 prompts) | $3.73 | 6 |
+| F-0, repeat 1 (160) | $2.00 | 3 |
+| W-0, repeat 1 (160) | $6.81 | 10 |
+| F-0 restated, repeat 1 (160) | $2.00 | 3 |
+| single-turn, repeat 1 (80) | $0.37 | 1 |
+
+- **Before each run,** Claude sums block `4-haiku`'s rows. If the run's planned spend would take the block past $180, Claude stops and asks the researcher.
+- **After the runs:** the analysis, an independent re-derivation of every reported number, and the report. Results go into the AGENT paper and an arXiv v2, not v1.

@@ -1,0 +1,318 @@
+{
+  "prereg": "PREREG.md §17.8 (amendment R8)",
+  "status": "complete",
+  "provisional_reasons": [],
+  "inputs": {
+    "costs_csv": "results/costs.csv",
+    "costs_csv_sha256": "2eaf86372a462d976d4a5e766ed1f04875c23ebf20a399cd3c29970d76a6d524",
+    "results_root": "results",
+    "runs": [
+      {
+        "run_id": "20261018T043551Z-F-0-claude-haiku-5-5",
+        "experiment": "persistgym_pilot",
+        "cell": "F-0",
+        "variant": "base",
+        "costs_line": 70,
+        "billed_usd": 0.098302,
+        "episodes": 8,
+        "input_tokens": 5084208,
+        "cached_input_tokens": 4704762,
+        "cache_write_tokens": 378678,
+        "calls_over_100000": 0,
+        "price_source_date": "2026-10-17",
+        "cached_share": 0.9253677268907959,
+        "feeds": [],
+        "meta_json": "results/persistgym_pilot/20261018T043551Z-F-0-claude-haiku-5-5/meta.json",
+        "meta_json_sha256": "562fbf9048e253ae709bcc04c53437efb5dec2a2ba54dfba0a3f725dd72a3218"
+      },
+      {
+        "run_id": "20261018T043926Z-W-0-claude-haiku-5-5",
+        "experiment": "persistgym_pilot",
+        "cell": "W-0",
+        "variant": "base",
+        "costs_line": 71,
+        "billed_usd": 0.34028,
+        "episodes": 8,
+        "input_tokens": 4386228,
+        "cached_input_tokens": 1844791,
+        "cache_write_tokens": 2540661,
+        "calls_over_100000": 0,
+        "price_source_date": "2026-10-17",
+        "cached_share": 0.42058711950222377,
+        "feeds": [
+          "W-0"
+        ],
+        "meta_json": "results/persistgym_pilot/20261018T043926Z-W-0-claude-haiku-5-5/meta.json",
+        "meta_json_sha256": "42f961ff69de319b3afcedfdb60881034916cdead43b7cd8c471e246c597274f"
+      },
+      {
+        "run_id": "20261018T044223Z-W-n-0-claude-haiku-5-5",
+        "experiment": "persistgym_pilot",
+        "cell": "W-n-0",
+        "variant": "base",
+        "costs_line": 72,
+        "billed_usd": 0.351242,
+        "episodes": 8,
+        "input_tokens": 4432067,
+        "cached_input_tokens": 1827249,
+        "cache_write_tokens": 2604042,
+        "calls_over_100000": 0,
+        "price_source_date": "2026-10-17",
+        "cached_share": 0.4122791916277439,
+        "feeds": [
+          "W-n-0"
+        ],
+        "meta_json": "results/persistgym_pilot/20261018T044223Z-W-n-0-claude-haiku-5-5/meta.json",
+        "meta_json_sha256": "84d1d38362c4f708c5a61b8b6920f6eaa25ee5014736b4e221aa55c032b1b876"
+      },
+      {
+        "run_id": "20261018T044546Z-single-turn-claude-haiku-5-5",
+        "experiment": "persistgym_pilot",
+        "cell": "single-turn",
+        "variant": "single_turn",
+        "costs_line": 73,
+        "billed_usd": 0.03728,
+        "episodes": 8,
+        "input_tokens": 368834,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "calls_over_100000": 0,
+        "price_source_date": "2026-10-17",
+        "cached_share": 0.0,
+        "feeds": [
+          "single-turn"
+        ],
+        "meta_json": "results/persistgym_pilot/20261018T044546Z-single-turn-claude-haiku-5-5/meta.json",
+        "meta_json_sha256": "8265fc093961519edcdd3a6483bdc3d058d1c017fe2d12124b72c5b03c2fa484"
+      },
+      {
+        "run_id": "20261018T044721Z-F-0-claude-haiku-5-5",
+        "experiment": "persistgym_validity",
+        "cell": "F-0",
+        "variant": "restated",
+        "costs_line": 74,
+        "billed_usd": 2.000525,
+        "episodes": 160,
+        "input_tokens": 102705064,
+        "cached_input_tokens": 95004525,
+        "cache_write_tokens": 7685147,
+        "calls_over_100000": 0,
+        "price_source_date": "2026-10-17",
+        "cached_share": 0.925022791475988,
+        "feeds": [
+          "F-0",
+          "F-0-restated"
+        ],
+        "meta_json": "results/persistgym_validity/20261018T044721Z-F-0-claude-haiku-5-5/meta.json",
+        "meta_json_sha256": "6d74df56498f84a0242374b7151235e20457c9fee37acbc83c4f405b70634391"
+      },
+      {
+        "run_id": "20261018T045130Z-F-0-claude-haiku-5-5",
+        "experiment": "persistgym_validity",
+        "cell": "F-0",
+        "variant": "withheld",
+        "costs_line": 75,
+        "billed_usd": 2.158346,
+        "episodes": 160,
+        "input_tokens": 110864561,
+        "cached_input_tokens": 103139823,
+        "cache_write_tokens": 7708746,
+        "calls_over_100000": 0,
+        "price_source_date": "2026-10-17",
+        "cached_share": 0.93032274759109,
+        "feeds": [],
+        "meta_json": "results/persistgym_validity/20261018T045130Z-F-0-claude-haiku-5-5/meta.json",
+        "meta_json_sha256": "447a19fcfa4c91f069c4f752953efc064cd546f07bc1a256bb1f966f10372a5a"
+      }
+    ]
+  },
+  "block": {
+    "name": "4-haiku",
+    "max_usd": 180.0,
+    "rows": 6,
+    "spent_usd": 4.985975,
+    "R_usd": 175.014025,
+    "fit_share": 0.85,
+    "limit_usd": 148.76192125
+  },
+  "per_episode": {
+    "F-0": {
+      "usd": 0.01250328125,
+      "source": "validity, restated",
+      "runs": [
+        "20261018T044721Z-F-0-claude-haiku-5-5"
+      ],
+      "episodes": 160
+    },
+    "W-0": {
+      "usd": 0.042535,
+      "source": "pilot",
+      "runs": [
+        "20261018T043926Z-W-0-claude-haiku-5-5"
+      ],
+      "episodes": 8
+    },
+    "W-n-0": {
+      "usd": 0.04390525,
+      "source": "pilot",
+      "runs": [
+        "20261018T044223Z-W-n-0-claude-haiku-5-5"
+      ],
+      "episodes": 8
+    },
+    "F-0-restated": {
+      "usd": 0.01250328125,
+      "source": "validity, restated",
+      "runs": [
+        "20261018T044721Z-F-0-claude-haiku-5-5"
+      ],
+      "episodes": 160
+    },
+    "single-turn": {
+      "usd": 0.00466,
+      "source": "pilot",
+      "runs": [
+        "20261018T044546Z-single-turn-claude-haiku-5-5"
+      ],
+      "episodes": 8
+    }
+  },
+  "checks": {
+    "template": {
+      "f0_pilot_usd_per_episode": 0.01228775,
+      "f0_validity_restated_usd_per_episode": 0.01250328125,
+      "validity_over_pilot": 1.0175403348863705
+    },
+    "withheld_usd_per_episode": 0.0134896625
+  },
+  "design": {
+    "T_max": 200,
+    "T_step": 10,
+    "task_cells": 8,
+    "single_turn_task_cells": 4,
+    "lines": [
+      "F-0",
+      "W-0",
+      "W-n-0",
+      "F-0-restated",
+      "single-turn"
+    ],
+    "optional_line": "W-n-0"
+  },
+  "outcome": {
+    "w_n_0_runs": false,
+    "T": 200,
+    "stop_and_ask": false,
+    "step": 2,
+    "F_usd": 122.97395,
+    "limit_usd": 148.76192125,
+    "margin": 1.2097027154938098,
+    "comparisons": [
+      {
+        "T": 200,
+        "w_n_0": true,
+        "F_usd": 200.24719,
+        "fits": false
+      },
+      {
+        "T": 200,
+        "w_n_0": false,
+        "F_usd": 122.97395,
+        "fits": true
+      }
+    ],
+    "runs": {
+      "F-0": {
+        "episodes_repeat_0": 1600,
+        "episodes_repeat_1": 160,
+        "usd_per_episode": 0.01250328125,
+        "usd": 22.005775
+      },
+      "W-0": {
+        "episodes_repeat_0": 1600,
+        "episodes_repeat_1": 160,
+        "usd_per_episode": 0.042535,
+        "usd": 74.8616
+      },
+      "F-0-restated": {
+        "episodes_repeat_0": 1600,
+        "episodes_repeat_1": 160,
+        "usd_per_episode": 0.01250328125,
+        "usd": 22.005775
+      },
+      "single-turn": {
+        "episodes_repeat_0": 800,
+        "episodes_repeat_1": 80,
+        "usd_per_episode": 0.00466,
+        "usd": 4.1008
+      }
+    }
+  },
+  "sensitivity": {
+    "factor": 1.25,
+    "applied": false,
+    "F_200_with_w_n_0_usd": 250.3089875,
+    "F_200_without_w_n_0_usd": 153.7174375,
+    "rule_would_give": {
+      "w_n_0_runs": false,
+      "T": 190,
+      "stop_and_ask": false,
+      "step": 3,
+      "F_usd": 146.031565625,
+      "limit_usd": 148.76192125,
+      "margin": 1.0186970235737347,
+      "comparisons": [
+        {
+          "T": 200,
+          "w_n_0": true,
+          "F_usd": 250.3089875,
+          "fits": false
+        },
+        {
+          "T": 200,
+          "w_n_0": false,
+          "F_usd": 153.7174375,
+          "fits": false
+        },
+        {
+          "T": 190,
+          "w_n_0": false,
+          "F_usd": 146.031565625,
+          "fits": true
+        }
+      ]
+    },
+    "note": "reported only: the rule's outcome is `outcome`"
+  },
+  "pilot_basis": {
+    "applied": false,
+    "authority_for_the_rule_basis": "results/decisions.md, 2026-10-18, item 2: the forecast from the pilots' and validity runs' costs (PREREG §17.8: from the pilots' costs.csv rows)",
+    "f0_usd_per_episode": 0.01228775,
+    "F_200_with_w_n_0_usd": 199.48852,
+    "F_200_without_w_n_0_usd": 122.21528,
+    "rule_would_give": {
+      "w_n_0_runs": false,
+      "T": 200,
+      "stop_and_ask": false,
+      "step": 2,
+      "F_usd": 122.21528,
+      "limit_usd": 148.76192125,
+      "margin": 1.2172121296944212,
+      "comparisons": [
+        {
+          "T": 200,
+          "w_n_0": true,
+          "F_usd": 199.48852,
+          "fits": false
+        },
+        {
+          "T": 200,
+          "w_n_0": false,
+          "F_usd": 122.21528,
+          "fits": true
+        }
+      ]
+    },
+    "note": "reported only: the rule's outcome is `outcome`"
+  }
+}

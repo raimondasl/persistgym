@@ -1,0 +1,241 @@
+{
+  "generated_utc": "2026-10-18T05:05:34+00:00",
+  "git_commit": "843dd83477b0cf7e74ab46b84609832bac811b94",
+  "git_dirty": false,
+  "prereg_version": "1.0",
+  "model": "claude-haiku-5-5",
+  "config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+  "llm": {
+    "runs": {
+      "restated": {
+        "run_id": "20261018T044721Z-F-0-claude-haiku-5-5",
+        "n_episodes": 160,
+        "n_excluded": 0,
+        "exit_reasons": [
+          "DONE"
+        ],
+        "correct": 160,
+        "n": 160,
+        "rate": 1.0,
+        "per_cell": {
+          "derived-nonrec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "derived-nonrec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "derived-rec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "derived-rec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-nonrec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-nonrec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-rec-far": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          },
+          "observed-rec-near": {
+            "correct": 20,
+            "n": 20,
+            "rate": 1.0
+          }
+        },
+        "billed_usd": 2.000525325
+      },
+      "withheld": {
+        "run_id": "20261018T045130Z-F-0-claude-haiku-5-5",
+        "n_episodes": 160,
+        "n_excluded": 0,
+        "exit_reasons": [
+          "DONE"
+        ],
+        "correct": 0,
+        "n": 160,
+        "rate": 0.0,
+        "per_cell": {
+          "derived-nonrec-far": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "derived-nonrec-near": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "derived-rec-far": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "derived-rec-near": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "observed-nonrec-far": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "observed-nonrec-near": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "observed-rec-far": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          },
+          "observed-rec-near": {
+            "correct": 0,
+            "n": 20,
+            "rate": 0.0
+          }
+        },
+        "billed_usd": 2.15834568
+      }
+    },
+    "rule": {
+      "restated_min": 0.85,
+      "withheld_max": 0.2,
+      "restated_ok": true,
+      "withheld_ok": true,
+      "pass": true
+    }
+  },
+  "audits": [
+    {
+      "split": "validity",
+      "n_templates": 20,
+      "n_episodes": 480,
+      "rc": 0,
+      "pass": true,
+      "failed_checks": [],
+      "oracles": {
+        "key/base/nonrec": 1.0,
+        "key/base/rec": 1.0,
+        "key/restated/nonrec": 1.0,
+        "key/restated/rec": 1.0,
+        "text/base/nonrec": 1.0,
+        "text/base/rec": 1.0,
+        "text/restated/nonrec": 1.0,
+        "text/restated/rec": 1.0
+      },
+      "oracles_ok": true,
+      "baselines_max": 0.1,
+      "partial_memory_pass": true,
+      "file": "audit_validity.json"
+    },
+    {
+      "split": "main",
+      "n_templates": 1000,
+      "n_episodes": 24000,
+      "rc": 0,
+      "pass": true,
+      "failed_checks": [],
+      "oracles": {
+        "key/base/nonrec": 1.0,
+        "key/base/rec": 1.0,
+        "key/restated/nonrec": 1.0,
+        "key/restated/rec": 1.0,
+        "text/base/nonrec": 1.0,
+        "text/base/rec": 1.0,
+        "text/restated/nonrec": 1.0,
+        "text/restated/rec": 1.0
+      },
+      "oracles_ok": true,
+      "baselines_max": 0.1,
+      "partial_memory_pass": true,
+      "file": "audit_main.json"
+    }
+  ],
+  "audits_pass": true,
+  "spotcheck": {
+    "package": "g1-validity-0-20-3d6bc648",
+    "cells": {
+      "observed-nonrec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "observed-nonrec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "observed-rec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "observed-rec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-nonrec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-nonrec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-rec-near": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      },
+      "derived-rec-far": {
+        "no_shortcut": 20,
+        "possible_shortcut": 0,
+        "shortcut": 0,
+        "unreviewed": 0
+      }
+    },
+    "totals": {
+      "no_shortcut": 160,
+      "possible_shortcut": 0,
+      "shortcut": 0,
+      "unreviewed": 0
+    },
+    "flagged": [],
+    "complete": true
+  },
+  "spend_by_phase": {
+    "0": 20.5661,
+    "1a": 96.88149799999998,
+    "1b": 507.9596199999999,
+    "2": 0.0
+  }
+}

@@ -1,9 +1,11 @@
 """R8's guard for claude-haiku-5-5 (harnesses/registered.py `haiku_refusal`; PREREG §17.8,
 amendment R8): fail closed.
 
-* `R8_IN_EFFECT` is True in the repository and `HAIKU_G1_PASSED` empty, and with no
-  monkeypatching the rules hold in R4's pattern: pilots, the validity run with no G1, main
-  runs only after `HAIKU_G1_PASSED` (so they refuse until the researcher's G1 decision PR);
+* `R8_IN_EFFECT` is True in the repository, `HAIKU_G1_PASSED` records the researcher's G1 GO
+  of 2026-10-18 on the default config, and R8's size record sets `HAIKU_CELLS` to F-0 and
+  W-0 at `HAIKU_T` = 200. With no monkeypatching the rules hold in R4's pattern: pilots, the
+  validity run with no G1, main runs of F-0 and W-0 only after `HAIKU_G1_PASSED` (with it
+  emptied they refuse), and no W-n-0 main run;
   every other claude-* string refuses, as a model R8 does not register; luna's and sol's runs
   are judged as before, and neither runs in `persistgym_haiku`.
 * The kill switch: with `R8_IN_EFFECT` monkeypatched False, every Haiku paid run refuses,
@@ -12,7 +14,8 @@ amendment R8): fail closed.
   and so does every other claude-* string, which goes to the Messages API too.
 * The CLI: `dry-run` works at $0 on the Messages wire, --service-tier defaults per wire, the
   docstring's R8 commands parse (its pilot and validity commands pass the guard, its main
-  commands wait for G1), Haiku's main runs and the probes refuse before the lock, an
+  commands wait for G1 with `HAIKU_G1_PASSED` emptied), Haiku's main runs refuse before the
+  lock without G1 and the probes refuse before it always, an
   end-to-end Haiku pilot goes through the real guarded transport with a fake-backed client
   (and a pilot or validity run refuses under a block that does not list persistgym_haiku),
   and `account-run` refuses a Haiku run.
@@ -67,6 +70,13 @@ def g1(monkeypatch):
     monkeypatch.setitem(registered.HAIKU_G1_PASSED, HAIKU, DEFAULT)
 
 
+@pytest.fixture
+def no_g1(monkeypatch):
+    """`HAIKU_G1_PASSED` as it was before the researcher's G1 decision PR: empty."""
+    monkeypatch.delitem(registered.HAIKU_G1_PASSED, HAIKU)
+    assert registered.HAIKU_G1_PASSED == {}
+
+
 def _haiku_pilot_meta(results: Path, name: str, n: int, model: str = HAIKU) -> None:
     meta = {"experiment": PILOT, "run_id": name, "cell_or_config": "single-turn",
             "model_requested": model, "n_episodes_run": n}
@@ -87,18 +97,20 @@ RUNS = [
     (MAIN, "F-0", {}),
     (MAIN, "F-0", {"variant": "restated"}),
     (MAIN, "W-0", {}),
-    (MAIN, "W-n-0", {"templates": (190, 200)}),
+    (MAIN, "W-0", {"templates": (190, 200)}),
     (MAIN, "single-turn", {"task_cells": NONREC, "matrix": None}),
 ]
 
 
-# --- the repository: R8 in effect, no Haiku G1 ---------------------------------------------------
+# --- the repository: R8 in effect, Haiku's G1 and size record ------------------------------------
 
-def test_the_repository_has_r8_in_effect_and_no_haiku_g1():
-    assert registered.R8_IN_EFFECT is True and registered.HAIKU_G1_PASSED == {}
+def test_the_repository_has_r8_in_effect_haikus_g1_and_size_record():
+    assert registered.R8_IN_EFFECT is True
+    assert registered.HAIKU_G1_PASSED == {HAIKU: DEFAULT}  # the researcher's G1 GO, 2026-10-18
     assert registered.R8_REF == "PREREG.md §17.8 (amendment R8)"
     assert registered.REGISTERED_EFFORT[HAIKU] == "medium" == registered.HAIKU_EFFORT
-    assert registered.HAIKU_CELLS == ("F-0", "W-0", "W-n-0")
+    assert registered.HAIKU_CELLS == ("F-0", "W-0")  # R8's size record: W-n-0 does not run
+    assert "W-n-0" in registered.HAIKU_PILOT_CELLS  # its pilot ran
     assert registered.HAIKU_TASK_CELLS == ALL8 and registered.HAIKU_T == 200
     assert registered.HAIKU_REQUEST == REQUEST and registered.HAIKU_GENERATOR_HASH == DEFAULT
     assert registered.HAIKU_EXPERIMENT == MAIN
@@ -116,11 +128,24 @@ def test_with_r8_its_runs_pass(tmp_path, g1, experiment, cell, kw):
     assert guard(experiment, cell, tmp_path, **kw) is None
 
 
-def test_with_r8_the_validity_run_and_pilots_need_no_g1_and_main_runs_do(tmp_path):
-    """The repository as it is: R8 in effect and `HAIKU_G1_PASSED` empty, so the pilots and
-    the validity run pass and every main run and control refuses until the researcher's G1
-    decision PR."""
-    assert registered.HAIKU_G1_PASSED == {}
+def test_the_repository_as_it_is_passes_every_registered_run(tmp_path):
+    """No monkeypatching: with Haiku's G1 recorded, every run R8 registers passes."""
+    for experiment, cell, kw in RUNS:
+        assert guard(experiment, cell, tmp_path, **kw) is None, (experiment, cell, kw)
+
+
+@pytest.mark.parametrize("templates", [(0, 200), (190, 200), (0, 20)])
+def test_the_size_record_refuses_a_w_n_0_main_run(tmp_path, templates):
+    """R8's size record drops W-n-0: its main runs refuse even after G1; its pilot still
+    passes the guard (it ran before the record)."""
+    why = guard(MAIN, "W-n-0", tmp_path, templates=templates)
+    assert why is not None and "cell W-n-0" in why and registered.R8_REF in why
+    assert guard(PILOT, "W-n-0", tmp_path, split="pilot", templates=(0, 1)) is None
+
+
+def test_with_r8_the_validity_run_and_pilots_need_no_g1_and_main_runs_do(tmp_path, no_g1):
+    """R8 in effect and `HAIKU_G1_PASSED` empty, as before the researcher's G1 decision PR:
+    the pilots and the validity run pass and every main run and control refuses."""
     for experiment, cell, kw in RUNS:
         why = guard(experiment, cell, tmp_path, **kw)
         if experiment == MAIN:
@@ -136,7 +161,7 @@ def test_with_r8_the_validity_run_and_pilots_need_no_g1_and_main_runs_do(tmp_pat
      "--experiment", MAIN],
     ["single-turn", "--model", HAIKU, "--split", "main", "--n", "200", "--experiment", MAIN]])
 def test_with_r8_the_cli_refuses_haikus_main_runs_before_the_lock_until_g1(monkeypatch, capsys,
-                                                                           argv):
+                                                                           no_g1, argv):
     monkeypatch.setenv(ALLOW_ENV, "1")
 
     def no_transport(*a, **k):
@@ -370,11 +395,12 @@ def _r8_commands() -> list[list[str]]:
     return [c for c in _commands(cli.__doc__) if HAIKU in c]
 
 
-def test_the_cli_docstrings_r8_commands_parse_and_main_runs_wait_for_g1(tmp_path, monkeypatch):
+def test_the_cli_docstrings_r8_commands_parse_and_main_runs_wait_for_g1(tmp_path, monkeypatch,
+                                                                         no_g1):
     """The docstring's paid commands: a pilot, the validity run, a main run and the
-    single-turn control's main run. With R8 in effect (the repository) the first two pass the
-    guard and the main runs wait for `HAIKU_G1_PASSED`; after G1 all four pass; with the kill
-    switch off all four refuse."""
+    single-turn control's main run. With R8 in effect and `HAIKU_G1_PASSED` emptied the first
+    two pass the guard and the main runs wait for it; after G1 (the repository) all four
+    pass; with the kill switch off all four refuse."""
     commands = _r8_commands()
     assert {c[0] for c in commands} == {"dry-run", "count-tokens", "run", "single-turn"}
     paid = [c for c in commands if c[0] in ("run", "single-turn")]
@@ -459,7 +485,8 @@ class _FakeBackedClient:
 
 @pytest.fixture
 def haiku_paid_env(tmp_path, monkeypatch):
-    """R8 in effect (the repository's default, not monkeypatched; no Haiku G1); a repo whose
+    """R8 in effect (the repository's default, not monkeypatched; its G1 is irrelevant to a
+    pilot or validity run); a repo whose
     frozen PREREG and approval line for block 4-haiku list R8's
     experiments, beside block 1-pilots, approved before the Haiku replication (it lists the
     pilot and validity experiments, not persistgym_haiku); the CLI's own `_guarded_transport`

@@ -56,3 +56,22 @@ def test_audit_on_ten_validity_templates_passes(tmp_path):
     a = g1.run_audit("validity", 10, tmp_path / "audit_validity.json")
     assert a["pass"] and a["oracles_ok"] and a["partial_memory_pass"]
     assert a["n_templates"] == 10 and a["baselines_max"] <= 0.20 and not a["failed_checks"]
+
+
+def test_summary_for_another_model_names_it_and_drops_sols_section():
+    """`--model claude-haiku-5-5` (PREREG §17.8): its own runs under "llm", no sol report."""
+    run = {"run_id": "r", "correct": 160, "n": 160, "rate": 1.0, "n_excluded": 0,
+           "exit_reasons": ["DONE"], "per_cell": {"observed-rec-far": {"correct": 20, "n": 20}}}
+    g = {"generated_utc": "2026-10-18T00:00:00+00:00", "git_commit": "abcdef0", "git_dirty": False,
+         "model": "claude-haiku-5-5",
+         "llm": {"runs": {"restated": run, "withheld": {**run, "correct": 0, "rate": 0.0}},
+                 "rule": g1.llm_rule({"restated": run, "withheld": {**run, "correct": 0, "rate": 0.0}})},
+         "audits": [], "audits_pass": True,
+         "spotcheck": {"package": "p", "cells": {}, "complete": True, "flagged": [],
+                       "totals": {"no_shortcut": 160, "possible_shortcut": 0, "shortcut": 0,
+                                  "unreviewed": 0}},
+         "spend_by_phase": {"1a": 1.0}}
+    text = "\n".join(g1.summary_lines(g))
+    assert "Model claude-haiku-5-5" in text and "--model claude-haiku-5-5" in text
+    assert "amendment R8" in text and "gpt-6.1-sol" not in text
+    assert "160/160 = 100.0%" in text and "LLM rule: **met**" in text

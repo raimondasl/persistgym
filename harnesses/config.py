@@ -29,7 +29,9 @@ ARC_SUMMARY_BRIDGE_TEMPLATE = (
 
 REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 REASONING_MODES = ("standard", "pro")
-SERVICE_TIERS = ("auto", "default", "flex", "scale", "priority", "fast", "ultrafast")
+SERVICE_TIERS = ("auto", "default", "flex", "scale", "priority", "fast", "ultrafast", "standard")
+"""OpenAI's tiers, and "standard", the only tier a run on Anthropic's Messages API records (it
+sends none; `harnesses.wire.MESSAGES_SERVICE_TIER`). Each wire refuses the other's."""
 ENCRYPTED_REASONING = "reasoning.encrypted_content"
 DEFAULT_MAX_OUTPUT_TOKENS = 32_000
 """PREREG D13 (decided 2026-10-01; §6: luna and sol requests carry `max_output_tokens: 32000`):
@@ -179,4 +181,23 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "stop_on_effort_mismatch": ("PREREG §17.2 (R2)", ("stop and exclude the episode, as for "
                                                       "reasoning.context")),
     "output_items_replay": ("§7", "output items sent back verbatim, null fields dropped"),
+    # The Messages wire (claude-*; PREREG §17.8, amendment R8, not yet merged; DESIGN §13)
+    "messages_replay_off": ("PREREG §17.8 (R8, pending)", (
+        "earlier turns go back as visible text only, never a thinking block; replay-on and "
+        "summary cells refused")),
+    "messages_empty_reply": ("PREREG §17.8 (R8, pending)", (
+        "a turn with no visible text goes back as '(no reply)'; it counts 0 toward W")),
+    "messages_refusal_partial": ("PREREG §17.8 (R8, pending)", (
+        "a refusal's partial text is discarded from the history: '(no reply)', 0 toward W")),
+    "messages_inference_geo": ("PREREG §17.8 (R8, pending)", (
+        "no inference_geo sent; each call priced at the geo served (us 1.1x; none reported: "
+        "1.1x)")),
+    "messages_prompt_caching": ("PREREG §17.8 (R8, pending)", (
+        "top-level cache_control (5 minutes) in multi-turn cells, none in the single-turn "
+        "control")),
+    "messages_service_tier": ("PREREG §17.8 (R8, pending)", (
+        "no service_tier sent; standard recorded as requested, usage.service_tier as served")),
+    "messages_stop_reasons": ("PREREG §17.8 (R8, pending)", (
+        "max_tokens, refusal and any unexpected stop reason are incomplete: an invalid "
+        "action (D13)")),
 }

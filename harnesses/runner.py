@@ -2,7 +2,13 @@
 
 A transport is any object with `paid: bool` and `send(payload) -> response dict`:
 * `harnesses.fake.FakeModel` for tests and $0 dry runs;
-* `harnesses.openai_transport.OpenAIResponsesTransport` for paid runs (guarded).
+* `harnesses.openai_transport.OpenAIResponsesTransport` and
+  `harnesses.anthropic_transport.AnthropicMessagesTransport` for paid runs (guarded;
+  `harnesses.paid_transport.PaidTransport`). A paid one also has `git`, `approval`,
+  `planned_usd`, `spent_usd`, `ledger`, `finalize`, `keep_lock_if_unaccounted` and
+  `paid_lock`, which `run_batch`, `harnesses.parallel` and the CLI read.
+The payloads and responses are those of the model's wire (`harnesses.wire.wire_for`):
+OpenAI's Responses API, or Anthropic's Messages API for `claude-*` models.
 
 Per request the runner logs the payload, the response, the echoed `reasoning.context` and the
 returned model string to the raw transcript (results/raw/, gitignored). At the need step's
@@ -14,7 +20,10 @@ An episode whose echoed `reasoning.context` differs from the request on any resp
 excluded (CLAUDE.md); by default it stops at that response. So is an episode whose echoed
 `reasoning.effort` differs (PREREG §17.2, amendment R2), in the same way: exit reason
 `REASONING_EFFORT_MISMATCH`, and both kinds count toward the run's abort after
-`abort_after_mismatched_episodes` excluded episodes.
+`abort_after_mismatched_episodes` excluded episodes. A setting the provider does not echo
+(the Messages API echoes neither) is None in the echo record: never a mismatch, never an
+exclusion; the Messages wire checks every request before it is sent instead
+(`harnesses.wire.MessagesWire.check_payload`).
 
 Per episode it also logs (harnesses/DESIGN.md §7):
 * `need_phase` (D8): provider-reported tokens summed over every call made while the need step
@@ -58,6 +67,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+import anthropic
 import openai
 
 from common import runmeta
@@ -65,10 +75,11 @@ from harnesses import blinding
 from harnesses.cells import CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.items import item_text
-from harnesses.openai_transport import BudgetExceeded
+from harnesses.paid_transport import BudgetExceeded
 from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
-from harnesses.pricing import cost_usd, usage_numbers
+from harnesses.pricing import add_counts, cost_usd, unbilled_refusal
 from harnesses.session import EmptySummaryError, HarnessSession
+from harnesses.wire import wire_for
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION
 from persistgym.env import EpisodeEnv
 from persistgym.episode import Episode
@@ -112,22 +123,16 @@ ECHO_ABORTS = ("ABORTED_CONTEXT_MISMATCH", "ABORTED_EFFORT_MISMATCH", "ABORTED_E
 context mismatch, all for an effort mismatch, or both kinds (`_stop_reason`)."""
 
 
+API_ERRORS = (openai.OpenAIError, anthropic.AnthropicError)
+"""Errors a transport raises after its retries, or for a rejected payload: the episode ends
+`API_ERROR`."""
+
+
 def check_echo(payload: dict, response: dict) -> dict:
-    """Requested vs echoed reasoning settings, the returned model and service tier."""
-    req = payload.get("reasoning") or {}
-    got = response.get("reasoning") or {}
-    return {
-        "context_requested": req.get("context"), "context_echoed": got.get("context"),
-        "context_ok": req.get("context") == got.get("context"),
-        "effort_requested": req.get("effort"), "effort_echoed": got.get("effort"),
-        "effort_ok": req.get("effort") == got.get("effort"),
-        "mode_requested": req.get("mode"), "mode_echoed": got.get("mode"),
-        "model_requested": payload.get("model"), "model_returned": response.get("model"),
-        "service_tier_requested": payload.get("service_tier"),
-        "service_tier_returned": response.get("service_tier"),
-        "status": response.get("status"),
-        "incomplete_reason": (response.get("incomplete_details") or {}).get("reason"),
-    }
+    """Requested vs echoed reasoning settings, the returned model and service tier, as the
+    payload's wire reads them (`harnesses.wire`): on the Messages API, which echoes neither
+    effort nor a reasoning context, `context_ok` and `effort_ok` are None (not echoed)."""
+    return wire_for(payload.get("model")).echo(payload, response)
 
 
 class JsonlRecorder:
@@ -210,14 +215,20 @@ class EpisodeRun:
 
 
 def _add_usage(run: EpisodeRun, response: dict) -> None:
-    for k, v in usage_numbers(response.get("usage")).items():
-        run.usage[k] = run.usage.get(k, 0) + v
+    """Add one response's usage (read by the requested model's wire, in one meaning on both
+    APIs: `harnesses.pricing`) and cost to the episode's (or prompt's) totals. A count the
+    provider did not report makes its total None (`pricing.add_counts`). A refusal Anthropic
+    does not bill adds its list cost and a billed estimate of 0 (`pricing.unbilled_refusal`)."""
+    wire = wire_for(run.model)
+    add_counts(run.usage, wire.usage(response))
     try:
         listed, billed = cost_usd(response.get("model") or "", response.get("usage"),
-                                  response.get("service_tier"))
+                                  wire.served_tier(response))
     except KeyError:
         run.cost_usd_list = run.cost_usd_billed_est = None
         return
+    if unbilled_refusal(wire.api, response):
+        billed = 0.0
     if run.cost_usd_list is not None:
         run.cost_usd_list += listed
         run.cost_usd_billed_est += billed
@@ -226,11 +237,13 @@ def _add_usage(run: EpisodeRun, response: dict) -> None:
 def _need_phase_add(run: EpisodeRun, req, info: dict, response: dict) -> None:
     """D8: add one call made while the need step is pending. `tokens` is the D8 quantity:
     provider-reported input tokens (cached included: OpenAI's `input_tokens` counts cached
-    tokens) plus output tokens (reasoning included: `output_tokens` counts reasoning
-    tokens). Summary calls fired while the need step is pending are calls at the need step
-    and are included; they are also totalled apart (`summary_tokens`) for the reading that
-    leaves them out. H1's cells (F-0, W-0) never summarize."""
-    u = usage_numbers(response.get("usage"))
+    tokens; on the Messages API cache reads and writes are added back,
+    `pricing.messages_usage_numbers`) plus output tokens (reasoning included: `output_tokens`
+    counts reasoning tokens). Summary calls fired while the need step is pending are calls at
+    the need step and are included; they are also totalled apart (`summary_tokens`) for the
+    reading that leaves them out. H1's cells (F-0, W-0) never summarize. Reasoning tokens a
+    provider does not report make `reasoning_tokens` None."""
+    u = wire_for(run.model).usage(response)
     if run.need_phase is None:
         run.need_phase = {"n_calls": 0, "n_step_calls": 0, "n_lookup_result_calls": 0,
                           "n_summary_calls": 0, "input_tokens": 0, "cached_input_tokens": 0,
@@ -238,8 +251,8 @@ def _need_phase_add(run: EpisodeRun, req, info: dict, response: dict) -> None:
                           "summary_tokens": 0, "first_step_call": None, "complete": False}
     n = run.need_phase
     n["n_calls"] += 1
-    for k in ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"):
-        n[k] += u[k]
+    add_counts(n, {k: u[k] for k in ("input_tokens", "cached_input_tokens", "output_tokens",
+                                     "reasoning_tokens")})
     n["tokens"] += u["input_tokens"] + u["output_tokens"]
     if req.kind == "summary":
         n["n_summary_calls"] += 1
@@ -254,14 +267,17 @@ def _need_phase_add(run: EpisodeRun, req, info: dict, response: dict) -> None:
 def _incomplete_record(info: dict, need: int, payload: dict, response: dict,
                        reply: str) -> dict:
     """One step response with status `incomplete` (D13): where it happened, why, and whether
-    it used the whole output cap. Its step is scored as an invalid action."""
-    details = response.get("incomplete_details") or {}
+    it used the whole output cap. Its step is scored as an invalid action. On the Messages
+    wire `reason` is `max_output_tokens`, `refusal:<category>` or
+    `unexpected_stop_reason:<stop_reason>` (`MessagesWire.status`), and `max_output_tokens`
+    holds the request's `max_tokens`."""
+    wire = wire_for(payload.get("model"))
     return {"turn": info["turn"], "pending_step": info["pending_step"],
             "at_need": int(info["pending_step"] == need),
             "is_lookup_result": int(info["is_lookup_result"]),
-            "reason": details.get("reason"),
-            "max_output_tokens": payload.get("max_output_tokens"),
-            "output_tokens": usage_numbers(response.get("usage"))["output_tokens"],
+            "reason": wire.status(response)[1],
+            "max_output_tokens": wire.cap(payload),
+            "output_tokens": wire.usage(response)["output_tokens"],
             "reply_chars": len(reply or "")}
 
 
@@ -269,6 +285,7 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 recorder=None) -> EpisodeRun:
     env = EpisodeEnv(episode)
     session = HarnessSession.for_episode(cell, episode, cfg)
+    wire = session.wire
     run = EpisodeRun(episode.episode_id, episode.template_id, episode.cell.id, episode.variant,
                      cell.cell_id, model=cfg.model,
                      generator_config_hash=episode.config_hash)
@@ -302,14 +319,14 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 if first_need:
                     bridge = req.info["bridge_index"]
                     run.need_payload = survival_from_payload(
-                        episode, req.payload["input"], system=req.payload["instructions"],
+                        episode, wire.messages(req.payload), system=wire.system(req.payload),
                         exclude_indices=[bridge] if bridge is not None else [])
                     run.need_info = dict(req.info)
                     # every compaction so far is applied to this payload (D12)
                     n_compactions_seen_at_need = len(session.compactions)
                     if bridge is not None:
                         run.need_bridge_carried = carried_in_text(
-                            item_text(req.payload["input"][bridge]), episode)
+                            item_text(wire.messages(req.payload)[bridge]), episode)
                 started = CLOCK()
                 response = transport.send(req.payload)
                 run.call_latency_s.append(round(CLOCK() - started, 3))
@@ -333,7 +350,8 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                 # CLAUDE.md (context) and PREREG §17.2 (effort): an echo that differs from the
                 # request excludes the episode, and by default stops it there. Both kinds are
                 # recorded before it stops, so a response that differs in both counts as both.
-                mismatched = [k for k in ECHO_MISMATCH_EXITS if not echo[f"{k}_ok"]]
+                # A setting the provider does not echo (None: the Messages API) never does.
+                mismatched = [k for k in ECHO_MISMATCH_EXITS if echo[f"{k}_ok"] is False]
                 if mismatched:
                     run.excluded = True
                     run.exclusion_reason = "; ".join(
@@ -359,18 +377,19 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                     break
                 failures = 0  # a compaction succeeded; the next one gets its own attempts
             # PREREG §6, §13 (D13): a step response that stopped short (status `incomplete`,
-            # e.g. at max_output_tokens) is a content failure. Its step is scored as an
-            # invalid action whatever its partial text says, and the episode goes on. The
-            # session keeps the turn's output items as returned.
+            # e.g. at max_output_tokens; on the Messages API also a refusal) is a content
+            # failure. Its step is scored as an invalid action whatever its partial text
+            # says, and the episode goes on. The session keeps the turn's output items as
+            # returned (on the Messages wire, its visible text or the empty-reply placeholder).
             invalid = None
-            if response.get("status") == "incomplete":
+            if wire.status(response)[0] == "incomplete":
                 invalid = "incomplete"
                 run.incomplete.append(_incomplete_record(info, need, req.payload, response,
                                                          reply))
             obs, done = env.step(reply, invalid=invalid)
     except BudgetExceeded as e:
         run.exit_reason, run.error = "COST_CAP", str(e)
-    except openai.OpenAIError as e:  # API errors after retries, rejected payloads
+    except API_ERRORS as e:  # API errors after retries, rejected payloads
         run.exit_reason, run.error = "API_ERROR", f"{type(e).__name__}: {e}"
     except RunStopped as e:  # parallel play: the run stopped while this episode was in flight
         run.exit_reason, run.error = RUN_STOPPED, str(e)
@@ -407,11 +426,24 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
             run.compacted_between = int(any(
                 c["at_step"] > r_first
                 for c in run.compactions[:n_compactions_seen_at_need]))
-        run.echo = {"context_requested": cell.reasoning_context,
-                    "context_echoed": dict(echoed),
-                    "effort_requested": cfg.reasoning_effort, "effort_echoed": dict(efforts),
-                    "models_returned": dict(models), "service_tiers_returned": dict(tiers)}
+        run.echo = episode_echo(wire, cell, cfg, echoed, efforts, models, tiers)
     return run
+
+
+def episode_echo(wire, cell: CellSpec, cfg: HarnessConfig, echoed: Counter, efforts: Counter,
+                 models: Counter, tiers: Counter) -> dict:
+    """An episode's (or prompt's) `echo` record: the requested reasoning.context and effort
+    and the counts of what the responses echoed, returned and were served on. On a wire that
+    echoes no reasoning settings (the Messages API) the context is not requested and neither
+    is echoed: `context_requested`, `context_echoed` and `effort_echoed` are None, and
+    `effort_requested` is the effort sent (`output_config.effort`)."""
+    if not wire.echoes_reasoning:
+        return {"context_requested": None, "context_echoed": None,
+                "effort_requested": cfg.reasoning_effort, "effort_echoed": None,
+                "models_returned": dict(models), "service_tiers_returned": dict(tiers)}
+    return {"context_requested": cell.reasoning_context, "context_echoed": dict(echoed),
+            "effort_requested": cfg.reasoning_effort, "effort_echoed": dict(efforts),
+            "models_returned": dict(models), "service_tiers_returned": dict(tiers)}
 
 
 def _stop_reason(runs: list[EpisodeRun], last: EpisodeRun, cfg: HarnessConfig,
@@ -655,16 +687,20 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
                 parallel_path=None, git=None, finished=None, recorded=None) -> dict:
     """Write meta.json. `git`: the git state read at the run's start (None: read now);
     `finished`: the finish time (None: now). `recorded` adds fields: `harnesses account-run`
-    gives `recovered` and the run's own `prereg_version` and `sdk_versions`."""
+    gives `recovered` and the run's own `prereg_version` and `sdk_versions`. A run on the
+    Messages wire records no reasoning.context and no echo (None) and adds `wire_meta`'s
+    fields."""
+    wire = wire_for(cfg.model)
     echoed: Counter = Counter()
     efforts: Counter = Counter()
     models: Counter = Counter()
-    usage: Counter = Counter()
+    usage: dict = {}
     for r in runs:
-        echoed.update(r.echo.get("context_echoed", {}))
-        efforts.update(r.echo.get("effort_echoed", {}))
+        echoed.update(r.echo.get("context_echoed") or {})
+        efforts.update(r.echo.get("effort_echoed") or {})
         models.update(r.echo.get("models_returned", {}))
-        usage.update(r.usage)
+        add_counts(usage, r.usage)
+    echo = meta_echo(wire, cell.reasoning_context, echoed, efforts)
     listed = [r.cost_usd_list for r in runs]
     billed = [r.cost_usd_billed_est for r in runs]
     gen_cfgs = {e.config_hash: e.config for e in episodes}
@@ -676,7 +712,7 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
         config["run_matrix"] = run_matrix
     tokens = dict(usage)
     parallel = parallel or {"max_episodes_in_flight": 1}
-    extra = {}
+    extra = wire_meta(wire, transport)
     if blinded:
         # PREREG §11: one run is one arm, so its reasoning-token total is a per-arm number,
         # and pilots report cost no finer than the run's total (blinding.blinded_parallel).
@@ -689,10 +725,12 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
     path = runmeta.write_meta(
         out_dir, experiment=experiment, run_id=run_id, cell_or_config=cell.cell_id,
         config=config, model_requested=cfg.model, model_returned=sorted(models),
-        reasoning_effort=cfg.reasoning_effort, reasoning_effort_echoed=dict(efforts),
+        reasoning_effort=cfg.reasoning_effort,
+        reasoning_effort_echoed=echo["reasoning_effort_echoed"],
         reasoning_mode=cfg.reasoning_mode,
-        reasoning_context_requested=cell.reasoning_context,
-        reasoning_context_echoed=dict(echoed), service_tier_requested=cfg.service_tier,
+        reasoning_context_requested=echo["reasoning_context_requested"],
+        reasoning_context_echoed=echo["reasoning_context_echoed"],
+        service_tier_requested=cfg.service_tier,
         template_id=sorted({e.template_id for e in episodes}), repeat_index=repeat_index,
         seeds={"template_seeds": sorted({e.template_seed for e in episodes})},
         started_utc=started, finished_utc=finished or runmeta.utc_now(),
@@ -704,3 +742,37 @@ def _write_meta(out_dir, raw_path, episodes, runs, cell, cfg, transport, *, expe
         n_episodes_run=len(runs), n_excluded=sum(r.excluded for r in runs),
         parallel=parallel, git=git, **extra, **(recorded or {}))
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+MESSAGES_ECHO_NOTE = (
+    "the Messages API echoes neither the effort nor a reasoning context: "
+    "reasoning_context_requested, reasoning_context_echoed and reasoning_effort_echoed are "
+    "null (not echoed, never a mismatch); instead every request passed the request-side check "
+    "before it was sent (harnesses/wire.py MessagesWire.check_payload: adaptive thinking, the "
+    "effort, max_tokens, no thinking block), PREREG §17.8 (amendment R8, pending)")
+
+
+def meta_echo(wire, context_requested: str, echoed: Counter, efforts: Counter) -> dict:
+    """meta.json's reasoning.context requested and echoed and effort echoed: the counts, or
+    None on a wire that echoes no reasoning settings (the Messages API; `MESSAGES_ECHO_NOTE`)."""
+    if wire.echoes_reasoning:
+        return {"reasoning_context_requested": context_requested,
+                "reasoning_context_echoed": dict(echoed),
+                "reasoning_effort_echoed": dict(efforts)}
+    return {"reasoning_context_requested": None, "reasoning_context_echoed": None,
+            "reasoning_effort_echoed": None}
+
+
+def wire_meta(wire, transport) -> dict:
+    """The meta.json fields a run on the Messages wire adds (none on the Responses wire, so
+    those runs' meta.json is as before): its `api`, the `echo_note`, `prompt_size`, the
+    largest prompt (input + cache reads + cache writes) of its calls and how many passed the
+    price's 100,000-token threshold, and `inference_geos`, the calls per served
+    `usage.inference_geo` (priced 1.1x for "us"), both from the paid transport's ledger (None
+    without one: a fake run)."""
+    if wire.echoes_reasoning:
+        return {}
+    ledger = getattr(transport, "ledger", None)
+    return {"api": f"{wire.provider}.{wire.api}", "echo_note": MESSAGES_ECHO_NOTE,
+            "prompt_size": ledger.prompt_size() if ledger is not None else None,
+            "inference_geos": ledger.served_geos() if ledger is not None else None}

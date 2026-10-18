@@ -1,9 +1,10 @@
 """Payload builder: what one harness cell sends at every request of one episode.
 
-A `HarnessSession` holds the client-side history of one episode (stateless Responses API:
-`store: false`, nothing kept server-side) and turns each new observation into the exact JSON
-body of `POST /v1/responses`. It does not talk to any API; a transport sends the payload and
-hands the response back to `record`.
+A `HarnessSession` holds the client-side history of one episode (stateless: nothing is kept
+server-side) and turns each new observation into the exact JSON body of one API request:
+`POST /v1/responses` on OpenAI's Responses API, `POST /v1/messages` on Anthropic's Messages
+API (`harnesses.wire`, chosen by the model string). It does not talk to any API; a transport
+sends the payload and hands the response back to `record`.
 
 Flow per environment observation (see runner.run_episode):
 
@@ -33,16 +34,17 @@ r and 0 arms of a pair (given the same replies).
 
 Reasoning replay: every kept turn is sent with its reasoning items (`encrypted_content`) in
 every cell. Only `reasoning.context` differs between r (`all_turns`) and 0 (`current_turn`).
+On the Messages wire only replay-off cells run, and a kept turn goes back as its visible
+reply only: no thinking block is ever sent back (`harnesses.wire.MessagesWire`).
 """
 
 from __future__ import annotations
 
-import copy
 from dataclasses import dataclass, field
 
 from harnesses.cells import NOTES_INSTRUCTION, CellSpec
-from harnesses.config import ENCRYPTED_REASONING, HarnessConfig
-from harnesses.items import output_text, replay_items, user_message
+from harnesses.config import HarnessConfig
+from harnesses.wire import wire_for
 from persistgym import tokens
 from persistgym.survival import window_keep_start
 
@@ -57,8 +59,10 @@ class Turn:
     index: int  # turn number in the episode (lookups add turns, so this is not the step)
     observation: str
     obs_tokens: int
-    items: list[dict]  # the response's output items, sent back on later turns
-    reply: str  # visible output text (what the environment scores)
+    items: list[dict]  # what the turn sends back on later turns (`Wire.turn_items`)
+    # visible output text as later turns carry it and W counts it (`Wire.kept_reply`: the
+    # reply the environment scores, but the empty text for a Messages refusal)
+    reply: str
     reply_tokens: int
     dropped_output_types: list[str] = field(default_factory=list)
 
@@ -71,14 +75,25 @@ class Turn:
 class Request:
     kind: str  # "step" | "summary"
     turn: int  # index of the pending turn (the observation being answered)
-    payload: dict  # exact JSON body of POST /v1/responses
-    trace: list[str]  # provenance of each payload["input"] item: U<t>, R<t>, A<t>, B<k>, Q
+    payload: dict  # exact JSON body of the request (POST /v1/responses or /v1/messages)
+    # provenance of each input item (payload["input"]; payload["messages"] on the Messages
+    # wire): U<t>, R<t>, A<t>, B<k>, Q
+    trace: list[str]
     info: dict  # loss-policy bookkeeping (never sent)
 
 
 class HarnessSession:
     def __init__(self, cell: CellSpec, system_prompt: str, cfg: HarnessConfig, *,
-                 W_tokens: int | None, count_system: bool):
+                 W_tokens: int | None, count_system: bool, cache_prefix: bool = True):
+        """`cache_prefix`: whether the requests ask the provider to cache their prefix. On
+        the Messages wire, a top-level `cache_control` (5 minutes) in every request of a
+        multi-turn cell; the single-turn control sends none. The Responses body is the same
+        either way (OpenAI caches prefixes automatically). The wire (`harnesses.wire`,
+        chosen by `cfg.model`) refuses a cell or a setting it does not send."""
+        self.wire = wire_for(cfg.model)
+        self.wire.check_cell(cell)
+        self.wire.check_config(cfg)
+        self.cache_prefix = cache_prefix
         if cell.history != "full" and not W_tokens:
             raise ValueError(f"cell {cell.cell_id} needs W_tokens")
         if (cell.history == "summary" and W_tokens
@@ -174,46 +189,30 @@ class HarnessSession:
     # ------------------------------------------------------------------
     def _base_payload(self, instructions: str, input_items: list[dict],
                       max_output_tokens: int) -> dict:
-        """The request body. `max_output_tokens` is always sent: the step cap or the summary
-        cap, both 32,000 under PREREG D13."""
-        cfg = self.cfg
-        reasoning = {"effort": cfg.reasoning_effort, "mode": cfg.reasoning_mode,
-                     "context": self.cell.reasoning_context}
-        if cfg.reasoning_summary is not None:
-            reasoning["summary"] = cfg.reasoning_summary
-        payload = {
-            "model": cfg.model,
-            "instructions": instructions,
-            "input": copy.deepcopy(input_items),
-            "reasoning": reasoning,
-            "store": False,
-            "include": [ENCRYPTED_REASONING],
-            "service_tier": cfg.service_tier,
-            "truncation": "disabled",
-            "max_output_tokens": max_output_tokens,
-        }
-        if cfg.prompt_cache_key is not None:
-            payload["prompt_cache_key"] = cfg.prompt_cache_key
-        return payload
+        """The request body, as the wire writes it (`Wire.build`). The output cap is always
+        sent: the step cap or the summary cap, both 32,000 under PREREG D13."""
+        return self.wire.build(self.cfg, self.cell, instructions, input_items,
+                               max_output_tokens, cache=self.cache_prefix)
 
     def _history(self, first: int, end: int) -> tuple[list[dict], list[str]]:
         items: list[dict] = []
         trace: list[str] = []
         if self.cell.history == "summary" and self.bridge is not None:
-            items.append(user_message(self.bridge))
+            items.append(self.wire.user_message(self.bridge))
             trace.append(f"B{self.bridge_no}")
         for t in self.turns[first:end]:
-            items.append(user_message(t.observation))
+            items.append(self.wire.user_message(t.observation))
             trace.append(f"U{t.index}")
             for it in t.items:
                 items.append(it)
-                trace.append(f"R{t.index}" if it.get("type") == "reasoning" else f"A{t.index}")
+                trace.append(f"R{t.index}" if self.wire.is_reasoning_item(it)
+                             else f"A{t.index}")
         return items, trace
 
     def _step_request(self, start: int) -> Request:
         items, trace = self._history(start, len(self.turns))
         bridge_index = 0 if trace and trace[0].startswith("B") else None
-        items.append(user_message(self.pending))
+        items.append(self.wire.user_message(self.pending))
         trace.append(f"U{len(self.turns)}")
         ctx = self.context_tokens(start)
         info = {
@@ -229,7 +228,7 @@ class HarnessSession:
 
     def _summary_request(self, first: int, end: int, total: int) -> Request:
         items, trace = self._history(first, end)
-        items.append(user_message(self.cfg.summary_request_prompt))
+        items.append(self.wire.user_message(self.cfg.summary_request_prompt))
         trace.append("Q")
         instructions = (self.cfg.summary_system_prompt
                         if self.cfg.summary_system_prompt is not None else self.instructions)
@@ -250,13 +249,16 @@ class HarnessSession:
 
         A step response with status `incomplete` (it hit `max_output_tokens`, D13) is kept
         like any other: its output items as returned (only a reasoning item if it stopped
-        while reasoning) and its partial text, if any. The runner scores its step as an
-        invalid action. An incomplete or empty summary raises `EmptySummaryError`."""
+        while reasoning) and its partial text, if any; on the Messages wire, its visible text,
+        or `harnesses.wire.EMPTY_REPLY_PLACEHOLDER` when it has none or it is a refusal,
+        whose partial text is discarded from the history and from W (`Wire.kept_reply`).
+        The runner scores its step as an invalid action. An incomplete or empty summary
+        raises `EmptySummaryError`."""
         if request.turn != len(self.turns) or self.pending is None:
             raise RuntimeError("response does not belong to the pending request")
         if request.kind == "summary":
-            text = output_text(response).strip()
-            status = response.get("status")
+            text = self.wire.text(response).strip()
+            status, _ = self.wire.status(response)
             if not text or (status is not None and status != "completed"):
                 raise EmptySummaryError(f"summary status={status!r}, {len(text)} chars")
             first, end = request.info["compact_turns"]
@@ -271,10 +273,11 @@ class HarnessSession:
                 "summary_text": text,
             })
             return None
-        items, dropped = replay_items(response)
-        reply = output_text(response)
-        self.turns.append(Turn(len(self.turns), self.pending, self.pending_tokens, items, reply,
-                               self._count(reply), dropped))
+        items, dropped = self.wire.turn_items(response)
+        reply = self.wire.text(response)
+        kept = self.wire.kept_reply(response)
+        self.turns.append(Turn(len(self.turns), self.pending, self.pending_tokens, items, kept,
+                               self._count(kept), dropped))
         if self.cell.history == "window":
             self.start = request.info["keep_start"]
         self.pending = None

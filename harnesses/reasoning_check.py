@@ -463,7 +463,9 @@ def _echoes(rec: dict) -> list[dict]:
 def echo_counts(raw_root: Path, experiments: Iterable[str] = PERSISTGYM_EXPERIMENTS) -> dict:
     """Per run under results/raw/<experiment>/, and in total: responses, and how many echoed
     the requested `reasoning.context` and `reasoning.effort`. Only those four echo fields are
-    read from each record."""
+    read from each record. A response whose API echoes neither (the Messages API: both
+    `context_ok` and `effort_ok` null, PREREG §17.8, pending) counts in neither and in
+    `not_echoed`, a key a run's entry (and the total) has only when it is not 0."""
     runs: dict[str, dict] = {}
     total = {"responses": 0, "context_matched": 0, "effort_matched": 0}
     for exp in experiments:
@@ -472,9 +474,13 @@ def echo_counts(raw_root: Path, experiments: Iterable[str] = PERSISTGYM_EXPERIME
             for rec in _read_jsonl(path):
                 for echo in _echoes(rec):
                     d["responses"] += 1
+                    if echo.get("context_ok", False) is None and echo.get("effort_ok",
+                                                                          False) is None:
+                        d["not_echoed"] = d.get("not_echoed", 0) + 1
+                        continue
                     d["context_matched"] += _echo_ok(echo, "context")
                     d["effort_matched"] += _echo_ok(echo, "effort")
             runs[f"{exp}/{path.parent.name}"] = d
-            for k in total:
-                total[k] += d[k]
+            for k, v in d.items():
+                total[k] = total.get(k, 0) + v
     return {"experiments": list(experiments), "runs": runs, "total": total}

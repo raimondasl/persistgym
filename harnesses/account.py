@@ -67,9 +67,10 @@ from harnesses import blinding, runner
 from harnesses.cells import CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.matrix import RunMatrix
-from harnesses.openai_transport import build_costs_row
+from harnesses.paid_transport import build_costs_row
 from harnesses.pricing import UsageLedger, usage_numbers
 from harnesses.session import HarnessSession
+from harnesses.wire import RESPONSES, wire_for
 from persistgym.episode import Episode
 
 STREAM = paidlock.PERSISTGYM
@@ -237,6 +238,11 @@ def _utc(text: str, what: str) -> str:
 
 def _check_settings(run: Run, plan: dict | None) -> None:
     a = run.args
+    if wire_for(a.model) is not RESPONSES:
+        raise Refused(f"run of {a.model}: account-run rebuilds runs on OpenAI's Responses API "
+                      "only (a Messages API run's responses, usage and echoes have another "
+                      "shape; harnesses/wire.py); add its row by hand from the totals in the "
+                      "paid-run lock")
     if paidlock.stream_of(a.experiment) != STREAM:
         raise Refused(f"experiment {a.experiment!r} is not a PersistGym-stream experiment "
                       f"({', '.join(PERSISTGYM_EXPERIMENTS)})")

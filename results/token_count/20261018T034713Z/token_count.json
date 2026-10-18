@@ -1,0 +1,302 @@
+{
+  "model": "claude-haiku-5-5",
+  "endpoint": "POST /v1/messages/count_tokens (free)",
+  "generator_config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+  "templates": {
+    "split": "main",
+    "start": 0,
+    "n": 5
+  },
+  "cells": [
+    "F-0",
+    "W-0",
+    "W-n-0",
+    "single-turn"
+  ],
+  "counted_fields": [
+    "model",
+    "system",
+    "messages",
+    "thinking"
+  ],
+  "reply_note": "replies are harnesses.fake.FakeModel's defaults (about 12 o200k_base tokens, about luna's visible reply length) and no lookup is taken: real replies that are longer, and lookup turns, make the requests larger",
+  "threshold": 100000,
+  "requests": [
+    {
+      "cell": "F-0",
+      "task_cell": "observed-nonrec-near",
+      "episode_id": "main-000001/observed-nonrec-near/base",
+      "request_index": 25,
+      "o200k_tokens": 39422,
+      "claude_tokens": 54752,
+      "ratio": 1.3889
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-nonrec-far",
+      "episode_id": "main-000001/observed-nonrec-far/base",
+      "request_index": 25,
+      "o200k_tokens": 39422,
+      "claude_tokens": 54747,
+      "ratio": 1.3887
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-rec-near",
+      "episode_id": "main-000001/observed-rec-near/base",
+      "request_index": 25,
+      "o200k_tokens": 39473,
+      "claude_tokens": 54831,
+      "ratio": 1.3891
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-rec-far",
+      "episode_id": "main-000001/observed-rec-far/base",
+      "request_index": 25,
+      "o200k_tokens": 39473,
+      "claude_tokens": 54826,
+      "ratio": 1.3889
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-nonrec-near",
+      "episode_id": "main-000001/derived-nonrec-near/base",
+      "request_index": 25,
+      "o200k_tokens": 39422,
+      "claude_tokens": 54758,
+      "ratio": 1.389
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-nonrec-far",
+      "episode_id": "main-000001/derived-nonrec-far/base",
+      "request_index": 25,
+      "o200k_tokens": 39422,
+      "claude_tokens": 54745,
+      "ratio": 1.3887
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-rec-near",
+      "episode_id": "main-000001/derived-rec-near/base",
+      "request_index": 25,
+      "o200k_tokens": 39473,
+      "claude_tokens": 54837,
+      "ratio": 1.3892
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-rec-far",
+      "episode_id": "main-000001/derived-rec-far/base",
+      "request_index": 25,
+      "o200k_tokens": 39473,
+      "claude_tokens": 54824,
+      "ratio": 1.3889
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-nonrec-near",
+      "episode_id": "main-000003/observed-nonrec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22781,
+      "claude_tokens": 31667,
+      "ratio": 1.3901
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-nonrec-far",
+      "episode_id": "main-000003/observed-nonrec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22781,
+      "claude_tokens": 31658,
+      "ratio": 1.3897
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-rec-near",
+      "episode_id": "main-000003/observed-rec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22832,
+      "claude_tokens": 31744,
+      "ratio": 1.3903
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-rec-far",
+      "episode_id": "main-000003/observed-rec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22832,
+      "claude_tokens": 31735,
+      "ratio": 1.3899
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-nonrec-near",
+      "episode_id": "main-000003/derived-nonrec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22781,
+      "claude_tokens": 31667,
+      "ratio": 1.3901
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-nonrec-far",
+      "episode_id": "main-000003/derived-nonrec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22781,
+      "claude_tokens": 31653,
+      "ratio": 1.3894
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-rec-near",
+      "episode_id": "main-000003/derived-rec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22832,
+      "claude_tokens": 31744,
+      "ratio": 1.3903
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-rec-far",
+      "episode_id": "main-000003/derived-rec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22832,
+      "claude_tokens": 31730,
+      "ratio": 1.3897
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-nonrec-near",
+      "episode_id": "main-000003/observed-nonrec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22802,
+      "claude_tokens": 31693,
+      "ratio": 1.3899
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-nonrec-far",
+      "episode_id": "main-000003/observed-nonrec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22802,
+      "claude_tokens": 31684,
+      "ratio": 1.3895
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-rec-near",
+      "episode_id": "main-000003/observed-rec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22853,
+      "claude_tokens": 31770,
+      "ratio": 1.3902
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-rec-far",
+      "episode_id": "main-000003/observed-rec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22853,
+      "claude_tokens": 31761,
+      "ratio": 1.3898
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-nonrec-near",
+      "episode_id": "main-000003/derived-nonrec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22802,
+      "claude_tokens": 31693,
+      "ratio": 1.3899
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-nonrec-far",
+      "episode_id": "main-000003/derived-nonrec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22802,
+      "claude_tokens": 31679,
+      "ratio": 1.3893
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-rec-near",
+      "episode_id": "main-000003/derived-rec-near/base",
+      "request_index": 14,
+      "o200k_tokens": 22853,
+      "claude_tokens": 31770,
+      "ratio": 1.3902
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-rec-far",
+      "episode_id": "main-000003/derived-rec-far/base",
+      "request_index": 14,
+      "o200k_tokens": 22853,
+      "claude_tokens": 31756,
+      "ratio": 1.3896
+    },
+    {
+      "cell": "single-turn",
+      "task_cell": "observed-nonrec-near",
+      "episode_id": "main-000002/observed-nonrec-near/single_turn",
+      "request_index": 0,
+      "o200k_tokens": 36282,
+      "claude_tokens": 50341,
+      "ratio": 1.3875
+    },
+    {
+      "cell": "single-turn",
+      "task_cell": "observed-nonrec-far",
+      "episode_id": "main-000002/observed-nonrec-far/single_turn",
+      "request_index": 0,
+      "o200k_tokens": 36282,
+      "claude_tokens": 50329,
+      "ratio": 1.3872
+    },
+    {
+      "cell": "single-turn",
+      "task_cell": "derived-nonrec-near",
+      "episode_id": "main-000002/derived-nonrec-near/single_turn",
+      "request_index": 0,
+      "o200k_tokens": 36284,
+      "claude_tokens": 50343,
+      "ratio": 1.3875
+    },
+    {
+      "cell": "single-turn",
+      "task_cell": "derived-nonrec-far",
+      "episode_id": "main-000002/derived-nonrec-far/single_turn",
+      "request_index": 0,
+      "o200k_tokens": 36280,
+      "claude_tokens": 50340,
+      "ratio": 1.3875
+    }
+  ],
+  "ratio": {
+    "min": 1.3872,
+    "median": 1.3895,
+    "max": 1.3903
+  },
+  "max_claude_tokens": 54837,
+  "max_request": {
+    "cell": "F-0",
+    "task_cell": "derived-rec-near",
+    "episode_id": "main-000001/derived-rec-near/base",
+    "request_index": 25
+  },
+  "over_threshold": [],
+  "generated_utc": "2026-10-18T03:47:12+00:00",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "0130e116210aaf317d35dbfd045e5738959d86ba",
+  "git_dirty": false
+}

@@ -1024,7 +1024,7 @@ In the researcher's words, 2026-10-18, after the G1 metrics above: "G1 go".
 - **Released:** Haiku's main runs and controls in block `4-haiku`, through the pull request that adds this entry. `HAIKU_G1_PASSED` records claude-haiku-5-5 on the default config, `3d6bc648...`.
 
 ## 2026-10-18: Haiku's size record (R8)
-R8's size rule, applied before any main episode by `uv run python -m analysis.haiku_forecast` at `ecd0632`, clean tree (`results/haiku_forecast/20261018T070826Z/`; `results/costs.csv` sha256 `2eaf86372a46...`). The script was built and reviewed adversarially. The reviewer's read-only run on this ledger, at `814b1d8`, gave the same numbers and outcome. The review fixes in `92bc12c` changed none of them: they added input checks and exact arithmetic, and report the pilot basis below.
+R8's size rule, applied before any main episode by `uv run python -m analysis.haiku_forecast` at `ecd0632`, clean tree (`results/haiku_forecast/20261018T070826Z/`). The script recorded `results/costs.csv` with sha256 `2eaf86372a46...`. That is the hash of the Windows working copy, whose six `4-haiku` rows end in CRLF (`common.costs` appends them so). The committed file, stored with LF, hashes to `53cef5472211...`. The rows' values are the same in both. The same holds for the six run `meta.json` files the forecast pins: their recorded hashes are of CRLF working copies, and their content is the same as the committed files'. The script was built and reviewed adversarially. The reviewer's read-only run on this ledger, at `814b1d8`, gave the same numbers and outcome. The review fixes in `92bc12c` changed none of them: they added input checks and exact arithmetic, and report the pilot basis below.
 - **R** = $180 − $4.985975 = $175.014025, so 0.85 R = $148.761921.
 - **F(T = 200, with W-n-0)** = $200.247190, which is over 0.85 R.
 - **F(T = 200, without W-n-0)** = $122.973950, which fits.
@@ -1053,20 +1053,20 @@ R8's size rule, applied before any main episode by `uv run python -m analysis.ha
 ## 2026-10-18: The analysis commit (R8), and one harness fix before any main episode
 - **The analysis.** `analysis/persistgym_h1h3.py` reads Haiku's main runs with `--model claude-haiku-5-5`; luna's profile is the default and is unchanged.
   - It was built in `e2024f9`, reviewed adversarially, fixed in `2a0fda4`, and reworded in `ecd0632` (below).
-  - **The analysis commit is `f79921c`.** That commit holds the analysis code and the registered values it reads at call time (`HAIKU_CELLS`, `HAIKU_T`). Later commits in the pull request that adds this entry change neither.
+  - **The analysis commit is `753f492`.** Its analysis code, and the registered values that code reads at call time (`HAIKU_CELLS`, `HAIKU_T`), are those of `f79921c`, where the regression below ran. Since `f79921c` only tests and docstrings have changed. At `f79921c`, 7 Haiku analysis tests failed because they assumed W-n-0 was among Haiku's cells. `753f492` pins those tests to R8's three cells and checks the repository's two. Later commits in the pull request that adds this entry change neither the analysis code nor those values.
   - Three choices from the review read R8 strictly:
     - Reasoning tokens are reported as unavailable for any harness cell and task cell with an episode that does not report them. No cell is fitted on part of its episodes.
     - An episode stopped by the request-side check is excluded and listed as a deviation, even if a continuation replays it.
     - Power is read only from a `power_sim` table made from Haiku's validity runs. Otherwise it is reported as unavailable.
 - **luna regression** (R8: "the extended code must reproduce every number and label of luna's cited output"):
   - `uv run python -m analysis.persistgym_h1h3_regression` reproduced `results/persistgym_h1h3/20261010T232227Z/` with 0 differences at `2a0fda4` (`results/persistgym_h1h3_regression/20261018T063002Z/`) and again at `f79921c` (`results/persistgym_h1h3_regression/20261018T071235Z/`).
-  - Only the run's own identity fields differ: times, run id, git state, SDK versions.
+  - The comparison ignores only the run's own identity fields: times, run id, git state and SDK versions. It also ignores how the input paths are spelled, since they are absolute in the cited output and relative to the repository in the re-run. The paths are compared once resolved, and the config hash differs only because of that spelling.
 - **The harness fix** (`ecd0632`):
   - A whitespace-only reply goes back as `(no reply)`, as an empty one does, because the API rejects a whitespace-only text block. The harness had counted its whitespace toward W. R8 says that a turn with no visible text adds 0 tokens toward W, and the harness now counts it so (`MessagesWire.kept_reply`; `harnesses/DESIGN.md` §13).
   - None of the 8,434 pilot and validity responses was whitespace-only, so no run is affected.
 
 ## 2026-10-18: Haiku's main runs: the plan
-In R8's order, one at a time, in the PersistGym stream, each with `--parallel 16` and Claude Code's `ANTHROPIC_BASE_URL` unset. Each run's `--planned-usd` is about 1.5 times its forecast, and each run stops at it.
+In R8's order, one at a time, in the PersistGym stream, each with `--parallel 16` and Claude Code's `ANTHROPIC_BASE_URL` unset. Each run's `--planned-usd` is about 1.5 times its forecast, rounded up to whole dollars (so single-turn at repeat 1 gets $1), and each run stops at it.
 
 | Run | Forecast | `--planned-usd` |
 |---|---|---|

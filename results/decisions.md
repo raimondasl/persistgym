@@ -965,3 +965,30 @@ Raw transcripts stay in `results/raw/` (gitignored).
   - New related work cited: Mehta and Datta, arXiv 2606.22953 (eviction lowers ALFWorld success); Wang et al., arXiv 2609.29875 (when an agent can drop its earlier reasoning).
   - Upstream PR #56 (merged 2026-10-16) removes the 8,192-token summary output cap from the provider-adapter configs, for the failure amendment R7 addressed. Our runs use the pinned commit 4ca00e6, so the preprint notes it.
 - **Figures.** `analysis/figures.py`: the heatmap's task-cell labels and the H5 count labels go from 7 to 8 pt (the heatmap's in full ink), and PNGs are saved at 300 dpi for print. Same data; the new render is `results/figures/20261017T004832Z/`. The module docstring maps file names to the preprint's figure numbers.
+
+## 2026-10-18: The researcher's decisions on the Haiku replication (PREREG amendment R8, PLAN A10); the free token count; block 4-haiku proposed by Claude, approved when the researcher merges the PR that adds this entry
+**Background.** The researcher has about $190 of Anthropic API credit that must be used by 2026-10-25, and on 2026-10-17 approved spending up to $180 of it on a replication of H1 and H3 on claude-haiku-5-5, whose list prices equal gpt-6-luna's. A Claude run on ARC was considered and not chosen: at this budget it would be one or two runs, not a decomposition.
+
+**The researcher's decisions** (2026-10-17, "approve all" of Claude's recommendations; encoded in `PREREG.md` §17.8):
+1. **Status:** a replication in R4's sense (§17.4): pre-registered, reported in full whatever the outcome, outside luna's Holm family, unadjusted one-sided p-values, never called "supported"; luna stays primary.
+2. **W-n-0** runs only if the committed forecast from the pilots' and validity runs' costs fits within 85% of the block's remaining limit; decided and recorded before any main episode.
+3. **If the core does not fit:** W-n-0 is dropped first, then T is lowered from 200 in steps of 10.
+4. **Near losses above 2% in the pilots:** W is not re-tuned; the losses are reported, episodes are analysed by their assigned cell, and Claude stops and asks before the main runs.
+5. **Defaults:** luna's templates and seeds; automatic prompt caching (5-minute) on the multi-turn cells, none on the single-turn control; `max_tokens` 32,000 with streaming; the standard path for every cell (no batches); experiment `persistgym_haiku`, block `4-haiku` in phase 1a; the thinking display left at its default.
+
+**Also adopted by this merge** (choices made while building and drafting, listed in `harnesses/DESIGN.md` §13 and `PREREG.md` §17.8): an empty visible reply, and a refusal's partial text, go back as `(no reply)`; no service-tier or inference-geo field is sent, and if the pilots are served anything but the standard tier and the global geo, Claude stops and asks; pilots of F-0, W-0 and W-n-0 on pilot template 0 × the 8 task cells and the single-turn pilot on pilot templates 0-1 × the 4 non-recoverable cells; the size rule's forecast is made after the pilots and the validity runs; power at the chosen T is reported at one-sided α = 0.05; the extended `analysis/persistgym_h1h3.py` must reproduce luna's cited output before it reads any Haiku main run.
+
+**The free token count** (2026-10-18, before any paid call; no model output). `uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 5` at commit `0130e11`, clean tree (`results/token_count/20261018T034713Z/token_count.json`):
+- Haiku's tokens are 1.39 times `o200k_base`'s on the largest requests of every cell (1.387 to 1.390).
+- The largest request is 54,837 Haiku tokens (F-0, derived-rec-near, main template 1); none of the counted requests exceeds the 100,000-token price threshold.
+- Claude Code's own `ANTHROPIC_BASE_URL` was set in the session's environment; the transport refused it, as designed, and the command ran with it unset, so it reached Anthropic's API with the researcher's key.
+
+**Block 4-haiku.**
+- **Covers:** Haiku's pilots (`persistgym_pilot`), validity runs (`persistgym_validity`) and main runs and controls (`persistgym_haiku`), in the order of `PREREG.md` §17.8. The guard refuses any Haiku run under a block that does not list `persistgym_haiku`, and every Haiku main run until the researcher's G1 decision pull request.
+- **Forecast:** none committed yet. luna's list costs for the same runs, scaled by the 1.39 token ratio, suggest about $115 for the core before Haiku's thinking output; the pilots measure it, and the size rule decides W-n-0 and T.
+- **Limit: $180 billed** (billed = list on Anthropic, except unbilled refusals). Each run's `--planned-usd` is about 1.5× its forecast, and each run stops at it. The researcher may set a matching spend limit in Anthropic's Console as a backstop.
+- **Phase 1a:** $91.90 spent of its $500 cap.
+
+approved_block: 4-haiku | experiments: persistgym_pilot,persistgym_validity,persistgym_haiku | max_usd: 180
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R8 (`PREREG.md` §17.8) and PLAN A10, the decisions above, and the token-count result. It also approves block `4-haiku` up to $180 billed.

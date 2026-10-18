@@ -11,6 +11,8 @@ A reading aid. Where it and the numbered sections differ, the numbered sections 
 
 [Amended 2026-10-09, see §17.6: the project now runs a minimal path. Its ARC runs are seed 1 only, with S2 added to S0 and S4 (S1 only if decided first). The PersistGym sweep is luna's alone. There is no StateCarry, no seed 2 and no sol replication. The runs, counts and money below describe the plan before that cut.]
 
+[Amended 2026-10-18, see §17.8: claude-haiku-5-5 replicates H1 and H3 on luna's episodes, outside the Holm family, within block `4-haiku`'s $180.]
+
 **The question.** With the model fixed, when does the agent harness (what history it keeps, whether it asks for notes, whether it replays the model's earlier reasoning) change whether the agent *succeeds*, not only what it costs? Our bet: success suffers when the needed fact was worked out from several observations (*derived*), cannot be looked up again (*not recoverable*), and was thrown away by the harness (*evicted*). When the fact can be looked up again, the harness should change cost, not success.
 
 **What we run.**
@@ -1205,7 +1207,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim [Amended 2026-10-02, see §17.3] |
 
 ## 17. Amendment log
-Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5), R6 (2026-10-09, §17.6) and R7 (2026-10-10, §17.7), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void; A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
+Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5), R6 (2026-10-09, §17.6) R7 (2026-10-10, §17.7) and R8 (2026-10-18, §17.8), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void; A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
 - **A-cfg:** only if the block-1 pilot forces an ARC config change after the freeze record (§7.1) is filled; merged before the first block-2 run. It writes the new values into the §7.1 tables themselves and is merged together with the regenerated `arc/config_freeze.json`: the ARC launcher reads §7.1, so a table added only to this log would make every paid ARC run refuse (PR #23).
 - **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8). [Amended 2026-10-09, see §17.6]
 - **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7). [Amended 2026-10-09, see §17.6]
@@ -1752,3 +1754,219 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 - `analysis/checkpoint_c.py`: the chain in `check_links`. `--d20-run` adds `r7_replaces` and `rerun_seed`.
 - `analysis/arc_h4.py`: the chain, the sensitivity analyses of change 4, and the per-run config hash and budget.
 - `analysis/arc_action_matched.py`: replicate = seed mod 100, plus an `r7_replaces` column.
+
+### 17.8 Amendment R8 (2026-10-18): a pre-registered replication of H1 and H3 on claude-haiku-5-5
+**Status.** Proposed by Claude after the researcher's decisions of 2026-10-17 (`results/decisions.md`): a replication, in R4's sense (§17.4), of H1 and H3 on claude-haiku-5-5 ("Haiku" below), a model from a second provider, on luna's episodes. It takes effect when the researcher merges the pull request that adds it. That merge adopts the replication below, its validity gate, the rule that sets its size, and the code that enforces them. The version line and the "Frozen" status line are unchanged. It adds no spending approval: Haiku's runs need block `4-haiku`'s own approval line in `results/decisions.md` (§12).
+
+**What it changes.**
+1. **H1 and H3 (§3) get a replication on Haiku,** on luna's episodes (Design below). gpt-6-luna stays the primary and only confirmatory model for both.
+2. **The run matrix (§4.6, D36).** One row is added:
+
+   | Model | Harness cells | Controls | Status |
+   |---|---|---|---|
+   | claude-haiku-5-5 | F-0 and W-0 on all 8 task cells; W-n-0 only under the size rule below; default generator config; `output_config.effort: medium` | Restated-at-need on all 8 task cells, as full F-0 episodes; position-matched single-turn on the 4 non-recoverable task cells | H1 and H3 replication, outside the Holm family |
+
+3. **Settings (§6, D13), for Haiku only.** Haiku uses Anthropic's Messages API with the settings under Design, which replace D13's OpenAI settings. D13's output cap stays at 32,000 (`max_tokens`). luna's settings are unchanged.
+4. **R6 (§17.6), for R8's runs only.** R8 is the "new dated amendment" that R6 change 1 requires before any later paid run. For R8's runs, and for no others, it supersedes these parts of R6:
+   - **change 1's hard stop,** including its clause that later results are "reported as outside this pre-registration". R8's runs are pre-registered here and reported under R8;
+   - **change 1's scope:** "the PersistGym sweep is luna's alone" (also in the summary's note) and "Not run: every extension (§14)". R8's runs are registered here, not as an extension;
+   - **change 6:** Haiku's T follows the size rule below, not luna's rule;
+   - **change 7:** Haiku has its own G1 (Validity below). A Haiku failure stops Haiku's main runs only, not PersistGym;
+   - **change 9:** Haiku's tests are outside the Holm family;
+   - **change 10:** Haiku's settings (change 3) replace D13 for Haiku;
+   - **the project total** of about $560 in R6's Status and Reason ($620.42 billed is already spent: `results/costs.csv`, 68 rows). Haiku's runs are bounded by block `4-haiku`'s $180 in phase 1a.
+
+   R6 otherwise stands. After R8's runs no further paid run is made, and any later paid run needs a new dated amendment.
+5. **luna-only rules with no counterpart on the Messages API.** These do not apply to Haiku:
+   - §13's echo exclusion and the CLAUDE.md echo rule;
+   - R2 change 3's effort echo (§17.2);
+   - §5's identical-payload replay toggle. No replay-on cell runs on Haiku.
+
+   Their substitutes are under Exclusions below. For Haiku, the near-loss rule below replaces §2.8's re-tuning trigger (D6).
+6. **§9.10.** The replication is registered here with its estimands, predictions and thresholds, before any Haiku data exists, so it is not exploratory. It is not confirmatory either (Status in the analysis below).
+7. **Nothing else changes:**
+   - no hypothesis, prediction, threshold or blockquote;
+   - luna's runs, analysis and results;
+   - luna's Holm family: H1 and H3 on luna, a family of 2, with the family of 4 as a sensitivity analysis;
+   - the kill rules and the phase caps.
+
+   The frozen text of §2.8, §3 H1, §3 H3, §4.6, §5, §6, §9.4, §9.10, §10.2, §13 and §14 stays, with a pointer here. So do the register rows D6, D13, D33 and D36, and the text of R2, R4 and R6.
+
+**Reason.**
+- **One model so far.** PersistGym's H1 and H3 rest on one model, gpt-6-luna. R4's replication on a second model of the same family was dropped for budget by R6, and H2 stopped under R3. A replication on another provider's model, on the same episodes, asks whether luna's results depend on one model family.
+- **No replay needed.** H1 concerns eviction and lookup, and H3 multi-turn structure. Neither needs reasoning replay, so both can run with replay off on an API whose replay works differently (Design).
+- **Cost.** Rough estimates from luna's measured token counts were made while drafting; they are not from a committed script and decide nothing. They put the core runs within $180 in most scenarios, and the core with W-n-0 near or above it. Haiku's thinking tokens per call and its tokenizer's ratio to `o200k_base` dominate the uncertainty. That is why W-n-0 and T are set by a rule from the pilots' measured costs.
+
+**Timing.** Drafted on 2026-10-17, after the researcher's decisions that day.
+- **Seen when it was written:**
+  - luna's sweep and its H1 and H3 results (`results/decisions.md`, 2026-10-10). The cited output labels both "supported", after two fixes made once the result had been read (the Firth fit's iteration cap; H3's one-template fit). As first computed, both were "inconclusive". F-0 is at the ceiling in H3's cells (Δ_H3 = +0.25pp);
+  - luna's and sol's validity rates;
+  - the ARC results (H4, H5).
+- **Chosen with luna's results known.** R8's design copies luna's registered design and departs from it only where the API or the budget requires (Departures below). The researcher's rulings of 2026-10-10 and the two fixes were made after luna's results were read. Here they are fixed before any Haiku data exists.
+- **Seen, with no model output:** the free token count of 2026-10-18 (Design).
+- **Not seen, because none exists:** any Haiku pilot, validity or main episode.
+- **Training data.** Haiku 5.5's reliable-knowledge and training-data cutoffs are both June 2026 ([models overview](https://platform.claude.com/docs/en/models/overview), checked 2026-10-17). That is before this project's first work (2026-09-30), so its training data can hold no PersistGym episode, code or result. The episodes are synthetic and rendered from seeds.
+
+**Design.**
+- **Model:** `claude-haiku-5-5`. The ID has no date suffix, but Anthropic states that every Claude model ID is a pinned snapshot, dateless ones included ([models overview](https://platform.claude.com/docs/en/models/overview), checked 2026-10-17). It therefore meets CLAUDE.md's pin rule. The returned `model` string is recorded on every response. If it changes during the replication, the change is flagged and results are also reported split by model string, as for luna (§6).
+- **Request settings** (every Haiku request: pilots, validity runs, main runs and controls). These are D13's counterparts:
+  - the Messages API (`POST /v1/messages`);
+  - `thinking: {"type": "adaptive"}` and `output_config: {"effort": "medium"}`, both sent explicitly even though both are Haiku's defaults ([thinking](https://platform.claude.com/docs/en/build-with-claude/thinking), [effort](https://platform.claude.com/docs/en/build-with-claude/effort), checked 2026-10-17). Medium is luna's effort;
+  - no temperature, top_p or top_k (default sampling, as D13); no tools, no prefill and no fallback model;
+  - `max_tokens: 32000` (D13; it includes thinking), sent with streaming, which the SDK requires for an output cap of that size;
+  - the thinking display left at its default ("omitted"), so no thinking text is returned or read;
+  - the standard Messages endpoint for every cell and control, never Message Batches, so every arm shares one serving path, as luna's arms did. No service-tier field and no `inference_geo` field are sent. The tier served (`usage.service_tier`) is logged as `service_tier_served`, and the geo served (`usage.inference_geo`) is logged and priced. If the pilots are served any tier other than standard or any geo other than global, Claude stops and asks the researcher before the validity runs;
+  - the researcher's API key (CLAUDE.md), with no other Anthropic credential, profile, base URL or custom header in the run's environment (the transport refuses them), and the `anthropic` SDK 1.15.0, pinned in `uv.lock`.
+- **Replay off.** Every earlier assistant turn goes back as its visible text only, never as a thinking or redacted_thinking block.
+  - Anthropic's docs allow omitting earlier turns' thinking outside tool use, and say that Haiku 5.5 keeps in context any earlier thinking block that is sent back ([thinking](https://platform.claude.com/docs/en/build-with-claude/thinking), checked 2026-10-17). So sending none is the only way to turn replay off. The harness uses no API tools.
+  - In luna's F-0, the encrypted reasoning items were sent, and `reasoning.context: current_turn` hid them. On Haiku nothing is sent. In both cases the model sees none of its earlier reasoning.
+  - No replay-on, Σ or summary cell runs on Haiku.
+- **Empty visible reply.** A turn with no visible text (thinking only, a refusal, or a stop at `max_tokens` while thinking) cannot go back as an empty assistant message, because the API rejects one.
+  - It goes back as the harness's documented placeholder text, `(no reply)` (`harnesses/wire.py`, `EMPTY_REPLY_PLACEHOLDER`).
+  - A refusal that comes after some visible text goes back as the same placeholder: its partial text is kept in the episode record and the raw transcript, but not sent back.
+  - Its visible reply is still the empty text. It adds 0 tokens toward W, and it is an invalid action (§2.6).
+  - A turn that stopped at `max_tokens` with partial text goes back as that text, as D13 replays an incomplete turn's partial message (§6).
+- **Prompt caching.** Anthropic's automatic prompt caching ([prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)): a top-level `cache_control: {"type": "ephemeral"}`, with a 5-minute TTL (never 1 hour).
+  - It is used on every multi-turn request: F-0, W-0, W-n-0 and the restated-at-need control, in pilots and validity runs too.
+  - It is not used on the single-turn control: each prompt is sent once, so a cache write would be paid for and never read.
+  - Caching changes cost, not what the model is sent.
+- **Generator and episodes.** The default config, `3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b`, with W = 24,000, v = 1,500 and R_plan = 1,000 in project tokens (`o200k_base`), all unchanged (`results/decisions.md`, 2026-10-10).
+  - W, the near and far inequalities and the survival calculator are defined in project tokens (§2.1, D5). The harness therefore evicts at the same steps as on luna, and Haiku plays luna's episodes byte for byte.
+  - Haiku's own tokenizer affects only provider-reported tokens and cost.
+- **Cells.** F-0 and W-0 on all 8 task cells. W-n-0 on all 8 only under the size rule. Restated-at-need as full F-0 episodes on all 8. The single-turn control on the 4 non-recoverable task cells, exactly as luna's (§3 H3, §4.3, with the prompt format of 2026-10-10).
+  - All 8 task cells, unlike R4's 4: H3 needs the derived non-recoverable cells, R_need needs the near cells, and the §9.1 GLM needs the derived and distance terms.
+  - No Σ-n-0. On luna it served only the accounting, not H1 or H3.
+- **Templates and seeds.** Main templates 0 to T − 1, which are luna's (T = 200 unless the size rule lowers it). Repeat 1 runs on those divisible by 10, controls included (§2.9), which at T = 200 is luna's subset. Primary analyses use repeat 0. Validity templates 0-19 (seeds 50,000-50,019). Pilot templates are below.
+- **Pilots** (CLAUDE.md; §11). Every Haiku cell is new.
+  - One pilot run each of F-0, W-0 and W-n-0, on pilot template 0 × the 8 task cells: 8 episodes each, the shape of luna's block-1 pilots.
+  - The single-turn pilot, on pilot templates 0 and 1 × the 4 non-recoverable task cells: 8 prompts.
+  - All in experiment `persistgym_pilot`, blinded and excluded from all analyses (§11).
+  - They check errors, payload acceptance, the request-side check, the returned model string, whether thinking tokens are reported, cache reads, the largest prompt per call, and cost per episode.
+  - The single-turn pilot rule of 2026-10-10 applies unchanged: the single-turn main runs proceed only if all 8 replies are of the need-verb class. Otherwise Claude stops, and the researcher decides.
+- **Near losses** (§2.8). After the pilots, `analysis.near_loss` counts, pooled, the near window episodes that lost their evidence. It reads the survival flag only.
+  - If any near window cell exceeds 2%, W and R_plan are **not** re-tuned: re-tuning would change the config and luna's episodes. Instead the losses are reported, every episode is analysed by its assigned cell (§13), and Claude stops and asks the researcher before the main runs.
+  - In the main runs, near losses are reported per cell, as for luna.
+- **Token count, before any paid call.** Anthropic's free token-counting endpoint ([token counting](https://platform.claude.com/docs/en/build-with-claude/token-counting)) was run on 2026-10-18 on the largest requests of each cell and of the single-turn control, main templates 0-4 (`harnesses count-tokens --model claude-haiku-5-5 --n 5`; `results/token_count/20261018T034713Z/`, recorded in `results/decisions.md`). It sends no request to the model and returns no model output.
+  - Haiku's tokens are 1.39 times `o200k_base`'s (1.387 to 1.390).
+  - The largest request is 54,837 Haiku tokens; none is expected to exceed 100,000.
+- **Order.** Each step comes after the one before:
+  1. the token count (done, 2026-10-18);
+  2. the pilots: F-0, W-0, W-n-0, then the single-turn pilot;
+  3. the near-loss check;
+  4. the validity runs: restated, then withheld;
+  5. Haiku's G1;
+  6. the size record and the analysis commit (below);
+  7. the main runs, one at a time in the PersistGym stream: F-0, W-0, W-n-0 if it runs, F-0 restated and the single-turn control, then each again at repeat 1. Each run plays up to 16 episodes in parallel (§4.6).
+
+**The size rule: W-n-0 and T, fixed before any main episode.**
+- **The forecast.** After the pilots and the validity runs, a committed $0 script, written in the pattern of `analysis/sol_h1_forecast.py`, forecasts F, the billed cost of the main runs with their repeats and both controls, from the pilots' `costs.csv` rows. R is $180 minus block `4-haiku`'s spend at that point.
+- **The rule:**
+  1. W-n-0 runs, at T = 200, iff F(T = 200, with W-n-0) ≤ 0.85 R.
+  2. Otherwise W-n-0 does not run, and T = 200 iff F(T = 200, without W-n-0) ≤ 0.85 R.
+  3. Otherwise T is the largest multiple of 10 below 200 with F(T, without W-n-0) ≤ 0.85 R. The runs then use main templates 0 to T − 1, with repeat 1 on those divisible by 10.
+  4. If no T ≥ 10 qualifies, no main run starts, and Claude asks the researcher.
+- **The record.** F, R, the outcome and the script's commit go into `results/decisions.md` before any main episode. The pull request that records them sets the guard to match: `HAIKU_T`, and `HAIKU_CELLS` without W-n-0 if it does not run. Neither value changes after that. This is a value set by a pre-registered rule, not an amendment. If W-n-0 does not run, it is reported as "pre-registered, not run (budget)".
+- **Power** at the chosen T is simulated with `analysis.power_sim`, using luna's assumptions (2026-10-10) re-estimated from Haiku's validity runs, at one-sided α = 0.05, and reported. It does not set T.
+
+**Exclusions and errors** (§13, D33, mapped to the Messages API; [errors](https://platform.claude.com/docs/en/api/errors), checked 2026-10-17).
+- **Transport failures,** after the transport's own retries, are re-run once with the same template and seeds, and a second failure is an exclusion. They cover HTTP 429, 529 (overloaded) and other 5xx errors, timeouts, connection errors, and a stream that breaks off before its final message. Counts are reported per cell.
+- **A spend-limit error** is not retried: the run stops, and Claude asks the researcher.
+- **Content failures** score 0 and are not re-run, as for luna:
+  - **`stop_reason: "refusal"`** is a refused action (§13): an invalid action at any step, and 0 at the need step. Refusals are counted per cell, each with its `stop_details.category`. Haiku 5.5 has no server-side fallback and none is requested, so no other model ever answers ([refusals](https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback), checked 2026-10-17);
+  - **`stop_reason: "max_tokens"`** is luna's `incomplete` (D13 as implemented, §6): an invalid action at any step. Any other unexpected stop reason is treated the same way and logged;
+  - **an empty visible reply** is an invalid action (above).
+- **No echo.** The Messages API echoes neither effort nor a reasoning context ([Messages API](https://platform.claude.com/docs/en/api/messages/create), checked 2026-10-17), so no Haiku episode is excluded for an echo. In its place:
+  - **payload snapshot tests,** which assert the exact Haiku body of every cell and must pass before any paid run (CLAUDE.md);
+  - **a request-side check** on every request before it is sent: adaptive thinking, effort medium, `max_tokens` 32,000, and no thinking or redacted_thinking block in the messages. A violation is a harness bug: the episode is excluded and the run stops;
+  - **the returned model string** on every response (above).
+
+  `meta.json` records the thinking and effort settings as requested, and `reasoning.context` as neither sent nor echoed.
+- Episodes are analysed by their assigned cell, and §2.8's bug stop applies as for luna.
+
+**Tokens and prices.**
+- **Input** = `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens`, because Anthropic's `input_tokens` counts only uncached input. This sum is the "input tokens (cached included)" of H1's need-phase tokens (§3 H1, D8) and the costs rows' `input_tokens`.
+- **Cached** = `cache_read_input_tokens`, and **cache writes** = `cache_creation_input_tokens`.
+- **Output** = `output_tokens`, thinking included.
+- **Reasoning** = `output_tokens_details.thinking_tokens` where the response reports it. Otherwise it is unavailable (null, never 0), and §9.5's reasoning-token outcome is reported as unavailable ([Messages API](https://platform.claude.com/docs/en/api/messages/create), checked 2026-10-17).
+- **Prices** for Haiku 5.5, per MTok ([pricing](https://platform.claude.com/docs/en/about-claude/pricing), checked 2026-10-17):
+
+  | Prompt length | Input | 5-minute cache write | Cache read | Output |
+  |---|---|---|---|---|
+  | Up to 100,000 tokens | $0.10 | $0.125 | $0.01 | $0.50 |
+  | Over 100,000 tokens | $0.50 | $0.625 | $0.05 | $2.50 |
+
+  - A request's prompt length counts all of its input tokens, cache reads and writes included, and each request is priced on its own.
+  - Routing is the workspace's default; the geo served is logged per call and priced (US-only routing at 1.1×). There is no Flex discount, so billed = list, except refusals that Anthropic does not bill, which keep their list cost and a billed estimate of 0.
+  - Every call over 100,000 tokens is flagged in its run's summary. The price source date is 2026-10-17.
+- Provider tokens are Haiku's own. W and every planned distance stay in project tokens.
+
+**Status in the analysis** (as R4, §17.4).
+- **A replication, reported in full whatever the outcome,** next to luna's primary results. Every H1 and H3 quantity of §3 is computed on Haiku's episodes exactly as on luna's, with the same predictions, thresholds and model checks (§9.4):
+  - Penalty_NR, Penalty_R and Δ_H1, with its 90% CI;
+  - the manipulation check (≥ 25pp) and the recoverable-success prediction (|Penalty_R| ≤ 5pp);
+  - the lookups prediction (≥ 1.30, with the zero-lookup rule);
+  - R_need ≥ 1.30, with R_tok and the literal ratio;
+  - the kill reading;
+  - Δ_H3 and its prediction (upper bound of the 90% CI ≤ 5pp).
+
+  As on luna, the analysis uses repeat 0, §13's exclusions, the template-cluster bootstrap and the GLMs of §9.1 and §9.4, and both scales (§9.3). If W-n-0 runs, it is reported alongside, with §2.8's accounting.
+- **Pre-specified rules.** These were fixed for luna on 2026-10-10, after luna's data and before any Haiku data, and apply to Haiku unchanged:
+  - the §9.1 GLM's harness levels are F-0 and W-0 on all 8 task cells, with W-n-0 as a third level in a sensitivity analysis if it runs;
+  - H1's model check uses Firth's penalized fit when the logit-scale Δ_H1 is not finite, with `max_iter` 1,000;
+  - H3's model check is fitted even when only one template has outcome variation;
+  - the Bayesian GLMM uses bambi's default priors, 4 chains × 1,000 draws after 1,000 tuning steps;
+  - the seeds are luna's: bootstrap SEED + 10 and Bayesian SEED + 11. At T = 200 the template resamples are therefore luna's.
+- **Outside the Holm family** (§9.4). luna's family stays H1 and H3 on luna, 2 tests (R6 change 9), with the family of 4 as its sensitivity analysis.
+  - Haiku's H1 test (H0: Δ_H1 ≤ 0) and H3 test (H0: Δ_H3 ≥ 5pp) are reported with their unadjusted one-sided bootstrap p-values and their model checks. They are never called "supported".
+  - They neither confirm nor kill H1 or H3. luna stays primary, and H1's kill rule and D38 read luna only.
+- **If the two models disagree,** both results are reported side by side and the disagreement is stated. Neither overrides the other. Haiku's episodes are **never pooled** with luna's.
+- **The analysis code.** `analysis/persistgym_h1h3.py` is extended to a second model, covering Haiku's runs and cells, Messages transcripts (§2.8's accounting check included) and the replication's labels.
+  - It is tested on synthetic data only and committed before any Haiku main episode. Its commit is recorded in `results/decisions.md`.
+  - Run on luna's sweep, the extended code must reproduce every number and label of luna's cited output, `results/persistgym_h1h3/20261010T232227Z/`.
+
+**Validity** (Haiku's G1: §4.4, as for luna). The main runs run only if Haiku passes it.
+- **Runs:** F-0 on validity templates 0-19 × the 8 task cells, restated and withheld: 320 episodes in two runs, in `persistgym_validity`. They need no G1.
+- **Thresholds:** restated-at-need ≥ 85% and fact-withheld ≤ 20%, each pooled over the 8 task cells. Per-cell rates are reported. The programmatic oracle and the default config's $0 audits pass (`results/decisions.md`, 2026-10-09).
+- **Spot-check:** none new. The researcher's spot-check of package `g1-validity-0-20-3d6bc648` reviewed these templates and cells without model output (160 of 160 episodes, no shortcut). It serves for Haiku as it did for luna and for sol (R4).
+- **Decision:** the rates go into `results/decisions.md`, and the researcher decides. Only the researcher's G1 decision pull request for Haiku records a pass in code (`HAIKU_G1_PASSED`).
+  - There is no redesign pass. If Haiku fails, its main runs do not run and are reported as not run, with its validity rates.
+  - This gate is Haiku's alone: it is not luna's G1, and it is not kill criterion 3.
+
+**Cost and approval.**
+- **Budget:** block `4-haiku`, phase 1a, `max_usd` 180, listing `persistgym_pilot`, `persistgym_validity` and `persistgym_haiku`.
+  - Phase 1a has spent $91.90 of its $500 cap (`results/costs.csv`), so the block fits under it.
+  - This amendment adds no spending approval. The block's approval line is its own entry in `results/decisions.md`, adopted when the researcher merges the pull request that adds it (§12).
+- **Stop and ask:** Claude stops and asks the researcher before block or phase spend would pass its limit. A spend limit that the researcher sets in Anthropic's Console is the provider-side backstop (§12).
+- **No committed forecast yet.** The size rule's forecast comes from the pilots' measured costs.
+- **Logging:** every paid Haiku run writes one `results/costs.csv` row (CLAUDE.md), with provider `anthropic`, API `messages` and price source date 2026-10-17.
+
+**Departures from luna's design, stated.**
+- **Another API and serving path:** the Messages API on the standard path, with explicit caching and streaming, instead of the Responses API on Flex.
+- **Replay off by sending nothing,** instead of by sending items the API hides (Design).
+- **The placeholder:** where luna's history held a reasoning item with no message, Haiku's holds a short placeholder text that the model sees.
+- **No Σ-n-0 cell.**
+- **W-n-0 and T may be cut** by the size rule.
+
+**What it does not show.**
+- **Not a model comparison.** It ranks neither the models nor their providers.
+  - Each model's harness effects are reported against task properties (fact kind, recoverability, distance), in the same form for both.
+  - No "Haiku versus luna" contrast is tested or plotted as a ranking. Differences between the two models' effects are described, not tested (§15).
+- **One model per provider.** The provider, the model, its training, its reasoning, and the API and serving path all differ at once. A difference between the two models cannot be attributed to any one of them, and agreement says nothing about other models or providers.
+- **Not a second confirmation.** Agreement with luna is a replication outside the Holm family.
+- **The same synthetic task family.** Haiku plays luna's episodes, so luna's limits carry over: PersistGym is synthetic, and window effects at S = 0 are mechanical (§15). If both models are at the ceiling in H3's cells, H3 says nothing about harder tasks.
+- **Not blind to luna.** R8's design and its pre-specified rules were chosen with luna's results known (Timing).
+- **Costs and tokens are not comparable** across the two models: each is in its own provider's tokens and prices.
+- **Thinking is not inspected.** Its display is omitted, so only its token counts are seen, where reported.
+
+**As implemented** (the pull request that adds this amendment).
+- **The change:** `harnesses/registered.py` sets `R8_IN_EFFECT = True`, and the "not yet merged" notes on R8 are removed. Tests check the Haiku rules with R8 in effect.
+- **Already in place,** merged before this pull request by its own $0 pull request (#68):
+  - `claude-haiku-5-5` at `medium` in `REGISTERED_EFFORT`;
+  - the `HAIKU_*` constants: experiment `persistgym_haiku`, the cells and task cells, `HAIKU_T = 200`, validity templates 0-19, the pilot cells, the single-turn pilot's 10-prompt limit and `HAIKU_REQUEST`;
+  - `HAIKU_G1_PASSED`, which is empty, so the main runs fail closed until the researcher's G1 decision pull request;
+  - `haiku_refusal`, applied right after R6's hard stop and before the pilot rules, which refuses every Haiku run that R8 does not register;
+  - `persistgym_haiku` in `common.costs.EXPERIMENT_PHASE` at phase 1a, and in the PersistGym stream;
+  - the Messages wire (`harnesses/wire.py`, `MessagesWire`, whose `check_payload` is the request-side check);
+  - the Anthropic transport (`harnesses/anthropic_transport.py`), the payload snapshot tests of Haiku's cells, and `harnesses count-tokens`;
+  - the `anthropic` SDK 1.15.0 in `uv.lock`, and `ANTHROPIC_API_KEY` (the name only) in `.env.example`.
+- **Not yet written,** each a $0 pull request before the step that needs it: the size rule's forecast script, before the size record; and the extension of `analysis/persistgym_h1h3.py`, before any main episode.

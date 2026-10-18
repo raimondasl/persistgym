@@ -1151,6 +1151,11 @@ In R8's order, one at a time, in the PersistGym stream, each with `--parallel 16
 - **The command:** `uv run python -m analysis.power_sim --part luna --reps 2000 --luna-boot 10000 --luna-templates 200 --luna-sensitivity-templates 200 --luna-sensitivity-sd 0.5,1,1.5,2 --luna-names primary,pessimistic --luna-p-f0-obs 0.95,0.85 --luna-p-f0-der 0.9,0.8 --luna-p-w0-nr 0.023,0.18 --luna-template-sd 0.92,0 --luna-validity-glob 'results/persistgym_validity/*-F-0-claude-haiku-5-5/episodes.jsonl'`.
 - **The alternative,** not proposed: report power as unavailable, since the template SD cannot be re-estimated.
 - **Power does not set T,** and it is reported only.
+- **The table:** `results/power_sim/20261018T232402Z/`, at `bc4d8fc` with a clean tree. At T = 200, one-sided 0.05 unadjusted, P(the test rejects) is:
+  - primary: H1 0.913, H3 0.864;
+  - pessimistic: H1 0.531, H3 0.565.
+  - The Monte Carlo SE is at most 0.011.
+  - If the ruling changes, it is re-run.
 
 **Next.** Once this pull request is merged, Claude:
 1. runs the analysis once on the sweep. It is FINAL: the 13 runs above with `--run`, the five links with `--rerun`, this entry as `--sweep-closed`, and the power table above as `--power-path`.

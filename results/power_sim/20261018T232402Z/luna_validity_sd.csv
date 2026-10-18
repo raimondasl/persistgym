@@ -1,0 +1,3 @@
+variant,templates,episodes,successes,rate,sd_hat,sd_ci95_low,sd_ci95_high,lr_vs_sd0,note
+restated,20,160,160,1,,,,,not identified: every episode had the same outcome
+withheld,20,160,0,0,,,,,not identified: every episode had the same outcome

@@ -1,0 +1,9 @@
+scenario,reading,target,T_h1,T_h3,T_both,T_set,T_set_by,power_h1_at_T_set,power_h3_at_T_set,all_larger_T_meet,T_h1_uncapped,T_h3_uncapped,T_both_uncapped,T_grid_max
+primary,"worst Holm step, supported (decision)",0.8,200,,,200,"cap (200, R6 change 6)",0.849,0.7815,,200,,,200
+primary,"worst Holm step, bootstrap test only",0.8,200,,,200,"cap (200, R6 change 6)",0.849,0.7815,,200,,,200
+primary,"Holm over H1 and H3 together, supported",0.8,200,200,200,200,rule,0.8945,0.8415,True,200,200,200,200
+primary,unadjusted one-sided 0.05,0.8,200,200,200,200,rule,0.9125,0.8635,True,200,200,200,200
+pessimistic,"worst Holm step, supported (decision)",0.8,,,,200,"cap (200, R6 change 6)",0.4165,0.4555,,,,,200
+pessimistic,"worst Holm step, bootstrap test only",0.8,,,,200,"cap (200, R6 change 6)",0.4165,0.4555,,,,,200
+pessimistic,"Holm over H1 and H3 together, supported",0.8,,,,200,"cap (200, R6 change 6)",0.473,0.4945,,,,,200
+pessimistic,unadjusted one-sided 0.05,0.8,,,,200,"cap (200, R6 change 6)",0.5305,0.565,,,,,200

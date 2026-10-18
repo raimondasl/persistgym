@@ -1,0 +1,3 @@
+scenario,templates,normal_h1_worst_step,normal_h3_worst_step,normal_h1_unadjusted,normal_h3_unadjusted,normal_T_both_uncapped
+primary,200,0.860302,0.797723,0.918762,0.874645,210
+pessimistic,200,0.444101,0.462176,0.569276,0.587125,480

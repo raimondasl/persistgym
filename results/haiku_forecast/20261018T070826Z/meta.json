@@ -1,0 +1,79 @@
+{
+  "experiment": "haiku_forecast",
+  "run_id": "20261018T070826Z",
+  "cell_or_config": "r8_size_rule",
+  "config": {
+    "prereg": "PREREG.md §17.8 (amendment R8)",
+    "inputs": {
+      "costs_csv": "results/costs.csv",
+      "costs_csv_sha256": "2eaf86372a462d976d4a5e766ed1f04875c23ebf20a399cd3c29970d76a6d524",
+      "results_root": "results",
+      "meta_json": {
+        "results/persistgym_pilot/20261018T043551Z-F-0-claude-haiku-5-5/meta.json": "562fbf9048e253ae709bcc04c53437efb5dec2a2ba54dfba0a3f725dd72a3218",
+        "results/persistgym_pilot/20261018T043926Z-W-0-claude-haiku-5-5/meta.json": "42f961ff69de319b3afcedfdb60881034916cdead43b7cd8c471e246c597274f",
+        "results/persistgym_pilot/20261018T044223Z-W-n-0-claude-haiku-5-5/meta.json": "84d1d38362c4f708c5a61b8b6920f6eaa25ee5014736b4e221aa55c032b1b876",
+        "results/persistgym_pilot/20261018T044546Z-single-turn-claude-haiku-5-5/meta.json": "8265fc093961519edcdd3a6483bdc3d058d1c017fe2d12124b72c5b03c2fa484",
+        "results/persistgym_validity/20261018T044721Z-F-0-claude-haiku-5-5/meta.json": "6d74df56498f84a0242374b7151235e20457c9fee37acbc83c4f405b70634391",
+        "results/persistgym_validity/20261018T045130Z-F-0-claude-haiku-5-5/meta.json": "447a19fcfa4c91f069c4f752953efc064cd546f07bc1a256bb1f966f10372a5a"
+      }
+    },
+    "rule": {
+      "block": "4-haiku",
+      "max_usd": "180",
+      "fit_share": "0.85",
+      "T_max": 200,
+      "T_step": 10
+    },
+    "design": {
+      "task_cells": 8,
+      "single_turn_task_cells": 4,
+      "lines": [
+        "F-0",
+        "W-0",
+        "W-n-0",
+        "F-0-restated",
+        "single-turn"
+      ],
+      "optional_line": "W-n-0"
+    },
+    "sensitivity_factor": "1.25"
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": null,
+  "started_utc": "2026-10-18T07:08:26+00:00",
+  "finished_utc": "2026-10-18T07:08:26+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "status": "complete",
+  "outcome": {
+    "w_n_0_runs": false,
+    "T": 200,
+    "stop_and_ask": false,
+    "step": 2
+  },
+  "outputs": [
+    "forecast.json",
+    "forecast.csv",
+    "summary.md"
+  ],
+  "paid_calls": 0,
+  "config_hash": "91207ad2a26fc23525c609593d037db8d1e1ac0674ec740ddccbe33da9e7dbd9",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "ecd06321c57d6ce6474b7ddeca86e1b3f79c9ace",
+  "git_dirty": false
+}

@@ -1,5 +1,5 @@
 """The Claude token count of the largest Haiku requests, before any paid call (CLI
-`count-tokens`; PREREG §17.8, amendment R8, pending).
+`count-tokens`; PREREG §17.8, amendment R8).
 
 Every window and token rule of the harness is in project tokens (tiktoken `o200k_base`), and
 stays so on the Messages wire, so that W evicts where the generator designed near and far.

@@ -181,23 +181,23 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "stop_on_effort_mismatch": ("PREREG §17.2 (R2)", ("stop and exclude the episode, as for "
                                                       "reasoning.context")),
     "output_items_replay": ("§7", "output items sent back verbatim, null fields dropped"),
-    # The Messages wire (claude-*; PREREG §17.8, amendment R8, not yet merged; DESIGN §13)
-    "messages_replay_off": ("PREREG §17.8 (R8, pending)", (
+    # The Messages wire (claude-*; PREREG §17.8, amendment R8; DESIGN §13)
+    "messages_replay_off": ("PREREG §17.8 (R8)", (
         "earlier turns go back as visible text only, never a thinking block; replay-on and "
         "summary cells refused")),
-    "messages_empty_reply": ("PREREG §17.8 (R8, pending)", (
+    "messages_empty_reply": ("PREREG §17.8 (R8)", (
         "a turn with no visible text goes back as '(no reply)'; it counts 0 toward W")),
-    "messages_refusal_partial": ("PREREG §17.8 (R8, pending)", (
+    "messages_refusal_partial": ("PREREG §17.8 (R8)", (
         "a refusal's partial text is discarded from the history: '(no reply)', 0 toward W")),
-    "messages_inference_geo": ("PREREG §17.8 (R8, pending)", (
+    "messages_inference_geo": ("PREREG §17.8 (R8)", (
         "no inference_geo sent; each call priced at the geo served (us 1.1x; none reported: "
         "1.1x)")),
-    "messages_prompt_caching": ("PREREG §17.8 (R8, pending)", (
+    "messages_prompt_caching": ("PREREG §17.8 (R8)", (
         "top-level cache_control (5 minutes) in multi-turn cells, none in the single-turn "
         "control")),
-    "messages_service_tier": ("PREREG §17.8 (R8, pending)", (
+    "messages_service_tier": ("PREREG §17.8 (R8)", (
         "no service_tier sent; standard recorded as requested, usage.service_tier as served")),
-    "messages_stop_reasons": ("PREREG §17.8 (R8, pending)", (
+    "messages_stop_reasons": ("PREREG §17.8 (R8)", (
         "max_tokens, refusal and any unexpected stop reason are incomplete: an invalid "
         "action (D13)")),
 }

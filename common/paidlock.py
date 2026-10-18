@@ -93,7 +93,7 @@ STREAMS = (ARC, PERSISTGYM)
 
 # Which stream each budget experiment (common.costs.EXPERIMENT_PHASE) runs in: the ARC
 # launcher on Gemini, or the PersistGym launcher on OpenAI or, for claude-haiku-5-5's
-# replication (PREREG §17.8, pending), on Anthropic (PREREG §0.3 line 15). StateCarry
+# replication (PREREG §17.8, amendment R8), on Anthropic (PREREG §0.3 line 15). StateCarry
 # on PersistGym is an OpenAI run; StateCarry on ARC games a Gemini run. tests/test_common.py
 # checks that every budget experiment has a stream. `ext_` experiments have none: they have
 # no budget phase either, so the paid guard refuses them.

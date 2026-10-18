@@ -55,11 +55,13 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   luna in this checkout's results/. Like any paid run, it also needs an approval line that
   lists its experiment (`common/approval.py`): block `3-persistgym`'s lists
   `persistgym_pilot` for it explicitly, so the researcher approves the pilot by name.
-  Every other run refuses, fail closed: any other pilot (a harness cell's, or any of sol's),
-  `persistgym_validity` for every model, `persistgym_sol_h1`, the probes (`toggle_pilot`,
-  `replay_probe`), every sol run, any other experiment, and any model that is not a
-  registered one. The rules below for those runs stay, as the record of what was
-  registered, and apply again only with `R6_HARD_STOP` off (tests).
+  R8 (below), the new dated amendment R6 change 1 asks for, adds claude-haiku-5-5's runs in
+  its three experiments, which pass on to `haiku_refusal`. Every other run refuses, fail
+  closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
+  every model but Haiku, `persistgym_sol_h1`, the probes (`toggle_pilot`, `replay_probe`),
+  every sol run, any other experiment, and any model that is not a registered one. The
+  rules below for those runs stay, as the record of what was registered, and apply again
+  only with `R6_HARD_STOP` off (tests).
 
 * R4 (§17.4), sol's replication of H1: gpt-6.1-sol at `medium` effort on the default
   generator config, with D13's other request settings (`H1_REPLICATION_REQUEST`), in F-0,
@@ -74,19 +76,19 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   Its pilot (W-0 and W-n-0, `H1_REPLICATION_PILOT_CELLS`) runs as any sol pilot at medium
   does, and the pooled pilot report leaves it out (`harnesses.blinding.is_left_out`).
 
-* R8 (§17.8, not yet written or merged), claude-haiku-5-5's replication of H1 and H3 on
-  Anthropic's Messages API (`harnesses.wire.MessagesWire`): `R8_IN_EFFECT` is False, so every
-  Haiku paid run refuses (`haiku_refusal`, `R8_STOP`), its pilots and validity run included.
-  The rules it will apply once the researcher's R8 pull request sets it True, in R4's
-  pattern: Haiku at `medium` on the default config with R8's request settings
+* R8 (§17.8), claude-haiku-5-5's replication of H1 and H3 on Anthropic's Messages API
+  (`harnesses.wire.MessagesWire`): `R8_IN_EFFECT` is True, so `haiku_refusal` applies R8's
+  rules, in R4's pattern: Haiku at `medium` on the default config with R8's request settings
   (`HAIKU_REQUEST`); pilots of `HAIKU_PILOT_CELLS` (the single-turn pilot at most 10 prompts,
   counted over Haiku's own); a validity run of exactly `VALIDITY_RUN` on validity templates
   0-19, with no G1; and main runs and controls in `HAIKU_EXPERIMENT` (`persistgym_haiku`):
   F-0, W-0 and W-n-0 as the full matrix on all 8 task cells, the single-turn control on its
   4, main templates 0 to `HAIKU_T` - 1, base episodes or the restated-at-need control in F-0,
-  after `HAIKU_G1_PASSED` (empty: fail closed). Every other `claude-*` string is on the
-  Messages wire too, and is held to R8 as well (with R6's hard stop on or off): it refuses
-  while R8 is not in effect, and after, as a model R8 does not register. The Anthropic
+  after `HAIKU_G1_PASSED` (empty until the researcher's G1 decision PR: the main runs fail
+  closed). Every other `claude-*` string is on the Messages wire too, and is held to R8 as
+  well (with R6's hard stop on or off): it refuses as a model R8 does not register. The flag
+  stays as a kill switch: set False, every Haiku paid run refuses (`R8_STOP`), its pilots
+  and validity run included, and so does every other `claude-*` string. The Anthropic
   transport also refuses any model but Haiku, and an approved block that does not list
   `persistgym_haiku` (harnesses/anthropic_transport.py).
 
@@ -132,8 +134,8 @@ VALIDITY_EXPERIMENT = "persistgym_validity"
 REGISTERED_EFFORT: dict[str, str] = {"gpt-6-luna": "medium", "gpt-6.1-sol": "high",
                                      "claude-haiku-5-5": "medium"}
 """PREREG §6 (D13) as amended by R2 (§17.2): sol at high, luna at medium; claude-haiku-5-5 at
-medium (`output_config.effort`; PREREG §17.8, amendment R8, not yet merged: every Haiku paid
-run refuses until `R8_IN_EFFECT`)."""
+medium (`output_config.effort`; PREREG §17.8, amendment R8: `haiku_refusal` holds every Haiku
+paid run to R8 while `R8_IN_EFFECT`)."""
 DEFAULT_EFFORT = "medium"
 """The effort of a model not in `REGISTERED_EFFORT` (the documented default, D13)."""
 
@@ -259,13 +261,14 @@ R6_STOP = (f"R6's hard stop ({R6_REF} change 1): the PersistGym stream's only pa
            f"{PILOT_EXPERIMENT}: block 3-persistgym's); no other paid run, and none after "
            "these")
 
-# --- R8 (PREREG §17.8, not yet written or merged): claude-haiku-5-5's replication of H1/H3 ---
-R8_REF = "PREREG.md §17.8 (amendment R8, not yet merged)"
-R8_IN_EFFECT = False
-"""Whether amendment R8 (PREREG §17.8) is in effect. False: every claude-haiku-5-5 paid run
-refuses, pilots and validity runs included (`haiku_refusal`), fail closed. Only the pull
-request that adds R8 to PREREG.md, merged by the researcher, sets it True (with its own tests
-of the rules below); tests monkeypatch it."""
+# --- R8 (PREREG §17.8): claude-haiku-5-5's replication of H1/H3 ---
+R8_REF = "PREREG.md §17.8 (amendment R8)"
+R8_IN_EFFECT = True
+"""Whether amendment R8 (PREREG §17.8) is in effect. True since the pull request that adds R8
+to PREREG.md, merged by the researcher: `haiku_refusal` holds every claude-haiku-5-5 paid run
+to R8's rules below (its main runs still need `HAIKU_G1_PASSED`). It stays as a kill switch:
+set False, every Haiku paid run refuses, pilots and validity runs included (`R8_STOP`), fail
+closed, and so does every other `claude-*` string; tests monkeypatch it to check that."""
 HAIKU_MODEL = "claude-haiku-5-5"
 """Anthropic's Messages API (`harnesses.wire.MessagesWire`); a fixed model id with no dated
 snapshot, so the returned model string is the pin."""
@@ -307,10 +310,10 @@ HAIKU_G1_PASSED: dict[str, str] = {}
 """Model -> the generator config hash on which the researcher recorded the Haiku
 replication's G1 gate as passed. Set only by the researcher's G1 decision PR under R8; empty,
 the main runs refuse (fail closed)."""
-R8_STOP = (f"{HAIKU_MODEL} runs only under {R8_REF}, which is not in effect "
-           "(harnesses/registered.py R8_IN_EFFECT): every paid run of it refuses, its pilots "
-           "and its validity run included, until the researcher merges the pull request that "
-           "adds R8")
+R8_STOP = (f"{HAIKU_MODEL} runs only under {R8_REF}, which is switched off "
+           "(harnesses/registered.py R8_IN_EFFECT is False): every paid run of it refuses, its "
+           "pilots and its validity run included, until the researcher's pull request sets it "
+           "True again")
 
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
@@ -678,15 +681,15 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
       this run's (`templates` x `task_cells`) with those earlier ones played or planned in
       this checkout's results/ (`_single_turn_pilot_prompts`). Any of these left as None
       refuses. So a pilot of another request cannot use up the allowance;
-    * claude-haiku-5-5 (R8, PREREG §17.8, not yet merged): every run refuses while
-      `R8_IN_EFFECT` is False (`R8_STOP`), and so does every other model on the Messages
-      wire (any `claude-*` string, `_on_messages_wire`); once it is True, its runs in R8's
+    * claude-haiku-5-5 (R8, PREREG §17.8): while `R8_IN_EFFECT` is True, its runs in R8's
       three experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new
       dated amendment R6 change 1 asks for, and every other Haiku run refuses (another
-      `claude-*` model as one that is not registered);
-    * every other run refuses: `persistgym_validity` for every model, `persistgym_sol_h1`,
-      `toggle_pilot` and `replay_probe` (the probes), any other pilot, any sol run and any
-      other experiment."""
+      `claude-*` model as one that is not registered); with the kill switch off
+      (`R8_IN_EFFECT` False) every Haiku run refuses (`R8_STOP`), and so does every other
+      model on the Messages wire (any `claude-*` string, `_on_messages_wire`);
+    * every other run refuses: `persistgym_validity` for every model but Haiku,
+      `persistgym_sol_h1`, `toggle_pilot` and `replay_probe` (the probes), any other pilot,
+      any sol run and any other experiment."""
     if not R6_HARD_STOP:
         return None
     family = model_family(model)
@@ -829,9 +832,9 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
                   task_cells: tuple[str, ...] | None = None, request: dict | None = None,
                   templates: tuple[int, int] | None = None,
                   matrix: str | None = None) -> str | None:
-    """Why a paid run of claude-haiku-5-5 must refuse, or None (PREREG §17.8, amendment R8,
-    not yet merged; fail closed). While `R8_IN_EFFECT` is False every Haiku run refuses
-    (`R8_STOP`). Once it is True, in the R4 pattern, every Haiku run is in R8's experiments
+    """Why a paid run of claude-haiku-5-5 must refuse, or None (PREREG §17.8, amendment R8;
+    fail closed). With the kill switch `R8_IN_EFFECT` False every Haiku run refuses
+    (`R8_STOP`). While it is True, in the R4 pattern, every Haiku run is in R8's experiments
     (`HAIKU_EXPERIMENTS`) at --effort medium on the default generator config with R8's request
     settings (`HAIKU_REQUEST`), and:
     * a pilot (`persistgym_pilot`): a cell of `HAIKU_PILOT_CELLS` on pilot templates, base
@@ -968,12 +971,12 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        run (`VALIDITY_RUN`: cell F-0, `split` validity, `variant` restated or withheld);
     6. such a model needs an ENGAGED check on that config (`engagement_refusal`);
     7. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config.
-    R8. claude-haiku-5-5 (PREREG §17.8, not yet merged), and every other model on the
-       Messages wire (any `claude-*` string, which the CLI would send through the Anthropic
-       transport and price by prefix), is judged by `haiku_refusal` alone, right after step 0
-       and before the pilot rules, so its pilots are held to R8 too; while `R8_IN_EFFECT` is
-       False every such run refuses (with R6's hard stop off as well), and once it is True
-       one that is not claude-haiku-5-5 or a dated snapshot of it still refuses."""
+    R8. claude-haiku-5-5 (PREREG §17.8), and every other model on the Messages wire (any
+       `claude-*` string, which the CLI would send through the Anthropic transport and price
+       by prefix), is judged by `haiku_refusal` alone, right after step 0 and before the
+       pilot rules, so its pilots are held to R8 too; one that is not claude-haiku-5-5 or a
+       dated snapshot of it refuses, and with the kill switch `R8_IN_EFFECT` False every such
+       run refuses (with R6's hard stop off as well)."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)

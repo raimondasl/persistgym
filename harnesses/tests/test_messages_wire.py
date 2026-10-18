@@ -1,5 +1,5 @@
 """Payload snapshot tests of the Messages wire (harnesses/wire.py; PREREG §17.8, amendment
-R8, not yet merged), hand-derived like test_payload_snapshots.py's, and its response parsing,
+R8), hand-derived like test_payload_snapshots.py's, and its response parsing,
 usage and pricing.
 
 Synthetic episode as there: observations of exactly 200 tokens, replies of exactly 50, W =
@@ -118,7 +118,7 @@ def no_reasoning_turns(keep: int, m: int) -> list[str]:
 
 
 def _assert_wire_invariants(p: dict, *, cache: bool = True) -> None:
-    """What every Messages body of a replay-off cell holds (PREREG §17.8, pending)."""
+    """What every Messages body of a replay-off cell holds (PREREG §17.8)."""
     assert set(p) == (FIELDS if cache else FIELDS - {"cache_control"})
     assert not any(k in p for k in FORBIDDEN)
     assert p["thinking"] == {"type": "adaptive"}  # display left at the default: omitted

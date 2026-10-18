@@ -17,7 +17,7 @@ episode's first step, with the flattened prompt as that step's observation. F-0'
 * `store: false`, `include: ["reasoning.encrypted_content"]`, the service tier,
   `truncation: "disabled"` and `max_output_tokens` (32,000, D13).
 harnesses/tests/test_payload_snapshots.py asserts the whole body. On the Messages wire
-(`claude-*`, PREREG §17.8, pending; `harnesses.wire.MessagesWire`) it is F-0's first request
+(`claude-*`, PREREG §17.8; `harnesses.wire.MessagesWire`) it is F-0's first request
 there with the prompt as its one user message and without `cache_control` (the prompt is never
 sent again, so a cache write would only cost more); harnesses/tests/test_messages_wire.py
 asserts it.
@@ -103,9 +103,10 @@ the lookup a recoverable cell offers."""
 PILOT_EXPERIMENT = "persistgym_pilot"
 EXPERIMENTS = ("persistgym", PILOT_EXPERIMENT, HAIKU_EXPERIMENT)
 """The control runs in luna's main sweep (`persistgym`, PREREG §4.6 row 1, §17.6), in
-claude-haiku-5-5's replication (`persistgym_haiku`, PREREG §17.8, amendment R8, not yet
-merged: refused until `registered.R8_IN_EFFECT`) and in a pilot (≤ 10 prompts, CLAUDE.md),
-nowhere else."""
+claude-haiku-5-5's replication (`persistgym_haiku`, PREREG §17.8, amendment R8: its main runs
+after `registered.HAIKU_G1_PASSED`, and refused whenever the kill switch
+`registered.R8_IN_EFFECT` is False) and in a pilot (≤ 10 prompts, CLAUDE.md), nowhere
+else."""
 REGISTERED_MODELS = ("gpt-6-luna",)
 """PREREG §3 H3: H3 is luna's. Outside pilots no other model runs the control in luna's
 sweep, and luna's guard (`registered.check_run_settings` with
@@ -113,8 +114,8 @@ sweep, and luna's guard (`registered.check_run_settings` with
 settings (`registered.LUNA_REQUEST`)."""
 EXPERIMENT_MODELS = {"persistgym": REGISTERED_MODELS, HAIKU_EXPERIMENT: (HAIKU_MODEL,)}
 """The models each non-pilot experiment runs the control on: luna's sweep luna only, the
-Haiku replication claude-haiku-5-5 only (R8, pending; `registered.haiku_refusal` holds it to
-R8's settings)."""
+Haiku replication claude-haiku-5-5 only (R8; `registered.haiku_refusal` holds it to R8's
+settings)."""
 REPEAT_INDICES = (0, 1)
 """§2.9: main templates whose seed is divisible by `REPEAT_EVERY` (10) also play
 repeat_index 1; `REPEAT_EVERY` and `REPEAT_SPLIT` are the run matrix's (harnesses/matrix.py),
@@ -554,7 +555,7 @@ def settings_refusal(*, experiment: str, model: str, split: str,
     the main split, the default config and D13's request settings). The control runs only
     under `EXPERIMENTS`; repeat 1 only on main templates (§2.9); and outside pilots only on
     its experiment's models (`EXPERIMENT_MODELS`: in `persistgym` luna's `REGISTERED_MODELS`,
-    H3 is luna's, §3 H3; in `persistgym_haiku` claude-haiku-5-5, R8, pending). --mode and
+    H3 is luna's, §3 H3; in `persistgym_haiku` claude-haiku-5-5, R8). --mode and
     --service-tier are checked by luna's guard (`registered.LUNA_REQUEST`), as for luna's
     main runs, and by R8's (`registered.HAIKU_REQUEST`)."""
     if experiment not in EXPERIMENTS:

@@ -176,8 +176,8 @@ def _echo_match(eps: list[dict]) -> dict:
     """Per harness cell: requests, how many echoed the requested reasoning.context
     (`matched`) and how many echoed the requested reasoning.effort (`effort_matched`, PREREG
     §17.2; None when an episode was run before the runner counted effort echoes). On an API
-    that echoes neither (the Messages API: `context_echoed` null in the record, PREREG §17.8,
-    pending) both are None and `requests` counts the responses."""
+    that echoes neither (the Messages API: `context_echoed` null in the record, PREREG §17.8)
+    both are None and `requests` counts the responses."""
     out: dict[str, dict[str, int | None]] = {}
     for e in eps:
         echo = e.get("echo") or {}
@@ -300,12 +300,12 @@ def is_left_out(e: dict) -> bool:
     The same holds for a prompt of a pilot of H3's single-turn control (`control`
     `single_turn`): it is one call, not an episode of a harness cell, and it would join luna's
     reported pool, showing that arm's reasoning tokens as the difference. And for every pilot
-    episode of claude-haiku-5-5 (PREREG §17.8, amendment R8, pending), whose pool, new and
+    episode of claude-haiku-5-5 (PREREG §17.8, amendment R8), whose pool, new and
     filled one cell at a time, would show each arm's tokens as the difference between
     reports."""
     if e.get("control") == SINGLE_TURN_CONTROL:
         return True
-    # PREREG §17.8 (R8, pending): claude-haiku-5-5's pilots are never pooled either; a new
+    # PREREG §17.8 (R8): claude-haiku-5-5's pilots are never pooled either; a new
     # model's pool would show one arm's tokens after its first pilot run
     if registered.model_family(str(e.get("model"))) == registered.HAIKU_MODEL:
         return True
@@ -368,7 +368,7 @@ def pooled_report(runs: dict[str, list[dict]], *, experiment: str) -> dict:
                                       "and W-n-0, sol at medium on the default config) is "
                                       "never pooled, nor is a pilot of H3's single-turn "
                                       "control (PREREG §3 H3), nor a pilot of "
-                                      "claude-haiku-5-5 (PREREG §17.8, pending); read their "
+                                      "claude-haiku-5-5 (PREREG §17.8); read their "
                                       "costs rows and summary.json")},
             "rule": ("PREREG §11 pilot blinding: validity levels, pooled tokens, errors, "
                      "latency and cost only; no per-arm success or per-arm reasoning tokens")}

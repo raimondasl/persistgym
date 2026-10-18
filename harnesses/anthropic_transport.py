@@ -1,5 +1,5 @@
-"""Paid calls to Anthropic's Messages API (claude-haiku-5-5; PREREG §17.8, amendment R8, not
-yet merged). Guarded exactly as the OpenAI transport is.
+"""Paid calls to Anthropic's Messages API (claude-haiku-5-5; PREREG §17.8, amendment R8).
+Guarded exactly as the OpenAI transport is.
 
 `AnthropicMessagesTransport` is a `harnesses.paid_transport.PaidTransport`: the same guard
 before any client exists (the paid-run lock, PERSISTGYM_ALLOW_PAID=1, the approval line on
@@ -17,7 +17,7 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   built, a client that holds any custom header refuses too (`client_header_refusal`). It
   checks only that the key's variable is set and not empty; the SDK reads the key from the
   environment itself, and this module never keeps, prints, logs or passes on its value.
-* **The model and the approval** (R8, PREREG §17.8, pending). Before the guard it refuses a
+* **The model and the approval** (R8, PREREG §17.8). Before the guard it refuses a
   model other than claude-haiku-5-5 (or a dated snapshot of it; `registered.model_family`).
   After the guard it refuses unless the approved block lists R8's experiment
   `persistgym_haiku` (`registered.HAIKU_EXPERIMENT`): only an approval line written for the

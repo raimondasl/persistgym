@@ -796,3 +796,11 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
   - the summarizer failures of R7.
   - The compaction timing of the other runs has not been tabulated.
 - **What it will not show:** a causal effect of compaction. Compactions come at fixed context sizes, which are also the points where play has gone on longest, so time-into-the-run is confounded with time-since-compaction. There are few runs: about 8 S1/S2 runs and 4 S4 runs.
+
+## 25. Amendment A10 (2026-10-18): a replication of H1 and H3 on claude-haiku-5-5
+**Why.** PersistGym's H1 and H3 rest on one model, gpt-6-luna; sol's replication was dropped for budget (A7). The researcher has about $190 of Anthropic API credit that must be used by 2026-10-25. claude-haiku-5-5 is priced exactly like luna at list ($0.10 input, $0.01 cache read, $0.125 cache write, $0.50 output per MTok for prompts up to 100k tokens), so luna's ledger predicts its cost, and it brings a second provider's model to the probe. ARC runs on a Claude model were judged not worth this budget: one or two Opus-class runs would be an anecdote, not a decomposition.
+- **The change:** `PREREG.md` §17.8 (amendment R8) registers the replication: Haiku plays luna's episodes (W in project tokens, unchanged) in F-0 and W-0 on all 8 task cells, with the restated-at-need and single-turn controls, replay off, at effort medium; W-n-0 and T are set by a pre-registered size rule from the pilots' costs.
+- **Status:** a replication in R4's sense, outside luna's Holm family, never called "supported"; luna stays primary.
+- **Budget:** block `4-haiku`, $180, phase 1a (which has spent $91.90 of $500). After R8's runs no further paid run is made without a new amendment (A7 otherwise stands).
+- **Timing:** pilots and the validity gate first, then the researcher's G1 decision, then the main runs; results targeted for 2026-10-23/24, for the AGENT 2027 paper and an arXiv v2, not the preprint's v1.
+- **What it does not show:** a model comparison. The two models differ in provider, training, API and serving path at once; differences are described, not tested.

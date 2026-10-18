@@ -1,4 +1,4 @@
-"""`count-tokens` (harnesses/token_count.py; PREREG §17.8, pending): the largest requests of
+"""`count-tokens` (harnesses/token_count.py; PREREG §17.8): the largest requests of
 each R8 cell and task cell, rebuilt with the fake model, sent to the free token-counting
 endpoint only. The client is a stub that counts characters; `messages.create` and
 `messages.stream` fail the test, and no test sets a real key. The volume is the small one, so

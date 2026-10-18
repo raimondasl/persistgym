@@ -11,7 +11,7 @@ read. Two wires exist, and the model string alone chooses one (`wire_for`), so
   (harnesses/tests/test_payload_snapshots.py) hold its bodies byte for byte.
 * `MessagesWire` (`claude-*`): Anthropic's Messages API, `POST /v1/messages`, for the
   replay-off cells F-0, W-0 and W-n-0 and the single-turn control only (PREREG §17.8,
-  amendment R8, not yet merged; harnesses/DESIGN.md §13). It refuses every cell that replays
+  amendment R8; harnesses/DESIGN.md §13). It refuses every cell that replays
   reasoning and every summary cell (`check_cell`).
 
 Provider-neutral, and the same on both wires: the history and loss policies, the notes
@@ -42,7 +42,7 @@ Echoes: the Responses API echoes the reasoning settings it applied and the runne
 on every response. The Messages API echoes neither effort nor a reasoning context, so
 `MessagesWire.echo` reports them as not echoed (None): never a mismatch, never an
 exclusion. Its substitute is the request-side check above, on every body before it is sent
-(PREREG §17.8, pending).
+(PREREG §17.8).
 """
 
 from __future__ import annotations
@@ -209,7 +209,7 @@ class ResponsesWire:
 
 class MessagesWire:
     """Anthropic's Messages API, for the replay-off cells and the single-turn control only
-    (module docstring; PREREG §17.8, pending)."""
+    (module docstring; PREREG §17.8)."""
 
     api = MESSAGES_API
     provider = "anthropic"

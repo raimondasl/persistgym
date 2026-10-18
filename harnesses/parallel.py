@@ -58,14 +58,18 @@ it goes only if
         <= planned spend
 
 and otherwise waits for a call in flight to return (or for the run to stop). The most a call
-can cost is its `max_output_tokens` (D13: 32,000 on every request) at the output price plus
-one input token per byte of its JSON body at the cache-write price, at the standard tier's
-list prices (`CallGate.bound_usd`); a request without a cap counts as unbounded, so it goes
-only alone. So the calls that overlap can never take the run past its planned spend, and a
-parallel run ends above it by at most the one call that went alone, as a sequential run can.
+can cost is its `max_output_tokens` (D13: 32,000 on every request; `max_tokens` on the
+Messages wire) at the output price plus one input token per byte of its JSON body at the
+cache-write price, at the standard tier's list prices, on the dearest card where the price
+depends on prompt size (claude-haiku-5-5's card above 100,000 tokens) (`CallGate.bound_usd`);
+a request without a cap counts as unbounded, so it goes only alone. So the calls that
+overlap can never take the run past its planned spend, and a parallel run ends above it by at
+most the one call that went alone, as a sequential run can.
 This rests on one assumption: that a request's input tokens are no more than the bytes of its
-JSON body, which holds for text (an o200k_base token is at least one byte) and is assumed for
-replayed reasoning items, whose `encrypted_content` carries those tokens. The gate waits only
+JSON body, which holds for text (an o200k_base token is at least one byte), is assumed for
+Claude's tokenizer on the Messages wire (`harnesses count-tokens` measures its counts against
+o200k_base) and is assumed for replayed reasoning items, whose `encrypted_content` carries
+those tokens. The gate waits only
 when the planned spend has less room left than the bounds of the calls that would overlap, so
 it changes the timing of calls near the end of a run, never a payload.
 
@@ -74,7 +78,7 @@ the run and waits for the calls in flight to return, so that they are recorded; 
 then end `RUN_STOPPED` and everything is written as above. A second Ctrl+C stops the wait:
 the episodes still in flight are abandoned (`ParallelPlay.abandoned`), their transcript files
 stay under `inflight/`, and the paid transport, finalized with calls in flight, keeps the
-paid-run lock with the reason (`OpenAIResponsesTransport.finalize`), since those calls' usage
+paid-run lock with the reason (`PaidTransport.finalize`), since those calls' usage
 is not in costs.csv.
 """
 
@@ -92,6 +96,7 @@ from typing import Any
 
 from common.costs import spend_usd
 from harnesses.pricing import CACHE_WRITE_MULTIPLIER, UsageLedger, price_for
+from harnesses.wire import wire_for
 
 MAX_PARALLEL = 16
 """PREREG §4.6, §0.3 line 15: a run plays at most 16 episodes at once."""
@@ -158,12 +163,21 @@ class CallGate:
             "in flight and this one can cost <= planned spend; the most a call can cost is "
             "its max_output_tokens at the output price plus one input token per byte of its "
             "JSON body at the cache-write price, at list prices")
+    RULE_MESSAGES = ("a call goes alone, or with others in flight only if spent + the most the "
+                     "calls in flight and this one can cost <= planned spend; the most a call "
+                     "can cost is its max_tokens at the output price plus one input token per "
+                     "byte of its JSON body at the cache-write price, at list prices on the "
+                     "dearest card of a price that depends on prompt size (claude-haiku-5-5: "
+                     "its card for prompts over 100,000 tokens)")
+    """`RULE` on the Messages wire (`harnesses.wire.MessagesWire`), whose cap is `max_tokens`."""
 
     def __init__(self, planned_usd: float, spent: Callable[[], float], model: str,
                  stop: RunStop):
         self.planned_usd = float(planned_usd)
         self._spent = spent
         self.price = price_for(model)
+        self.wire = wire_for(model)
+        self.rule = self.RULE if self.wire.echoes_reasoning else self.RULE_MESSAGES
         self.stop = stop
         self._cond = threading.Condition()
         self._in_flight: dict[int, float] = {}  # ticket -> the most that call can cost
@@ -174,15 +188,17 @@ class CallGate:
 
     def bound_usd(self, payload: dict) -> float:
         """The most one call with this payload can cost, at list prices (no Flex discount):
-        its `max_output_tokens` at the output price, plus one input token per byte of its
-        JSON body at the cache-write price (more than the uncached and cached prices).
-        Unbounded (inf) without a positive integer `max_output_tokens`."""
-        cap = payload.get("max_output_tokens")
+        its output cap (`max_output_tokens`; `max_tokens` on the Messages wire) at the output
+        price, plus one input token per byte of its JSON body at the cache-write price (more
+        than the uncached and cached prices), on the dearest card of a price that depends on
+        prompt size (`Price.worst_card`: claude-haiku-5-5's card above 100,000 tokens).
+        Unbounded (inf) without a positive integer cap."""
+        cap = self.wire.cap(payload)
         if isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0:
             return math.inf
         n_bytes = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
-        return (n_bytes * self.price.input * CACHE_WRITE_MULTIPLIER
-                + cap * self.price.output) / 1e6
+        inp, _, out = self.price.worst_card()
+        return (n_bytes * inp * CACHE_WRITE_MULTIPLIER + cap * out) / 1e6
 
     def enter(self, payload: dict) -> int:
         """Wait until this call may go (or raise `RunStopped` once the run stops); returns
@@ -216,7 +232,7 @@ class CallGate:
 
     def info(self) -> dict:
         with self._cond:
-            return {"rule": self.RULE, "calls": self.calls, "calls_waited": self.calls_waited,
+            return {"rule": self.rule, "calls": self.calls, "calls_waited": self.calls_waited,
                     "peak_calls_in_flight": self.peak_calls_in_flight}
 
 

@@ -35,7 +35,7 @@ REQUIRED = [
     "tokens", "cost_usd", "raw_transcript_path",
 ]
 
-SDKS = ["openai", "google-genai", "arc-agi", "tiktoken"]
+SDKS = ["openai", "anthropic", "google-genai", "arc-agi", "tiktoken"]
 GIT_KEYS = ("git_commit", "git_dirty")
 # subprocess.CREATE_NO_WINDOW, which exists only on Windows
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)

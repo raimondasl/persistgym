@@ -175,10 +175,18 @@ def _cost(eps: list[dict]) -> dict:
 def _echo_match(eps: list[dict]) -> dict:
     """Per harness cell: requests, how many echoed the requested reasoning.context
     (`matched`) and how many echoed the requested reasoning.effort (`effort_matched`, PREREG
-    §17.2; None when an episode was run before the runner counted effort echoes)."""
+    §17.2; None when an episode was run before the runner counted effort echoes). On an API
+    that echoes neither (the Messages API: `context_echoed` null in the record, PREREG §17.8,
+    pending) both are None and `requests` counts the responses."""
     out: dict[str, dict[str, int | None]] = {}
     for e in eps:
         echo = e.get("echo") or {}
+        if "context_echoed" in echo and echo["context_echoed"] is None:
+            d = out.setdefault(e["harness_cell"], {"requests": 0, "matched": None,
+                                                   "effort_matched": None})
+            d["requests"] += sum((echo.get("models_returned") or {}).values())
+            d["matched"] = d["effort_matched"] = None
+            continue
         want = str(echo.get("context_requested"))
         got = echo.get("context_echoed") or {}
         d = out.setdefault(e["harness_cell"], {"requests": 0, "matched": 0,

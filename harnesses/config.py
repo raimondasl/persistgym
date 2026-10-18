@@ -29,7 +29,9 @@ ARC_SUMMARY_BRIDGE_TEMPLATE = (
 
 REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 REASONING_MODES = ("standard", "pro")
-SERVICE_TIERS = ("auto", "default", "flex", "scale", "priority", "fast", "ultrafast")
+SERVICE_TIERS = ("auto", "default", "flex", "scale", "priority", "fast", "ultrafast", "standard")
+"""OpenAI's tiers, and "standard", the only tier a run on Anthropic's Messages API records (it
+sends none; `harnesses.wire.MESSAGES_SERVICE_TIER`). Each wire refuses the other's."""
 ENCRYPTED_REASONING = "reasoning.encrypted_content"
 DEFAULT_MAX_OUTPUT_TOKENS = 32_000
 """PREREG D13 (decided 2026-10-01; §6: luna and sol requests carry `max_output_tokens: 32000`):

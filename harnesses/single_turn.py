@@ -16,7 +16,11 @@ episode's first step, with the flattened prompt as that step's observation. F-0'
 * `reasoning`: the configured effort and mode, and F-0's `reasoning.context`, `current_turn`;
 * `store: false`, `include: ["reasoning.encrypted_content"]`, the service tier,
   `truncation: "disabled"` and `max_output_tokens` (32,000, D13).
-harnesses/tests/test_payload_snapshots.py asserts the whole body.
+harnesses/tests/test_payload_snapshots.py asserts the whole body. On the Messages wire
+(`claude-*`, PREREG §17.8, pending; `harnesses.wire.MessagesWire`) it is F-0's first request
+there with the prompt as its one user message and without `cache_control` (the prompt is never
+sent again, so a cache write would only cost more); harnesses/tests/test_messages_wire.py
+asserts it.
 
 **One call per prompt**, scored as the need step of an episode is (`run_prompt`):
 * a response whose echoed `reasoning.context` or `reasoning.effort` differs from the request
@@ -67,18 +71,17 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-import openai
-
 from common import runmeta
 from harnesses import blinding, runner
 from harnesses.cells import get_cell
 from harnesses.config import HarnessConfig
-from harnesses.items import output_text
 from harnesses.matrix import REPEAT_EVERY, REPEAT_SPLIT
-from harnesses.openai_transport import BudgetExceeded
+from harnesses.paid_transport import BudgetExceeded
 from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
+from harnesses.pricing import add_counts
 from harnesses.registered import model_family
 from harnesses.session import HarnessSession, Request
+from harnesses.wire import wire_for
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION, GeneratorConfig
 from persistgym.controls import reply_action_class, score_single_turn, single_turn_control
 from persistgym.episode import ALL_CELLS, TaskCell
@@ -191,7 +194,7 @@ def build_request(control: dict, cfg: HarnessConfig) -> Request:
     """F-0's first step request with the control's prompt as its observation (module
     docstring): the request the control sends."""
     session = HarnessSession(get_cell(SETTINGS_CELL), control["system_prompt"], cfg,
-                             W_tokens=None, count_system=False)
+                             W_tokens=None, count_system=False, cache_prefix=False)
     session.observe(control["prompt"])
     return session.next_request()
 
@@ -255,6 +258,7 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
                     generator_config_hash=prompt.generator_config_hash)
     seen = {k: Counter() for k in ("context", "effort", "model", "tier")}
     stop_on = {"context": cfg.stop_on_context_mismatch, "effort": cfg.stop_on_effort_mismatch}
+    wire = wire_for(cfg.model)
     try:
         req = build_request(c, cfg)
         started = runner.CLOCK()
@@ -272,8 +276,9 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
                       "turn": req.turn, "pending_step": prompt.need_step,
                       "is_lookup_result": False, "trace": req.trace, "info": req.info,
                       "echo": echo, "payload": req.payload, "response": response})
-        # CLAUDE.md (context) and PREREG §17.2 (effort), as in runner.run_episode
-        mismatched = [k for k in runner.ECHO_MISMATCH_EXITS if not echo[f"{k}_ok"]]
+        # CLAUDE.md (context) and PREREG §17.2 (effort), as in runner.run_episode; a setting
+        # the provider does not echo (None: the Messages API) never mismatches
+        mismatched = [k for k in runner.ECHO_MISMATCH_EXITS if echo[f"{k}_ok"] is False]
         if mismatched:
             run.excluded = True
             run.exclusion_reason = "; ".join(
@@ -284,18 +289,19 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
             if stop is not None:
                 run.exit_reason = runner.ECHO_MISMATCH_EXITS[stop]
                 return run
-        reply = output_text(response)
+        reply = wire.text(response)
         # the format check (summary.json; its need-verb count bounds successes from above):
         # incomplete replies are classed on their partial text too, so the classes' total
         # does not count them apart
         run.reply_action_class = reply_action_class(c, reply)
-        if response.get("status") == "incomplete":
-            # PREREG §6, §13 (D13): an invalid answer, whatever the partial text says
-            details = response.get("incomplete_details") or {}
+        status, reason = wire.status(response)
+        if status == "incomplete":
+            # PREREG §6, §13 (D13): an invalid answer, whatever the partial text says (on the
+            # Messages API a refusal too: `reason` refusal:<category>)
             run.need_outcome = "incomplete"
             run.incomplete.append({
-                "reason": details.get("reason"),
-                "max_output_tokens": req.payload.get("max_output_tokens"),
+                "reason": reason,
+                "max_output_tokens": wire.cap(req.payload),
                 "output_tokens": (response.get("usage") or {}).get("output_tokens"),
                 "reply_chars": len(reply)})
         else:
@@ -306,17 +312,13 @@ def run_prompt(prompt: Prompt, cfg: HarnessConfig, transport: runner.Transport,
             run.need_action = score["action"]
     except BudgetExceeded as e:
         run.exit_reason, run.error = "COST_CAP", str(e)
-    except openai.OpenAIError as e:  # API errors after retries, rejected payloads
+    except runner.API_ERRORS as e:  # API errors after retries, rejected payloads
         run.exit_reason, run.error = "API_ERROR", f"{type(e).__name__}: {e}"
     except RunStopped as e:  # parallel play: the run stopped before this prompt's call
         run.exit_reason, run.error = RUN_STOPPED, str(e)
     finally:
-        run.echo = {"context_requested": get_cell(SETTINGS_CELL).reasoning_context,
-                    "context_echoed": dict(seen["context"]),
-                    "effort_requested": cfg.reasoning_effort,
-                    "effort_echoed": dict(seen["effort"]),
-                    "models_returned": dict(seen["model"]),
-                    "service_tiers_returned": dict(seen["tier"])}
+        run.echo = runner.episode_echo(wire, get_cell(SETTINGS_CELL), cfg, seen["context"],
+                                       seen["effort"], seen["model"], seen["tier"])
     return run
 
 
@@ -479,15 +481,17 @@ def _write_meta(out_dir: Path, raw_path: Path, prompts: list[Prompt], runs: list
                 parallel_path: Path | None, git: dict) -> dict:
     """Write meta.json, with the fields `runner._write_meta` writes for a harness run; its
     config names the control and the harness cell whose settings it sends."""
+    wire = wire_for(cfg.model)
     echoed: Counter = Counter()
     efforts: Counter = Counter()
     models: Counter = Counter()
-    usage: Counter = Counter()
+    usage: dict = {}
     for r in runs:
-        echoed.update(r.echo.get("context_echoed", {}))
-        efforts.update(r.echo.get("effort_echoed", {}))
+        echoed.update(r.echo.get("context_echoed") or {})
+        efforts.update(r.echo.get("effort_echoed") or {})
         models.update(r.echo.get("models_returned", {}))
-        usage.update(r.usage)
+        add_counts(usage, r.usage)
+    echo = runner.meta_echo(wire, get_cell(SETTINGS_CELL).reasoning_context, echoed, efforts)
     listed = [r.cost_usd_list for r in runs]
     billed = [r.cost_usd_billed_est for r in runs]
     gen_cfgs = {p.generator_config_hash: p.generator_config for p in prompts}
@@ -501,7 +505,7 @@ def _write_meta(out_dir: Path, raw_path: Path, prompts: list[Prompt], runs: list
     if templates is not None:
         config["templates"] = templates
     tokens = dict(usage)
-    extra = {}
+    extra = runner.wire_meta(wire, transport)
     if blinded:
         tokens = blinding.blinded_tokens(tokens)
         parallel = blinding.blinded_parallel(parallel)
@@ -513,10 +517,12 @@ def _write_meta(out_dir: Path, raw_path: Path, prompts: list[Prompt], runs: list
     path = runmeta.write_meta(
         out_dir, experiment=experiment, run_id=run_id, cell_or_config=RECORD_CELL,
         config=config, model_requested=cfg.model, model_returned=sorted(models),
-        reasoning_effort=cfg.reasoning_effort, reasoning_effort_echoed=dict(efforts),
+        reasoning_effort=cfg.reasoning_effort,
+        reasoning_effort_echoed=echo["reasoning_effort_echoed"],
         reasoning_mode=cfg.reasoning_mode,
-        reasoning_context_requested=get_cell(SETTINGS_CELL).reasoning_context,
-        reasoning_context_echoed=dict(echoed), service_tier_requested=cfg.service_tier,
+        reasoning_context_requested=echo["reasoning_context_requested"],
+        reasoning_context_echoed=echo["reasoning_context_echoed"],
+        service_tier_requested=cfg.service_tier,
         template_id=sorted({p.control["template_id"] for p in prompts}),
         repeat_index=repeat_index,
         seeds={"template_seeds": sorted({p.template_seed for p in prompts})},

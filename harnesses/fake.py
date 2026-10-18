@@ -26,6 +26,19 @@ parallel (harnesses/parallel.py) then get the responses they get when played one
 whatever the order of the calls. The default, `ids="call_order"`, numbers calls in the order
 they arrive, which the payload snapshot tests label. `send` may be called from several
 threads at once.
+
+For a `claude-*` model (the Messages wire, `harnesses.wire`) the response is shaped like the
+Messages API's JSON instead, and the payload must first pass the wire's request-side check
+(`MessagesWire.check_payload`, with any of its efforts and caps; the paid transport pins
+both): a thinking block with empty text and a fake signature (`fake-sig-<tag>`, as Haiku 5.5
+returns thinking by default, display omitted), then a text block holding the reply (none if
+the reply is empty), `stop_reason`, the returned model string and usage with the cache fields
+and `output_tokens_details.thinking_tokens` (left out with
+`report_thinking_tokens=False`). No reasoning setting is echoed. `status_fn` may return
+`completed` (`end_turn`), `incomplete` (`max_tokens`, the whole cap in `output_tokens`) or
+`refusal` (`stop_details.category` `refusal_category`). Prompt caching is faked from the
+payload alone: with `cache_control`, everything before the last assistant turn and the
+observation is a cache read and the rest a cache write; without it, all is uncached input.
 """
 
 from __future__ import annotations
@@ -38,6 +51,7 @@ from collections.abc import Callable
 
 from harnesses.config import ARC_SUMMARY_REQUEST_PROMPT
 from harnesses.items import item_text
+from harnesses.wire import MESSAGES, visible_text, wire_for
 from persistgym import tokens
 
 ReplyFn = Callable[[dict, int], str]
@@ -76,7 +90,9 @@ class FakeModel:
                  reasoning_tokens_fn: Callable[[dict, int], int] | None = None,
                  summary_request_prompt: str = ARC_SUMMARY_REQUEST_PROMPT,
                  status_fn: Callable[[dict, str], str] | None = None,
-                 ids: str = "call_order"):
+                 ids: str = "call_order",
+                 report_thinking_tokens: bool = True,
+                 refusal_category: str | None = "general_harms"):
         if ids not in ("call_order", "payload"):
             raise ValueError(f"ids must be 'call_order' or 'payload', got {ids!r}")
         self.ids = ids
@@ -91,15 +107,28 @@ class FakeModel:
         self.reasoning_tokens_fn = reasoning_tokens_fn
         self.summary_request_prompt = summary_request_prompt
         self.status_fn = status_fn
+        self.report_thinking_tokens = report_thinking_tokens
+        self.refusal_category = refusal_category
         self.calls: list[dict] = []  # deep copies of every payload received
         self.n_step = 0
         self.n_summary = 0
 
+    @staticmethod
+    def _messages(payload: dict) -> list[dict]:
+        """The payload's input items (`input`; `messages` on the Messages wire)."""
+        key = "messages" if wire_for(payload.get("model")) is MESSAGES else "input"
+        return payload.get(key) or []
+
     def is_summary(self, payload: dict) -> bool:
-        last = payload["input"][-1] if payload.get("input") else {}
+        items = self._messages(payload)
+        last = items[-1] if items else {}
         return last.get("role") == "user" and item_text(last) == self.summary_request_prompt
 
     def send(self, payload: dict) -> dict:
+        if wire_for(payload.get("model")) is MESSAGES:
+            # the request-side check every Messages body passes before the paid transport
+            # sends it (that one also pins the registered effort and the 32,000 cap)
+            MESSAGES.check_payload(payload)
         summary = self.is_summary(payload)
         snapshot = copy.deepcopy(payload)
         with self._lock:
@@ -116,10 +145,12 @@ class FakeModel:
             digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False)
                                     .encode("utf-8")).hexdigest()[:16]
             tag = f"{kind}{digest}"
-            n = sum(1 for i in payload.get("input") or [] if i.get("role") == "user") - 1
+            n = sum(1 for i in self._messages(payload) if i.get("role") == "user") - 1
         else:
             tag = f"{kind}{n}"
         text = self.summary_fn(payload, n) if summary else self.reply_fn(payload, n)
+        if wire_for(payload.get("model")) is MESSAGES:
+            return self._messages_response(payload, tag, n, text)
         req = payload.get("reasoning") or {}
         echo = (self.echo_context(payload, k) if callable(self.echo_context)
                 else req.get("context") if self.echo_context == "request" else self.echo_context)
@@ -171,4 +202,55 @@ class FakeModel:
                 "output_tokens_details": {"reasoning_tokens": reasoning_tokens},
                 "total_tokens": visible + rendered + out_tokens,
             },
+        }
+
+    def _messages_response(self, payload: dict, tag: str, n: int, text: str) -> dict:
+        """A Messages API response (module docstring)."""
+        status = self.status_fn(payload, tag) if self.status_fn else "completed"
+        thinking = (self.reasoning_tokens_fn(payload, n) if self.reasoning_tokens_fn
+                    else self.reasoning_tokens)
+        details = None
+        if status == "incomplete":
+            # stopped at max_tokens: the whole cap is used, thinking included; an empty text
+            # means it stopped while thinking (no text block at all)
+            stop = "max_tokens"
+            cap = payload.get("max_tokens")
+            if cap is not None:
+                thinking = max(cap - tokens.count(text), 0)
+        elif status == "refusal":
+            stop = "refusal"
+            details = {"type": "refusal", "category": self.refusal_category,
+                       "explanation": None}
+        else:
+            stop = "end_turn"
+        content = [{"type": "thinking", "thinking": "", "signature": f"fake-sig-{tag}"}]
+        if text:
+            content.append({"type": "text", "text": text})
+        msgs = payload["messages"]
+        visible = tokens.count(visible_text(payload))
+        if "cache_control" not in payload:
+            plain, read, write = visible, 0, 0
+        else:
+            prefix = (tokens.count(payload["system"] + "".join(item_text(m) for m in msgs[:-2]))
+                      if len(msgs) > 2 else 0)
+            plain, read, write = 0, prefix, max(visible - prefix, 0)
+        out_tokens = tokens.count(text) + thinking
+        usage = {"input_tokens": plain, "cache_creation_input_tokens": write,
+                 "cache_read_input_tokens": read,
+                 "cache_creation": {"ephemeral_5m_input_tokens": write,
+                                    "ephemeral_1h_input_tokens": 0},
+                 "output_tokens": out_tokens, "service_tier": "standard",
+                 "inference_geo": "global"}
+        if self.report_thinking_tokens:
+            usage["output_tokens_details"] = {"thinking_tokens": thinking}
+        return {
+            "id": f"msg_{tag}",
+            "type": "message",
+            "role": "assistant",
+            "model": payload.get("model", "") + self.model_suffix,
+            "content": content,
+            "stop_reason": stop,
+            "stop_sequence": None,
+            "stop_details": details,
+            "usage": usage,
         }

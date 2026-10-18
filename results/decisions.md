@@ -1081,3 +1081,83 @@ In R8's order, one at a time, in the PersistGym stream, each with `--parallel 16
 
 - **Before each run,** Claude sums block `4-haiku`'s rows. If the run's planned spend would take the block past $180, Claude stops and asks the researcher.
 - **After the runs:** the analysis, an independent re-derivation of every reported number, and the report. Results go into the AGENT paper and an arXiv v2, not v1.
+
+## 2026-10-18: Haiku's sweep closed (R8); its re-runs and continuations; the power ruling, made before any result is read
+**Block `4-haiku`'s main runs are complete.**
+- **Cost:** 13 runs, $124.71 billed, against the size record's forecast of $122.97. The block's 19 rows total $129.69 of its $180 limit (`results/costs.csv`).
+- **Served:** every call on the standard tier and the global geo. The largest prompt was 62,379 Haiku tokens, and no call was over 100,000.
+- **What was read:** the run folders and costs rows are committed in this pull request. Claude read only run and episode endings, counts, costs, served tiers, geos, prompt sizes and refusal counts. No one has read any success outcome of the sweep.
+- **Repeat 0:** 1,600 episodes per harness cell and 800 single-turn prompts.
+
+  | Run | Run ID | Ending | Played |
+  |---|---|---|---|
+  | F-0 | `20261018T141157Z-F-0-claude-haiku-5-5` | `COMPLETED` | 1,600 |
+  | W-0 | `20261018T144829Z-W-0-claude-haiku-5-5` | `ABORTED_API_ERRORS` (below) | templates 0-126, with parts of 127-129 |
+  | W-0, §13 re-run of template 114 | `20261018T154817Z-W-0-claude-haiku-5-5` | `COMPLETED` | 8 (template 114) |
+  | W-0, continuation (DESIGN §7.9) | `20261018T154918Z-W-0-claude-haiku-5-5` | `COMPLETED` | 584 (templates 127-199) |
+  | F-0 restated | `20261018T162133Z-F-0-claude-haiku-5-5` | `COMPLETED` | 1,600 |
+  | Single-turn | `20261018T165717Z-single-turn-claude-haiku-5-5` | `ABORTED_API_ERRORS` (below) | templates 0-88 |
+  | Single-turn, §13 re-run of template 81 | `20261018T225735Z-single-turn-claude-haiku-5-5` | `COMPLETED` | 4 (template 81) |
+  | Single-turn, §13 re-run of template 84 | `20261018T225747Z-single-turn-claude-haiku-5-5` | `COMPLETED` | 4 (template 84) |
+  | Single-turn, continuation (DESIGN §7.9) | `20261018T225838Z-single-turn-claude-haiku-5-5` | `COMPLETED` | 444 (templates 89-199) |
+
+- **Repeat 1:** 160 episodes per harness cell and 80 single-turn prompts; every run ended `COMPLETED`.
+
+  | Run | Run ID |
+  |---|---|
+  | F-0 | `20261018T230235Z-F-0-claude-haiku-5-5-repeat1` |
+  | W-0 | `20261018T230709Z-W-0-claude-haiku-5-5-repeat1` |
+  | F-0 restated | `20261018T231530Z-F-0-claude-haiku-5-5-repeat1` |
+  | Single-turn | `20261018T231953Z-single-turn-claude-haiku-5-5-repeat1` |
+
+**The two aborts.**
+- **The cause** was the same both times: HTTP 429 from the organization's rate limit of 10,000,000 input tokens per minute for claude-haiku-5-5.
+  - At `--parallel 16`, W-0 sent about that much. Its window keeps changing the prompt's prefix, so most of its input is uncached. F-0's input, by contrast, is about 93% cache reads, which do not count toward the limit.
+  - The single-turn control sends each prompt once, uncached (about 48,000 tokens), and its calls return fast. At 16 in parallel it played 356 prompts in 45 seconds.
+- **The researcher was told** the cause and the plan before anything was continued (DESIGN §7.9):
+  - for W-0, "Yes" (2026-10-18);
+  - for the single-turn control, "go ahead" (2026-10-18).
+- **What followed.** Each run's stopped episodes were continued from the first template the stop left unfinished (DESIGN §7.9). Each episode that had ended `API_ERROR` after the transport's retries got its one §13 re-run, playing its whole template.
+  - W-0's continuation and repeat-1 run played at `--parallel 8`.
+  - The single-turn control's re-runs, continuation and repeat-1 run played at `--parallel 3`.
+  - R8 allows up to 16 (§4.6). None of these runs met a rate-limit retry.
+- **The links,** for `analysis.persistgym_h1h3 --rerun` (DESIGN §7.8):
+  - `20261018T154817Z-W-0-claude-haiku-5-5=20261018T144829Z-W-0-claude-haiku-5-5`
+  - `20261018T154918Z-W-0-claude-haiku-5-5=20261018T144829Z-W-0-claude-haiku-5-5`
+  - `20261018T225735Z-single-turn-claude-haiku-5-5=20261018T165717Z-single-turn-claude-haiku-5-5`
+  - `20261018T225747Z-single-turn-claude-haiku-5-5=20261018T165717Z-single-turn-claude-haiku-5-5`
+  - `20261018T225838Z-single-turn-claude-haiku-5-5=20261018T165717Z-single-turn-claude-haiku-5-5`
+- **Completeness,** checked by DESIGN §7.8's rule on endings alone:
+  - every key of every cell, variant and repeat has a final record, and no key has two `API_ERROR`s;
+  - in W-0 at repeat 0, 26 records do not count: 2 `API_ERROR`, 15 `RUN_STOPPED`, and 9 later duplicates of keys already final;
+  - in the single-turn control at repeat 0, 8 records do not count: 2 `API_ERROR` and 6 later duplicates.
+
+**Refusals.** Haiku refused some steps with `stop_reason: "refusal"`, all category `bio`. The scenarios include biobank-style records. At repeat 0 they touched 22 of F-0's 1,600 episodes, 26 of W-0's records over its three runs, and 17 of F-0 restated's 1,600, about 1.1% to 1.6% per harness cell, concentrated in a few templates. One single-turn prompt was refused. None were refused at repeat 1. R8 registers them as content failures: they score 0 and are not re-run. The analysis counts them per cell, with their category.
+
+**W-n-0** is "pre-registered, not run (budget)", by the size record above.
+
+**The sweep is closed.** No continuation and no §13 re-run is pending or will be made. This entry is the sweep's closing entry: the `--sweep-closed` reference of `analysis.persistgym_h1h3 --model claude-haiku-5-5`.
+
+**The power ruling** (proposed by Claude; the researcher's merge adopts it).
+- **The problem.** R8 says power at the chosen T is simulated "using luna's assumptions (2026-10-10) re-estimated from Haiku's validity runs". Haiku's validity runs can re-estimate only part of them.
+  - **F-0's success.** luna's levels rest on its restated validity run, 160/160. Haiku's is also 160/160, so the levels are unchanged: 0.95 observed-far and 0.90 derived-NR-far (pessimistic: 0.85 and 0.80).
+  - **W-0's no-memory success on observed-far-NR.** luna's 0.12 was its withheld run's rate, 19/160, and its pessimistic 0.18 that rate's 95% Wilson upper end. Haiku's withheld run is 0/160. A rate of exactly 0 has no logit, so the template intercepts cannot be added to it.
+    - **Primary: 0.023,** the 95% Wilson upper end of 0/160.
+    - **Pessimistic: luna's 0.18,** kept as the conservative bound.
+  - **The template SD.** luna's 0.92 was the ML estimate from its withheld run. Haiku's runs do not identify it, since every restated episode succeeded and every withheld one failed (`validity_template_sd`).
+    - **Primary: luna's 0.92. Pessimistic: 0, as luna's.**
+    - The power table also reports SD 0.5, 1, 1.5 and 2 at T = 200 as sensitivity.
+- **Settings.** T = 200 only, with luna's 2,000 simulated sweeps, 10,000 bootstrap resamples and seed. Power is read at one-sided α = 0.05 unadjusted (`P_h*_unadjusted`), as R8 reports Haiku's tests.
+- **The command:** `uv run python -m analysis.power_sim --part luna --reps 2000 --luna-boot 10000 --luna-templates 200 --luna-sensitivity-templates 200 --luna-sensitivity-sd 0.5,1,1.5,2 --luna-names primary,pessimistic --luna-p-f0-obs 0.95,0.85 --luna-p-f0-der 0.9,0.8 --luna-p-w0-nr 0.023,0.18 --luna-template-sd 0.92,0 --luna-validity-glob 'results/persistgym_validity/*-F-0-claude-haiku-5-5/episodes.jsonl'`.
+- **The alternative,** not proposed: report power as unavailable, since the template SD cannot be re-estimated.
+- **Power does not set T,** and it is reported only.
+
+**Next.** Once this pull request is merged, Claude:
+1. runs the analysis once on the sweep. It is FINAL: the 13 runs above with `--run`, the five links with `--rerun`, this entry as `--sweep-closed`, and the power table above as `--power-path`.
+2. commits the output.
+3. has every reported number re-derived independently.
+4. reports to the researcher.
+
+Results go into the AGENT paper and an arXiv v2, not v1.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts the power ruling and closes the sweep. It adds no spending approval. The pull request is $0.

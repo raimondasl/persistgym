@@ -204,9 +204,11 @@ and H3 on Anthropic's Messages API (harnesses/wire.py, harnesses/anthropic_trans
 model string chooses the API). `registered.R8_IN_EFFECT` is False, so `run` and `single-turn`
 refuse every claude-haiku-5-5 paid run before the paid-run lock (`registered.haiku_refusal`),
 its pilots and validity run included, and the probes refuse every model off OpenAI's
-Responses API. This works now, at $0:
+Responses API. These work now, at $0 (the second needs ANTHROPIC_API_KEY, and only Anthropic's
+free token-counting endpoint is called):
     uv run python -m harnesses dry-run --model claude-haiku-5-5 --cell W-0 \
         --task-cell observed-nonrec-far
+    uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 10
 Once R8 is in effect (with --approved-block and amounts from its approval line), the rules
 `haiku_refusal` holds these runs to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
@@ -252,6 +254,7 @@ from harnesses import (
     reasoning_check,
     registered,
     single_turn,
+    token_count,
 )
 from harnesses.anthropic_transport import AnthropicMessagesTransport
 from harnesses.cells import CELLS, get_cell
@@ -284,6 +287,9 @@ LOCK_PATH: Path | None = None
 # The ledger `account-run` appends to. None: this checkout's results/costs.csv. Tests point it
 # at a temporary file.
 COSTS_PATH: Path | None = None
+# The client `count-tokens` sends to the token-counting endpoint. None: an Anthropic SDK client
+# (`harnesses.token_count`). Tests replace it with a stub.
+TOKEN_COUNT_CLIENT: Callable[[], object] | None = None
 RUN_ARGS = ("cell", "split", "start", "variant", "W", "gen_preset", "gen_set", "model",
             "effort", "mode", "service_tier", "milestone", "approved_block", "planned_usd", "n",
             "task_cell", "matrix", "n_observed", "cell_templates", "experiment", "parallel",
@@ -881,6 +887,28 @@ def cmd_account_run(a) -> int:
     return 0
 
 
+def cmd_count_tokens(a) -> int:
+    """$0: the Claude token count of claude-haiku-5-5's largest requests, against its
+    100,000-token price threshold (`harnesses.token_count`; PREREG §17.8, pending): the
+    requests are rebuilt from the generator with the fake model and sent to Anthropic's free
+    token-counting endpoint only, never to the model. Writes
+    results/token_count/<time>/token_count.json (or --out) and prints it."""
+    try:
+        gen = _gen_config(a.gen_preset, a.gen_set)
+        report = token_count.token_count(a.model, gen, start=a.start, n=a.n,
+                                         client_factory=TOKEN_COUNT_CLIENT)
+    except (TypeError, ValueError) as e:  # token_count.Refused included
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    out = (Path(a.out) if a.out else RESULTS / "token_count"
+           / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") / "token_count.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    print(f"written: {_rel(out)}", file=sys.stderr)
+    return 0
+
+
 def cmd_summary_timing(a) -> int:
     print(json.dumps(diagnostics.summary_timing(
         a.n, split=a.split, summary_tokens=a.summary_tokens,
@@ -1076,6 +1104,18 @@ def build_parser() -> argparse.ArgumentParser:
                  "flight, so that it stays within --planned-usd")
 
     sub.add_parser("cells", help="list the harness cells").set_defaults(fn=cmd_cells)
+
+    tc = sub.add_parser("count-tokens",
+                        help="Claude token counts of claude-haiku-5-5's largest requests "
+                             "against its 100,000-token price threshold (free endpoint; $0)")
+    tc.add_argument("--model", default=registered.HAIKU_MODEL)
+    tc.add_argument("--start", type=int, default=0, help="first main template")
+    tc.add_argument("--n", type=int, default=10, help="main templates per task cell")
+    tc.add_argument("--gen-preset", choices=sorted(PRESETS), default="default")
+    tc.add_argument("--gen-set", action="append", default=[], metavar="FIELD=JSON")
+    tc.add_argument("--out", default=None,
+                    help="default: results/token_count/<time>/token_count.json")
+    tc.set_defaults(fn=cmd_count_tokens)
 
     st = sub.add_parser("summary-timing", help="where Σ cells compact at the default volume ($0)")
     st.add_argument("--n", type=int, default=20)

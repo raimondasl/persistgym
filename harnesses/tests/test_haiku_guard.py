@@ -290,7 +290,7 @@ def _r8_commands() -> list[list[str]]:
 
 def test_the_cli_docstrings_r8_commands_parse_and_wait_for_r8(tmp_path, monkeypatch):
     commands = _r8_commands()
-    assert {c[0] for c in commands} == {"dry-run", "run", "single-turn"}
+    assert {c[0] for c in commands} == {"dry-run", "count-tokens", "run", "single-turn"}
     paid = [c for c in commands if c[0] in ("run", "single-turn")]
     assert len(paid) == 4
     for argv in commands:

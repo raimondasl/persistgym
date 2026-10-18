@@ -1,9 +1,12 @@
 """H1 and H3 on gpt-6-luna's PersistGym main sweep, as pre-registered (PREREG §3 H1, §3 H3,
-§2.8, §2.9, §9.1-§9.5, §13 and §15; amendments R2 change 3 and R6 changes 1, 6 and 9).
+§2.8, §2.9, §9.1-§9.5, §13 and §15; amendments R2 change 3 and R6 changes 1, 6 and 9); and,
+with ``--model claude-haiku-5-5``, amendment R8's replication of both on claude-haiku-5-5
+(§17.8; "A second model" below).
 
 Run: ``uv run python -m analysis.persistgym_h1h3 --run RUN_ID [--run RUN_ID ...]
 [--rerun RUN=ORIGINAL ...] [--sweep-closed REF] [--results-root DIR] [--raw-root DIR]
-[--no-write] [--boot N] [--no-bayes] [--allow-incomplete]`` ($0: it reads files only). It writes
+[--no-write] [--boot N] [--no-bayes] [--allow-incomplete] [--model MODEL] [--experiment NAME]
+[--power-path CSV]`` ($0: it reads files only). It writes
 ``<results root>/persistgym_h1h3/<UTC>/h1h3.json``, ``summary.md`` and ``meta.json``, and prints
 the summary. It was written and tested on synthetic data only, before any outcome of the sweep
 was read (the researcher's blinding rule of 2026-10-10), and revised after two reviews of the
@@ -340,6 +343,73 @@ C. **The summary's wording**, with no number changed: the reason a fit gave no e
    sign to compare" where a sign is missing, the route power_sim's emulation took (`emulate`),
    and the Bayesian GLMM's divergent transitions.
 
+**A second model: claude-haiku-5-5's replication** (``--model claude-haiku-5-5``; PREREG §17.8,
+amendment R8, "Status in the analysis"). Every H1 and H3 quantity above is computed on Haiku's
+runs exactly as on luna's: the same code, predictions, thresholds and model checks, with the
+rules of 2026-10-10 that R8 pre-specifies for Haiku (the §9.1 GLM's harness levels, Firth with
+``max_iter`` 1,000, H3's one-template fit, the Bayesian GLMM's settings), and luna's seeds
+(bootstrap SEED + 10, Bayesian SEED + 11, so at T = 200 the template resamples are luna's).
+What differs is set by the model's `Profile` (`profile`). luna's profile is the analysis above,
+unchanged: on luna's sweep it reproduces the cited output
+(``results/persistgym_h1h3/20261010T232227Z/``) number for number and label for label, which
+`analysis.persistgym_h1h3_regression` re-runs and checks ($0; it needs luna's raw transcripts).
+Haiku's task cells must be luna's (`profile` refuses otherwise): the tables run over them.
+
+* **Runs.** Folders of ``<results root>/persistgym_haiku/`` whose ``meta.json`` is a
+  claude-haiku-5-5 run (`registered.model_family`) on the default generator config
+  (``registered.HAIKU_GENERATOR_HASH``, luna's), read on main templates 0 to T - 1, T =
+  ``registered.HAIKU_T`` (200 unless R8's size record lowers it), with the transcripts under
+  ``<raw root>/persistgym_haiku/``. ``--experiment`` reads another experiment's folder (either
+  model), and the output is then PROVISIONAL.
+* **Run kinds.** F-0 and W-0 on base episodes, F-0 on the restated-at-need control and the
+  single-turn control, and W-n-0 if it runs: the harness cells are ``registered.HAIKU_CELLS``,
+  read at call time, which R8's size record sets without W-n-0 if W-n-0 does not run. A W-n-0
+  run is then refused, and W-n-0 is reported as "pre-registered, not run (budget)", with no
+  alongside reading, §9.1 sensitivity fit, cost ratio or accounting row. No Σ-n-0 (R8).
+* **No echo** (R8, What it changes 5). The Messages API echoes neither effort nor a reasoning
+  context, so no Haiku record is excluded for an echo: the echo endings and fields are not read.
+  A record the runner marked ``excluded`` (it never marks one on the Messages wire) would still
+  be excluded, as "excluded by the runner". The substitutes, the request-side check and the
+  payload snapshot tests, act before a request is sent.
+* **The request-side check** (R8: "A violation is a harness bug: the episode is excluded and
+  the run stops"). A run it stopped (``ERROR:RequestCheckFailed``) wrote no record of the
+  episode it stopped at, which is found from the run's meta.json (`request_check_stops`) and
+  excluded, with any record a later run (a continuation) holds of it; it is counted per cell
+  and listed in the Deviations, open sweep or closed. A run it stopped in which that episode
+  cannot be found refuses.
+* **Usage.** The runner records Messages usage in the Responses meanings
+  (`harnesses.pricing.messages_usage_numbers`): ``input_tokens`` already includes the cache
+  reads and writes, so total tokens are ``input_tokens + output_tokens`` as on luna, and nothing
+  is added twice. Reasoning tokens a response did not report are null in the record, so that
+  episode's are missing (never 0; `_reasoning`, on the Messages wire only). §9.5's outcome is
+  then reported as unavailable (R8), decided per task cell and harness cell (`cost_outcomes`):
+  a cell with any such episode has no mean and no ratio there, and none is reported in a task
+  cell where F-0, the reference, has one. No outcome is fitted on part of a cell's episodes.
+* **§2.8's replay on Messages transcripts** (`window_recheck`). The system prompt is the
+  request's ``system``, the observation the last of its ``messages`` (text blocks), and a turn's
+  reply the response's text blocks as the session kept and W counted them
+  (`MessagesWire.kept_reply`: the empty text for a refusal). A turn with no visible reply counts
+  0 tokens: the ``(no reply)`` placeholder that went back in its place is not its reply
+  (harnesses/wire.py, ``EMPTY_REPLY_PLACEHOLDER``). A whitespace-only reply also went back as
+  the placeholder, but the session counted its whitespace toward W, and so does the replay.
+* **Refusals and stops** (R8, Exclusions) are content failures that score 0 and stay in, as on
+  luna; per cell, the step responses that stopped short are also counted by reason
+  (``refusal:<category>``, ``max_output_tokens``).
+* **Labels** (R8, Status in the analysis): outside luna's Holm family, H1's test (H0: Δ_H1 ≤ 0)
+  and H3's (H0: Δ_H3 ≥ 5pp) are read with their unadjusted one-sided bootstrap p-values at 0.05
+  and their model checks (`replication_readings`). Each label says whether the test rejects
+  and whether the model check agrees, and carries no confirmatory word. H1's predictions and
+  kill reading are computed as on luna; the kill rule reads luna only, so here it neither kills
+  nor confirms H1.
+* **Power** at the chosen T comes from ``--power-path``, a per-T power table of
+  ``analysis.power_sim``'s luna part (its ``luna_power.csv``) simulated with Haiku's
+  assumptions (R8): its rows at T, P(the unadjusted test rejects) and P(it rejects and the
+  model check agrees). The power run's meta.json must show its template SD measured on
+  claude-haiku-5-5's validity runs (``luna_validity_glob``), so luna's own power run is
+  refused (`replication_power`). Without such a table, power is reported as unavailable.
+* **Output:** ``<results root>/persistgym_h1h3_haiku/<UTC>/``, the same three files; the
+  summary's "What it does not show" is R8's.
+
 **What this does not do.** No failure labels (§9.7; void under R6), no exploratory analysis
 (§9.10), no H2 (stopped under R3) and no sol replication (not run under R6). It does not read
 ``results/decisions.md``: the re-run links, the input list and the closing entry are passed by
@@ -359,7 +429,7 @@ import math
 import sys
 import warnings
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from fractions import Fraction
 from itertools import combinations
@@ -376,6 +446,7 @@ from common import runmeta
 from harnesses import registered
 from harnesses.cells import CELLS, NOTES_INSTRUCTION
 from harnesses.items import item_text, output_text
+from harnesses.wire import MESSAGES, MESSAGES_API, RESPONSES_API
 from persistgym import tokens
 from persistgym.episode import TaskCell
 from persistgym.survival import window_keep_start
@@ -452,6 +523,33 @@ COST_OUTCOMES = {"tokens_total": "total tokens (input + output)",
 OUTPUTS = ("h1h3.json", "summary.md")
 FINAL, PROVISIONAL = "FINAL", "PROVISIONAL"
 
+# --- R8 (PREREG §17.8): claude-haiku-5-5's replication ("A second model" above) ---
+HAIKU_OUT_NAME = "persistgym_h1h3_haiku"
+R8_CELLS = ("F-0", "W-0", "W-n-0")
+"""The harness cells R8 registers for Haiku; W-n-0 runs only under its size rule, and
+``registered.HAIKU_CELLS`` (read at call time) says whether it does."""
+LUNA_CITED_OUTPUT = "results/persistgym_h1h3/20261010T232227Z/"
+"""luna's cited H1/H3 output (results/decisions.md, 2026-10-10), which stays primary (R8)."""
+REQUEST_CHECK_STOP = "ERROR:RequestCheckFailed"
+"""The exit reason of a Messages run that the request-side check stopped (harnesses/DESIGN.md
+§13.2): a harness bug; R8 excludes the episode, whose record is never written."""
+NOT_RUN_BUDGET = "pre-registered, not run (budget)"
+PRE_SPECIFIED = (
+    ("the §9.1 GLM's harness levels are F-0 and W-0 on all 8 task cells, with W-n-0 as a "
+     "third level in a sensitivity fit if it runs"),
+    ("H1's model check reads a Firth-penalized fit when the logit-scale Δ_H1 is not finite, "
+     "with max_iter 1,000"),
+    "H3's model check is fitted even when only one template has outcome variation",
+    ("the Bayesian GLMM uses bambi's default priors, 4 chains × 1,000 draws after 1,000 tuning "
+     "steps"),
+    "the seeds are luna's: bootstrap SEED + 10 and Bayesian SEED + 11")
+"""R8's pre-specified rules (§17.8, Status in the analysis): fixed for luna on 2026-10-10,
+after luna's data and before any Haiku data."""
+POWER_TABLE_COLUMNS = ("scenario", "templates", "P_h1_unadjusted", "P_h3_unadjusted",
+                       "P_h1_glm_veto", "P_h3_glm_veto")
+"""The columns of power_sim's per-T luna power table (``luna_power.csv``) that Haiku's power
+reading needs (`replication_power`)."""
+
 
 class Refusal(ValueError):
     """Inputs this analysis cannot be computed from (exit 2)."""
@@ -459,6 +557,96 @@ class Refusal(ValueError):
 
 class AccountingBug(Refusal):
     """PREREG §2.8's bug stop: a window-cell episode breaks the accounting conditions."""
+
+
+# --- profiles: what one model's analysis reads, and how it labels its tests ---------------
+
+@dataclass(frozen=True)
+class Profile:
+    """One model's analysis (`profile`). luna's is the pre-registered analysis of its sweep;
+    Haiku's is R8's replication (PREREG §17.8), computed the same way on Haiku's runs."""
+    model: str                       # the registered model (`registered.model_family`)
+    name: str                        # in messages: "luna", "Haiku"
+    experiment: str                  # the folder read (--experiment, else the registered one)
+    registered_experiment: str
+    out_name: str                    # the output folder under the results root
+    T: int
+    generator_hash: str
+    cells: tuple[str, ...]           # the harness cells read (not the single-turn control)
+    registered_cells: tuple[str, ...]
+    task_cells: tuple[str, ...]
+    nr_task_cells: tuple[str, ...]
+    api: str                         # the wire's API: transcripts and echo
+    replication: bool                # R8: outside the Holm family, unadjusted p-values
+    power_path: Path | None          # the default power file
+
+    @property
+    def kinds(self) -> tuple[tuple[str, str], ...]:
+        """The run kinds (harness cell, variant), luna's in the order of `KINDS`."""
+        return (*((c, BASE) for c in self.cells), ("F-0", RESTATED), (SINGLE_TURN, BASE))
+
+    @property
+    def echo(self) -> bool:
+        """Whether the API echoes the reasoning settings (§13's echo exclusion applies)."""
+        return self.api == RESPONSES_API
+
+    @property
+    def not_run(self) -> tuple[str, ...]:
+        """Registered cells that do not run (Haiku's W-n-0 under R8's size rule)."""
+        return tuple(c for c in self.registered_cells if c not in self.cells)
+
+    def public(self) -> dict:
+        return {"model": self.model, "name": self.name, "experiment": self.experiment,
+                "registered_experiment": self.registered_experiment,
+                "out_name": self.out_name, "T": self.T, "api": self.api,
+                "cells": list(self.cells), "cells_not_run": list(self.not_run),
+                "replication": self.replication, "prereg": R8_PREREG}
+
+
+R8_PREREG = ("PREREG.md §17.8 (amendment R8): §3 H1, §3 H3, §2.8, §2.9, §9.1-§9.5, §13 as on "
+             "luna; outside the Holm family")
+
+
+def profile(model: str | None = None, experiment: str | None = None) -> Profile:
+    """The analysis of `model` (default luna's), reading `experiment` (default the model's
+    registered one). luna's is built from this module's constants and Haiku's from
+    `registered.HAIKU_*`, both read at call time (R8's size record sets ``HAIKU_T`` and
+    ``HAIKU_CELLS``)."""
+    model = model or MODEL
+    if model == MODEL:
+        prof = Profile(model=MODEL, name="luna", experiment=EXPERIMENT,
+                       registered_experiment=EXPERIMENT, out_name=OUT_NAME, T=T_REGISTERED,
+                       generator_hash=GENERATOR_HASH, cells=tuple(HARNESS_CELLS),
+                       registered_cells=tuple(HARNESS_CELLS), task_cells=tuple(TASK_CELLS),
+                       nr_task_cells=tuple(NR_TASK_CELLS), api=RESPONSES_API,
+                       replication=False, power_path=POWER_DECISION)
+    elif model == registered.HAIKU_MODEL:
+        cells = tuple(registered.HAIKU_CELLS)
+        if not {"F-0", "W-0"} <= set(cells) or not set(cells) <= set(R8_CELLS):
+            raise Refusal(f"registered.HAIKU_CELLS is {cells!r}: R8 registers F-0 and W-0, and "
+                          "W-n-0 only under its size rule")
+        # the completeness, cost, accounting, cell and exclusion tables run over luna's task
+        # cells (TASK_CELLS, NR_TASK_CELLS): Haiku's must be the same, as R8 registers them
+        for name, mine, lunas in (("HAIKU_TASK_CELLS", registered.HAIKU_TASK_CELLS, TASK_CELLS),
+                                  ("HAIKU_SINGLE_TURN_TASK_CELLS",
+                                   registered.HAIKU_SINGLE_TURN_TASK_CELLS, NR_TASK_CELLS)):
+            if tuple(mine) != tuple(lunas):
+                raise Refusal(f"registered.{name} is {tuple(mine)!r}, not luna's "
+                              f"{tuple(lunas)!r}: R8 has Haiku play luna's task cells, and "
+                              "this analysis's tables run over them")
+        prof = Profile(model=registered.HAIKU_MODEL, name="Haiku",
+                       experiment=registered.HAIKU_EXPERIMENT,
+                       registered_experiment=registered.HAIKU_EXPERIMENT,
+                       out_name=HAIKU_OUT_NAME, T=registered.HAIKU_T,
+                       generator_hash=registered.HAIKU_GENERATOR_HASH, cells=cells,
+                       registered_cells=R8_CELLS,
+                       task_cells=tuple(registered.HAIKU_TASK_CELLS),
+                       nr_task_cells=tuple(registered.HAIKU_SINGLE_TURN_TASK_CELLS),
+                       api=MESSAGES_API, replication=True, power_path=None)
+    else:
+        raise Refusal(f"--model {model!r}: this analysis covers {MODEL} (the pre-registered "
+                      f"sweep) and {registered.HAIKU_MODEL} (R8's replication) only")
+    return replace(prof, experiment=experiment) if experiment else prof
 
 
 # --- runs ----------------------------------------------------------------------------------
@@ -476,6 +664,8 @@ class Run:
     model_returned: list
     records: list[dict]
     window: dict
+    episode_ids: list = field(default_factory=list)   # meta.json config.episode_ids, in order
+    parallel: dict = field(default_factory=dict)      # meta.json parallel (how play went)
 
 
 def _window_settings(meta: dict) -> dict:
@@ -491,16 +681,19 @@ def _window_settings(meta: dict) -> dict:
             "tokenizer": h.get("tokenizer") or g.get("tokenizer") or "o200k_base"}
 
 
-def _not_ours(meta: dict) -> str | None:
-    """Why a run folder is not one of luna's sweep runs on the default config, or None."""
-    if meta.get("experiment") != EXPERIMENT:
+def _not_ours(meta: dict, prof: Profile | None = None) -> str | None:
+    """Why a run folder is not one of the model's sweep runs (luna's by default) on the
+    default config, or None."""
+    prof = prof or profile()
+    if meta.get("experiment") != prof.experiment:
         return f"experiment {meta.get('experiment')!r}"
     model = str(meta.get("model_requested"))
-    if registered.model_family(model) != MODEL:
-        return f"model {model!r}, not {MODEL}"
+    if registered.model_family(model) != prof.model:
+        return f"model {model!r}, not {prof.model}"
     hashes = (meta.get("config") or {}).get("generator_config_hashes")
-    if hashes != [GENERATOR_HASH]:
-        return f"generator config {hashes!r}, not the default config {GENERATOR_HASH[:12]}"
+    if hashes != [prof.generator_hash]:
+        return (f"generator config {hashes!r}, not the default config "
+                f"{prof.generator_hash[:12]}")
     return None
 
 
@@ -511,7 +704,9 @@ def template_index(template_id: str) -> int:
     return int(num)
 
 
-def _check_record(run_id: str, cell: str, repeat: int, rec: dict) -> None:
+def _check_record(run_id: str, cell: str, repeat: int, rec: dict,
+                  prof: Profile | None = None) -> None:
+    prof = prof or profile()
     where = f"{run_id}: record {rec.get('episode_id')!r}"
     if rec.get("harness_cell") != cell:
         raise Refusal(f"{where} has harness cell {rec.get('harness_cell')!r}, its run {cell!r}")
@@ -521,12 +716,12 @@ def _check_record(run_id: str, cell: str, repeat: int, rec: dict) -> None:
                       "absent field means repeat 0)")
     if rep != repeat:
         raise Refusal(f"{where} has repeat_index {rep}, its run {repeat}")
-    if rec.get("generator_config_hash") not in (None, GENERATOR_HASH):
+    if rec.get("generator_config_hash") not in (None, prof.generator_hash):
         raise Refusal(f"{where} played generator config {rec.get('generator_config_hash')!r}")
     variant = rec.get("variant")
     if variant not in (BASE, RESTATED) or (variant == RESTATED and cell != "F-0"):
         raise Refusal(f"{where} has variant {variant!r} in cell {cell}")
-    allowed = NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS
+    allowed = prof.nr_task_cells if cell == SINGLE_TURN else prof.task_cells
     if rec.get("task_cell") not in allowed:
         raise Refusal(f"{where} has task cell {rec.get('task_cell')!r}")
     template_index(rec.get("template_id"))
@@ -554,12 +749,15 @@ def _read_jsonl(path: Path, run_id: str) -> list[dict]:
     return out
 
 
-def discover(root: Path, declared: list[str] | None = None) -> tuple[list[Run], list[dict]]:
-    """luna's sweep runs under root/persistgym/ (only those in `declared`, the --run input
-    list, when it is given), and the folders skipped with the reason."""
-    base = root / EXPERIMENT
+def discover(root: Path, declared: list[str] | None = None,
+             prof: Profile | None = None) -> tuple[list[Run], list[dict]]:
+    """The model's sweep runs (luna's by default) under root/<its experiment>/ (only those in
+    `declared`, the --run input list, when it is given), and the folders skipped with the
+    reason."""
+    prof = prof or profile()
+    base = root / prof.experiment
     if not base.is_dir():
-        raise Refusal(f"no {EXPERIMENT}/ folder under {root}")
+        raise Refusal(f"no {prof.experiment}/ folder under {root}")
     wanted = None if declared is None else set(declared)
     if declared is not None and len(wanted) != len(declared):
         raise Refusal("--run names a run twice")
@@ -570,25 +768,27 @@ def discover(root: Path, declared: list[str] | None = None) -> tuple[list[Run], 
             skipped.append({"folder": folder.name, "reason": "no meta.json"})
             continue
         meta = _read_json(meta_path, folder.name)
-        why = _not_ours(meta)
+        why = _not_ours(meta, prof)
         if why:
             skipped.append({"folder": folder.name, "reason": why})
             continue
         run_id = str(meta.get("run_id") or folder.name)
         if wanted is not None and run_id not in wanted:
             skipped.append({"folder": folder.name,
-                            "reason": f"a {MODEL} sweep run not in the input list (--run)"})
+                            "reason": f"a {prof.model} sweep run not in the input list (--run)"})
             continue
         ep_path = folder / "episodes.jsonl"
         if not ep_path.is_file():
-            raise Refusal(f"{run_id}: a {MODEL} run without episodes.jsonl")
+            raise Refusal(f"{run_id}: a {prof.model} run without episodes.jsonl")
         cell = meta.get("cell_or_config")
-        if cell not in (*HARNESS_CELLS, SINGLE_TURN):
-            raise Refusal(f"{run_id}: cell {cell!r} is not one of luna's sweep cells")
+        if cell not in (*prof.cells, SINGLE_TURN):
+            raise Refusal(f"{run_id}: cell {cell!r} is not one of {prof.name}'s sweep cells"
+                          + (f" ({', '.join(prof.cells)}: registered.HAIKU_CELLS, which R8's "
+                             "size record sets)" if prof.replication else ""))
         repeat = int(meta.get("repeat_index") or 0)
         records = _read_jsonl(ep_path, run_id)
         for rec in records:
-            _check_record(run_id, cell, repeat, rec)
+            _check_record(run_id, cell, repeat, rec, prof)
         try:
             started = datetime.fromisoformat(str(meta["started_utc"]))
         except (KeyError, ValueError):
@@ -598,12 +798,15 @@ def discover(root: Path, declared: list[str] | None = None) -> tuple[list[Run], 
                         repeat_index=repeat, started=started,
                         exit_reason=meta.get("exit_reason"),
                         model_returned=list(meta.get("model_returned") or []),
-                        records=records, window=_window_settings(meta)))
+                        records=records, window=_window_settings(meta),
+                        episode_ids=[str(e) for e in
+                                     (meta.get("config") or {}).get("episode_ids") or []],
+                        parallel=dict(meta.get("parallel") or {})))
     if wanted is not None:
         missing = sorted(wanted - {r.run_id for r in runs})
         if missing:
-            raise Refusal(f"--run names run(s) that are not {MODEL} sweep runs on the default "
-                          f"config under {base}: {', '.join(missing)}")
+            raise Refusal(f"--run names run(s) that are not {prof.model} sweep runs on the "
+                          f"default config under {base}: {', '.join(missing)}")
     return runs, skipped
 
 
@@ -627,10 +830,13 @@ def _known(ending: str | None) -> bool:
             or (isinstance(ending, str) and ending.startswith("ERROR:")))
 
 
-def echo_exclusion(rec: dict) -> str | None:
-    """Why a counted record is excluded for its echo (§13, R2 change 3), or None."""
+def echo_exclusion(rec: dict, echo: bool = True) -> str | None:
+    """Why a counted record is excluded for its echo (§13, R2 change 3), or None. With `echo`
+    False (the Messages API echoes nothing: R8) no echo is read, only the runner's mark."""
     if rec.get("excluded"):
         return rec.get("exclusion_reason") or "excluded by the runner"
+    if not echo:
+        return None
     if rec.get("exit_reason") in ECHO_EXITS:
         return str(rec["exit_reason"])
     echo = rec.get("echo") or {}
@@ -657,6 +863,53 @@ class Resolved:
     last_ending: str | None = None     # of the key's last record
     closed: bool = False               # excluded with no final record: the sweep is closed
     awaiting_rerun: bool = False       # its last record is a single API_ERROR (§13)
+    request_check: bool = False        # excluded: the request-side check stopped it (R8)
+
+
+def request_check_stops(runs: list[Run]) -> dict[tuple[str, str, int], tuple[str, str]]:
+    """The episodes the request-side check stopped (R8, Exclusions: "A violation is a harness
+    bug: the episode is excluded and the run stops"), as {key: (run_id, reason)}, keyed as in
+    `resolve`. The check raises before its request is sent, the runner does not catch it, and
+    no record of the episode is written (harnesses/DESIGN.md §13.2), so the episode is found
+    from its run's meta.json:
+
+    * sequential play: the first of ``config.episode_ids`` with no record in the run;
+    * parallel play (``parallel.episodes_started``): the episode ``parallel.stop_reason`` names
+      (``ERROR:RequestCheckFailed in episode <id>``), and every other episode the run started
+      and left with no record: each raised during play, and the run names only the first (an
+      abandoned one, ``parallel.abandoned_episode_ids``, is not counted).
+
+    A run the check stopped in which no such episode is found refuses (resolve it by hand)."""
+    out = {}
+    prefix = f"{REQUEST_CHECK_STOP} in episode "
+    for run in runs:
+        if run.exit_reason != REQUEST_CHECK_STOP:
+            continue
+        recorded = {str(rec.get("episode_id")) for rec in run.records}
+        stop = str(run.parallel.get("stop_reason") or "")
+        named = stop[len(prefix):] if stop.startswith(prefix) else None
+        started = run.parallel.get("episodes_started")
+        if isinstance(started, int) and not isinstance(started, bool):
+            abandoned = {str(e) for e in run.parallel.get("abandoned_episode_ids") or []}
+            found = [e for e in run.episode_ids[:started]
+                     if e not in recorded and e not in abandoned]
+        else:
+            found = next(([e] for e in run.episode_ids if e not in recorded), [])
+            named = found[0] if found else None
+        if not found or (named is not None and named not in found):
+            raise Refusal(f"{run.run_id} was stopped by the request-side check "
+                          f"({REQUEST_CHECK_STOP}), but the episode it stopped at cannot be "
+                          "found from its meta.json (config.episode_ids, parallel): R8 excludes "
+                          "that episode. Resolve it by hand.")
+        for eid in found:
+            why = (f"request-side check (R8): {run.run_id} stopped in this episode; a harness "
+                   "bug, so the episode is excluded, whatever a later run holds"
+                   if eid == named else
+                   f"request-side check (R8): started in {run.run_id}, which the check "
+                   "stopped, and left no record (it raised in play; the run names only the "
+                   "first such episode); excluded with it")
+            out[(run.cell, eid, run.repeat_index)] = (run.run_id, why)
+    return out
 
 
 def parse_links(pairs: list[str] | None) -> dict[str, str]:
@@ -672,11 +925,16 @@ def parse_links(pairs: list[str] | None) -> dict[str, str]:
     return out
 
 
-def resolve(runs: list[Run], links: dict[str, str],
-            sweep_closed: bool = False) -> tuple[dict, list[str]]:
+def resolve(runs: list[Run], links: dict[str, str], sweep_closed: bool = False,
+            echo: bool = True, stopped: dict | None = None) -> tuple[dict, list[str]]:
     """Every key's counted record, exclusion or pending state; and warnings. With
     `sweep_closed`, a key with no final record is excluded (§7.8), unless its last record is a
-    single API_ERROR, whose §13 re-run is still owed (reading 17)."""
+    single API_ERROR, whose §13 re-run is still owed (reading 17). With `echo` False (Haiku,
+    R8) no record is excluded for an echo (`echo_exclusion`). A key in `stopped`
+    (`request_check_stops`: R8) is excluded, with or without records, and the records a later
+    run holds of it are dropped; only a final record from a run that started before the
+    stopped one still counts (§7.8: the first final record counts), with a warning."""
+    stopped = stopped or {}
     ids = {r.run_id: r for r in runs}
     for run, orig in links.items():
         if run not in ids or orig not in ids:
@@ -728,8 +986,9 @@ def resolve(runs: list[Run], links: dict[str, str],
             r.record, r.run_id = rec, run_id
             r.dropped = [{"run_id": x, "exit_reason": y.get("exit_reason")}
                          for x, y in entries[first + 1:]]
-            why = echo_exclusion(rec)
-            r.status, r.reason = ("excluded", f"echo: {why}") if why else ("counted", None)
+            why = echo_exclusion(rec, echo)
+            r.status, r.reason = (("excluded", f"{'echo' if echo else 'runner'}: {why}") if why
+                                  else ("counted", None))
         elif api >= 2:
             r.status = "excluded"
             r.reason = "two transport failures (API_ERROR) before a final record (§13)"
@@ -746,7 +1005,24 @@ def resolve(runs: list[Run], links: dict[str, str],
                             "the sweep is closed (DESIGN §7.8)")
             else:
                 r.reason = f"no final record yet (last ending {r.last_ending} in {last_run})"
+        if key in stopped:
+            run_id, why = stopped[key]
+            if r.record is not None and ids[r.run_id].started < ids[run_id].started:
+                warnings_.append(f"{key[0]} {key[1]!r} (repeat {key[2]}): the request-side "
+                                 f"check stopped its play in {run_id}, but {r.run_id}, an "
+                                 "earlier run, holds its first final record, which counts "
+                                 "(DESIGN §7.8)")
+            else:
+                r = Resolved(key=key, status="excluded", record=None, run_id=None, reason=why,
+                             dropped=[{"run_id": x, "exit_reason": y.get("exit_reason")}
+                                      for x, y in entries],
+                             n_records=len(entries), n_api_errors=api,
+                             last_ending=r.last_ending, request_check=True)
         out[key] = r
+    for key, (_, why) in stopped.items():
+        if key not in out:
+            out[key] = Resolved(key=key, status="excluded", record=None, run_id=None,
+                                reason=why, request_check=True)
     return out, warnings_
 
 
@@ -761,15 +1037,16 @@ def kind_label(cell: str, variant: str) -> str:
             ("F-0", RESTATED): "F-0 restated-at-need"}.get((cell, variant), cell)
 
 
-def completeness(resolved: dict, templates: int,
-                 sweep_closed: bool = False) -> tuple[list[str], list[str]]:
+def completeness(resolved: dict, templates: int, sweep_closed: bool = False,
+                 kinds: tuple = KINDS) -> tuple[list[str], list[str]]:
     """Why the repeat-0 sweep is incomplete for templates 0..templates-1 (empty if complete),
-    and, for a closed sweep, its deviations: the keys excluded with no final record and the
-    keys never played, per run kind (§13: listed in every write-up)."""
+    and its deviations: for a closed sweep, the keys excluded with no final record and the
+    keys never played; in any sweep, the keys the request-side check stopped (R8); per run
+    kind of `kinds` (luna's by default; §13: listed in every write-up)."""
     reasons, deviations = [], []
-    for cell, variant in KINDS:
+    for cell, variant in kinds:
         cells = NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS
-        missing, pending, closed = [], [], Counter()
+        missing, pending, closed, checked = [], [], Counter(), []
         for t in range(templates):
             for tc in cells:
                 eid = episode_id_of(cell, variant, t, tc)
@@ -780,6 +1057,8 @@ def completeness(resolved: dict, templates: int,
                     pending.append(f"{eid}: {r.reason}")
                 elif r.closed:
                     closed[str(r.last_ending)] += 1
+                elif r.request_check:
+                    checked.append(eid)
         n = templates * len(cells)
         label = kind_label(cell, variant)
         if missing and sweep_closed and len(missing) < n:
@@ -798,6 +1077,11 @@ def completeness(resolved: dict, templates: int,
                 f"{label}: {sum(closed.values())} of {n} repeat-0 episodes had no final record "
                 "and are excluded, the sweep being closed (DESIGN §7.8); last endings: "
                 + ", ".join(f"{k} {v}" for k, v in sorted(closed.items())))
+        if checked:
+            deviations.append(
+                f"{label}: {len(checked)} of {n} repeat-0 episodes are excluded because the "
+                "request-side check stopped their run (R8: a harness bug; the episode is "
+                f"excluded, whatever a later run holds): {', '.join(checked)}")
     return reasons, deviations
 
 
@@ -819,7 +1103,24 @@ def _num(x) -> float:
     return float("nan") if x is None else float(x)
 
 
-def episode_row(r: Resolved) -> dict:
+def _reasoning(usage: dict, api: str = RESPONSES_API) -> float:
+    """An episode's reasoning tokens. On the Responses wire (luna) as before the second model:
+    a null or absent count is 0 (the runner never writes null there). On the Messages wire
+    (Haiku) a null count is missing (NaN), as the runner records a count its responses did not
+    report (R8: null, never 0); absent, 0."""
+    if api != MESSAGES_API:
+        return float(int(usage.get("reasoning_tokens") or 0))
+    x = usage.get("reasoning_tokens", 0)
+    return float("nan") if x is None else float(int(x or 0))
+
+
+def _tiers(rec: dict) -> tuple[tuple[str, int], ...]:
+    """The service tiers the record's responses report they were served, with their counts."""
+    return tuple(sorted((str(k), int(v)) for k, v in
+                        ((rec.get("echo") or {}).get("service_tiers_returned") or {}).items()))
+
+
+def episode_row(r: Resolved, api: str = RESPONSES_API) -> dict:
     rec = r.record
     cell, eid, repeat = r.key
     tc = TaskCell.from_id(rec["task_cell"])
@@ -840,9 +1141,11 @@ def episode_row(r: Resolved) -> dict:
         "n_lookups_unavailable": int(rec.get("n_lookups_unavailable") or 0),
         "need_tokens": _num(need_phase.get("tokens")) if need_phase else float("nan"),
         "need_complete": bool(need_phase.get("complete")) if need_phase else False,
+        # input_tokens counts cached input on both APIs: the runner adds a Messages
+        # response's cache reads and writes to it (pricing.messages_usage_numbers)
         "tokens_total": float(int(usage.get("input_tokens") or 0)
                               + int(usage.get("output_tokens") or 0)),
-        "reasoning_tokens": float(int(usage.get("reasoning_tokens") or 0)),
+        "reasoning_tokens": _reasoning(usage, api),
         "cost_list": _num(rec.get("cost_usd_list")),
         "cost_billed": _num(rec.get("cost_usd_billed_est")),
         "s_verbatim": _num(None if s_verbatim is None else int(bool(s_verbatim))),
@@ -850,6 +1153,8 @@ def episode_row(r: Resolved) -> dict:
         "s_any": _num(None if s_any is None else int(s_any)),
         "compacted_between": _num(rec.get("compacted_between")),
         "models": "|".join(models),
+        "stopped": tuple(str(x.get("reason")) for x in rec.get("incomplete") or []),
+        "tiers": _tiers(rec),
     }
 
 
@@ -857,13 +1162,15 @@ ROW_COLUMNS = ("cell", "variant", "task_cell", "fact", "recoverable", "distance"
                "repeat", "episode_id", "run_id", "status", "excluded", "exclusion_reason",
                "exit_reason", "success", "need_outcome", "n_lookups", "n_lookups_unavailable",
                "need_tokens", "need_complete", "tokens_total", "reasoning_tokens", "cost_list",
-               "cost_billed", "s_verbatim", "s_carried", "s_any", "compacted_between", "models")
+               "cost_billed", "s_verbatim", "s_carried", "s_any", "compacted_between", "models",
+               "stopped", "tiers")
 """The columns of `episode_row`, in order."""
 
 
-def episode_table(resolved: dict) -> tuple[pd.DataFrame, list[str]]:
+def episode_table(resolved: dict, api: str = RESPONSES_API) -> tuple[pd.DataFrame, list[str]]:
     """One row per counted or echo-excluded key (pending and transport-excluded keys have no
-    counted record and are counted separately). Also warnings."""
+    counted record and are counted separately), read on the runs' wire (`api`: how a null
+    reasoning count reads, `_reasoning`). Also warnings."""
     rows, warn = [], []
     for r in resolved.values():
         if r.record is None:
@@ -873,7 +1180,7 @@ def episode_table(resolved: dict) -> tuple[pd.DataFrame, list[str]]:
             warn.append(f"{r.run_id}: {r.key[1]!r}: need_correct {rec.get('need_correct')} "
                         f"disagrees with need_outcome {rec.get('need_outcome')!r}; "
                         "need_correct is used")
-        row = episode_row(r)
+        row = episode_row(r, api)
         assert tuple(row) == ROW_COLUMNS
         rows.append(row)
     return pd.DataFrame(rows, columns=list(ROW_COLUMNS)), warn
@@ -916,11 +1223,30 @@ def _system_tokens(instructions: str, notes: bool, settings: dict) -> tuple[int,
     return tokens.count(text, settings["tokenizer"]), None
 
 
+def request_parts(payload: dict, api: str = RESPONSES_API) -> tuple[str, list[dict]]:
+    """A transcript request's system prompt and input messages, on its API's wire: the
+    Responses ``instructions`` and ``input``, or the Messages ``system`` and ``messages``."""
+    if api == MESSAGES_API:
+        return payload.get("system") or "", payload.get("messages") or []
+    return payload.get("instructions") or "", payload.get("input") or []
+
+
+def reply_counted(response: dict, api: str = RESPONSES_API) -> str:
+    """A turn's visible reply as the session kept it and W counted it (harnesses/session.py,
+    `Wire.kept_reply`): the Responses message text, or the Messages text blocks, which are the
+    empty text for a refusal (its partial text is discarded). A Messages turn with no visible
+    reply went back as the ``(no reply)`` placeholder, which is not its reply and counts 0. A
+    whitespace-only reply went back as the placeholder too (the API rejects a whitespace-only
+    block), but the session counted its whitespace toward W, and so does this replay."""
+    return MESSAGES.kept_reply(response) if api == MESSAGES_API else output_text(response)
+
+
 def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
-                   settings: dict) -> dict[str, dict]:
+                   settings: dict, api: str = RESPONSES_API) -> dict[str, dict]:
     """§2.8 condition 2 for one window-cell run: for each episode in `wanted` ({episode_id:
     {"need_step", "evidence_steps"}}), the drop-oldest rule replayed on the project-token counts
-    of the turns its transcript shows were sent. Returns {episode_id: {"S", "keep",
+    of the turns its transcript shows were sent, read on the run's wire (`api`:
+    `request_parts`, `reply_counted`). Returns {episode_id: {"S", "keep",
     "user_messages_sent", "user_messages_expected"} or {"problem": why}}."""
     tok = settings["tokenizer"]
     W = settings["W"]
@@ -937,9 +1263,9 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
             if eid not in wanted or ev.get("kind") != "step" or eid in problems:
                 continue
             payload = ev.get("payload") or {}
-            items = payload.get("input") or []
+            instructions, items = request_parts(payload, api)
             if eid not in system:
-                system[eid] = _system_tokens(payload.get("instructions") or "", notes, settings)
+                system[eid] = _system_tokens(instructions, notes, settings)
             turn = int(ev["turn"])
             if turn != len(turns[eid]):
                 problems[eid] = (f"transcript turn {turn} where turn {len(turns[eid])} was "
@@ -951,7 +1277,7 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
                 problems[eid] = f"turn {turn}: the request does not end with a user message"
                 continue
             obs = tokens.count(item_text(last), tok)
-            reply = tokens.count(output_text(ev.get("response") or {}), tok)
+            reply = tokens.count(reply_counted(ev.get("response") or {}, api), tok)
             turns[eid].append((int(ev["pending_step"]), bool(ev["is_lookup_result"]), obs,
                                reply))
             users_at[eid][turn] = sum(1 for i in items if i.get("role") == "user")
@@ -997,8 +1323,10 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
     return out
 
 
-def accounting_check(runs: list[Run], raw_root: Path) -> dict:
-    """§2.8's two conditions over every window-cell record that reached its need step. Returns
+def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIMENT,
+                     api: str = RESPONSES_API) -> dict:
+    """§2.8's two conditions over every window-cell record that reached its need step, the
+    transcripts read from raw_root/<experiment>/ on the runs' wire (`api`). Returns
     {"bugs", "warnings", "missing_transcripts", "checked", "runs"}."""
     bugs = far_window_bugs(runs)
     warn, missing, checked, per_run = [], [], 0, []
@@ -1035,11 +1363,12 @@ def accounting_check(runs: list[Run], raw_root: Path) -> dict:
                         + ", ".join(f"{k} {v}" for k, v in sorted(never_reached.items())))
         if not wanted:
             continue
-        path = raw_root / EXPERIMENT / run.run_id / "transcript.jsonl.gz"
+        path = raw_root / experiment / run.run_id / "transcript.jsonl.gz"
         if not path.is_file():
             missing.append(run.run_id)
             continue
-        got = window_recheck(path, wanted, notes=CELLS[run.cell].notes, settings=run.window)
+        got = window_recheck(path, wanted, notes=CELLS[run.cell].notes, settings=run.window,
+                             api=api)
         n_keep = n_users = n_stopped = 0
         for eid, (s_verbatim, keep_start, ending) in expect.items():
             g = got[eid]
@@ -1650,7 +1979,8 @@ def fe_poisson(y: np.ndarray, groups: np.ndarray, x: np.ndarray, names: list[str
     template-clustered sandwich with the G/(G - 1) factor; ratios exp(beta). Templates whose
     outcome is 0 in every row are dropped (their fixed effect is -inf). A cell with no events
     at all has ratio 0 and no interval, and is left out of the fit; with no events in the
-    reference cell (the rows of no column) no ratio is finite, and there is no fit. The
+    reference cell (the rows of no column) no ratio is finite, and there is no fit; with no
+    rows in it (none with a finite outcome) no ratio is identified, and there is no fit. The
     sandwich does not use the dispersion; the Pearson dispersion is reported."""
     y = np.asarray(y, float)
     x = np.asarray(x, float)
@@ -1665,6 +1995,10 @@ def fe_poisson(y: np.ndarray, groups: np.ndarray, x: np.ndarray, names: list[str
     rows = ~x[:, zero].any(axis=1) if zero else np.ones(len(y), bool)
     y, x, groups = y[rows], x[rows], groups[rows]
     reference = ~x.any(axis=1)
+    if len(y) and not reference.any():
+        # the template effects and the cell indicators are collinear: no ratio is identified
+        out["note"] = "no rows in the reference cell (F-0): no ratio"
+        return out
     if reference.any() and y[reference].sum() <= 0:
         out["note"] = "no events in the reference cell (F-0): no ratio is finite"
         return out
@@ -1710,21 +2044,48 @@ def fe_poisson(y: np.ndarray, groups: np.ndarray, x: np.ndarray, names: list[str
     return out
 
 
-def cost_outcomes(prim: pd.DataFrame) -> list[dict]:
-    """§9.5 per task cell and outcome: each harness cell against F-0 (reading 11)."""
-    others = [c for c in HARNESS_CELLS if c != "F-0"]
+REFERENCE_UNAVAILABLE = "F-0, the reference, is unavailable: no ratio"
+
+
+def cost_outcomes(prim: pd.DataFrame, cells: tuple[str, ...] = HARNESS_CELLS,
+                  unreported: bool = False) -> list[dict]:
+    """§9.5 per task cell and outcome: each harness cell of `cells` against F-0 (reading 11).
+
+    With `unreported` (Haiku, R8: "Otherwise it is unavailable (null, never 0), and §9.5's
+    reasoning-token outcome is reported as unavailable"), an outcome is decided per (task
+    cell, harness cell): a harness cell with any episode whose outcome is missing (a reasoning
+    count a response did not report) has that outcome unavailable in that task cell, with no
+    mean and no ratio, and is left out of the fit (``unavailable``: {cell: {"missing", "of"}});
+    if that cell is F-0, the reference, no ratio is reported in the task cell. No outcome is
+    fitted on part of a cell's episodes. Without it (luna) the fit is as before: fe_poisson
+    leaves out rows with no finite outcome (luna's sweep has none)."""
+    others = [c for c in cells if c != "F-0"]
     rows = []
     for tc in TASK_CELLS:
-        sub = prim[(prim.variant == BASE) & prim.cell.isin(HARNESS_CELLS)
-                   & (prim.task_cell == tc)]
-        x = np.column_stack([(sub.cell == c).to_numpy(float) for c in others])
+        sub = prim[(prim.variant == BASE) & prim.cell.isin(cells) & (prim.task_cell == tc)]
         for outcome, label in COST_OUTCOMES.items():
-            means = {c: _f(sub[sub.cell == c][outcome].mean()) if (sub.cell == c).any()
-                     else None for c in HARNESS_CELLS}
-            fit = fe_poisson(sub[outcome].to_numpy(float), sub["template"].to_numpy(), x,
-                             others)
-            rows.append({"task_cell": tc, "outcome": outcome, "label": label, "means": means,
-                         **fit})
+            gone = {}
+            if unreported:
+                for c in cells:
+                    vals = sub[sub.cell == c][outcome]
+                    if vals.isna().any():
+                        gone[c] = {"missing": int(vals.isna().sum()), "of": len(vals)}
+            use = sub[~sub.cell.isin(list(gone))] if gone else sub
+            fitted = [c for c in others if c not in gone]
+            means = {c: (None if c in gone else _f(sub[sub.cell == c][outcome].mean())
+                         if (sub.cell == c).any() else None) for c in cells}
+            if "F-0" in gone:
+                fit = {"n_rows": 0, "ratios": {}, "note": REFERENCE_UNAVAILABLE}
+            elif not fitted:                    # every compared cell is unavailable
+                fit = {"n_rows": len(use), "ratios": {}}
+            else:
+                x = np.column_stack([(use.cell == c).to_numpy(float) for c in fitted])
+                fit = fe_poisson(use[outcome].to_numpy(float), use["template"].to_numpy(), x,
+                                 fitted)
+            row = {"task_cell": tc, "outcome": outcome, "label": label, "means": means, **fit}
+            if gone:
+                row["unavailable"] = gone
+            rows.append(row)
     return rows
 
 
@@ -1799,12 +2160,16 @@ def h1_rule_sensitivity(glm: dict, delta, in_force: str, firth: dict | None = No
             for rule in H1_SEPARATION_RULES if rule != in_force}
 
 
-def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None) -> dict:
-    """§3 H1 on luna (above), with W-n-0 alongside."""
+def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None,
+               w_n_0: bool = True) -> dict:
+    """§3 H1 (above), with W-n-0 alongside; with `w_n_0` False (Haiku's W-n-0 cut by R8's size
+    rule) W-n-0 is reported as not run."""
     idx = an.idx
     s = {"F-0 NR": an.sample("F-0", OBS_NR_FAR), "W-0 NR": an.sample("W-0", OBS_NR_FAR),
-         "F-0 R": an.sample("F-0", OBS_R_FAR), "W-0 R": an.sample("W-0", OBS_R_FAR),
-         "W-n-0 NR": an.sample("W-n-0", OBS_NR_FAR), "W-n-0 R": an.sample("W-n-0", OBS_R_FAR)}
+         "F-0 R": an.sample("F-0", OBS_R_FAR), "W-0 R": an.sample("W-0", OBS_R_FAR)}
+    if w_n_0:
+        s.update({"W-n-0 NR": an.sample("W-n-0", OBS_NR_FAR),
+                  "W-n-0 R": an.sample("W-n-0", OBS_R_FAR)})
     pt = {k: v.point() for k, v in s.items()}
     bt = {k: v.boot(idx) for k, v in s.items()}
     out = {"cells": {k: rate(v) for k, v in s.items()}}
@@ -1831,6 +2196,10 @@ def h1_reading(an: Analysis, glm: dict, standin: dict, firth: dict | None = None
     out["model_check_sensitivity"] = h1_rule_sensitivity(glm, delta, mc["rule"], firth)
     out["scales_disagree_in_sign"] =(delta is not None and delta != 0 and sign not in (None, 0)
                                       and (delta > 0) != (sign > 0))
+    if not w_n_0:
+        out["w_n_0_alongside"] = {"status": NOT_RUN_BUDGET,
+                                  "note": "W-n-0 did not run (R8's size rule): no reading"}
+        return out
     pn_nr, pn_r = (_diff(pt["F-0 NR"], pt["W-n-0 NR"]), _diff(pt["F-0 R"], pt["W-n-0 R"]))
     dn_nr, dn_r = bt["F-0 NR"] - bt["W-n-0 NR"], bt["F-0 R"] - bt["W-n-0 R"]
     out["w_n_0_alongside"] = {"penalty_nr": summarise(pn_nr, dn_nr),
@@ -1968,6 +2337,45 @@ def family_readings(h1: dict, h3: dict) -> dict:
     return out
 
 
+def replication_label(p: float | None, agrees: bool) -> str:
+    """A replication test's label (R8): whether its unadjusted one-sided test rejects at 0.05
+    and whether its model check agrees, with no confirmatory word."""
+    if p is None:
+        return "not computable: a cell has no episode"
+    test = ("the unadjusted test rejects" if p <= ALPHA
+            else "the unadjusted test does not reject")
+    return f"{test}, and the model check {'agrees' if agrees else 'does not agree'}"
+
+
+H3_AGAINST = "the whole 90% CI of Δ_H3 lies above 5pp, against the prediction"
+
+
+def replication_readings(h1: dict, h3: dict) -> dict:
+    """R8's readings of the replication's tests (PREREG §17.8, Status in the analysis): outside
+    luna's Holm family, each test's unadjusted one-sided bootstrap p-value at 0.05 and its model
+    check, as `replication_label`; H1's kill reading as on luna, which reads luna only; the H1
+    rules not in force (ruled item 1) as sensitivity lines, which enter no reading."""
+    p1, p3 = h1["p_one_sided"], h3["p_one_sided"]
+    m1, m3 = bool(h1["model_check"]["agrees"]), bool(h3["model_check"]["agrees"])
+    lo90 = ((h3.get("delta_h3") or {}).get("ci90") or [None])[0]
+    against = lo90 is not None and lo90 > float(H3_MARGIN) + TOL
+    out = {"alpha_one_sided": ALPHA,
+           "holm": "outside luna's Holm family (R8; R6 change 9): unadjusted p-values only",
+           "H1": {"test": "H0: Δ_H1 ≤ 0", "p_one_sided": p1,
+                  "rejects_unadjusted": p1 is not None and p1 <= ALPHA, "model_agrees": m1,
+                  "label": replication_label(p1, m1), "kill_reading": h1.get("kill"),
+                  "kill_note": ("H1's kill rule reads luna only (R8): this reading neither "
+                                "kills nor confirms H1")},
+           "H3": {"test": "H0: Δ_H3 ≥ 5pp", "p_one_sided": p3,
+                  "rejects_unadjusted": p3 is not None and p3 <= ALPHA, "model_agrees": m3,
+                  "label": replication_label(p3, m3) + (f"; {H3_AGAINST}" if against else ""),
+                  "ci90_above_margin": against}}
+    out["H1"]["sensitivity_rules"] = {
+        rule: {"model_agrees": s["agrees"], "label": replication_label(p1, bool(s["agrees"]))}
+        for rule, s in (h1.get("model_check_sensitivity") or {}).items()}
+    return out
+
+
 def h1_predictions(h1: dict, lookups: dict, tok: dict) -> dict:
     """PLAN §4's H1 predictions, each on its point estimate (§3 H1)."""
     parts = {"non-recoverable drop >= 25pp (manipulation check)": h1["manipulation_check"],
@@ -1995,10 +2403,10 @@ def _rate(df: pd.DataFrame) -> dict:
     return {"n": n, "successes": k, "rate": k / n if n else None}
 
 
-def accounting(prim: pd.DataFrame) -> list[dict]:
-    """§2.8 and §9.6 per harness cell x task cell (base, repeat 0)."""
+def accounting(prim: pd.DataFrame, cells: tuple[str, ...] = HARNESS_CELLS) -> list[dict]:
+    """§2.8 and §9.6 per harness cell of `cells` x task cell (base, repeat 0)."""
     rows = []
-    for cell in HARNESS_CELLS:
+    for cell in cells:
         for tc in TASK_CELLS:
             sub = prim[(prim.cell == cell) & (prim.variant == BASE) & (prim.task_cell == tc)]
             dist = TaskCell.from_id(tc).distance
@@ -2044,9 +2452,12 @@ def accounting(prim: pd.DataFrame) -> list[dict]:
 
 # --- cells, exclusions, repeats, model strings ----------------------------------------------
 
-def cell_table(prim: pd.DataFrame) -> list[dict]:
+def cell_table(prim: pd.DataFrame, kinds: tuple = KINDS, stopped: bool = False) -> list[dict]:
+    """Each run kind's success per task cell, with its content failures. With `stopped` (Haiku,
+    R8: refusals are counted per cell, with their category), also the step responses that
+    stopped short, by reason (``refusal:<category>``, ``max_output_tokens``, ...)."""
     rows = []
-    for cell, variant in KINDS:
+    for cell, variant in kinds:
         for tc in (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
             sub = prim[(prim.cell == cell) & (prim.variant == variant) & (prim.task_cell == tc)]
             outcomes = Counter(str(x) for x in sub.need_outcome)
@@ -2055,15 +2466,24 @@ def cell_table(prim: pd.DataFrame) -> list[dict]:
                          "content_failures": {k: v for k, v in sorted(outcomes.items())
                                               if k not in ("correct", "wrong")},
                          "exploratory": cell in SUMMARY_CELLS})
+            if stopped:
+                reasons = Counter(x for t in sub.stopped for x in t)
+                rows[-1]["stopped_responses"] = dict(sorted(reasons.items()))
+                rows[-1]["episodes_with_a_refusal"] = int(sum(
+                    any(x.startswith("refusal:") for x in t) for t in sub.stopped))
     return rows
 
 
-def exclusion_table(resolved: dict, templates: int) -> list[dict]:
+def exclusion_table(resolved: dict, templates: int, kinds: tuple = KINDS,
+                    echo: bool = True) -> list[dict]:
     """Per run kind and task cell, over the repeat-0 keys of templates 0..T-1: keys with a
-    record, keys never played, exclusions by reason (echo, transport, no final record in a
-    closed sweep), pending keys and dropped duplicates (§13: counts per cell)."""
+    record (or excluded by the request-side check), keys never played, exclusions by reason
+    (echo, transport, no final record in a closed sweep), pending keys and dropped duplicates
+    (§13: counts per cell). With `echo` False (Haiku, R8: no echo) a record-holding exclusion
+    is the runner's own mark, ``excluded_by_runner``, with no echo share, and the keys the
+    request-side check stopped are counted as ``excluded_request_check``."""
     rows = []
-    for cell, variant in KINDS:
+    for cell, variant in kinds:
         for tc in (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
             c: Counter = Counter()
             for t in range(templates):
@@ -2077,24 +2497,30 @@ def exclusion_table(resolved: dict, templates: int) -> list[dict]:
                     c["pending"] += 1
                 elif r.closed:
                     c["excluded_no_final"] += 1
+                elif r.request_check:
+                    c["excluded_request_check"] += 1
                 elif r.status == "excluded":
                     c["excluded_echo" if r.record is not None else "excluded_transport"] += 1
             share = c["excluded_echo"] / c["keys"] if c["keys"] else 0.0
+            excluded = ({"excluded_echo": c["excluded_echo"]} if echo
+                        else {"excluded_by_runner": c["excluded_echo"],
+                              "excluded_request_check": c["excluded_request_check"]})
             rows.append({"kind": kind_label(cell, variant), "cell": cell, "variant": variant,
                          "task_cell": tc, "keys": c["keys"], "never_played": c["never_played"],
-                         "excluded_echo": c["excluded_echo"],
+                         **excluded,
                          "excluded_transport": c["excluded_transport"],
                          "excluded_no_final": c["excluded_no_final"], "pending": c["pending"],
                          "dropped_duplicates": c["dropped_duplicates"],
-                         "echo_share": share, "echo_over_5pct": share > ECHO_SHARE_MAX})
+                         **({"echo_share": share, "echo_over_5pct": share > ECHO_SHARE_MAX}
+                            if echo else {})})
     return rows
 
 
-def repeat_agreement(table: pd.DataFrame, templates: int) -> list[dict]:
+def repeat_agreement(table: pd.DataFrame, templates: int, kinds: tuple = KINDS) -> list[dict]:
     """§2.9: within-template noise, as the agreement between the two plays of each episode."""
     ok = table[(table.status == "counted") & (table.template < templates)]
     rows = []
-    for cell, variant in KINDS:
+    for cell, variant in kinds:
         sub = ok[(ok.cell == cell) & (ok.variant == variant)]
         r0 = sub[sub.repeat == 0].set_index("episode_id")["success"]
         r1 = sub[sub.repeat == 1].set_index("episode_id")["success"]
@@ -2143,6 +2569,15 @@ def model_strings(an: Analysis) -> dict:
     return out
 
 
+def served_tiers(prim: pd.DataFrame) -> dict[str, int]:
+    """The service tiers the primary episodes' responses report they were served, with the
+    number of responses (the records' ``echo.service_tiers_returned``)."""
+    out: Counter = Counter()
+    for t in prim.tiers:
+        out.update(dict(t))
+    return dict(sorted(out.items()))
+
+
 def achieved_power(path: Path = POWER_DECISION) -> list[dict] | None:
     """The achieved power at the worst Holm step quoted with the results (§9.4), from the
     committed luna power run, with each scenario's F-0 level (power_sim's `LunaSetup`)."""
@@ -2156,6 +2591,78 @@ def achieved_power(path: Path = POWER_DECISION) -> list[dict] | None:
              "p_f0_observed_far": (setups[r["scenario"]].p_f0_obs if r["scenario"] in setups
                                    else None),
              "source": _rel(path)} for r in rows]
+
+
+def _haiku_validity_glob(meta: dict) -> str | None:
+    """Why a power run's meta.json does not show a simulation from Haiku's validity runs (R8),
+    or None: power_sim's luna part (``part`` "luna"), with ``luna_validity_glob`` (the episodes
+    its template SD is measured on) naming claude-haiku-5-5's runs of experiment
+    persistgym_validity and no other model's."""
+    cfg = meta.get("config") or {}
+    glob = str(cfg.get("luna_validity_glob") or "")
+    if cfg.get("part") != "luna":
+        return f"not a run of power_sim's luna part (part {cfg.get('part')!r})"
+    if (registered.HAIKU_MODEL not in glob or "persistgym_validity" not in glob
+            or MODEL in glob):
+        return (f"its validity glob {glob!r} does not name {registered.HAIKU_MODEL}'s validity "
+                "runs")
+    return None
+
+
+def replication_power(path: Path | None, templates: int) -> dict:
+    """The replication's power at its T (R8: simulated with `analysis.power_sim` "using luna's
+    assumptions (2026-10-10) re-estimated from Haiku's validity runs", at one-sided 0.05,
+    reported, not used to set T): from a per-T power table of power_sim's luna part
+    (``luna_power.csv``), the rows at T. P(the unadjusted test rejects) is
+    ``P_h*_unadjusted``; P(it rejects and power_sim's model check agrees) is that minus
+    ``P_h*_glm_veto`` (it rejects and the check does not agree). Unavailable without a table
+    or a row at T, and unless the run's meta.json next to the table shows it was simulated from
+    Haiku's validity runs (`_haiku_validity_glob`; luna's own power run is refused): the
+    assumptions passed to power_sim are not checked, only that provenance, which is
+    reported (``validity_glob``)."""
+    out = {"available": False, "T": templates, "alpha_one_sided": ALPHA,
+           "source": None if path is None else _rel(path), "validity_glob": None, "rows": []}
+    if path is None:
+        out["note"] = "no power table given (--power-path)"
+        return out
+    if not Path(path).is_file():
+        out["note"] = f"no power table at {path}"
+        return out
+    meta_path = Path(path).parent / "meta.json"
+    if not meta_path.is_file():
+        out["note"] = ("no meta.json next to the power table, so it cannot be shown to come "
+                       "from Haiku's validity runs (R8)")
+        return out
+    meta = _read_json(meta_path, "the power run")
+    out["validity_glob"] = (meta.get("config") or {}).get("luna_validity_glob")
+    why = _haiku_validity_glob(meta)
+    if why:
+        out["note"] = f"not simulated from Haiku's validity runs (R8): {why}"
+        return out
+    with open(path, encoding="utf-8", newline="") as fh:
+        table = list(csv.DictReader(fh))
+    missing = [c for c in POWER_TABLE_COLUMNS if table and c not in table[0]]
+    if not table or missing:
+        out["note"] = ("not a per-T power table of power_sim's luna part (luna_power.csv): "
+                       + (f"no column {', '.join(missing)}" if missing else "no rows"))
+        return out
+    for r in table:
+        if int(r["templates"]) != templates:
+            continue
+        row = {"scenario": r["scenario"], "templates": templates}
+        for h in ("h1", "h3"):
+            rejects, veto = float(r[f"P_{h}_unadjusted"]), float(r[f"P_{h}_glm_veto"])
+            row[f"power_{h}_rejects"] = rejects
+            row[f"power_{h}_rejects_and_model_agrees"] = rejects - veto
+        for k in ("reps", "p_f0_onr", "p_f0_or", "true_delta_h1_pp", "true_delta_h3_pp"):
+            if r.get(k) not in (None, ""):
+                row[k] = float(r[k])
+        out["rows"].append(row)
+    if out["rows"]:
+        out["available"] = True
+    else:
+        out["note"] = f"the power table has no row at T = {templates}"
+    return out
 
 
 def bayesian_glmm(prim: pd.DataFrame, seed: int, settings: dict | None = None) -> dict:
@@ -2240,32 +2747,41 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
             allow_incomplete: bool = False, raw_root: Path | None = None,
             links: dict[str, str] | None = None, templates: int | None = None,
             power_path: Path | None = None, runs: list[str] | None = None,
-            sweep_closed: str | None = None, bayes: bool = True) -> dict:
+            sweep_closed: str | None = None, bayes: bool = True, model: str | None = None,
+            experiment: str | None = None) -> dict:
     """H1 and H3 from the files under `root`. Raises Refusal (incomplete without
     `allow_incomplete`, undeclared duplicates, inconsistent records, a `runs` entry not found)
-    or AccountingBug. `templates` defaults to T (`registered.LUNA_T`), read at call time.
-    `runs` is the --run input list (None: every luna run found, PROVISIONAL); `sweep_closed`
-    the decisions.md entry that closed the sweep (--sweep-closed); `bayes` False skips the
-    Bayesian sensitivity fit (PROVISIONAL)."""
-    templates = templates or T_REGISTERED
-    power_path = power_path or POWER_DECISION
+    or AccountingBug. `model` is the model whose runs are read (`profile`: luna's by default;
+    claude-haiku-5-5 for R8's replication), in `experiment` (default its registered one; any
+    other is PROVISIONAL). `templates` defaults to the model's T (`registered.LUNA_T`,
+    `registered.HAIKU_T`), read at call time. `runs` is the --run input list (None: every run
+    of the model found, PROVISIONAL); `sweep_closed` the decisions.md entry that closed the
+    sweep (--sweep-closed); `bayes` False skips the Bayesian sensitivity fit (PROVISIONAL);
+    `power_path` the power file (luna: its committed power run; Haiku: none unless given)."""
+    prof = profile(model, experiment)
+    templates = templates or prof.T
+    power_path = power_path or prof.power_path
     raw_root = raw_root or root / "raw"
     links = dict(links or {})
     if sweep_closed is not None and not sweep_closed.strip():
         raise Refusal("--sweep-closed needs the results/decisions.md entry that closed the sweep")
     seed, draw_path = read_seed(root)
-    found, skipped = discover(root, runs)
+    found, skipped = discover(root, runs, prof)
     if not found:
-        raise Refusal(f"no {MODEL} run of experiment {EXPERIMENT} on the default config under "
-                      f"{root}")
-    resolved, warn = resolve(found, links, sweep_closed=sweep_closed is not None)
-    incomplete, deviations = completeness(resolved, templates, sweep_closed is not None)
+        raise Refusal(f"no {prof.model} run of experiment {prof.experiment} on the default "
+                      f"config under {root}")
+    # R8: an episode the request-side check stopped is excluded (the Messages wire only)
+    checked = request_check_stops(found) if prof.api == MESSAGES_API else {}
+    resolved, warn = resolve(found, links, sweep_closed=sweep_closed is not None,
+                             echo=prof.echo, stopped=checked)
+    incomplete, deviations = completeness(resolved, templates, sweep_closed is not None,
+                                          prof.kinds)
     if incomplete and not allow_incomplete:
         raise Refusal("the repeat-0 sweep is incomplete:\n" + "\n".join(
             f"  - {x}" for x in incomplete) + "\nWait for the runs (a transport failure needs "
             "its §13 re-run), close the sweep with --sweep-closed REF if the researcher has "
             "closed it, or pass --allow-incomplete to see what exists (PROVISIONAL).")
-    check = accounting_check(found, raw_root)
+    check = accounting_check(found, raw_root, prof.experiment, prof.api)
     if check["bugs"]:
         raise AccountingBug(
             "PREREG §2.8's bug stop: window-accounting bug(s), so no result is reported until "
@@ -2277,15 +2793,27 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
         if not allow_incomplete:
             raise Refusal(incomplete[-1] + "\nRun it in the checkout that holds results/raw/, "
                           "pass --raw-root, or pass --allow-incomplete (PROVISIONAL).")
-    table, warn_rows = episode_table(resolved)
+    table, warn_rows = episode_table(resolved, prof.api)
     warn += warn_rows + check["warnings"]
     beyond = sorted({int(t) for t in table.template if t >= templates}) if len(table) else []
     if beyond:
         warn.append(f"records on templates {beyond[0]}..{beyond[-1]} lie outside 0..{templates - 1}"
                     " and are left out")
     if any(s["reason"].endswith("not in the input list (--run)") for s in skipped):
-        warn.append("luna sweep run(s) found but not in the input list (--run): see Checks")
+        warn.append(f"{prof.name} sweep run(s) found but not in the input list (--run): see "
+                    "Checks")
+    stopped = sorted(r.run_id for r in found if r.exit_reason == REQUEST_CHECK_STOP)
+    if stopped and prof.api == MESSAGES_API:
+        excluded = sorted(f"{k[1]} (repeat {k[2]})" for k, r in resolved.items()
+                          if r.request_check)
+        warn.append(f"run(s) stopped by the request-side check ({REQUEST_CHECK_STOP}): "
+                    + ", ".join(stopped) + ". A harness bug (R8): the episode(s) it stopped "
+                    "at, of which no record was written, are excluded, with any record a later "
+                    "run holds of them: " + (", ".join(excluded) or "none"))
     provisional = list(incomplete)
+    if prof.experiment != prof.registered_experiment:
+        provisional.append(f"--experiment {prof.experiment}: not {prof.name}'s registered "
+                           f"experiment ({prof.registered_experiment})")
     if runs is None:
         provisional.append("no input list: the runs read were found, not named with --run "
                            "(harnesses/DESIGN.md §7.8)")
@@ -2297,13 +2825,14 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
                  & (table.template < templates)].reset_index(drop=True)
     idx = resample_indices(templates, seed + BOOT_SEED_OFFSET, boot)
     an = Analysis(prim, templates, idx)
+    w_n_0 = "W-n-0" in prof.cells
     glm = glm_91(prim)
-    glm_wn = glm_91(prim, ("W-0", "W-n-0"))
+    glm_wn = glm_91(prim, ("W-0", "W-n-0")) if w_n_0 else None
     standin = h1_standin(prim)
     # the Firth fit, whenever the logit-scale Delta_H1 is not finite: read by the rule in force
     # ("firth") or, were another rule in force, by its sensitivity line
     firth = glm_91_firth(prim) if glm.get("logit_status") != FINITE else None
-    h1 = h1_reading(an, glm, standin, firth)
+    h1 = h1_reading(an, glm, standin, firth, w_n_0=w_n_0)
     lookups = lookups_reading(an)
     tok = token_ratios(an)
     if tok["R_need"]["episodes_left_out_no_tokens"]:
@@ -2312,9 +2841,10 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
                     "of R_need")
     glm3, glm3_ps = h3_glm_literal(prim), h3_glm_powersim(prim)
     h3 = h3_reading(an, glm3, glm3_ps)
-    fam = family_readings(h1, h3)
+    rep = prof.replication
+    fam = replication_readings(h1, h3) if rep else family_readings(h1, h3)
     status = PROVISIONAL if provisional else FINAL
-    excl = exclusion_table(resolved, templates)
+    excl = exclusion_table(resolved, templates, prof.kinds, prof.echo)
     bayes_out = (bayesian_glmm(prim, seed + BAYES_SEED_OFFSET) if bayes else
                  {"status": "not run", "note": "--no-bayes"})
     model_sign = h1["model_check"]["sign"]
@@ -2322,6 +2852,8 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
         bayes_out["sign_disagrees_with_glm"] = (_has_sign(model_sign)
                                                 and _has_sign(_sign(bayes_out["median"]))
                                                 and _sign(bayes_out["median"]) != model_sign)
+    # luna's output keeps exactly the keys, in the order, of its cited output
+    # (LUNA_CITED_OUTPUT); the replication's differ where R8 does (profile, labels, power)
     out = {
         "generated_utc": generated, **git, "prereg_version": runmeta.prereg_version(),
         "status": status, "provisional_reasons": provisional, "deviations": deviations,
@@ -2332,33 +2864,46 @@ def compute(root: Path, generated: str, git: dict, *, boot: int = N_BOOT,
                    "runs": [run_row(r, resolved) for r in sorted(found,
                                                                  key=lambda x: x.started)],
                    "rerun_links": links, "skipped": skipped},
-        "model": MODEL, "generator_config_hash": GENERATOR_HASH, "templates": templates,
+        **({"profile": prof.public()} if rep else {}),
+        "model": prof.model, "generator_config_hash": prof.generator_hash,
+        "templates": templates,
         "seed": seed, "bootstrap": {"seed": seed + BOOT_SEED_OFFSET, "resamples": boot,
                                     "method": "percentile", "levels": list(LEVELS)},
         "h1_separation_rule": H1_SEPARATION_RULE,
-        "changed_after_final": list(CHANGED_AFTER_FINAL),
+        **({"pre_specified": list(PRE_SPECIFIED)} if rep
+           else {"changed_after_final": list(CHANGED_AFTER_FINAL)}),
         "primary_episodes": len(prim),
         "accounting_check": {k: v for k, v in check.items() if k != "bugs"},
         "h1": h1, "h1_lookups": lookups, "h1_tokens": tok,
-        "h1_predictions": h1_predictions(h1, lookups, tok), "h3": h3, "family": fam,
-        "glm_9_1": _public(glm), "glm_9_1_with_w_n_0": _public(glm_wn),
+        "h1_predictions": h1_predictions(h1, lookups, tok), "h3": h3,
+        **({"replication": fam} if rep else {"family": fam}),
+        "glm_9_1": _public(glm),
+        "glm_9_1_with_w_n_0": (_public(glm_wn) if glm_wn is not None
+                               else {"status": NOT_RUN_BUDGET, "note": "W-n-0 did not run"}),
         "glm_9_1_firth": firth, "glm_h1_standin": standin,
         "glm_h3": _public(glm3), "glm_h3_powersim": glm3_ps,
-        "bayesian_glmm": bayes_out, "achieved_power": achieved_power(power_path),
-        "accounting": accounting(prim), "cost_outcomes": cost_outcomes(prim),
-        "cells": cell_table(prim), "exclusions": excl,
-        "echo_cells_over_5pct": [f"{e['kind']} {e['task_cell']}" for e in excl
-                                 if e["echo_over_5pct"]],
-        "repeats": repeat_agreement(table, templates), "model_strings": model_strings(an),
+        "bayesian_glmm": bayes_out,
+        **({"power": replication_power(power_path, templates)} if rep
+           else {"achieved_power": achieved_power(power_path)}),
+        "accounting": accounting(prim, prof.cells),
+        "cost_outcomes": cost_outcomes(prim, prof.cells,
+                                       unreported=prof.api == MESSAGES_API),
+        "cells": cell_table(prim, prof.kinds, stopped=not prof.echo), "exclusions": excl,
+        **({"echo_cells_over_5pct": [f"{e['kind']} {e['task_cell']}" for e in excl
+                                     if e["echo_over_5pct"]]} if prof.echo else {}),
+        "repeats": repeat_agreement(table, templates, prof.kinds),
+        "model_strings": model_strings(an),
+        **({"service_tiers_served": served_tiers(prim)} if rep else {}),
         "dropped_records": [{"cell": r.key[0], "episode_id": r.key[1], "repeat": r.key[2],
                              "kept_from": r.run_id, "dropped": r.dropped}
                             for r in resolved.values() if r.dropped],
     }
-    wn = logit_sign(glm_wn)
-    out["glm_9_1_with_w_n_0"]["sign"] = wn
-    out["glm_9_1_with_w_n_0"]["sign_disagrees"] = (wn not in (None, 0)
-                                                   and model_sign not in (None, 0)
-                                                   and wn != model_sign)
+    if glm_wn is not None:
+        wn = logit_sign(glm_wn)
+        out["glm_9_1_with_w_n_0"]["sign"] = wn
+        out["glm_9_1_with_w_n_0"]["sign_disagrees"] = (wn not in (None, 0)
+                                                       and model_sign not in (None, 0)
+                                                       and wn != model_sign)
     return out
 
 
@@ -2443,16 +2988,39 @@ def _bayes_line(b: dict, model_sign: int | None) -> str:
             f"{same}.")
 
 
+def _rep(h: dict) -> bool:
+    """Whether `h` is R8's replication: its output has a "replication" block, luna's a
+    "family" one (and no "profile")."""
+    return "replication" in h
+
+
+def _cells_of(h: dict) -> tuple[str, ...]:
+    """The harness cells the output read: the profile's, or luna's (its output names none)."""
+    return tuple((h.get("profile") or {}).get("cells") or HARNESS_CELLS)
+
+
+def _name_of(h: dict) -> str:
+    return (h.get("profile") or {}).get("name") or "luna"
+
+
 def _h1_lines(h: dict) -> list[str]:
-    h1, fam, g = h["h1"], h["family"], h["glm_9_1"]
+    rep = _rep(h)
+    h1, g = h["h1"], h["glm_9_1"]
+    fam = h["replication"] if rep else h["family"]
     mc, c = h1["model_check"], h1["cells"]
-    holm1 = _word(fam["H1"]["holm_rejects"], "rejects", "does not reject")
+    if rep:
+        test1 = (f"Unadjusted at one-sided 0.05 (outside luna's Holm family, R8): "
+                 f"{_word(fam['H1']['rejects_unadjusted'], 'rejects', 'does not reject')}.")
+    else:
+        test1 = (f"Holm (family of 2): "
+                 f"{_word(fam['H1']['holm_rejects'], 'rejects', 'does not reject')}.")
+    wn_nr, wn_r = (_rate_s(c[k]) if k in c else "not run" for k in ("W-n-0 NR", "W-n-0 R"))
     L = ["### H1: recoverability turns a success penalty into a cost penalty", "",
          "| Cell (observed, far) | F-0 | W-0 | W-n-0 (alongside) |", "|---|---|---|---|",
          (f"| not recoverable | {_rate_s(c['F-0 NR'])} | {_rate_s(c['W-0 NR'])} | "
-          f"{_rate_s(c['W-n-0 NR'])} |"),
+          f"{wn_nr} |"),
          (f"| recoverable | {_rate_s(c['F-0 R'])} | {_rate_s(c['W-0 R'])} | "
-          f"{_rate_s(c['W-n-0 R'])} |"), "",
+          f"{wn_r} |"), "",
          "| Quantity (probability scale) | Estimate | 90% CI | 95% CI |", "|---|---|---|---|"]
     for name, key in (("Penalty_NR = p(F-0, NR) − p(W-0, NR)", "penalty_nr"),
                       ("Penalty_R = p(F-0, R) − p(W-0, R)", "penalty_r"),
@@ -2465,7 +3033,7 @@ def _h1_lines(h: dict) -> list[str]:
            for k in ("penalty_nr_logit", "penalty_r_logit")}
     L += ["",
           (f"- One-sided bootstrap test, H0: Δ_H1 ≤ 0: p = {_num_s(h1['p_one_sided'], 4)}. "
-           f"Holm (family of 2): {holm1}."),
+           f"{test1}"),
           ("- Model check (§9.4; the §9.1 GLM, fitted by statsmodels on F-0 and W-0 × 8 task "
            "cells; the logit-scale Δ_H1 is its W-0 × R coefficient): "
            f"{_logit_s(mc['estimate'], mc['logit_status'], g)}; agrees (> 0): "
@@ -2473,10 +3041,12 @@ def _h1_lines(h: dict) -> list[str]:
            f"variation dropped from the GLM: {g.get('n_templates_dropped', 'n/a')}.")]
     fz = h.get("glm_9_1_firth") or {}
     if mc["logit_status"] != FINITE:
+        ruling = ("the researcher's ruling of 2026-10-10, module docstring; pre-specified for "
+                  "Haiku by R8" if rep else "the researcher's ruling of 2026-10-10, module "
+                  "docstring")
         L.append("- **The logit-scale Δ_H1 is not finite:** among the GLM's templates, "
                  + "; ".join(mc["h1_cells_no_variation"]) + f". The rule in force is "
-                 f"`{mc['rule']}` (`H1_SEPARATION_RULE`; the researcher's ruling of "
-                 "2026-10-10, module docstring): " + {
+                 f"`{mc['rule']}` (`H1_SEPARATION_RULE`; {ruling}): " + {
                      "literal": ("the sign of the limit decides; −∞ (an interaction that flips "
                                  "sign between the scales near a ceiling, §9.3) and an "
                                  "undefined sign do not agree."),
@@ -2492,8 +3062,9 @@ def _h1_lines(h: dict) -> list[str]:
             fe = (h1.get("model_check_sensitivity") or {}).get(rule, {}).get("firth_estimate")
             parts.append(f"rule `{rule}`"
                          + (f" (Firth's W-0 × R {_num_s(fe)})" if rule == "firth" else "")
-                         + f": the model check would agree: {_yes(s['model_agrees'])}, and H1 "
-                         f"would be: {s['verdict']}")
+                         + f": the model check would agree: {_yes(s['model_agrees'])}, and "
+                         + (f"the replication's label would be: {s['label']}" if rep
+                            else f"H1 would be: {s['verdict']}"))
         if parts:
             L.append("- Sensitivity lines (the rules not in force, ruling of 2026-10-10; they "
                      "enter no decision): " + "; ".join(parts) + ".")
@@ -2506,24 +3077,36 @@ def _h1_lines(h: dict) -> list[str]:
     st = mc["standin_estimate"]
     st_same = _same(mc["standin_sign_disagrees"], "the model check",
                     _has_sign(mc["sign"]) and st is not None and _has_sign(_sign(st)))
-    wn_same = _same(wn.get("sign_disagrees"), "the model check",
-                    _has_sign(wn.get("sign")) and _has_sign(mc["sign"]))
+    if wn.get("status") == NOT_RUN_BUDGET:
+        wn_s = (" W-n-0 as a third harness level (a sensitivity analysis, ruling of "
+                f"2026-10-10): not fitted, W-n-0 being {NOT_RUN_BUDGET}.")
+    else:
+        wn_same = _same(wn.get("sign_disagrees"), "the model check",
+                        _has_sign(wn.get("sign")) and _has_sign(mc["sign"]))
+        wn_s = (" W-n-0 as a third harness level (a sensitivity analysis, ruling of "
+                "2026-10-10), W-0 × R "
+                + _logit_s(wn.get("estimate"), wn.get("logit_status", FINITE), wn)
+                + f" ({wn_same}).")
     L += [(f"- Logit scale (§9.3): Penalty_NR {pen['penalty_nr_logit']}, Penalty_R "
            f"{pen['penalty_r_logit']}, Δ_H1 {_logit_s(mc['estimate'], mc['logit_status'], g)}."),
           (f"- Cross-checks (not decisions): power_sim's emulation of the same fit {emu}; "
            f"power_sim's stand-in (4 cells; W, R, W × R) {_num_s(mc['standin_estimate'])} "
-           f"({st_same}); the §9.1 GLM with "
-           "W-n-0 as a third harness level (a sensitivity analysis, ruling of 2026-10-10), "
-           "W-0 × R "
-           + _logit_s(wn.get("estimate"), wn.get("logit_status", FINITE), wn)
-           + f" ({wn_same})."),
-          _bayes_line(h["bayesian_glmm"], mc["sign"]),
-          (f"- **H1: {fam['H1']['verdict']}.** Supported needs the Holm test and the model "
-           f"check (§9.4): {_yes(fam['H1']['holm_rejects'])} and "
-           f"{_yes(fam['H1']['model_agrees'])}."),
-          ("- **Kill rule** (Δ_H1 < 10pp and the 90% upper bound < 15pp): "
-           f"**{_word(h1['kill'], 'fires', 'does not fire')}**"
-           + (': drop the "success vs cost" framing (§3 H1).' if h1["kill"] else "."))]
+           f"({st_same}); the §9.1 GLM with" + wn_s),
+          _bayes_line(h["bayesian_glmm"], mc["sign"])]
+    if rep:
+        L += [(f"- **H1, replication (R8): {fam['H1']['label']}.** Outside luna's Holm family "
+               "and with no confirmatory label (R8): it neither confirms nor kills H1, and luna "
+               "stays primary."),
+              ("- **Kill reading** (computed as on luna: Δ_H1 < 10pp and the 90% upper bound "
+               f"< 15pp): **{_word(h1['kill'], 'fires', 'does not fire')}**. H1's kill rule "
+               "reads luna only (R8), so on Haiku this reading neither kills nor confirms H1.")]
+    else:
+        L += [(f"- **H1: {fam['H1']['verdict']}.** Supported needs the Holm test and the model "
+               f"check (§9.4): {_yes(fam['H1']['holm_rejects'])} and "
+               f"{_yes(fam['H1']['model_agrees'])}."),
+              ("- **Kill rule** (Δ_H1 < 10pp and the 90% upper bound < 15pp): "
+               f"**{_word(h1['kill'], 'fires', 'does not fire')}**"
+               + (': drop the "success vs cost" framing (§3 H1).' if h1["kill"] else "."))]
     if h1["scales_disagree_in_sign"]:
         L.append("- **The probability and logit scales disagree in sign** (§9.3).")
     if g.get("no_variation_cells"):
@@ -2555,16 +3138,26 @@ def _h1_lines(h: dict) -> list[str]:
         L.append(f"R_need leaves out {left} episode(s) whose need phase is incomplete or has "
                  "no token count.")
     wn = h1["w_n_0_alongside"]
-    L += ["", (f"W-n-0 alongside (not tested): penalty against F-0, NR "
-               f"{_pp(wn['penalty_nr']['estimate'])} {_ci(wn['penalty_nr'])}, R "
-               f"{_pp(wn['penalty_r']['estimate'])} {_ci(wn['penalty_r'])}.")]
+    if wn.get("status") == NOT_RUN_BUDGET:
+        L += ["", f"W-n-0 alongside: {NOT_RUN_BUDGET} (R8's size rule)."]
+    else:
+        L += ["", (f"W-n-0 alongside (not tested): penalty against F-0, NR "
+                   f"{_pp(wn['penalty_nr']['estimate'])} {_ci(wn['penalty_nr'])}, R "
+                   f"{_pp(wn['penalty_r']['estimate'])} {_ci(wn['penalty_r'])}.")]
     return L
 
 
 def _h3_lines(h: dict) -> list[str]:
-    h3, fam = h["h3"], h["family"]
+    rep = _rep(h)
+    h3 = h["h3"]
+    fam = h["replication"] if rep else h["family"]
     mc3 = h3["model_check"]
-    holm3 = _word(fam["H3"]["holm_rejects"], "rejects", "does not reject")
+    if rep:
+        test3 = (f"Unadjusted at one-sided 0.05 (outside luna's Holm family, R8): "
+                 f"{_word(fam['H3']['rejects_unadjusted'], 'rejects', 'does not reject')}.")
+    else:
+        test3 = (f"Holm (family of 2): "
+                 f"{_word(fam['H3']['holm_rejects'], 'rejects', 'does not reject')}.")
     holds = _word(h3["prediction_holds"], "holds", "does not hold")
     L = ["### H3: little residual cost of multi-turn structure when the fact survives", "",
          "| Arm (NR, far; observed and derived pooled) | Success |", "|---|---|",
@@ -2575,7 +3168,7 @@ def _h3_lines(h: dict) -> list[str]:
          (f"- Prediction (90% upper bound ≤ 5pp, §3 H3): **{holds}** (reported either way)"
           + ("; the whole 90% CI lies above 5pp." if h3.get("ci90_above_margin") else ".")),
          (f"- One-sided bootstrap test, H0: Δ_H3 ≥ 5pp: p = {_num_s(h3['p_one_sided'], 4)}. "
-          f"Holm (family of 2): {holm3}."),
+          f"{test3}"),
          ("- Model check (§9.4, as registered: a statsmodels binomial GLM with template fixed "
           "effects and the arm on the H3 cells; its probability-scale Δ_H3 is the arm's "
           f"average marginal effect over all {mc3.get('n_pairs')} (template, task cell) pairs, "
@@ -2604,10 +3197,15 @@ def _h3_lines(h: dict) -> list[str]:
           + "; below 5pp: "
           f"{_yes(mc3['powersim_agrees'])}"
           + ("; **it disagrees with the registered model about the 5pp bound**."
-             if mc3["powersim_disagrees"] else ".")),
-         (f"- **H3: {fam['H3']['verdict']}.** Supported needs the Holm test and the model "
-          f"check (§9.4): {_yes(fam['H3']['holm_rejects'])} and "
-          f"{_yes(fam['H3']['model_agrees'])}.")]
+             if mc3["powersim_disagrees"] else "."))]
+    if rep:
+        L.append(f"- **H3, replication (R8): {fam['H3']['label']}.** Outside luna's Holm "
+                 "family and with no confirmatory label (R8): it neither confirms nor refutes "
+                 "H3, and luna stays primary.")
+    else:
+        L.append(f"- **H3: {fam['H3']['verdict']}.** Supported needs the Holm test and the "
+                 f"model check (§9.4): {_yes(fam['H3']['holm_rejects'])} and "
+                 f"{_yes(fam['H3']['model_agrees'])}.")
     if h3["scales_disagree_in_sign"]:
         L.append("- **The probability and logit scales disagree in sign** (§9.3).")
     L += ["", "Per cell: " + "; ".join(
@@ -2653,7 +3251,50 @@ def _family_lines(h: dict) -> list[str]:
     return L
 
 
+def _replication_power_s(h: dict) -> str:
+    """The replication's power line (R8), or why it is unavailable."""
+    pw = h["power"]
+    if not pw.get("available"):
+        return (f"Power at T = {pw.get('T')} (R8: one-sided 0.05, simulated with "
+                "`analysis.power_sim` from Haiku's validity runs): unavailable "
+                f"({pw.get('note') or 'no note'}).")
+    parts = []
+    for r in pw["rows"]:
+        f0 = (f", F-0 observed-far at {r['p_f0_onr']:.2f} (NR) and {r['p_f0_or']:.2f} (R)"
+              if r.get("p_f0_onr") is not None and r.get("p_f0_or") is not None else "")
+        parts.append(f"{r['scenario']}{f0}: the unadjusted test rejects, H1 "
+                     f"{r['power_h1_rejects']:.3f} and H3 {r['power_h3_rejects']:.3f}; it "
+                     "rejects and the model check agrees, H1 "
+                     f"{r['power_h1_rejects_and_model_agrees']:.3f} and H3 "
+                     f"{r['power_h3_rejects_and_model_agrees']:.3f}")
+    return (f"Power at T = {pw['T']} (R8: one-sided 0.05; from `{pw['source']}`, whose run "
+            f"measured the template SD on `{pw['validity_glob']}`; simulated with "
+            "power_sim's model checks, H1: a 4-cell stand-in read through the stopping rule, "
+            f"H3: template fixed effects + derived term + arm): {'; '.join(parts)}. It "
+            "describes the simulation's scenarios, not these runs, and did not set T (R8)"
+            + _power_gaps(h) + ".")
+
+
+def _replication_lines(h: dict) -> list[str]:
+    rp = h["replication"]
+    L = ["### Multiplicity (§9.4; R8)", "",
+         "| Test | One-sided p, unadjusted | Rejects at 0.05 | Model check agrees | Label |",
+         "|---|---|---|---|---|"]
+    for key, name in (("H1", "H1 (H0: Δ_H1 ≤ 0)"), ("H3", "H3 (H0: Δ_H3 ≥ 5pp)")):
+        t = rp[key]
+        L.append(f"| {name} | {_num_s(t['p_one_sided'], 4)} | {_yes(t['rejects_unadjusted'])} "
+                 f"| {_yes(t['model_agrees'])} | {t['label']} |")
+    L += ["", ("Outside luna's Holm family (R8; R6 change 9): luna's family stays H1 and H3 on "
+               "luna, 2 tests, with the family of 4 as its sensitivity analysis, and these "
+               "tests change neither its size nor its membership. They carry no confirmatory "
+               "label: they neither confirm nor kill H1 or H3, and H1's kill rule and D38 read "
+               "luna only."), "", _replication_power_s(h)]
+    return L
+
+
 def _accounting_lines(h: dict) -> list[str]:
+    rep = _rep(h)
+    others = [c for c in _cells_of(h) if c != "F-0"]
     L = ["## §2.8 accounting by cell (base episodes, repeat 0)", "",
          ("| Cell | Task cell | n | S_planned | S_verbatim 1/0 | S = 1 | Near losses | "
           "P(carried) | P(used \\| carried) | Rescued, lookup | Rescued, no lookup | "
@@ -2669,22 +3310,39 @@ def _accounting_lines(h: dict) -> list[str]:
             f"{'-' if r['near_losses'] is None else r['near_losses']} | {carried} | {used} | "
             f"{_rate_s(r['rescued_with_lookup'])} | {_rate_s(r['rescued_without_lookup'])} | "
             f"{_rate_s(r['residual_at_S1'])} |")
-    L += ["", ("Rescued = success among S_verbatim = 0 (and, in W-n-0 and Σ-n-0, not "
-               "carried); chance is 0.10. P(carried) is a lower bound: the string match misses "
-               "paraphrase (§2.8). Near losses are expected, not bugs, and stay in their cell "
-               "(§13). Σ-n-0 is exploratory (D12, §9.10); its split by `compacted_between` is "
-               "in h1h3.json.")]
+    if rep:
+        carry = [c for c in others if c in CARRY_CELLS]
+        L += ["", ("Rescued = success among S_verbatim = 0"
+                   + (f" (and, in {' and '.join(carry)}, not carried)" if carry else "")
+                   + "; chance is 0.10."
+                   + (" P(carried) is a lower bound: the string match misses paraphrase "
+                      "(§2.8)." if carry else "")
+                   + " Near losses are expected, not bugs, and stay in their cell (§13).")]
+    else:
+        L += ["", ("Rescued = success among S_verbatim = 0 (and, in W-n-0 and Σ-n-0, not "
+                   "carried); chance is 0.10. P(carried) is a lower bound: the string match "
+                   "misses paraphrase (§2.8). Near losses are expected, not bugs, and stay in "
+                   "their cell (§13). Σ-n-0 is exploratory (D12, §9.10); its split by "
+                   "`compacted_between` is in h1h3.json.")]
+    heads = [f"{c} (expl.)" if c in SUMMARY_CELLS else c for c in others]
     L += ["", "## Cost outcomes (§9.5): ratio to F-0 in the same task cell", "",
           ("Quasi-Poisson log-link GLM with template fixed effects (§9.5); ratio exp(β) [95% "
            "CI]. §9.5 registers the model, not a comparison: each harness cell against F-0 "
            "within a task cell is this script's reading 11 (as implemented, not registered)."),
-          "", "| Task cell | Outcome | W-0 | W-n-0 | Σ-n-0 (expl.) |", "|---|---|---|---|---|"]
+          "", "| Task cell | Outcome | " + " | ".join(heads) + " |",
+          "|---|---|" + "---|" * len(heads)]
     for r in h["cost_outcomes"]:
+        gone = r.get("unavailable") or {}
+        note = r.get("note") or ""
         cells = []
-        for c in ("W-0", "W-n-0", "Σ-n-0"):
+        for c in others:
             x = r["ratios"].get(c)
+            if c in gone or "F-0" in gone:
+                cells.append("unavailable (not reported)")
+                continue
             if x is None:
-                cells.append("n/a" + (" (no F-0 events)" if "reference" in (r.get("note") or "")
+                cells.append("n/a" + (" (no F-0 events)" if "no events in the reference" in note
+                                      else " (no F-0 rows)" if "no rows in the reference" in note
                                       else ""))
                 continue
             if x.get("note"):
@@ -2694,34 +3352,74 @@ def _accounting_lines(h: dict) -> list[str]:
             cells.append(f"{x['ratio']:.3f}"
                          + ("" if ci is None else f" [{ci[0]:.3f}, {ci[1]:.3f}]"))
         L.append(f"| {r['task_cell']} | {r['label']} | " + " | ".join(cells) + " |")
+    gone = [r for r in h["cost_outcomes"] if r.get("unavailable")]
+    if gone:
+        L += ["", ("Unavailable (R8: a count a response did not report is null, never 0, and the "
+                   "outcome is reported as unavailable; no outcome is fitted on part of a "
+                   "cell's episodes): "
+                   + "; ".join(f"{r['task_cell']} {r['label']}, " + ", ".join(
+                       f"{c} {v['missing']} of {v['of']} episodes not reported"
+                       for c, v in r["unavailable"].items())
+                       + (" (F-0 is the reference, so no ratio)" if "F-0" in r["unavailable"]
+                          else "")
+                       for r in gone) + ".")]
     return L
 
 
+def _stopped_s(r: dict) -> str:
+    """The replication's stopped step responses of a cell, by reason (R8: refusals per cell,
+    with their category)."""
+    st = r.get("stopped_responses") or {}
+    return (", ".join(f"{k} {v}" for k, v in st.items()) or "-") + (
+        f" ({r['episodes_with_a_refusal']} episode(s) with a refusal)"
+        if r.get("episodes_with_a_refusal") else "")
+
+
 def _tables_lines(h: dict) -> list[str]:
-    L = ["## Success by cell (repeat 0; descriptive)", "",
-         ("Descriptive, not tests (§9.10): each cell's success rate. Only the contrasts above "
-          "are registered; the restated-at-need control (the memory-free ceiling, §4.3), the W "
-          "cells' derived and near cells and the Σ-n-0 cells (exploratory, D12) enter no "
-          "registered test here."), "",
-         "| Run kind | Task cell | Success | Content failures |", "|---|---|---|---|"]
+    rep = _rep(h)
+    if rep:
+        L = ["## Success by cell (repeat 0; descriptive)", "",
+             ("Descriptive, not tests (§9.10): each cell's success rate. Only the contrasts "
+              "above are registered; the restated-at-need control (the memory-free ceiling, "
+              "§4.3) and the W cells' derived and near cells enter no registered test here. "
+              "Stopped responses are the step responses that stopped short, by reason (a "
+              "refusal with its category, `max_output_tokens` at the output cap): each is an "
+              "invalid action that scores 0 and stays in (R8)."), "",
+             "| Run kind | Task cell | Success | Content failures | Stopped responses |",
+             "|---|---|---|---|---|"]
+    else:
+        L = ["## Success by cell (repeat 0; descriptive)", "",
+             ("Descriptive, not tests (§9.10): each cell's success rate. Only the contrasts "
+              "above are registered; the restated-at-need control (the memory-free ceiling, "
+              "§4.3), the W cells' derived and near cells and the Σ-n-0 cells (exploratory, "
+              "D12) enter no registered test here."), "",
+             "| Run kind | Task cell | Success | Content failures |", "|---|---|---|---|"]
     for r in h["cells"]:
         cf = ", ".join(f"{k} {v}" for k, v in r["content_failures"].items()) or "-"
         L.append(f"| {r['kind']}{' (expl.)' if r['exploratory'] else ''} | {r['task_cell']} | "
-                 f"{_rate_s(r)} | {cf} |")
-    ex = [e for e in h["exclusions"] if e["excluded_echo"] or e["excluded_transport"]
+                 f"{_rate_s(r)} | {cf} |" + (f" {_stopped_s(r)} |" if rep else ""))
+    runner = "excluded_echo" if not rep else "excluded_by_runner"
+    ex = [e for e in h["exclusions"] if e[runner] or e["excluded_transport"]
           or e["excluded_no_final"] or e["never_played"] or e["pending"]
-          or e["dropped_duplicates"]]
+          or e["dropped_duplicates"] or e.get("excluded_request_check")]
     L += ["", "## Exclusions and duplicates (§13; DESIGN §7.8)", ""]
     if ex:
-        L += [("| Run kind | Task cell | Keys | Never played | Echo excluded | Transport "
-               "excluded | No final record (closed) | Pending | Dropped duplicates |"),
-              "|---|---|---|---|---|---|---|---|---|"]
+        L += [(f"| Run kind | Task cell | Keys | Never played | "
+               f"{'Excluded by the runner' if rep else 'Echo excluded'} | "
+               + ("Request-side check (R8) | " if rep else "")
+               + "Transport excluded | No final record (closed) | Pending | Dropped duplicates |"),
+              "|---|---|---|---|---|---|---|---|---|" + ("---|" if rep else "")]
         L += [(f"| {e['kind']} | {e['task_cell']} | {e['keys']} | {e['never_played']} | "
-               f"{e['excluded_echo']}{' (**over 5%**)' if e['echo_over_5pct'] else ''} | "
-               f"{e['excluded_transport']} | {e['excluded_no_final']} | {e['pending']} | "
+               f"{e[runner]}{' (**over 5%**)' if e.get('echo_over_5pct') else ''} | "
+               + (f"{e['excluded_request_check']} | " if rep else "")
+               + f"{e['excluded_transport']} | {e['excluded_no_final']} | {e['pending']} | "
                f"{e['dropped_duplicates']} |") for e in ex]
     else:
         L.append("None: every repeat-0 key has one final record, and none is excluded.")
+    if rep:
+        L += ["", ("No echo exclusion (R8): the Messages API echoes neither effort nor a "
+                   "reasoning context. Its substitutes, the payload snapshot tests and the "
+                   "request-side check of every request, act before a request is sent.")]
     L += ["", "## Repeats (§2.9; descriptive, not in any primary result)", "",
           "| Run kind | Episode pairs | Agreement | Success at repeat 0 only | at repeat 1 only |",
           "|---|---|---|---|---|"]
@@ -2754,20 +3452,44 @@ def _tables_lines(h: dict) -> list[str]:
 
 
 def summary_lines(h: dict) -> list[str]:
+    rep = _rep(h)
     inputs = ("the runs named with --run" if h["inputs"].get("input_list") is not None
-              else "every luna run found (no --run input list)")
-    L = ["# H1 and H3 on gpt-6-luna's PersistGym sweep (PREREG §3 H1, §3 H3; R6)", "",
+              else f"every {_name_of(h)} run found (no --run input list)")
+    title = ("# H1 and H3 on claude-haiku-5-5's PersistGym runs: R8's replication (PREREG "
+             "§17.8)" if rep else
+             "# H1 and H3 on gpt-6-luna's PersistGym sweep (PREREG §3 H1, §3 H3; R6)")
+    command = ("`uv run python -m analysis.persistgym_h1h3`" if not rep else
+               f"`uv run python -m analysis.persistgym_h1h3 --model {h['model']}`")
+    L = [title, "",
          (f"Computed {h['generated_utc']} at commit {h['git_commit'][:7]} (dirty: "
-          f"{h['git_dirty']}) by `uv run python -m analysis.persistgym_h1h3`, from "
+          f"{h['git_dirty']}) by {command}, from "
           f"`{h['inputs']['results_root']}` ({inputs}). Templates 0-{h['templates'] - 1}, "
           f"repeat 0, {h['primary_episodes']} primary episodes. Bootstrap: "
           f"{h['bootstrap']['resamples']:,} template resamples, percentile intervals, RNG "
           f"seed SEED + {BOOT_SEED_OFFSET} = {h['bootstrap']['seed']}. H1's model-check rule "
           f"for a non-finite logit-scale Δ_H1: `{h['h1_separation_rule']}`."), "",
-         f"**Status: {h['status']}.**", "",
-         ("**Changed after the FINAL output of 2026-10-10 was read** (the researcher's "
-          "decisions, `results/decisions.md`; the outputs before the changes are kept): "
-          + "; ".join(h.get("changed_after_final") or CHANGED_AFTER_FINAL) + ".")]
+         f"**Status: {h['status']}.**", ""]
+    if rep:
+        prof = h["profile"]
+        L += [("**A replication** (PREREG §17.8, amendment R8), reported in full whatever the "
+               "outcome: every H1 and H3 quantity of §3 is computed on "
+               f"{h['model']}'s episodes (experiment `{prof['experiment']}`, cells "
+               f"{', '.join(prof['cells'])}, the restated-at-need control and the single-turn "
+               "control) exactly as on luna's, with the same predictions, thresholds and model "
+               "checks. Its tests are outside luna's Holm family: unadjusted one-sided "
+               "bootstrap p-values and the model checks, with no confirmatory label. luna stays "
+               f"primary (`{LUNA_CITED_OUTPUT}`), and these episodes are never pooled with "
+               "luna's."), "",
+              ("**Pre-specified rules** (fixed for luna on 2026-10-10, after luna's data and "
+               "before any Haiku data; R8): "
+               + "; ".join(h.get("pre_specified") or PRE_SPECIFIED) + ".")]
+        if prof["cells_not_run"]:
+            L += ["", (f"**{', '.join(prof['cells_not_run'])}: {NOT_RUN_BUDGET}** (R8's size "
+                       "rule; `registered.HAIKU_CELLS`).")]
+    else:
+        L.append("**Changed after the FINAL output of 2026-10-10 was read** (the researcher's "
+                 "decisions, `results/decisions.md`; the outputs before the changes are kept): "
+                 + "; ".join(h.get("changed_after_final") or CHANGED_AFTER_FINAL) + ".")
     if h["provisional_reasons"]:
         L += ["", "Not the registered analysis, so no confirmatory claim is made from it:"]
         L += [f"- {x}" for x in h["provisional_reasons"]]
@@ -2785,15 +3507,24 @@ def summary_lines(h: dict) -> list[str]:
         check = (f"§2.8 accounting check: passed on {ac['checked']} window-cell episodes (no "
                  "far window episode with S_verbatim = 1; S_verbatim equals the drop-oldest "
                  "replay in every one).")
-    L += ["", check, "", "## Confirmatory", ""]
-    L += _h1_lines(h) + [""] + _h3_lines(h) + [""] + _family_lines(h) + [""]
-    L += _accounting_lines(h) + [""] + _tables_lines(h) + [""] + not_shown_lines(h)
+    if rep:
+        check += (" The replay read the Messages transcripts: each turn's reply as the session "
+                  "kept it and W counted it (the empty text for a refusal). A turn with no "
+                  "visible text went back as `(no reply)` and counts 0 tokens; a whitespace-only "
+                  "reply also went back as `(no reply)`, but counts its whitespace's tokens, as "
+                  "the session counted them.")
+    L += ["", check, "", "## Replication (R8; outside luna's Holm family)" if rep
+          else "## Confirmatory", ""]
+    L += _h1_lines(h) + [""] + _h3_lines(h) + [""]
+    L += _replication_lines(h) if rep else _family_lines(h)
+    L += [""] + _accounting_lines(h) + [""] + _tables_lines(h) + [""]
+    L += not_shown_r8_lines(h) if rep else not_shown_lines(h)
     return L
 
 
-def _dated(strings) -> bool:
-    """Whether a returned model string is a dated snapshot of luna's (`model_family`)."""
-    return any(s != MODEL and registered.model_family(s) == MODEL for s in strings)
+def _dated(strings, model: str = MODEL) -> bool:
+    """Whether a returned model string is a dated snapshot of `model`'s (`model_family`)."""
+    return any(s != model and registered.model_family(s) == model for s in strings)
 
 
 def _power_gaps(h: dict) -> str:
@@ -2848,6 +3579,61 @@ def not_shown_lines(h: dict) -> list[str]:
          "2026-09-29/30, Flex tier.")]
 
 
+def not_shown_r8_lines(h: dict) -> list[str]:
+    """"What it does not show" for R8's replication: R8's list (PREREG §17.8), with §15's
+    points that carry over and this reading's model strings."""
+    model = h["model"]
+    singles = sorted({s for k in h["model_strings"]["strings"] for s in k.split("|") if s})
+    strings = ", ".join(f"`{s}`" for s in singles) or "none"
+    snapshot = ("a dated snapshot among the strings returned" if _dated(singles, model)
+                else "a pinned snapshot ID without a date suffix (R8)")
+    not_run = h["profile"]["cells_not_run"]
+    tiers = h.get("service_tiers_served") or {}
+    tier_s = (f"the {next(iter(tiers))} tier on every response" if len(tiers) == 1
+              else "tiers served: " + ", ".join(f"{k} ({v} responses)" for k, v in tiers.items())
+              if tiers else "no service tier reported")
+    return [
+        "## What it does not show", "",
+        (f"- **Not a model comparison.** One model of a second provider, {model}, at "
+         f"{registered.registered_effort(model)} effort on the standard Messages path, with "
+         f"{snapshot} (returned: {strings}). It "
+         "ranks neither the models nor their providers: each model's harness effects are "
+         "reported against task properties (fact kind, recoverability, distance), in the same "
+         "form for both, and no contrast between the two models is tested or plotted as a "
+         "ranking. Differences between their effects are described, not tested (§15)."),
+        ("- **One model per provider.** The provider, the model, its training, its reasoning, "
+         "and the API and serving path all differ at once: a difference between the two models "
+         "cannot be attributed to any one of them, and agreement says nothing about other "
+         "models or providers."),
+        ("- **Not a second confirmation.** Agreement with luna is a replication outside the "
+         "Holm family. This output holds Haiku's results only, not luna's "
+         f"(`{LUNA_CITED_OUTPUT}`) and no agreement statement: where the two disagree, both "
+         "are to be reported side by side and the disagreement stated, neither overriding the "
+         "other (R8)."),
+        ("- **The same synthetic task family.** Haiku plays luna's episodes, so luna's limits "
+         "carry over: PersistGym is synthetic, the results are not claimed to transfer to "
+         "coding agents, ARC or real tasks, and window effects at S = 0 are mechanical "
+         "(Penalty_NR is a manipulation check). If both models are at the ceiling in H3's "
+         "cells, H3 says nothing about harder tasks."),
+        ("- **Non-inferiority is not absence.** Where H3's bound holds, it says the "
+         "single-prompt arm is at most 5pp ahead at the stated confidence, not that the "
+         "multi-turn structure costs nothing; and H3's control uses the oracle's routine "
+         "replies, so its evidence-to-need gaps are slightly shorter than with real replies "
+         "(§3 H3)."),
+        ("- **R_need reinterprets PLAN's \"total tokens\"** (D8), and P(carried) is a lower "
+         "bound (string match misses paraphrased carry)."),
+        ("- **Not blind to luna.** R8's design and its pre-specified rules were chosen with "
+         "luna's results known."),
+        ("- **Costs and tokens are not comparable** across the two models: each is in its own "
+         "provider's tokens and prices (here Anthropic's, at the prices checked on 2026-10-17, "
+         f"with no Flex discount; {tier_s}). W and every planned distance stay in project "
+         "tokens."),
+        ("- **Thinking is not inspected.** Its display is omitted, so only its token counts "
+         "are seen, where reported."),
+        ("- **Not run on this model:** Σ-n-0 and every replay-on cell (R8)"
+         + (f"; {', '.join(not_run)} ({NOT_RUN_BUDGET})" if not_run else "") + ".")]
+
+
 # --- main ----------------------------------------------------------------------------------
 
 def _json_default(o):
@@ -2879,9 +3665,15 @@ def write(out_dir: Path, run_id: str, h: dict, text: str, git: dict) -> Path:
         json.dumps(_clean(h), indent=2, ensure_ascii=False, default=_json_default) + "\n",
         encoding="utf-8", newline="\n")
     (out_dir / "summary.md").write_text(text, encoding="utf-8", newline="\n")
-    config = {"prereg": "PREREG.md §3 H1, §3 H3, §2.8, §2.9, §9.1-§9.5, §13; R2 change 3, "
-                        "R6 changes 1, 6 and 9",
-              "model": MODEL, "generator_config_hash": GENERATOR_HASH,
+    rep = _rep(h)
+    config = {"prereg": (R8_PREREG if rep else
+                         "PREREG.md §3 H1, §3 H3, §2.8, §2.9, §9.1-§9.5, §13; R2 change 3, "
+                         "R6 changes 1, 6 and 9"),
+              "model": h["model"], "generator_config_hash": h["generator_config_hash"],
+              **({"experiment_read": h["profile"]["experiment"],
+                  "cells": h["profile"]["cells"],
+                  "cells_not_run": h["profile"]["cells_not_run"],
+                  "power_source": h["power"]["source"]} if rep else {}),
               "templates": h["templates"], "n_boot": h["bootstrap"]["resamples"],
               "bootstrap_seed": h["bootstrap"]["seed"], "levels": list(LEVELS),
               "status": h["status"], "rerun_links": h["inputs"]["rerun_links"],
@@ -2890,7 +3682,8 @@ def write(out_dir: Path, run_id: str, h: dict, text: str, git: dict) -> Path:
                   "status", "model", "priors", "seed", "chains", "draws", "tune", "versions")},
               "inputs": {k: v for k, v in h["inputs"].items() if k != "runs"}}
     return runmeta.write_meta(
-        out_dir, git=git, experiment=OUT_NAME, run_id=run_id, cell_or_config="h1h3",
+        out_dir, git=git, experiment=h["profile"]["out_name"] if rep else OUT_NAME,
+        run_id=run_id, cell_or_config="h1h3",
         config=_clean(config), model_requested=None, model_returned=None,
         reasoning_effort=None, reasoning_context_requested=None,
         reasoning_context_echoed=None, template_id=None, repeat_index=None,
@@ -2910,7 +3703,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--raw-root", type=Path, default=None,
                     help="where the raw transcripts are (default: <results root>/raw)")
     ap.add_argument("--out-dir", type=Path, default=None,
-                    help=f"default: <results root>/{OUT_NAME}/<UTC>/")
+                    help=f"default: <results root>/{OUT_NAME}/<UTC>/ ({MODEL}) or "
+                         f"<results root>/{HAIKU_OUT_NAME}/<UTC>/ ({registered.HAIKU_MODEL})")
     ap.add_argument("--no-write", action="store_true", help="print only")
     ap.add_argument("--boot", type=int, default=N_BOOT,
                     help="bootstrap resamples (registered: 10,000; any other is PROVISIONAL)")
@@ -2921,13 +3715,27 @@ def main(argv: list[str] | None = None) -> int:
                          "results/decisions.md (harnesses/DESIGN.md §7.8); repeatable")
     ap.add_argument("--run", action="append", metavar="RUN_ID", dest="runs",
                     help="a run to read; name every run (harnesses/DESIGN.md §7.8); without "
-                         "any, every luna run found is read and the output is PROVISIONAL")
+                         "any, every run of the model found is read and the output is "
+                         "PROVISIONAL")
     ap.add_argument("--sweep-closed", metavar="REF", default=None,
                     help="the results/decisions.md entry in which the researcher closed the "
                          "sweep: keys with no final record, and keys never played, are then "
                          "excluded (DESIGN §7.8) and listed as deviations")
     ap.add_argument("--no-bayes", action="store_true",
                     help="skip §9.1's Bayesian sensitivity fit (PROVISIONAL)")
+    ap.add_argument("--model", choices=(MODEL, registered.HAIKU_MODEL), default=MODEL,
+                    help=f"whose runs to analyse: {MODEL}'s pre-registered sweep (default) or "
+                         f"{registered.HAIKU_MODEL}'s replication under R8 (PREREG §17.8)")
+    ap.add_argument("--experiment", default=None,
+                    help=f"the experiment folder to read (default: the model's registered one, "
+                         f"{EXPERIMENT} or {registered.HAIKU_EXPERIMENT}; any other is "
+                         "PROVISIONAL)")
+    ap.add_argument("--power-path", type=Path, default=None,
+                    help=f"the power file (default for {MODEL}: its committed power run; for "
+                         f"{registered.HAIKU_MODEL}, a per-T power table of power_sim's luna "
+                         "part, luna_power.csv, whose run's meta.json shows Haiku's validity "
+                         "runs (--luna-validity-glob); without one its power is reported as "
+                         "unavailable)")
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -2940,11 +3748,14 @@ def main(argv: list[str] | None = None) -> int:
     root = a.results_root.resolve()
     try:
         links = parse_links(a.rerun)
+        prof = profile(a.model, a.experiment)
         git = runmeta.git_state()
         h = compute(root, now.isoformat(timespec="seconds"), git, boot=a.boot,
                     allow_incomplete=a.allow_incomplete,
                     raw_root=a.raw_root.resolve() if a.raw_root else None, links=links,
-                    runs=a.runs, sweep_closed=a.sweep_closed, bayes=not a.no_bayes)
+                    runs=a.runs, sweep_closed=a.sweep_closed, bayes=not a.no_bayes,
+                    model=a.model, experiment=a.experiment,
+                    power_path=a.power_path.resolve() if a.power_path else None)
     except AccountingBug as e:
         print(f"H1/H3 stopped: {e}", file=sys.stderr)
         return 2
@@ -2954,7 +3765,7 @@ def main(argv: list[str] | None = None) -> int:
     text = "\n".join(summary_lines(h)) + "\n"
     print(text)
     if not a.no_write:
-        out = a.out_dir or root / OUT_NAME / run_id
+        out = a.out_dir or root / prof.out_name / run_id
         write(out, run_id, h, text, git)
         print(f"written: {out}")
     return 0

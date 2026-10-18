@@ -1,0 +1,76 @@
+{
+  "cited": "results/persistgym_h1h3/20261010T232227Z/",
+  "rerun": "rerun/",
+  "reproduced": true,
+  "differences": [],
+  "per_file": {
+    "h1h3.json": 0,
+    "meta.json": 0,
+    "summary.md": 0
+  },
+  "ignored": {
+    "h1h3.json": {
+      "generated_utc": [
+        "2026-10-10T23:22:43+00:00",
+        "2026-10-18T06:30:02+00:00"
+      ],
+      "git_commit": [
+        "5c41d3eaf1ae02bdab3a49648a0f6dd019c3f7ff",
+        "2a0fda420e10055617de13e8ea8224ce16dc3013"
+      ],
+      "git_dirty": [
+        false,
+        false
+      ]
+    },
+    "meta.json": {
+      "run_id": [
+        "20261010T232243Z",
+        "20261018T063002Z"
+      ],
+      "started_utc": [
+        "2026-10-10T23:22:43+00:00",
+        "2026-10-18T06:30:02+00:00"
+      ],
+      "finished_utc": [
+        "2026-10-10T23:26:00+00:00",
+        "2026-10-18T06:36:10+00:00"
+      ],
+      "git_commit": [
+        "5c41d3eaf1ae02bdab3a49648a0f6dd019c3f7ff",
+        "2a0fda420e10055617de13e8ea8224ce16dc3013"
+      ],
+      "git_dirty": [
+        false,
+        false
+      ],
+      "sdk_versions": [
+        {
+          "openai": "3.22.1",
+          "google-genai": null,
+          "arc-agi": null,
+          "tiktoken": "0.14.0"
+        },
+        {
+          "openai": "3.22.1",
+          "anthropic": "1.15.0",
+          "google-genai": null,
+          "arc-agi": null,
+          "tiktoken": "0.14.0"
+        }
+      ]
+    }
+  },
+  "sha256": {
+    "cited": {
+      "h1h3.json": "393cb8cabdb0b2609214e5a3a628c30be481ab9c5d1e944e0a05761e1be213d1",
+      "meta.json": "4d34436479d5a06cb346d05fa361421000c6fd9ee80c427bd044ee58be0cc08f",
+      "summary.md": "9534967b93f9a992d6f7b2975a3550a8b0352336aeff6ec75c6be5b4d0b2e90d"
+    },
+    "re-run": {
+      "h1h3.json": "177d08b5731e4b80eb08c7d0922f32848fcc0032d9495a71e3aae8435b94eae1",
+      "meta.json": "20ace9329d9b1c44dbf00b47ef7926fbd38732c9351d02f87a8e2a2293d89fa4",
+      "summary.md": "1d0c45c7123c889680c488a2ce13242e0632514e8d56b76c6e6f48b478758e90"
+    }
+  }
+}

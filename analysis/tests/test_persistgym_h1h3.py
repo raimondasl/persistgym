@@ -5,7 +5,11 @@ prediction readings at their boundaries, DESIGN §7.8's dedup rule, §13's exclu
 of an incomplete sweep and a closed one, §2.8's bug stop (on synthetic transcripts and on real
 episodes played by the harness with the fake model), the model checks under separation (H1's
 rules, the Firth fit, H3's registered model), the input list, and the Bayesian sensitivity fit
-(once for real on a small sweep; stubbed elsewhere, since it takes seconds per fit).
+(once for real on a small sweep; stubbed elsewhere, since it takes seconds per fit). And R8's
+replication on claude-haiku-5-5 (PREREG §17.8): its profile and discovery, the optional W-n-0,
+no echo exclusion, its usage, §2.8's replay on Messages transcripts (synthetic, and real
+episodes played on the Messages wire with the fake model), its labels (never "supported"), its
+power, its output folder; and that luna's profile and output keys are unchanged.
 
 Every run here is synthetic, in a results root under tmp_path: no test reads luna's real sweep.
 """
@@ -30,6 +34,7 @@ from analysis import power_sim as ps
 from harnesses import registered
 from harnesses.cells import CELLS, NOTES_INSTRUCTION
 from harnesses.fake import padded_text
+from harnesses.wire import EMPTY_REPLY_PLACEHOLDER
 from persistgym.survival import window_keep_start
 
 SEED = 4086943125952605534
@@ -142,6 +147,16 @@ def default_success(cell, variant, tc) -> int:
 
 class Sweep:
     """A results root holding a synthetic luna sweep on templates 0..T-1."""
+    MODEL, EXPERIMENT = "gpt-6-luna", "persistgym"
+
+    def make_record(self, *args, **over) -> dict:
+        return record(*args, **over)
+
+    def transcript(self, eid: str, cell: str, reply_tokens: int, turns: int):
+        return transcript_lines(eid, cell, reply_tokens, turns)
+
+    def kinds(self):
+        return hh.KINDS
 
     def __init__(self, tmp_path, templates: int = T):
         self.root = tmp_path / "results"
@@ -173,24 +188,25 @@ class Sweep:
             for tc in cells:
                 vals = self.success.get((cell, variant, tc))
                 s = vals[t] if vals is not None else default_success(cell, variant, tc)
-                out.append(record(cell, variant, tc, t, s, repeat,
-                                  **self.over.get((cell, variant, tc, t), {})))
+                out.append(self.make_record(cell, variant, tc, t, s, repeat,
+                                            **self.over.get((cell, variant, tc, t), {})))
         return out
 
-    def run(self, cell, variant=BASE, records=None, repeat=0, transcript=True, minutes=None):
+    def run(self, cell, variant=BASE, records=None, repeat=0, transcript=True, minutes=None,
+            exit_reason="COMPLETED"):
         self.n += 1
         started = self.clock + timedelta(minutes=minutes if minutes is not None else self.n)
         name = cell.replace("Σ", "sigma")
-        run_id = f"{started:%Y%m%dT%H%M%SZ}-{name}-gpt-6-luna" + (
+        run_id = f"{started:%Y%m%dT%H%M%SZ}-{name}-{self.MODEL}" + (
             "-repeat1" if repeat else "") + ("" if variant == BASE else f"-{variant}")
         recs = records if records is not None else self.records(cell, variant, repeat=repeat)
         self.ids.append(run_id)
-        folder = self.root / "persistgym" / run_id
+        folder = self.root / self.EXPERIMENT / run_id
         folder.mkdir(parents=True)
-        meta = {"experiment": "persistgym", "run_id": run_id, "cell_or_config": cell,
-                "model_requested": "gpt-6-luna", "repeat_index": repeat,
-                "started_utc": started.isoformat(), "exit_reason": "COMPLETED",
-                "model_returned": ["gpt-6-luna"],
+        meta = {"experiment": self.EXPERIMENT, "run_id": run_id, "cell_or_config": cell,
+                "model_requested": self.MODEL, "repeat_index": repeat,
+                "started_utc": started.isoformat(), "exit_reason": exit_reason,
+                "model_returned": [self.MODEL],
                 "config": {"harness_cell": cell,
                            "harness": {"W_tokens": None, "window_counts_system_prompt": None,
                                        "notes_separator": "\n", "tokenizer": "o200k_base"},
@@ -202,23 +218,23 @@ class Sweep:
         with open(folder / "episodes.jsonl", "w", encoding="utf-8") as fh:
             fh.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in recs)
         if transcript and cell in hh.WINDOW_CELLS:
-            path = self.raw / "persistgym" / run_id / "transcript.jsonl.gz"
+            path = self.raw / self.EXPERIMENT / run_id / "transcript.jsonl.gz"
             path.parent.mkdir(parents=True)
             with gzip.open(path, "wt", encoding="utf-8") as fh:
                 for r in recs:
                     tokens_ = 20 if (cell, r["episode_id"]) in self.long_replies else 2
                     turns = self.turns.get((cell, r["episode_id"]), NEED + 2)
-                    for line in transcript_lines(r["episode_id"], cell, tokens_, turns):
+                    for line in self.transcript(r["episode_id"], cell, tokens_, turns):
                         fh.write(json.dumps(line, ensure_ascii=False) + "\n")
         return run_id
 
     def standard(self, skip=(), repeat1=False):
         ids = {}
-        for cell, variant in hh.KINDS:
+        for cell, variant in self.kinds():
             if (cell, variant) not in skip:
                 ids[(cell, variant)] = self.run(cell, variant)
         if repeat1:
-            for cell, variant in hh.KINDS:
+            for cell, variant in self.kinds():
                 tmpl = [t for t in range(self.T) if t % 10 == 0]
                 ids[(cell, variant, 1)] = self.run(
                     cell, variant, self.records(cell, variant, templates=tmpl, repeat=1),
@@ -1607,3 +1623,597 @@ def test_a_finished_window_episode_without_a_need_payload_is_a_bug(tmp_path):
     h = sw2.compute()
     assert any("never reached their need step" in w and "MAX_TURNS 1" in w
                for w in h["warnings"])
+
+
+# --- R8: claude-haiku-5-5's replication (PREREG §17.8; "A second model") -------------------------
+
+HAIKU = registered.HAIKU_MODEL
+HAIKU_ECHO = {"context_requested": None, "context_echoed": None, "effort_requested": "medium",
+              "effort_echoed": None, "models_returned": {HAIKU: 12},
+              "service_tiers_returned": {"standard": 12}}
+"""An episode's echo record on the Messages wire (runner.episode_echo): nothing echoed."""
+HAIKU_USAGE = {"input_tokens": 10_000, "cached_input_tokens": 9_000, "cache_write_tokens": 500,
+               "output_tokens": 300, "reasoning_tokens": None}
+"""Usage as the runner records it on the Messages wire (pricing.messages_usage_numbers): input
+already holds the cache reads and writes; thinking tokens not reported, so null."""
+
+
+def _keep_seq(reps: list[int], turn: int) -> int:
+    """The window start at `turn` with per-turn reply tokens `reps` (dropped turns stay out)."""
+    obs = [OBS_TOKENS] * (turn + 1)
+    return max(window_keep_start(obs[: j + 1], reps[:j], W_SMALL, SYS_TOKENS)
+               for j in range(turn + 1))
+
+
+def _m(role: str, text: str) -> dict:
+    return {"role": role, "content": [{"type": "text", "text": text}]}
+
+
+def messages_transcript_lines(eid: str, cell: str, reply_tokens: int = 2, turns: int = NEED + 2,
+                              silent: dict | None = None):
+    """The step requests of one window-cell Haiku episode as the runner's recorder writes them
+    on the Messages wire (harnesses/wire.py): `system` and `messages` (text blocks), and a
+    response of a thinking block, its text block and `stop_reason`. `silent` ({turn:
+    (stop_reason, partial text)}) marks turns with no visible reply as the session keeps it:
+    thinking only at end_turn (partial ""), or a refusal, whose partial text is discarded.
+    Each went back as the placeholder and counts 0 tokens toward W."""
+    silent = silent or {}
+    system = _text("System prompt.", SYS_TOKENS)
+    if CELLS[cell].notes:
+        system += "\n" + NOTES_INSTRUCTION
+    reply = _text("ok", reply_tokens)
+    reps = [0 if i in silent else reply_tokens for i in range(turns)]
+    for i in range(turns):
+        keep = _keep_seq(reps, i)
+        msgs = []
+        for t in range(keep, i):
+            msgs += [_m("user", _text(f"Observation {t}.", OBS_TOKENS)),
+                     _m("assistant", EMPTY_REPLY_PLACEHOLDER if t in silent else reply)]
+        msgs.append(_m("user", _text(f"Observation {i}.", OBS_TOKENS)))
+        stop, partial = silent.get(i, ("end_turn", reply))
+        content = [{"type": "thinking", "thinking": "", "signature": f"sig-{i}"}]
+        if partial:
+            content.append({"type": "text", "text": partial})
+        yield {"episode_id": eid, "harness_cell": cell, "request_index": i, "kind": "step",
+               "turn": i, "pending_step": i, "is_lookup_result": False,
+               "info": {"keep_start": keep},
+               "payload": {"model": HAIKU, "system": system, "messages": msgs,
+                           "max_tokens": 32_000, "thinking": {"type": "adaptive"},
+                           "output_config": {"effort": "medium"},
+                           "cache_control": {"type": "ephemeral"}},
+               "response": {"model": HAIKU, "content": content, "stop_reason": stop,
+                            "stop_details": ({"category": "general_harms"}
+                                             if stop == "refusal" else None)}}
+
+
+class HaikuSweep(Sweep):
+    """A results root holding a synthetic claude-haiku-5-5 sweep (R8) on templates 0..T-1, in
+    experiment persistgym_haiku: records as the runner writes them on the Messages wire (no
+    echo; usage in the Responses meanings, reasoning tokens unreported) and Messages
+    transcripts."""
+    MODEL, EXPERIMENT = HAIKU, registered.HAIKU_EXPERIMENT
+
+    def __init__(self, tmp_path, templates: int = T):
+        super().__init__(tmp_path, templates)
+        self.silent: dict[tuple[str, str], dict] = {}     # (cell, episode_id): silent turns
+
+    def make_record(self, cell, variant, tc, t, success, repeat=0, **over) -> dict:
+        r = record(cell, variant, tc, t, success, repeat)
+        r.update(model=HAIKU, echo=dict(HAIKU_ECHO), usage=dict(HAIKU_USAGE))
+        r.update(over)
+        return r
+
+    def transcript(self, eid, cell, reply_tokens, turns):
+        return messages_transcript_lines(eid, cell, reply_tokens, turns,
+                                         self.silent.get((cell, eid)))
+
+    def kinds(self):
+        return hh.profile(HAIKU).kinds
+
+    def compute(self, **kw):
+        kw.setdefault("model", HAIKU)
+        return super().compute(**kw)
+
+    def main(self, *args, monkeypatch, named=True):
+        monkeypatch.setattr(registered, "HAIKU_T", self.T)
+        runs = [x for r in self.ids for x in ("--run", r)] if named else []
+        return hh.main(["--model", HAIKU, "--results-root", str(self.root), *runs, *args])
+
+
+def haiku_toy(tmp_path) -> HaikuSweep:
+    """The toy sweep's outcomes and fields (above), played by Haiku, its usage in the Messages
+    wire's shape (reasoning tokens unreported)."""
+    sw = HaikuSweep(tmp_path)
+    luna = toy(tmp_path / "luna")
+    sw.success, sw.over = luna.success, luna.over
+    for t in range(T):
+        for tc in (OR, "observed-rec-near"):
+            sw.over[("W-0", BASE, tc, t)]["usage"].update(
+                cached_input_tokens=0, cache_write_tokens=0, reasoning_tokens=None)
+    return sw
+
+
+def _json(x) -> str:
+    """An output as the module writes it (NaN as null), for exact comparisons."""
+    return json.dumps(hh._clean(x), ensure_ascii=False, default=hh._json_default)
+
+
+def _words(h: dict) -> str:
+    """Every label and line of an output: its JSON and its summary."""
+    return json.dumps(h, ensure_ascii=False, default=str) + "\n".join(hh.summary_lines(h))
+
+
+def test_luna_profile_is_the_module_constants():
+    """luna's profile is the analysis of its sweep as it was: the module's constants, its 6 run
+    kinds in order, the echo checks, Holm, its power run and its output folder."""
+    p = hh.profile()
+    assert hh.profile(hh.MODEL) == p
+    assert (p.model, p.experiment, p.out_name, p.T, p.generator_hash) == (
+        "gpt-6-luna", "persistgym", "persistgym_h1h3", registered.LUNA_T,
+        registered.LUNA_GENERATOR_HASH)
+    assert p.cells == registered.LUNA_CELLS and p.kinds == hh.KINDS and p.not_run == ()
+    assert p.echo and not p.replication and p.api == hh.RESPONSES_API
+    assert p.power_path == hh.POWER_DECISION
+    with pytest.raises(hh.Refusal, match="covers gpt-6-luna"):
+        hh.profile("gpt-6.1-sol")
+
+
+def test_luna_output_keys_are_its_cited_outputs(tmp_path):
+    """luna's output has the keys, in order, of its cited output (committed, written by the
+    code before the second model): no Haiku field reaches it. The numbers and labels of the
+    cited output itself are re-derived from luna's real sweep outside the tests (its raw
+    transcripts are gitignored)."""
+    cited = json.loads((hh.REPO_ROOT / hh.LUNA_CITED_OUTPUT / "h1h3.json")
+                       .read_text(encoding="utf-8"))
+    sw = toy(tmp_path)
+    sw.standard()
+    h = json.loads(json.dumps(hh._clean(sw.compute()), default=hh._json_default))
+    assert list(h) == list(cited)
+    for key in ("inputs", "bootstrap", "h1", "h1_lookups", "h1_tokens", "h1_predictions", "h3",
+                "family", "accounting_check", "model_strings"):
+        assert list(h[key]) == list(cited[key]), key
+    for key in ("cells", "exclusions", "accounting", "repeats"):
+        assert list(h[key][0]) == list(cited[key][0]), key
+    assert list(h["h1"]["model_check"]) == list(cited["h1"]["model_check"])
+    assert list(h["family"]["H1"]) == list(cited["family"]["H1"])
+    assert _json(sw.compute(model=hh.MODEL)) == _json(sw.compute())
+
+
+def test_haiku_profile_reads_r8s_registered_values(monkeypatch):
+    p = hh.profile(HAIKU)
+    assert (p.model, p.experiment, p.out_name, p.T, p.generator_hash) == (
+        "claude-haiku-5-5", "persistgym_haiku", "persistgym_h1h3_haiku", registered.HAIKU_T,
+        registered.LUNA_GENERATOR_HASH)                     # luna's episodes
+    assert p.cells == ("F-0", "W-0", "W-n-0") and "Σ-n-0" not in p.cells
+    assert p.kinds == (("F-0", BASE), ("W-0", BASE), ("W-n-0", BASE), ("F-0", RESTATED),
+                       (ST, BASE))
+    assert not p.echo and p.replication and p.api == hh.MESSAGES_API and p.power_path is None
+    assert p.task_cells == hh.TASK_CELLS and p.nr_task_cells == hh.NR_TASK_CELLS
+    # R8's size record sets HAIKU_T and HAIKU_CELLS; both are read at call time
+    monkeypatch.setattr(registered, "HAIKU_T", 150)
+    monkeypatch.setattr(registered, "HAIKU_CELLS", ("F-0", "W-0"))
+    p = hh.profile(HAIKU)
+    assert p.T == 150 and p.not_run == ("W-n-0",) and ("W-n-0", BASE) not in p.kinds
+    monkeypatch.setattr(registered, "HAIKU_CELLS", ("F-0", "W-0", "Σ-n-0"))
+    with pytest.raises(hh.Refusal, match="R8 registers F-0 and W-0"):
+        hh.profile(HAIKU)
+    monkeypatch.setattr(registered, "HAIKU_CELLS", ("F-0", "W-n-0"))
+    with pytest.raises(hh.Refusal, match="R8 registers F-0 and W-0"):
+        hh.profile(HAIKU)
+    monkeypatch.setattr(registered, "HAIKU_CELLS", hh.R8_CELLS)
+    p = hh.profile(HAIKU, "persistgym_validity")
+    assert p.experiment == "persistgym_validity" and p.cells == hh.R8_CELLS
+    assert p.registered_experiment == "persistgym_haiku"
+
+
+def test_haiku_runs_are_discovered_in_their_own_experiment(tmp_path):
+    sw = HaikuSweep(tmp_path)
+    sw.standard()
+    luna = Sweep(tmp_path / "luna")                 # luna's sweep in the same results root
+    luna.root, luna.raw = sw.root, sw.raw
+    luna.clock = sw.clock + timedelta(days=1)
+    luna.standard()
+    h = sw.compute(runs=list(sw.ids))
+    assert h["status"] == hh.FINAL and h["model"] == HAIKU
+    assert [r["cell"] for r in h["inputs"]["runs"]] == ["F-0", "W-0", "W-n-0", "F-0", ST]
+    assert h["profile"]["experiment"] == "persistgym_haiku" and h["profile"]["replication"]
+    assert h["primary_episodes"] == T * (3 * 8 + 8 + 4)
+    assert h["inputs"]["skipped"] == []             # luna's folder is not even looked at
+    lh = luna.compute(runs=list(luna.ids))          # and luna's analysis reads luna's only
+    assert lh["model"] == "gpt-6-luna" and "profile" not in lh
+    assert {r["cell"] for r in lh["inputs"]["runs"]} == set(registered.LUNA_CELLS) | {ST}
+    # a run of another model in Haiku's folder is skipped, with the reason
+    other = sw.root / "persistgym_haiku" / "x-luna"
+    other.mkdir()
+    (other / "meta.json").write_text(json.dumps({"experiment": "persistgym_haiku",
+                                                 "model_requested": "gpt-6-luna"}))
+    h = sw.compute(runs=list(sw.ids))
+    assert {"folder": "x-luna", "reason": "model 'gpt-6-luna', not claude-haiku-5-5"} in \
+        h["inputs"]["skipped"]
+    with pytest.raises(hh.Refusal, match="no persistgym_pilot/ folder"):
+        sw.compute(experiment="persistgym_pilot")
+
+
+def test_another_experiment_is_provisional(tmp_path):
+    sw = HaikuSweep(tmp_path)
+    sw.EXPERIMENT = "persistgym_haiku_copy"
+    sw.standard()
+    h = sw.compute(experiment="persistgym_haiku_copy")
+    assert h["status"] == hh.PROVISIONAL and h["profile"]["experiment"] == "persistgym_haiku_copy"
+    assert any("not Haiku's registered experiment (persistgym_haiku)" in x
+               for x in h["provisional_reasons"])
+
+
+def test_haiku_has_no_sigma_cell(tmp_path):
+    sw = HaikuSweep(tmp_path)
+    sw.standard()
+    sw.run("Σ-n-0", records=sw.records("Σ-n-0"))
+    with pytest.raises(hh.Refusal, match="'Σ-n-0' is not one of Haiku's sweep cells"):
+        sw.compute()
+
+
+def test_haiku_estimands_equal_lunas_on_the_same_outcomes(tmp_path):
+    """The same outcomes give the same H1 and H3 quantities, intervals, p-values and model
+    checks on both models (the same code, and luna's seeds, R8); only the labels differ."""
+    luna = toy(tmp_path / "a")
+    luna.standard()
+    lh = luna.compute()
+    sw = haiku_toy(tmp_path / "b")
+    sw.standard()
+    h = sw.compute()
+    assert h["status"] == hh.FINAL and h["bootstrap"]["seed"] == SEED + 10
+    for key in ("h1", "h3", "h1_lookups", "h1_predictions", "glm_9_1", "glm_9_1_firth",
+                "glm_h3", "glm_h3_powersim", "glm_9_1_with_w_n_0"):
+        assert _json(h[key]) == _json(lh[key]), key
+    assert _json(h["h1_tokens"]) == _json(lh["h1_tokens"])
+    luna_rows = [r for r in lh["accounting"] if r["cell"] != "Σ-n-0"]
+    assert _json(h["accounting"]) == _json(luna_rows)
+    assert h["h1"]["delta_h1"]["exact"] == "3/5" and h["h3"]["delta_h3"]["exact"] == "0"
+    rp = h["replication"]
+    assert rp["H1"]["p_one_sided"] == lh["h1"]["p_one_sided"]
+    assert rp["H3"]["p_one_sided"] == lh["h3"]["p_one_sided"]
+    assert rp["H1"]["rejects_unadjusted"] and rp["H1"]["model_agrees"]
+    assert rp["H1"]["label"] == "the unadjusted test rejects, and the model check agrees"
+    assert rp["H1"]["kill_reading"] is False and "reads luna only" in rp["H1"]["kill_note"]
+    # at T = 10, H3's 90% CI reaches past 5pp: its test does not reject, as on luna
+    assert rp["H3"]["p_one_sided"] > 0.05 and not lh["family"]["H3"]["holm_rejects"]
+    assert rp["H3"]["label"] == "the unadjusted test does not reject, and the model check agrees"
+    # F-0 observed-rec-far is 10/10: the rules not in force are sensitivity lines, labelled
+    assert set(rp["H1"]["sensitivity_rules"]) == {"literal", "probability-scale"}
+    assert rp["H1"]["sensitivity_rules"]["literal"]["label"] == (
+        "the unadjusted test rejects, and the model check does not agree")
+    assert "family" not in h and "achieved_power" not in h and "changed_after_final" not in h
+    assert h["pre_specified"] == list(hh.PRE_SPECIFIED)
+
+
+def test_haiku_labels_never_say_supported(tmp_path):
+    """R8: the replication's tests are never called "supported", whatever the outcome: here an
+    H1 whose test rejects (the toy), and a null one whose kill reading fires."""
+    sw = haiku_toy(tmp_path / "a")
+    sw.standard()
+    h = sw.compute()
+    assert "support" not in _words(h).lower()
+    text = "\n".join(hh.summary_lines(h))
+    for needle in ("# H1 and H3 on claude-haiku-5-5's PersistGym runs: R8's replication",
+                   "**A replication** (PREREG §17.8, amendment R8)",
+                   "**Pre-specified rules** (fixed for luna on 2026-10-10",
+                   "## Replication (R8; outside luna's Holm family)",
+                   "Unadjusted at one-sided 0.05 (outside luna's Holm family, R8): rejects.",
+                   ("- **H1, replication (R8): the unadjusted test rejects, and the model check "
+                    "agrees.**"),
+                   "- **Kill reading** (computed as on luna",
+                   "on Haiku this reading neither kills nor confirms H1",
+                   ("- **H3, replication (R8): the unadjusted test does not reject, and the "
+                    "model check agrees.** Outside luna's Holm family"),
+                   "### Multiplicity (§9.4; R8)", "luna's family stays H1 and H3 on luna",
+                   "the replication's label would be: the unadjusted test rejects",
+                   "pre-specified for Haiku by R8", f"`{hh.LUNA_CITED_OUTPUT}`",
+                   "Power at T = 10 (R8: one-sided 0.05",
+                   "unavailable (no power table given (--power-path))",
+                   "No echo exclusion (R8)", "**One model per provider.**",
+                   "**Not blind to luna.**", "**Thinking is not inspected.**",
+                   "Σ-n-0 and every replay-on cell (R8)",
+                   "The replay read the Messages transcripts",
+                   "| Run kind | Task cell | Success | Content failures | Stopped responses |",
+                   "All four met: "):
+        assert needle in text, needle
+    for luna_only in ("Holm (family of 2)", "Changed after the FINAL", "Flex tier",
+                      "## Confirmatory", "Echo excluded", "Σ-n-0 (expl.)"):
+        assert luna_only not in text, luna_only
+    null = HaikuSweep(tmp_path / "b")                 # equal penalties: the kill reading fires
+    null.outcome("W-0", ONR, [0] * T)
+    null.outcome("W-0", OR, [0] * T)
+    null.standard()
+    h = null.compute()
+    assert h["h1"]["kill"] is True and h["replication"]["H1"]["kill_reading"] is True
+    assert h["replication"]["H1"]["label"].startswith("the unadjusted test does not reject")
+    text = "\n".join(hh.summary_lines(h))
+    assert "(computed as on luna: Δ_H1 < 10pp and the 90% upper bound < 15pp): **fires**" in text
+    assert "drop the" not in text and "support" not in _words(h).lower()
+
+
+def test_replication_labels_at_their_boundaries():
+    assert hh.replication_label(0.05, True) == (
+        "the unadjusted test rejects, and the model check agrees")
+    assert hh.replication_label(0.0501, True) == (
+        "the unadjusted test does not reject, and the model check agrees")
+    assert hh.replication_label(0.01, False) == (
+        "the unadjusted test rejects, and the model check does not agree")
+    assert hh.replication_label(None, True).startswith("not computable")
+    h1 = {"p_one_sided": 0.5, "model_check": {"agrees": True}, "kill": False}
+    h3 = {"p_one_sided": 1.0, "model_check": {"agrees": False},
+          "delta_h3": {"ci90": [0.15, 0.25]}}
+    rp = hh.replication_readings(h1, h3)
+    assert rp["H3"]["ci90_above_margin"] is True
+    assert rp["H3"]["label"] == ("the unadjusted test does not reject, and the model check does "
+                                 f"not agree; {hh.H3_AGAINST}")
+    assert not rp["H1"]["rejects_unadjusted"] and rp["H1"]["sensitivity_rules"] == {}
+    assert "support" not in json.dumps(rp, ensure_ascii=False).lower()
+
+
+def test_haiku_without_w_n_0(tmp_path, monkeypatch):
+    """R8's size rule can drop W-n-0 (registered.HAIKU_CELLS then lacks it): the analysis needs
+    no W-n-0 run, refuses one, and reports W-n-0 as pre-registered, not run (budget)."""
+    monkeypatch.setattr(registered, "HAIKU_CELLS", ("F-0", "W-0"))
+    sw = HaikuSweep(tmp_path)
+    sw.standard()
+    assert all(c != "W-n-0" for c, _ in sw.kinds())
+    h = sw.compute()
+    assert h["status"] == hh.FINAL and h["profile"]["cells_not_run"] == ["W-n-0"]
+    assert set(h["h1"]["cells"]) == {"F-0 NR", "W-0 NR", "F-0 R", "W-0 R"}
+    assert h["h1"]["w_n_0_alongside"]["status"] == hh.NOT_RUN_BUDGET
+    assert h["glm_9_1_with_w_n_0"]["status"] == hh.NOT_RUN_BUDGET
+    assert {r["cell"] for r in h["accounting"]} == {"F-0", "W-0"}
+    assert all(set(r["means"]) == {"F-0", "W-0"} for r in h["cost_outcomes"])
+    assert all(r["kind"] != "W-n-0" for r in h["cells"] + h["exclusions"] + h["repeats"])
+    assert "support" not in _words(h).lower()
+    text = "\n".join(hh.summary_lines(h))
+    for needle in ("**W-n-0: pre-registered, not run (budget)** (R8's size rule",
+                   "W-n-0 alongside: pre-registered, not run (budget) (R8's size rule).",
+                   "| not recoverable | 1.000 (10/10) | 0.000 (0/10) | not run |",
+                   ("W-n-0 as a third harness level (a sensitivity analysis, ruling of "
+                    "2026-10-10): not fitted, W-n-0 being pre-registered, not run (budget)."),
+                   "| Task cell | Outcome | W-0 |\n|---|---|---|",
+                   ("Σ-n-0 and every replay-on cell (R8); W-n-0 (pre-registered, not run "
+                    "(budget))")):
+        assert needle in text, needle
+    sw.run("W-n-0")
+    with pytest.raises(hh.Refusal, match="'W-n-0' is not one of Haiku's sweep cells"):
+        sw.compute()
+    # with W-n-0 registered, its runs are required like the others
+    monkeypatch.setattr(registered, "HAIKU_CELLS", ("F-0", "W-0", "W-n-0"))
+    sw2 = HaikuSweep(tmp_path / "b")
+    sw2.standard(skip={("W-n-0", BASE)})
+    with pytest.raises(hh.Refusal, match="W-n-0: 80 of 80 repeat-0 episodes have no record"):
+        sw2.compute()
+
+
+def test_haiku_records_are_never_excluded_for_an_echo(tmp_path):
+    """The Messages API echoes nothing (R8): echo fields that luna's defensive check would read
+    as a mismatch exclude no Haiku record. A record the runner marked excluded (never on the
+    Messages wire) is still excluded, as the runner's."""
+    odd = {**HAIKU_ECHO, "context_requested": "current_turn",
+           "context_echoed": {"all_turns": 1}, "effort_echoed": {"high": 2}}
+    for kind in (Sweep, HaikuSweep):
+        sw = kind(tmp_path / kind.__name__)
+        sw.fields("F-0", OR, 5, echo=odd)
+        sw.fields("W-0", ONR, 4, excluded=True, exclusion_reason="marked by the runner")
+        sw.standard()
+        h = sw.compute()
+        ex = {(e["kind"], e["task_cell"]): e for e in h["exclusions"]}
+        if kind is Sweep:
+            assert ex[("F-0", OR)]["excluded_echo"] == 1 and h["h1"]["cells"]["F-0 R"]["n"] == 9
+            continue
+        assert h["h1"]["cells"]["F-0 R"]["n"] == T          # not excluded
+        assert ex[("F-0", OR)]["excluded_by_runner"] == 0
+        assert ex[("W-0", ONR)]["excluded_by_runner"] == 1
+        assert h["h1"]["cells"]["W-0 NR"]["n"] == T - 1
+        assert "excluded_echo" not in ex[("F-0", OR)] and "echo_share" not in ex[("F-0", OR)]
+        assert "echo_cells_over_5pct" not in h
+        text = "\n".join(hh.summary_lines(h))
+        assert "| Excluded by the runner |" in text and "(**over 5%**)" not in text
+
+
+def test_haiku_usage_and_reasoning_tokens(tmp_path):
+    """Usage is in the Responses meanings (the runner added the cache reads and writes to
+    input_tokens): total tokens are input + output, nothing added twice. Reasoning tokens the
+    provider did not report are null: missing, never 0, and the §9.5 outcome is unavailable."""
+    sw = HaikuSweep(tmp_path)
+    sw.fields("F-0", OR, 0, usage={**HAIKU_USAGE, "reasoning_tokens": 40})
+    sw.standard()
+    h = sw.compute()
+    row = {(r["task_cell"], r["outcome"]): r for r in h["cost_outcomes"]}
+    assert row[(OR, "tokens_total")]["means"]["F-0"] == 10_300          # not 19,800
+    reasoning = row[(ONR, "reasoning_tokens")]
+    assert reasoning["unavailable"] and reasoning["n_missing"] == 3 * T
+    assert reasoning["ratios"] == {} and np.isnan(reasoning["means"]["F-0"])
+    partly = row[(OR, "reasoning_tokens")]
+    assert partly["n_missing"] == 3 * T - 1 and "unavailable" not in partly
+    assert partly["means"]["F-0"] == 40
+    text = "\n".join(hh.summary_lines(h))
+    assert ("| observed-nonrec-far | reasoning tokens | unavailable (not reported) | "
+            "unavailable (not reported) |") in text
+    assert "observed-rec-far reasoning tokens, 29 missing" in text
+
+
+def test_haiku_replay_reads_messages_transcripts(tmp_path, monkeypatch):
+    """§2.8's replay on Messages transcripts: the observation is the last message's text
+    blocks, the reply the response's text blocks as the session kept them. Turns with no
+    visible reply (thinking only, or a refusal whose partial text the session discarded) went
+    back as `(no reply)` and count 0 tokens: here three such turns before a near need step keep
+    its evidence in the window. Counting the refusals' partial text instead (the visible text,
+    not what the session kept) would drop it, and the replay would disagree with the runner."""
+    sw = HaikuSweep(tmp_path)
+    partial = _text("I can't help with", 20)
+    silent = {7: ("refusal", partial), 8: ("end_turn", ""), 9: ("refusal", partial)}
+    reps = [0 if i in silent else 2 for i in range(NEED + 2)]
+    # counted as kept, the window starts at turn 6; with the refusals' 20 tokens, at turn 8,
+    # which drops derived-rec-near's first evidence step (7)
+    assert _keep_seq(reps, NEED) == 6 and _keep_seq([2] * 7 + [20, 0, 20, 2, 2], NEED) == 8
+    for tc in ("observed-nonrec-near", "derived-rec-near"):
+        eid = hh.episode_id_of("W-0", BASE, 1, tc)
+        sw.silent[("W-0", eid)] = silent
+        sw.fields("W-0", tc, 1, need_info={"keep_start": 6},
+                  incomplete=[{"reason": "refusal:general_harms", "pending_step": 7},
+                              {"reason": "refusal:general_harms", "pending_step": 9}])
+    sw.standard()
+    h = sw.compute()
+    assert h["accounting_check"]["checked"] == 2 * T * 8 and h["warnings"] == []
+    cells = {(r["kind"], r["task_cell"]): r for r in h["cells"]}
+    near = cells[("W-0", "observed-nonrec-near")]
+    assert near["stopped_responses"] == {"refusal:general_harms": 2}
+    assert near["episodes_with_a_refusal"] == 1
+    assert "refusal:general_harms 2 (1 episode(s) with a refusal)" in "\n".join(
+        hh.summary_lines(h))
+    # the visible text of a refusal is not what W counted
+    monkeypatch.setattr(hh, "reply_counted",
+                        lambda response, api=hh.RESPONSES_API: hh.MESSAGES.text(response))
+    with pytest.raises(hh.AccountingBug, match=r"derived-rec-near/base': S_verbatim = 1, but "
+                                               r"the drop-oldest replay gives 0 \(window start 8"):
+        sw.compute()
+
+
+def test_transcripts_read_on_the_wrong_wire_are_a_bug(tmp_path):
+    """The replay reads a run's transcript on its own wire: a Responses-shaped transcript under
+    Haiku's profile has no request to replay, and a Messages one under luna's neither."""
+    sw = HaikuSweep(tmp_path)
+    sw.transcript = lambda eid, cell, n, turns: transcript_lines(eid, cell, n, turns)
+    sw.standard()
+    with pytest.raises(hh.AccountingBug, match="does not end with a user message"):
+        sw.compute()
+    runs, _ = hh.discover(sw.root, prof=hh.profile(HAIKU))
+    assert hh.accounting_check(runs, sw.raw, "persistgym_haiku", hh.RESPONSES_API)["bugs"] == []
+    good = HaikuSweep(tmp_path / "b")
+    good.standard()
+    runs, _ = hh.discover(good.root, prof=hh.profile(HAIKU))
+    assert hh.accounting_check(runs, good.raw, "persistgym_haiku", hh.MESSAGES_API)["bugs"] == []
+    assert hh.accounting_check(runs, good.raw, "persistgym_haiku")["bugs"]
+
+
+def test_haiku_replay_matches_the_harness_on_real_episodes(tmp_path, monkeypatch):
+    """Real episodes (generator, small volume) played on the Messages wire by Haiku's W-0 and
+    W-n-0 cells with the fake model: long replies push near evidence out, lookups shift turns,
+    some replies are empty (thinking only) and some calls are refusals after a long partial
+    text. The replay agrees with the runner's S_verbatim, window start and payload in every
+    episode; counting the refusals' partial text (the visible text, not what the session kept)
+    breaks it, and so does reading the transcripts on the Responses wire."""
+    from harnesses.config import HarnessConfig
+    from harnesses.fake import FakeModel
+    from harnesses.runner import run_batch
+    from persistgym.config import GeneratorConfig
+    from persistgym.episode import ALL_CELLS
+    from persistgym.render import generate
+
+    small = GeneratorConfig(W_tokens=6_400, v_tokens=400, assumed_max_reply_tokens=200)
+    eps = [ep for _, e in generate("main", range(2), small, ALL_CELLS, ("base",)) for ep in e]
+    long_reply = _text("Notes:", 5_000) + "\nACTION: ack(none)"
+    short = _text("Notes:", 150) + "\nACTION: ack(none)"
+
+    def reply(payload, i):
+        if i % 5 == 2:
+            return long_reply           # the partial text of a refusal (status below)
+        if i % 6 == 4:
+            return "ACTION: lookup(record)"
+        if i % 11 == 3:
+            return ""                   # thinking only: no visible reply
+        return long_reply if i % 7 == 0 else short
+
+    def status(payload, tag):
+        return "refusal" if int(tag[1:]) % 5 == 2 else "completed"
+
+    cfg = HarnessConfig(model=HAIKU, reasoning_effort="medium", service_tier="standard")
+    results = tmp_path / "results"
+    for cell in ("W-0", "W-n-0"):
+        run_batch(eps, CELLS[cell], cfg,
+                  FakeModel(reply, status_fn=status, report_thinking_tokens=False),
+                  experiment="persistgym_haiku", run_id=f"r-{cell}", results_root=results,
+                  raw_root=results / "raw")
+    monkeypatch.setattr(registered, "HAIKU_GENERATOR_HASH", eps[0].config_hash)
+    prof = hh.profile(HAIKU)
+    runs, skipped = hh.discover(results, prof=prof)
+    assert len(runs) == 2 and skipped == []
+    check = hh.accounting_check(runs, results / "raw", prof.experiment, prof.api)
+    assert check["bugs"] == [] and check["warnings"] == []
+    assert check["checked"] == 2 * len(eps)
+    recs = [r for run in runs for r in run.records]
+    near = [r["need_payload"]["S"] for r in recs if r["task_cell"].endswith("-near")]
+    assert True in near and False in near                  # both outcomes are exercised
+    assert any(r["n_lookups"] for r in recs)
+    assert any(x["reason"] == "refusal:general_harms" for r in recs for x in r["incomplete"])
+    assert all(r["usage"]["reasoning_tokens"] is None for r in recs)
+    with gzip.open(results / "raw" / "persistgym_haiku" / "r-W-0" / "transcript.jsonl.gz",
+                   "rt", encoding="utf-8") as fh:
+        sent = [m for line in fh for m in json.loads(line)["payload"]["messages"]]
+    assert any(m["content"][0]["text"] == EMPTY_REPLY_PLACEHOLDER for m in sent
+               if m["role"] == "assistant")
+    wrong_wire = hh.accounting_check(runs, results / "raw", prof.experiment, hh.RESPONSES_API)
+    assert wrong_wire["bugs"] and all("does not end with a user message" in b
+                                      for b in wrong_wire["bugs"])
+    monkeypatch.setattr(hh, "reply_counted",
+                        lambda response, api=hh.RESPONSES_API: hh.MESSAGES.text(response))
+    naive = hh.accounting_check(runs, results / "raw", prof.experiment, prof.api)
+    assert naive["bugs"] or naive["warnings"]
+
+
+def test_haiku_power_from_a_power_table(tmp_path):
+    """R8's power at the chosen T comes from a per-T power table of power_sim's luna part; P(it
+    rejects and the model check agrees) is P(it rejects) less the model check's vetoes."""
+    sw = HaikuSweep(tmp_path)
+    sw.standard()
+    table = tmp_path / "luna_power.csv"
+    cols = ["scenario", "templates", "reps", "p_f0_onr", "p_f0_or", "P_h1_unadjusted",
+            "P_h3_unadjusted", "P_h1_glm_veto", "P_h3_glm_veto", "P_h1_supported_worst_step"]
+    rows = [["primary", "10", "200", "0.95", "0.9", "0.70", "0.80", "0.05", "0.0", "0.6"],
+            ["primary", "20", "200", "0.95", "0.9", "0.90", "0.95", "0.01", "0.0", "0.8"],
+            ["pessimistic", "10", "200", "0.85", "0.8", "0.40", "0.45", "0.10", "0.02", "0.3"]]
+    table.write_text("\n".join(",".join(r) for r in [cols, *rows]) + "\n", encoding="utf-8")
+    h = sw.compute(power_path=table)
+    pw = h["power"]
+    assert pw["available"] and pw["T"] == T
+    assert [r["scenario"] for r in pw["rows"]] == ["primary", "pessimistic"]
+    p = pw["rows"][0]
+    assert (p["power_h1_rejects"], p["power_h3_rejects"]) == (0.70, 0.80)
+    assert p["power_h1_rejects_and_model_agrees"] == pytest.approx(0.65)
+    assert p["power_h3_rejects_and_model_agrees"] == pytest.approx(0.80)
+    assert pw["rows"][1]["power_h3_rejects_and_model_agrees"] == pytest.approx(0.43)
+    text = "\n".join(hh.summary_lines(h))
+    assert ("primary, F-0 observed-far at 0.95 (NR) and 0.90 (R): the unadjusted test "
+            "rejects, H1 0.700 and H3 0.800; it rejects and the model check agrees, H1 0.650 "
+            "and H3 0.800") in text
+    assert "did not set T (R8)" in text and "support" not in _words(h).lower()
+    none = hh.replication_power(table, 30)
+    assert not none["available"] and none["note"] == "the power table has no row at T = 30"
+    bad = tmp_path / "decision.csv"
+    bad.write_text("scenario,reading\nprimary,x\n", encoding="utf-8")
+    assert "not a per-T power table" in hh.replication_power(bad, T)["note"]
+    assert hh.replication_power(tmp_path / "missing.csv", T)["note"].startswith("no power table")
+
+
+def test_haiku_main_writes_its_own_folder(tmp_path, monkeypatch, capsys):
+    sw = haiku_toy(tmp_path)
+    sw.standard()
+    assert sw.main(monkeypatch=monkeypatch) == 0
+    (out,) = (sw.root / "persistgym_h1h3_haiku").iterdir()
+    assert not (sw.root / "persistgym_h1h3").exists()
+    h = json.loads((out / "h1h3.json").read_text(encoding="utf-8"))
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    text = (out / "summary.md").read_text(encoding="utf-8")
+    assert h["status"] == hh.FINAL and h["model"] == HAIKU and h["templates"] == T
+    assert meta["experiment"] == "persistgym_h1h3_haiku" and meta["paid_calls"] == 0
+    assert meta["seeds"] == {"bootstrap": SEED + 10, "bayesian_glmm": SEED + 11}
+    assert meta["config"]["prereg"] == hh.R8_PREREG and meta["config"]["model"] == HAIKU
+    assert meta["config"]["cells"] == ["F-0", "W-0", "W-n-0"]
+    assert meta["config"]["power_source"] is None
+    assert "support" not in text.lower() and "--model claude-haiku-5-5`" in text
+    # luna's default is unchanged: it reads luna's folder only, and there is none here
+    capsys.readouterr()
+    assert hh.main(["--results-root", str(sw.root), "--no-write"]) == 2
+    assert "no persistgym/ folder" in capsys.readouterr().err
+
+
+def test_a_run_stopped_by_the_request_side_check_is_named(tmp_path):
+    sw = HaikuSweep(tmp_path)
+    sw.standard(skip={("W-0", BASE)})
+    stopped = sw.run("W-0", exit_reason=hh.REQUEST_CHECK_STOP)
+    h = sw.compute()
+    assert any(stopped in w and "request-side check" in w for w in h["warnings"])

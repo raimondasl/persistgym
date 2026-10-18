@@ -1,0 +1,76 @@
+{
+  "cited": "results/persistgym_h1h3/20261010T232227Z/",
+  "rerun": "rerun/",
+  "reproduced": true,
+  "differences": [],
+  "per_file": {
+    "h1h3.json": 0,
+    "meta.json": 0,
+    "summary.md": 0
+  },
+  "ignored": {
+    "h1h3.json": {
+      "generated_utc": [
+        "2026-10-10T23:22:43+00:00",
+        "2026-10-18T07:12:35+00:00"
+      ],
+      "git_commit": [
+        "5c41d3eaf1ae02bdab3a49648a0f6dd019c3f7ff",
+        "f79921cd770d2e9f2062f57535d59e4a6529a16d"
+      ],
+      "git_dirty": [
+        false,
+        false
+      ]
+    },
+    "meta.json": {
+      "run_id": [
+        "20261010T232243Z",
+        "20261018T071235Z"
+      ],
+      "started_utc": [
+        "2026-10-10T23:22:43+00:00",
+        "2026-10-18T07:12:35+00:00"
+      ],
+      "finished_utc": [
+        "2026-10-10T23:26:00+00:00",
+        "2026-10-18T07:15:50+00:00"
+      ],
+      "git_commit": [
+        "5c41d3eaf1ae02bdab3a49648a0f6dd019c3f7ff",
+        "f79921cd770d2e9f2062f57535d59e4a6529a16d"
+      ],
+      "git_dirty": [
+        false,
+        false
+      ],
+      "sdk_versions": [
+        {
+          "openai": "3.22.1",
+          "google-genai": null,
+          "arc-agi": null,
+          "tiktoken": "0.14.0"
+        },
+        {
+          "openai": "3.22.1",
+          "anthropic": "1.15.0",
+          "google-genai": null,
+          "arc-agi": null,
+          "tiktoken": "0.14.0"
+        }
+      ]
+    }
+  },
+  "sha256": {
+    "cited": {
+      "h1h3.json": "393cb8cabdb0b2609214e5a3a628c30be481ab9c5d1e944e0a05761e1be213d1",
+      "meta.json": "4d34436479d5a06cb346d05fa361421000c6fd9ee80c427bd044ee58be0cc08f",
+      "summary.md": "9534967b93f9a992d6f7b2975a3550a8b0352336aeff6ec75c6be5b4d0b2e90d"
+    },
+    "re-run": {
+      "h1h3.json": "07a7227e315b3392754b4af0dbe0cb231acd593a721b66cfb9156eab198e0299",
+      "meta.json": "f6e44a278c3e72e7ffb622f63e590ac1e05dda110c90fc212fbda60f237b1c32",
+      "summary.md": "9167edea2d0a492a1f4df991c603a558399d9c2186c31f5c5f6105c70a6ecc19"
+    }
+  }
+}

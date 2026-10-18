@@ -1,0 +1,96 @@
+{
+  "experiment": "persistgym_h1h3_regression",
+  "run_id": "20261018T071235Z",
+  "cell_or_config": "luna-cited-output",
+  "config": {
+    "cited": "results/persistgym_h1h3/20261010T232227Z/",
+    "rerun_args": [
+      "--results-root",
+      "C:\\Users\\raimo\\persistgym\\results",
+      "--raw-root",
+      "C:\\Users\\raimo\\persistgym\\results\\raw",
+      "--out-dir",
+      "C:\\Users\\raimo\\persistgym\\results\\persistgym_h1h3_regression\\20261018T071235Z\\rerun",
+      "--sweep-closed",
+      "results/decisions.md, 2026-10-10: luna's sweep closed (PR #55), with its correction of 2026-10-10 (one §13 re-run)",
+      "--run",
+      "20261010T055742Z-F-0-gpt-6-luna",
+      "--run",
+      "20261010T073840Z-W-0-gpt-6-luna",
+      "--run",
+      "20261010T084438Z-W-n-0-gpt-6-luna",
+      "--run",
+      "20261010T100804Z-sigma-n-0-gpt-6-luna",
+      "--run",
+      "20261010T113553Z-F-0-gpt-6-luna",
+      "--run",
+      "20261010T125241Z-single-turn-gpt-6-luna",
+      "--run",
+      "20261010T125444Z-F-0-gpt-6-luna-repeat1",
+      "--run",
+      "20261010T130303Z-W-0-gpt-6-luna-repeat1",
+      "--run",
+      "20261010T131136Z-W-n-0-gpt-6-luna-repeat1",
+      "--run",
+      "20261010T132132Z-sigma-n-0-gpt-6-luna-repeat1",
+      "--run",
+      "20261010T133022Z-F-0-gpt-6-luna-repeat1",
+      "--run",
+      "20261010T133738Z-single-turn-gpt-6-luna-repeat1",
+      "--run",
+      "20261010T202127Z-F-0-gpt-6-luna",
+      "--rerun",
+      "20261010T202127Z-F-0-gpt-6-luna=20261010T055742Z-F-0-gpt-6-luna"
+    ],
+    "ignored": {
+      "h1h3.json": [
+        "generated_utc",
+        "git_commit",
+        "git_dirty"
+      ],
+      "meta.json": [
+        "run_id",
+        "started_utc",
+        "finished_utc",
+        "git_commit",
+        "git_dirty",
+        "sdk_versions"
+      ]
+    },
+    "path_keys": [
+      "results_root",
+      "raw_root",
+      "draw_json"
+    ]
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": null,
+  "started_utc": "2026-10-18T07:12:35+00:00",
+  "finished_utc": "2026-10-18T07:15:50+00:00",
+  "exit_reason": "reproduced",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "regression.json",
+    "rerun/"
+  ],
+  "paid_calls": 0,
+  "config_hash": "44aba33892565b5e868145e530dddb052b0edf2b671d97b9bb797382c879bed0",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "f79921cd770d2e9f2062f57535d59e4a6529a16d",
+  "git_dirty": false
+}

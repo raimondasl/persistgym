@@ -1,0 +1,109 @@
+{
+  "experiment": "persistgym_h1h3",
+  "run_id": "20261018T071235Z",
+  "cell_or_config": "h1h3",
+  "config": {
+    "prereg": "PREREG.md §3 H1, §3 H3, §2.8, §2.9, §9.1-§9.5, §13; R2 change 3, R6 changes 1, 6 and 9",
+    "model": "gpt-6-luna",
+    "generator_config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+    "templates": 200,
+    "n_boot": 10000,
+    "bootstrap_seed": 4086943125952605544,
+    "levels": [
+      0.9,
+      0.95
+    ],
+    "status": "FINAL",
+    "rerun_links": {
+      "20261010T202127Z-F-0-gpt-6-luna": "20261010T055742Z-F-0-gpt-6-luna"
+    },
+    "sweep_closed": "results/decisions.md, 2026-10-10: luna's sweep closed (PR #55), with its correction of 2026-10-10 (one §13 re-run)",
+    "h1_separation_rule": "firth",
+    "bayesian_glmm": {
+      "status": "fitted",
+      "model": "success ~ W*R*D*N + (1|template)",
+      "priors": "bambi's defaults",
+      "seed": 4086943125952605545,
+      "chains": 4,
+      "draws": 1000,
+      "tune": 1000,
+      "versions": {
+        "bambi": "0.21.0",
+        "pymc": "6.3.2",
+        "arviz": "1.3.0"
+      }
+    },
+    "inputs": {
+      "results_root": "results",
+      "raw_root": "results/raw",
+      "draw_json": "results/draw/20261002T033145Z/draw.json",
+      "input_list": [
+        "20261010T055742Z-F-0-gpt-6-luna",
+        "20261010T073840Z-W-0-gpt-6-luna",
+        "20261010T084438Z-W-n-0-gpt-6-luna",
+        "20261010T100804Z-sigma-n-0-gpt-6-luna",
+        "20261010T113553Z-F-0-gpt-6-luna",
+        "20261010T125241Z-single-turn-gpt-6-luna",
+        "20261010T125444Z-F-0-gpt-6-luna-repeat1",
+        "20261010T130303Z-W-0-gpt-6-luna-repeat1",
+        "20261010T131136Z-W-n-0-gpt-6-luna-repeat1",
+        "20261010T132132Z-sigma-n-0-gpt-6-luna-repeat1",
+        "20261010T133022Z-F-0-gpt-6-luna-repeat1",
+        "20261010T133738Z-single-turn-gpt-6-luna-repeat1",
+        "20261010T202127Z-F-0-gpt-6-luna"
+      ],
+      "rerun_links": {
+        "20261010T202127Z-F-0-gpt-6-luna": "20261010T055742Z-F-0-gpt-6-luna"
+      },
+      "skipped": []
+    }
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": null,
+  "seeds": {
+    "bootstrap": 4086943125952605544,
+    "bayesian_glmm": 4086943125952605545
+  },
+  "started_utc": "2026-10-18T07:12:35+00:00",
+  "finished_utc": "2026-10-18T07:15:50+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "h1h3.json",
+    "summary.md"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261010T055742Z-F-0-gpt-6-luna",
+    "20261010T073840Z-W-0-gpt-6-luna",
+    "20261010T084438Z-W-n-0-gpt-6-luna",
+    "20261010T100804Z-sigma-n-0-gpt-6-luna",
+    "20261010T113553Z-F-0-gpt-6-luna",
+    "20261010T125241Z-single-turn-gpt-6-luna",
+    "20261010T125444Z-F-0-gpt-6-luna-repeat1",
+    "20261010T130303Z-W-0-gpt-6-luna-repeat1",
+    "20261010T131136Z-W-n-0-gpt-6-luna-repeat1",
+    "20261010T132132Z-sigma-n-0-gpt-6-luna-repeat1",
+    "20261010T133022Z-F-0-gpt-6-luna-repeat1",
+    "20261010T133738Z-single-turn-gpt-6-luna-repeat1",
+    "20261010T202127Z-F-0-gpt-6-luna"
+  ],
+  "config_hash": "ecafa635bee005bd6aa0ac408e21ad129b49e5113b8e4bb3143354b341d428ea",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "f79921cd770d2e9f2062f57535d59e4a6529a16d",
+  "git_dirty": false
+}

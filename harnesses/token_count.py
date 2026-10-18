@@ -23,7 +23,8 @@ command measures, for free, how close the sweep's largest requests come:
 
 It never calls `messages.create` or `messages.stream`, takes no paid-run lock and needs no
 approval: the endpoint is free. It needs an API key: it refuses (`credential_refusal`) unless
-`ANTHROPIC_API_KEY` is set and no other credential is. The Claude counts are estimates, as
+`ANTHROPIC_API_KEY` is set and no other credential, base URL or custom header is, and a built
+client that holds a custom header (`client_header_refusal`). The Claude counts are estimates, as
 the endpoint says (they can include tokens the API adds and does not bill), of requests whose
 replies are the fake model's: real replies that are longer, and lookup turns, make the
 requests larger. Writes results/token_count/<time>/token_count.json (or --out) and prints it.
@@ -37,7 +38,7 @@ from typing import Any
 
 from common import runmeta
 from harnesses import registered, single_turn
-from harnesses.anthropic_transport import credential_refusal
+from harnesses.anthropic_transport import client_header_refusal, credential_refusal
 from harnesses.cells import get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
@@ -146,7 +147,9 @@ def token_count(model: str, gen: GeneratorConfig, *, start: int = 0, n: int = 10
                 client_factory: Callable[[], Any] | None = None) -> dict:
     """The command (module docstring), as a dict to write and print. Refuses (`Refused`)
     before any request is generated or any client built: a model off the Messages wire, a
-    model R8 does not register, --n below 1, or the credentials (`credential_refusal`)."""
+    model R8 does not register, --n below 1, or the credentials (`credential_refusal`); and
+    before any request is sent, a client that holds a custom header
+    (`client_header_refusal`)."""
     if wire_for(model) is not MESSAGES:
         raise Refused(f"count-tokens counts Claude tokens of Messages requests: {model} is not "
                       "a claude-* model")
@@ -160,6 +163,9 @@ def token_count(model: str, gen: GeneratorConfig, *, start: int = 0, n: int = 10
         raise Refused(why)
     requests = largest_requests(model, gen, start=start, n=n)
     client = (client_factory or _default_client)()
+    why = client_header_refusal(client)
+    if why:
+        raise Refused(why)
     report = count(requests, client)
     return {"model": model, "endpoint": "POST /v1/messages/count_tokens (free)",
             "generator_config_hash": runmeta.config_hash(gen.to_dict()),

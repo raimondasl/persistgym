@@ -168,7 +168,8 @@ class CallGate:
                      "can cost is its max_tokens at the output price plus one input token per "
                      "byte of its JSON body at the cache-write price, at list prices on the "
                      "dearest card of a price that depends on prompt size (claude-haiku-5-5: "
-                     "its card for prompts over 100,000 tokens)")
+                     "its card for prompts over 100,000 tokens) and in its dearest inference "
+                     "geo (claude-haiku-5-5: US-only, 1.1x)")
     """`RULE` on the Messages wire (`harnesses.wire.MessagesWire`), whose cap is `max_tokens`."""
 
     def __init__(self, planned_usd: float, spent: Callable[[], float], model: str,
@@ -191,8 +192,9 @@ class CallGate:
         its output cap (`max_output_tokens`; `max_tokens` on the Messages wire) at the output
         price, plus one input token per byte of its JSON body at the cache-write price (more
         than the uncached and cached prices), on the dearest card of a price that depends on
-        prompt size (`Price.worst_card`: claude-haiku-5-5's card above 100,000 tokens).
-        Unbounded (inf) without a positive integer cap."""
+        prompt size, in the dearest inference geo (`Price.worst_card`: claude-haiku-5-5's
+        card above 100,000 tokens, at US-only inference's 1.1x). Unbounded (inf) without a
+        positive integer cap."""
         cap = self.wire.cap(payload)
         if isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0:
             return math.inf

@@ -34,7 +34,9 @@ while thinking) cannot be sent back as an empty assistant message: the API rejec
 or whitespace-only text block. It goes back as one text block holding
 `EMPTY_REPLY_PLACEHOLDER`; its visible reply, the one W counts and the environment scores,
 is still the empty text (0 tokens toward W), as on OpenAI, where such a turn is a reasoning
-item with no message.
+item with no message. A refusal that came after some text is treated the same way: its
+partial text is discarded from the history (`MessagesWire.kept_reply`; 0 tokens toward W),
+as Anthropic advises; the step is an invalid action either way (D13).
 
 Echoes: the Responses API echoes the reasoning settings it applied and the runner checks them
 on every response. The Messages API echoes neither effort nor a reasoning context, so
@@ -98,6 +100,7 @@ class Wire(Protocol):
     def turn_items(self, response: dict) -> tuple[list[dict], list[str]]: ...
     def is_reasoning_item(self, item: dict) -> bool: ...
     def text(self, response: dict) -> str: ...
+    def kept_reply(self, response: dict) -> str: ...
     def status(self, response: dict) -> tuple[str | None, str | None]: ...
     def usage(self, response: dict) -> dict: ...
     def served_tier(self, response: dict) -> str | None: ...
@@ -159,6 +162,10 @@ class ResponsesWire:
 
     def text(self, response: dict) -> str:
         return output_text(response)
+
+    def kept_reply(self, response: dict) -> str:
+        """The visible reply as later requests carry it and W counts it: the reply itself."""
+        return self.text(response)
 
     def status(self, response: dict) -> tuple[str | None, str | None]:
         return (response.get("status"),
@@ -255,11 +262,12 @@ class MessagesWire:
         return payload
 
     def turn_items(self, response: dict) -> tuple[list[dict], list[str]]:
-        """What a turn sends back on later requests: one assistant message holding its
-        visible reply as one text block, or `EMPTY_REPLY_PLACEHOLDER` when the reply is empty
-        or whitespace only. Thinking blocks are never sent back (replay off); any block type
-        other than text and thinking (none is expected: no tools are offered) is reported."""
-        reply = self.text(response)
+        """What a turn sends back on later requests: one assistant message holding its kept
+        reply (`kept_reply`) as one text block, or `EMPTY_REPLY_PLACEHOLDER` when that is
+        empty or whitespace only (a refusal's partial text is never sent back). Thinking
+        blocks are never sent back (replay off); any block type other than text and thinking
+        (none is expected: no tools are offered) is reported."""
+        reply = self.kept_reply(response)
         dropped = [str(b.get("type")) for b in response.get("content") or []
                    if b.get("type") not in ("text", *THINKING_BLOCKS)]
         sent = reply if reply.strip() else EMPTY_REPLY_PLACEHOLDER
@@ -273,6 +281,15 @@ class MessagesWire:
         """The visible reply: the response's text blocks, concatenated; thinking never."""
         return "".join(b.get("text") or "" for b in response.get("content") or []
                        if b.get("type") == "text")
+
+    def kept_reply(self, response: dict) -> str:
+        """The visible reply as later requests carry it and W counts it: `text`, except that
+        a refusal's partial text is discarded (the empty text), as Anthropic advises: "treat
+        any partial output as incomplete and discard it"
+        (https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback). The
+        reply the environment scores (an invalid action, D13) and the raw transcript keep
+        `text`."""
+        return "" if response.get("stop_reason") == "refusal" else self.text(response)
 
     def status(self, response: dict) -> tuple[str | None, str | None]:
         """`stop_reason` as a Responses-style status and reason: `end_turn` completed;

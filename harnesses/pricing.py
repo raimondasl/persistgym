@@ -13,7 +13,21 @@ Prices (USD per million tokens):
   cache-read tokens + cache-write tokens. P <= 100,000: $0.10 input, $0.125 5-minute cache
   write, $0.01 cache read, $0.50 output; P > 100,000: $0.50, $0.625, $0.05 and $2.50, for every
   token of that request, output included. A 1-hour cache write costs 2x input (never
-  requested here). No Flex tier: the billed estimate equals the list cost.
+  requested here). No Flex tier: the billed estimate equals the list cost, except for a
+  refusal Anthropic does not bill (below).
+  * Inference geo (same date;
+    https://platform.claude.com/docs/en/about-claude/pricing#data-residency-pricing,
+    https://platform.claude.com/docs/en/manage-claude/data-residency): a request served with
+    `usage.inference_geo` "us" costs 1.1x every price, the > 100,000 card included; "global"
+    the prices above. The wire sends no `inference_geo`, so the workspace's
+    `default_inference_geo` decides; each response is priced at the geo it reports, and a geo
+    not listed or not reported at the highest multiplier (`Price.geo_multiplier`).
+  * Refusals (same date;
+    https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback#how-refusals-are-billed):
+    a refusal before any output (`output_tokens` 0) is billed only when its
+    `stop_details.category` is one of `REFUSAL_BILLED_CATEGORIES`; any other such refusal
+    has a billed estimate of 0 and its list cost as usual (`unbilled_refusal`). A refusal
+    after some output bills the input and the output streamed.
 
 `cost_usd_list` is the standard-tier price of the usage; `cost_usd_billed_est` applies the
 Flex discount when an OpenAI response's echoed `service_tier` is `flex`. Both are estimates;
@@ -24,7 +38,8 @@ Usage is read in one meaning on both APIs (`usage_numbers` for OpenAI's Response
 token, cached ones included (Anthropic reports them apart, so they are added back);
 `cached_input_tokens` are cache reads; `cache_write_tokens` cache writes; `output_tokens`
 include reasoning (thinking) tokens; `reasoning_tokens` is None when the provider does not
-report them, never 0.
+report them, never 0 (but 0 for a Messages response with no output at all, where the count
+can only be 0).
 
 costs.csv columns: `service_tier` is the tier requested; the tier the provider reports it
 served, the cache-write tokens and the median seconds per call go into the
@@ -32,7 +47,11 @@ served, the cache-write tokens and the median seconds per call go into the
 `common.costs.COLUMNS` has them (schema of 2026-10-01), and into `notes` otherwise.
 `provider`, `api` and `price_source_date` are the requested model's (`Price`). For a model
 priced by prompt size, the notes give the run's largest prompt and how many calls went over
-the threshold (`max_prompt_tokens=`, `calls_over_<threshold>=`).
+the threshold (`max_prompt_tokens=`, `calls_over_<threshold>=`); for a model priced by
+inference geo, the geos the calls were served in (`inference_geos=<geo>:<calls>;...`); and,
+when there are any, the refusals with a billed estimate of 0 (`unbilled_refusals=`) and the
+failed attempts whose usage is in the totals (`failed_attempts_with_usage=`,
+`UsageLedger.add_failed`).
 """
 
 from __future__ import annotations
@@ -65,6 +84,9 @@ class Price:
     the `long` card, every token of it; None: one card."""
     long: tuple[float, float, float] | None = None
     """(input, cached, output) above `long_threshold`."""
+    geo_multipliers: tuple[tuple[str, float], ...] = ()
+    """(served `usage.inference_geo`, the multiplier of every price) pairs; empty: no geo
+    pricing (`geo_multiplier`)."""
 
     def card(self, prompt_tokens: int) -> tuple[float, float, float]:
         """(input, cached, output) of a request with this prompt size."""
@@ -72,20 +94,38 @@ class Price:
             return self.long
         return self.input, self.cached, self.output
 
+    def geo_multiplier(self, geo: str | None) -> float:
+        """The multiplier of every price of a request served in `geo`: 1 without geo pricing;
+        the highest multiplier for a geo not listed or not reported (None), so the estimate
+        errs high, never low."""
+        if not self.geo_multipliers:
+            return 1.0
+        known = dict(self.geo_multipliers)
+        return known.get(geo, max(known.values()))
+
     def worst_card(self) -> tuple[float, float, float]:
-        """The dearest card: what a bound on one call's cost must use."""
-        return self.long if self.long is not None else (self.input, self.cached, self.output)
+        """The dearest card, in the dearest geo: what a bound on one call's cost must use."""
+        card = self.long if self.long is not None else (self.input, self.cached, self.output)
+        worst = max(dict(self.geo_multipliers).values(), default=1.0)
+        return card if worst == 1.0 else tuple(x * worst for x in card)
 
 
 HAIKU_PRICE_SOURCE_DATE = "2026-10-17"
 HAIKU_LONG_THRESHOLD = 100_000
+HAIKU_GEO_MULTIPLIERS = (("global", 1.0), ("us", 1.1))
+"""US-only inference costs 1.1x every price on Claude 4.6 and later models, Haiku 5.5's
+> 100,000-token card included; global routing the listed prices (module docstring)."""
+REFUSAL_BILLED_CATEGORIES = ("bio", "frontier_llm", "reasoning_extraction")
+"""The `stop_details.category` values whose refusals before any output are billed, as of
+2026-10-17 (module docstring; the docs say the list may change)."""
 
 PRICES: dict[str, Price] = {
     "gpt-6-luna": Price(0.10, 0.01, 0.50),
     "gpt-6.1-sol": Price(2.00, 0.10, 10.00),
     "claude-haiku-5-5": Price(0.10, 0.01, 0.50, provider="anthropic", api="messages",
                               source_date=HAIKU_PRICE_SOURCE_DATE,
-                              long_threshold=HAIKU_LONG_THRESHOLD, long=(0.50, 0.05, 2.50)),
+                              long_threshold=HAIKU_LONG_THRESHOLD, long=(0.50, 0.05, 2.50),
+                              geo_multipliers=HAIKU_GEO_MULTIPLIERS),
 }
 
 
@@ -124,16 +164,22 @@ def messages_usage_numbers(usage: dict | None) -> dict[str, int | None]:
     `cache_creation_input_tokens`, the prompt size P that also picks the price card;
     cached = cache reads; cache writes = cache creation; `output_tokens` as reported
     (thinking included); `reasoning_tokens` = `output_tokens_details.thinking_tokens`, or
-    None when the response does not report it."""
+    None when the response does not report it, except that a response with no output at all
+    (`output_tokens` 0, as a refusal before any output, whose usage has no
+    `output_tokens_details`) has 0: thinking tokens are always at most `output_tokens`
+    (https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost)."""
     usage = usage or {}
     read = int(usage.get("cache_read_input_tokens") or 0)
     write = int(usage.get("cache_creation_input_tokens") or 0)
+    out = int(usage.get("output_tokens") or 0)
     thinking = (usage.get("output_tokens_details") or {}).get("thinking_tokens")
+    if thinking is None and usage.get("output_tokens") == 0:  # reported 0, not missing
+        thinking = 0
     return {
         "input_tokens": int(usage.get("input_tokens") or 0) + read + write,
         "cached_input_tokens": read,
         "cache_write_tokens": write,
-        "output_tokens": int(usage.get("output_tokens") or 0),
+        "output_tokens": out,
         "reasoning_tokens": None if thinking is None else int(thinking),
     }
 
@@ -162,8 +208,11 @@ def add_counts(total: dict, numbers: dict) -> dict:
 
 
 def cost_usd(model: str, usage: dict | None, service_tier: str | None) -> tuple[float, float]:
-    """(list cost, billed estimate) of one response. A model priced by prompt size is priced
-    at the card its prompt size picks; its billed estimate is the list cost (no Flex)."""
+    """(list cost, billed estimate) of one response's usage. A model priced by prompt size is
+    priced at the card its prompt size picks, and one priced by inference geo at the
+    multiplier of the geo its usage reports (`Price.geo_multiplier`); its billed estimate is
+    the list cost (no Flex; for a refusal Anthropic does not bill, the callers set it to 0,
+    `unbilled_refusal`)."""
     p = price_for(model)
     u = normalized_usage(p.api, usage)
     inp, cached, out = p.card(u["input_tokens"])
@@ -175,8 +224,22 @@ def cost_usd(model: str, usage: dict | None, service_tier: str | None) -> tuple[
         one_hour = int(((usage or {}).get("cache_creation") or {})
                        .get("ephemeral_1h_input_tokens") or 0)
         listed += one_hour * inp * (CACHE_WRITE_1H_MULTIPLIER - CACHE_WRITE_MULTIPLIER) / 1e6
+        listed *= p.geo_multiplier((usage or {}).get("inference_geo"))
         return listed, listed
     return listed, listed * TIER_DISCOUNT.get(service_tier or "", 1.0)
+
+
+def unbilled_refusal(api: str, response: dict) -> bool:
+    """Whether a response is a refusal that Anthropic does not bill (module docstring): on
+    the Messages API, `stop_reason` refusal with `output_tokens` 0 (before any output) and a
+    `stop_details.category` not in `REFUSAL_BILLED_CATEGORIES` (null included). Its list
+    cost is kept; its billed estimate is 0."""
+    if api != "messages" or response.get("stop_reason") != "refusal":
+        return False
+    if (response.get("usage") or {}).get("output_tokens") != 0:
+        return False  # a refusal after some output bills the input and the output streamed
+    category = (response.get("stop_details") or {}).get("category")
+    return category not in REFUSAL_BILLED_CATEGORIES
 
 
 @dataclass
@@ -204,6 +267,14 @@ class UsageLedger:
     """The largest prompt size P (input + cache reads + cache writes) of a call."""
     calls_over_threshold: int = 0
     """Calls whose prompt size passed the price's `long_threshold` (the dearer card)."""
+    inference_geos: dict[str, int] = field(default_factory=dict)
+    """For a price with geo pricing: the `usage.inference_geo` each call reports ("None"
+    when it reports none, priced at the highest multiplier)."""
+    unbilled_refusals: int = 0
+    """Refusals Anthropic does not bill (`unbilled_refusal`): billed estimate 0."""
+    failed_attempts: int = 0
+    """Attempts that failed after their usage was known (a stream that failed part way,
+    `add_failed`): in the token and cost totals, not in `n_calls`."""
 
     @property
     def price(self) -> Price:
@@ -226,6 +297,12 @@ class UsageLedger:
             # losing it from costs.csv, and flag it.
             listed, billed = cost_usd(self.model_requested, response.get("usage"), tier)
             self.priced_as_requested[model] = self.priced_as_requested.get(model, 0) + 1
+        if unbilled_refusal(api, response):
+            billed = 0.0
+            self.unbilled_refusals += 1
+        if self.price.geo_multipliers:
+            geo = str((response.get("usage") or {}).get("inference_geo"))
+            self.inference_geos[geo] = self.inference_geos.get(geo, 0) + 1
         u = normalized_usage(api, response.get("usage"))
         self.n_calls += 1
         for k, v in add_counts({k: getattr(self, k) for k in u}, u).items():
@@ -243,6 +320,29 @@ class UsageLedger:
         threshold = self.price.long_threshold
         self.calls_over_threshold += threshold is not None and u["input_tokens"] > threshold
         return listed, billed
+
+    def add_failed(self, partial: dict) -> tuple[float, float]:
+        """Add one failed attempt whose usage the provider had already reported (`partial`:
+        the message so far of a Messages stream that failed after `message_start`; its input
+        was processed and may be billed). Its cost and its input, cache and output tokens go
+        into the totals, priced as the requested model; it is counted in `failed_attempts`,
+        never in `n_calls`, and adds no reasoning tokens (a partial message has no breakdown),
+        tier, geo or latency."""
+        usage = partial.get("usage")
+        listed, billed = cost_usd(self.model_requested, usage, served_tier(self.price.api,
+                                                                          partial))
+        u = normalized_usage(self.price.api, usage)
+        for k in ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens"):
+            setattr(self, k, getattr(self, k) + u[k])
+        self.cost_usd_list += listed
+        self.cost_usd_billed_est += billed
+        self.failed_attempts += 1
+        return listed, billed
+
+    def served_geos(self) -> dict | None:
+        """For a price with geo pricing: the calls per served `usage.inference_geo`; None
+        otherwise."""
+        return dict(sorted(self.inference_geos.items())) if self.price.geo_multipliers else None
 
     def totals(self) -> dict:
         return {k: getattr(self, k) for k in (
@@ -297,6 +397,13 @@ class UsageLedger:
         if size is not None:
             extra.append(f"max_prompt_tokens={size['max_prompt_tokens']}; "
                          f"calls_over_{size['threshold']}={size['calls_over_threshold']}")
+        geos = self.served_geos()
+        if geos is not None:
+            extra.append("inference_geos=" + ";".join(f"{g}:{n}" for g, n in geos.items()))
+        if self.unbilled_refusals:
+            extra.append(f"unbilled_refusals={self.unbilled_refusals}")
+        if self.failed_attempts:
+            extra.append(f"failed_attempts_with_usage={self.failed_attempts}")
         if self.reasoning_tokens is None:
             extra.append("reasoning_tokens not reported by the provider")
         row["notes"] = "; ".join([notes, *extra]) if notes else "; ".join(extra)

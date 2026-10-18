@@ -3,13 +3,15 @@ amendment R8, not yet written or merged): fail closed.
 
 * `R8_IN_EFFECT` is False in the repository, and then every Haiku paid run refuses, naming
   §17.8: pilots, the validity run, main runs and the single-turn control, with R6's hard stop
-  on or off, through `run`, `single-turn` and the probes, before the paid-run lock.
+  on or off, through `run`, `single-turn` and the probes, before the paid-run lock; and so
+  does every other claude-* string, which goes to the Messages API too.
 * With it monkeypatched True (as the R8 pull request will set it), the rules in R4's pattern:
   pilots, the validity run with no G1, main runs only after `HAIKU_G1_PASSED`; luna's and
   sol's runs are judged as before, and neither runs in `persistgym_haiku`.
 * The CLI: `dry-run` works at $0 on the Messages wire, --service-tier defaults per wire, the
   docstring's R8 commands parse, an end-to-end Haiku pilot (R8 on) goes through the real
-  guarded transport with a fake-backed client, and `account-run` refuses a Haiku run.
+  guarded transport with a fake-backed client (and refuses under a block that does not
+  list persistgym_haiku), and `account-run` refuses a Haiku run.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from common import costs, paidlock, runmeta
-from common.tests.gitrepo import FROZEN_PREREG, decisions_text, guarded_repo
+from common.tests.gitrepo import FROZEN_PREREG, approval_line, decisions_text, guarded_repo
 from harnesses import account, anthropic_transport, blinding, cli, registered
 from harnesses.anthropic_transport import AnthropicMessagesTransport
 from harnesses.fake import FakeModel
@@ -36,6 +38,9 @@ REQUEST = {"mode": "standard", "service_tier": "standard", "W": None}
 ALL8 = tuple(c.id for c in ALL_CELLS)
 NONREC = tuple(c.id for c in ALL_CELLS if not c.recoverable)
 PILOT, VALIDITY, MAIN = "persistgym_pilot", "persistgym_validity", "persistgym_haiku"
+OTHER_CLAUDE = ("claude-haiku-5-5-latest", "claude-sonnet-5", "claude-haiku-4-5")
+"""claude-* strings that are not claude-haiku-5-5 or a dated snapshot of it: the wire sends
+them to the Messages API and the price matches some of them by prefix, so R8 holds them too."""
 
 
 def guard(experiment, cell, root, *, model=HAIKU, effort="medium", gen=DEFAULT, split="main",
@@ -99,13 +104,17 @@ def test_the_repository_has_r8_off_and_no_haiku_g1():
     assert "ANTHROPIC_API_KEY=" in env  # the name only, no value
 
 
+@pytest.mark.parametrize("model", [HAIKU, "claude-haiku-5-5-2026-10-01", *OTHER_CLAUDE])
 @pytest.mark.parametrize("r6_on", [True, False])
 @pytest.mark.parametrize("experiment, cell, kw", RUNS)
 def test_without_r8_every_haiku_run_refuses(tmp_path, monkeypatch, g1, r6_on, experiment,
-                                            cell, kw):
+                                            cell, kw, model):
+    """Every claude-* string, not only claude-haiku-5-5: with R6's hard stop off, a string
+    outside Haiku's exact or dated family used to skip R8 and pass the old pilot rules."""
     monkeypatch.setattr(registered, "R6_HARD_STOP", r6_on)
-    why = guard(experiment, cell, tmp_path, **kw)
+    why = guard(experiment, cell, tmp_path, model=model, **kw)
     assert why is not None and registered.R8_REF in why and "R8_IN_EFFECT" in why
+    assert (f"got model {model}, which is not {HAIKU}" in why) is (model in OTHER_CLAUDE)
 
 
 def test_without_r8_the_probes_refuse_haiku(tmp_path):
@@ -207,6 +216,11 @@ def test_with_r8_and_r6_off_haiku_is_still_held_to_r8(tmp_path, r8, g1, monkeypa
     why = guard("persistgym", "F-0", tmp_path)
     assert registered.R8_REF in why and why.endswith("got --experiment persistgym")
     assert guard(MAIN, "F-0", tmp_path) is None
+    # every other claude-* string is held to R8 too, which registers none of them
+    for model in OTHER_CLAUDE:
+        for experiment, cell, kw in RUNS:
+            why = guard(experiment, cell, tmp_path, model=model, **kw)
+            assert why is not None and f"model {model}" in why, (model, experiment, cell)
 
 
 def test_with_r8_other_models_never_run_in_its_experiment(tmp_path, r8, g1):
@@ -369,10 +383,13 @@ class _FakeBackedClient:
 @pytest.fixture
 def haiku_paid_env(tmp_path, monkeypatch, r8):
     """R8 in effect; a repo whose frozen PREREG and approval line for block 4-haiku list R8's
-    experiments; the CLI's own `_guarded_transport` building the real Anthropic transport
-    with a fake-backed client; a dummy API key's variable; a lock file of its own."""
+    experiments, beside block 1-pilots, approved before the Haiku replication (it lists the
+    pilot and validity experiments, not persistgym_haiku); the CLI's own `_guarded_transport`
+    building the real Anthropic transport with a fake-backed client; a dummy API key's
+    variable; a lock file of its own."""
     guarded_repo(tmp_path, prereg=FROZEN_PREREG, decisions=decisions_text(
-        "4-haiku", experiments=(PILOT, VALIDITY, MAIN)))
+        "4-haiku", experiments=(PILOT, VALIDITY, MAIN))
+        + approval_line("1-pilots", (PILOT, VALIDITY)) + "\n")
     costs_csv = tmp_path / "costs.csv"
     costs_csv.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
     monkeypatch.setenv(ALLOW_ENV, "1")
@@ -422,8 +439,27 @@ def test_an_end_to_end_haiku_pilot(haiku_paid_env, capsys):
     assert meta["api"] == "anthropic.messages"
     assert meta["prompt_size"]["threshold"] == 100_000
     assert 0 < meta["prompt_size"]["max_prompt_tokens"] < 100_000
+    assert meta["inference_geos"] == {"global": len(fake.calls)}  # the fake reports global
+    assert f"inference_geos=global:{len(fake.calls)}" in row["notes"]
     assert meta["reasoning_context_requested"] is None and meta["tokens"]["reasoning_tokens"] \
         is None
     plan = json.loads((tmp / "raw" / PILOT / "hp" / "run_plan.json").read_text(encoding="utf-8"))
     assert plan["harness_config"]["service_tier"] == "standard"
     assert not (tmp / "lock" / paidlock.lock_name(cli.STREAM)).exists()  # released
+
+
+def test_a_haiku_pilot_under_a_block_approved_before_r8_refuses(haiku_paid_env, capsys):
+    """The guard alone would let it through (block 1-pilots lists persistgym_pilot); the
+    Anthropic transport refuses a block that does not list persistgym_haiku, before any
+    call, and releases the spend reservation and the lock."""
+    tmp, costs_csv, fakes = haiku_paid_env
+    assert cli.main(["run", "--cell", "W-0", "--model", HAIKU, "--split", "pilot", "--n", "1",
+                     "--approved-block", "1-pilots", "--planned-usd", "1",
+                     "--run-id", "hp1"]) == 2
+    err = capsys.readouterr().err
+    assert "refused: block '1-pilots' lists persistgym_pilot, persistgym_validity, not " \
+           "persistgym_haiku" in err
+    assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)
+    lock = tmp / "lock" / paidlock.lock_name(cli.STREAM)
+    assert not lock.exists()
+    assert not paidlock.reservation_path(lock, cli.STREAM).exists()

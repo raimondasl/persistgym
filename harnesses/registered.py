@@ -84,7 +84,11 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   0-19, with no G1; and main runs and controls in `HAIKU_EXPERIMENT` (`persistgym_haiku`):
   F-0, W-0 and W-n-0 as the full matrix on all 8 task cells, the single-turn control on its
   4, main templates 0 to `HAIKU_T` - 1, base episodes or the restated-at-need control in F-0,
-  after `HAIKU_G1_PASSED` (empty: fail closed).
+  after `HAIKU_G1_PASSED` (empty: fail closed). Every other `claude-*` string is on the
+  Messages wire too, and is held to R8 as well (with R6's hard stop on or off): it refuses
+  while R8 is not in effect, and after, as a model R8 does not register. The Anthropic
+  transport also refuses any model but Haiku, and an approved block that does not list
+  `persistgym_haiku` (harnesses/anthropic_transport.py).
 
 `check_run_settings` is the guard `harnesses run` and `harnesses single-turn` apply before
 they take the paid-run lock: first R6's hard stop (`r6_refusal`); then, for the runs it lets
@@ -115,6 +119,7 @@ from datetime import date
 from pathlib import Path
 
 from harnesses.config import REASONING_EFFORTS
+from harnesses.wire import MESSAGES, wire_for
 from persistgym.config import PRESET_HASHES
 from persistgym.episode import ALL_CELLS
 
@@ -375,6 +380,21 @@ def registered_effort(model: str) -> str:
     """The `reasoning.effort` a model's runs send by default and its non-pilot runs must
     send."""
     return REGISTERED_EFFORT.get(model_family(model), DEFAULT_EFFORT)
+
+
+def _on_messages_wire(model: str) -> bool:
+    """Whether a model string goes to Anthropic's Messages API (`harnesses.wire.wire_for`:
+    any `claude-*` string), so that only R8 can let its runs through, whatever its family."""
+    return wire_for(model) is MESSAGES
+
+
+def _not_haiku(model: str) -> str:
+    """For a refusal under R8: the model string, when it is not claude-haiku-5-5 (or a dated
+    snapshot of it), which R8 alone would register."""
+    if model_family(model) == HAIKU_MODEL:
+        return ""
+    return (f"; got model {model}, which is not {HAIKU_MODEL} (a claude-* model goes to the "
+            "Messages API, which only R8 can open)")
 
 
 def _ref(generator_hash: str) -> str:
@@ -659,24 +679,25 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
       this checkout's results/ (`_single_turn_pilot_prompts`). Any of these left as None
       refuses. So a pilot of another request cannot use up the allowance;
     * claude-haiku-5-5 (R8, PREREG §17.8, not yet merged): every run refuses while
-      `R8_IN_EFFECT` is False (`R8_STOP`); once it is True, its runs in R8's three
-      experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new dated
-      amendment R6 change 1 asks for, and every other Haiku run refuses;
+      `R8_IN_EFFECT` is False (`R8_STOP`), and so does every other model on the Messages
+      wire (any `claude-*` string, `_on_messages_wire`); once it is True, its runs in R8's
+      three experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new
+      dated amendment R6 change 1 asks for, and every other Haiku run refuses (another
+      `claude-*` model as one that is not registered);
     * every other run refuses: `persistgym_validity` for every model, `persistgym_sol_h1`,
       `toggle_pilot` and `replay_probe` (the probes), any other pilot, any sol run and any
       other experiment."""
     if not R6_HARD_STOP:
         return None
     family = model_family(model)
+    if _on_messages_wire(model) and not R8_IN_EFFECT:
+        return f"{R8_STOP}; got --experiment {experiment}{_not_haiku(model)}"
     if family not in REGISTERED_EFFORT:
         return (f"{R6_STOP}; got model {model}, which is not a registered model (the "
                 f"registered ones: {', '.join(REGISTERED_EFFORT)}, or a dated snapshot "
                 "-YYYY-MM-DD of one)")
-    if family == HAIKU_MODEL:
-        if not R8_IN_EFFECT:
-            return f"{R8_STOP}; got --experiment {experiment}"
-        if experiment in HAIKU_EXPERIMENTS and cell is not None:
-            return None
+    if family == HAIKU_MODEL and experiment in HAIKU_EXPERIMENTS and cell is not None:
+        return None
     if family == LUNA_MODEL and experiment == LUNA_EXPERIMENT:
         return None
     if family == LUNA_MODEL and experiment == PILOT_EXPERIMENT and cell == LUNA_SINGLE_TURN_CELL:
@@ -828,7 +849,7 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
     None refuse. The engagement checks, R3's and R6's rules for the OpenAI models, and luna's
     and sol's G1 are never read for Haiku."""
     if not R8_IN_EFFECT:
-        return f"{R8_STOP}; got --experiment {experiment}, cell {cell}"
+        return f"{R8_STOP}; got --experiment {experiment}, cell {cell}{_not_haiku(model)}"
     single = cell == HAIKU_SINGLE_TURN_CELL
     wrong = [what for what, bad in (
         (f"--experiment {experiment}", experiment not in HAIKU_EXPERIMENTS),
@@ -947,16 +968,19 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        run (`VALIDITY_RUN`: cell F-0, `split` validity, `variant` restated or withheld);
     6. such a model needs an ENGAGED check on that config (`engagement_refusal`);
     7. outside `persistgym_validity`, such a model also needs `G1_PASSED` on that config.
-    R8. claude-haiku-5-5 (PREREG §17.8, not yet merged) is judged by `haiku_refusal` alone,
-       right after step 0 and before the pilot rules, so its pilots are held to R8 too; while
-       `R8_IN_EFFECT` is False every Haiku run refuses (with R6's hard stop off as well)."""
+    R8. claude-haiku-5-5 (PREREG §17.8, not yet merged), and every other model on the
+       Messages wire (any `claude-*` string, which the CLI would send through the Anthropic
+       transport and price by prefix), is judged by `haiku_refusal` alone, right after step 0
+       and before the pilot rules, so its pilots are held to R8 too; while `R8_IN_EFFECT` is
+       False every such run refuses (with R6's hard stop off as well), and once it is True
+       one that is not claude-haiku-5-5 or a dated snapshot of it still refuses."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)
     if why:
         return why
     family = model_family(model)
-    if family == HAIKU_MODEL:
+    if family == HAIKU_MODEL or _on_messages_wire(model):
         return haiku_refusal(experiment, model, effort, cell, generator_hash, results_root,
                              split=split, variant=variant, task_cells=task_cells,
                              request=request, templates=templates, matrix=matrix)

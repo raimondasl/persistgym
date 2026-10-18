@@ -60,7 +60,9 @@ class Turn:
     observation: str
     obs_tokens: int
     items: list[dict]  # what the turn sends back on later turns (`Wire.turn_items`)
-    reply: str  # visible output text (what the environment scores and W counts)
+    # visible output text as later turns carry it and W counts it (`Wire.kept_reply`: the
+    # reply the environment scores, but the empty text for a Messages refusal)
+    reply: str
     reply_tokens: int
     dropped_output_types: list[str] = field(default_factory=list)
 
@@ -248,9 +250,10 @@ class HarnessSession:
         A step response with status `incomplete` (it hit `max_output_tokens`, D13) is kept
         like any other: its output items as returned (only a reasoning item if it stopped
         while reasoning) and its partial text, if any; on the Messages wire, its visible text,
-        or `harnesses.wire.EMPTY_REPLY_PLACEHOLDER` when it has none. The runner scores its
-        step as an invalid action. An incomplete or empty summary raises
-        `EmptySummaryError`."""
+        or `harnesses.wire.EMPTY_REPLY_PLACEHOLDER` when it has none or it is a refusal,
+        whose partial text is discarded from the history and from W (`Wire.kept_reply`).
+        The runner scores its step as an invalid action. An incomplete or empty summary
+        raises `EmptySummaryError`."""
         if request.turn != len(self.turns) or self.pending is None:
             raise RuntimeError("response does not belong to the pending request")
         if request.kind == "summary":
@@ -272,8 +275,9 @@ class HarnessSession:
             return None
         items, dropped = self.wire.turn_items(response)
         reply = self.wire.text(response)
-        self.turns.append(Turn(len(self.turns), self.pending, self.pending_tokens, items, reply,
-                               self._count(reply), dropped))
+        kept = self.wire.kept_reply(response)
+        self.turns.append(Turn(len(self.turns), self.pending, self.pending_tokens, items, kept,
+                               self._count(kept), dropped))
         if self.cell.history == "window":
             self.start = request.info["keep_start"]
         self.pending = None

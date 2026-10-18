@@ -90,7 +90,9 @@ def test_count_tokens_counts_with_the_endpoint_only(key):
 @pytest.mark.parametrize("env, why", [
     ({}, "ANTHROPIC_API_KEY is not set"),
     ({"ANTHROPIC_API_KEY": "dummy", "ANTHROPIC_AUTH_TOKEN": "x"}, "ANTHROPIC_AUTH_TOKEN"),
-    ({"ANTHROPIC_API_KEY": "dummy", "ANTHROPIC_PROFILE": "x"}, "ANTHROPIC_PROFILE")])
+    ({"ANTHROPIC_API_KEY": "dummy", "ANTHROPIC_PROFILE": "x"}, "ANTHROPIC_PROFILE"),
+    ({"ANTHROPIC_API_KEY": "dummy", "ANTHROPIC_CUSTOM_HEADERS": "x-api-key: y"},
+     "ANTHROPIC_CUSTOM_HEADERS")])
 def test_count_tokens_refuses_without_an_api_key(monkeypatch, env, why):
     for name in (anthropic_transport.KEY_ENV, *anthropic_transport.REFUSED_ENV):
         monkeypatch.delenv(name, raising=False)
@@ -101,6 +103,16 @@ def test_count_tokens_refuses_without_an_api_key(monkeypatch, env, why):
         raise AssertionError("must refuse before building a client")
     with pytest.raises(token_count.Refused, match=why):
         token_count.token_count(HAIKU, SMALL, n=1, client_factory=no_client)
+
+
+def test_count_tokens_refuses_a_client_with_custom_headers(key):
+    """The backstop behind ANTHROPIC_CUSTOM_HEADERS's refusal: a built client that holds any
+    custom header (which the SDK sends after its auth headers) refuses before any request."""
+    client = _CountingClient()
+    client._custom_headers = {"Authorization": "dummy-value"}
+    with pytest.raises(token_count.Refused, match=r"custom headers \(Authorization\)") as e:
+        token_count.token_count(HAIKU, SMALL, n=1, client_factory=lambda: client)
+    assert client.counted == [] and "dummy-value" not in str(e.value)
 
 
 @pytest.mark.parametrize("model, why", [("gpt-6-luna", r"not a claude-\* model"),

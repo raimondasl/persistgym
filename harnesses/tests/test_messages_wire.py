@@ -281,6 +281,54 @@ def test_an_empty_visible_reply_goes_back_as_the_placeholder(status):
     assert tokens.count(EMPTY_REPLY_PLACEHOLDER) > 0  # sent, but never counted toward W
 
 
+def test_a_refusals_partial_text_is_discarded_from_the_history():
+    """A refusal can come mid-stream, after some text. Anthropic: discard the partial output
+    (https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback). Its text
+    goes back neither in later requests nor into W: the turn goes back as the placeholder and
+    counts 0 tokens, as an empty reply. The environment still gets the text, and the step is
+    an invalid action (D13). A stop at max_tokens keeps its partial text, as on OpenAI."""
+    def fake(status):
+        return FakeModel(lambda p, i: reply_text(i), summary_fn=lambda p, j: summary_text(j),
+                         status_fn=lambda p, tag: status if tag == "t2" else "completed")
+    s, model, _ = run_synthetic(CELLS["F-0"], n_steps=5, cfg=CFG, fake=fake("refusal"))
+    assert model.calls[2]["messages"][-1] == _user(obs_text(2))
+    assert model.calls[3] == _body(SYSTEM, [
+        _user(obs_text(0)), _assistant(reply_text(0)), _user(obs_text(1)),
+        _assistant(reply_text(1)), _user(obs_text(2)), _assistant(EMPTY_REPLY_PLACEHOLDER),
+        _user(obs_text(3))])
+    assert (s.turns[2].reply, s.turns[2].reply_tokens) == ("", 0)
+    refused = FakeModel(status_fn=lambda p, tag: "refusal").send(_body(SYSTEM, _turns(0, 0)))
+    assert MESSAGES.text(refused) and MESSAGES.kept_reply(refused) == ""  # text kept, not sent
+    # W counts it as an empty reply: at W = 1150 step 4 keeps every turn
+    _, model, _ = run_synthetic(CELLS["W-0"], n_steps=5, W=1150, cfg=CFG, fake=fake("refusal"))
+    assert labels(model.calls[4]) == ["U0", "A0", "U1", "A1", "U2", "E", "U3", "A3", "U4"]
+    # a stop at max_tokens after some text keeps it (sent back, counted)
+    s, model, _ = run_synthetic(CELLS["F-0"], n_steps=4, cfg=CFG, fake=fake("incomplete"))
+    assert labels(model.calls[3]) == no_reasoning_turns(0, 3)
+    assert s.turns[2].reply == reply_text(2)
+    # the Responses wire keeps every reply (OpenAI's code is unchanged)
+    assert RESPONSES.kept_reply({"output": []}) == RESPONSES.text({"output": []}) == ""
+
+
+def test_a_refused_step_is_invalid_and_its_partial_text_kept_in_the_record(small_eps):
+    ep = next(e for e in small_eps if e.cell.id == "derived-nonrec-far"
+              and e.need_step < e.n_steps - 1)  # steps after the need step
+    need = ep.steps[ep.need_step].observation
+    correct = f"ACTION: {ep.need.expected_action}"
+    events = []
+    fake = FakeModel(lambda p, i: correct if item_text(p["messages"][-1]) == need
+                     else "ACTION: ack(none)",
+                     status_fn=lambda p, tag: ("refusal" if item_text(p["messages"][-1]) == need
+                                               else "completed"))
+    run = run_episode(ep, CELLS["F-0"], CFG, fake, recorder=events.append)
+    assert run.exit_reason == "DONE" and not run.need_correct
+    (inc,) = run.incomplete
+    assert inc["reason"] == "refusal:general_harms" and inc["reply_chars"] == len(correct)
+    after = [e["payload"]["messages"] for e in events if e["request_index"] > ep.need_step]
+    assert after and all(item_text(m) != correct for msgs in after for m in msgs)
+    assert all(EMPTY_REPLY_PLACEHOLDER in [item_text(m) for m in msgs] for msgs in after)
+
+
 def test_a_whitespace_reply_goes_back_as_the_placeholder_and_counts_as_itself():
     s, model, _ = run_synthetic(CELLS["F-0"], n_steps=3, cfg=CFG,
                                 fake=FakeModel(lambda p, i: "\n" if i == 1 else reply_text(i)))
@@ -339,7 +387,7 @@ def _response(stop="end_turn", text="ACTION: ack(none)", details=None, **usage):
             "usage": {"input_tokens": 10, "cache_read_input_tokens": 900,
                       "cache_creation_input_tokens": 90, "output_tokens": 300,
                       "output_tokens_details": {"thinking_tokens": 250},
-                      "service_tier": "standard", **usage}}
+                      "service_tier": "standard", "inference_geo": "global", **usage}}
 
 
 def test_reply_text_is_the_text_blocks_never_thinking():
@@ -381,6 +429,13 @@ def test_usage_in_the_responses_meanings():
                                             "cache_write_tokens": 0, "output_tokens": 0,
                                             "reasoning_tokens": None}
     assert MESSAGES.served_tier(_response()) == "standard"
+    # output reported but no breakdown: unknown; no output at all (a refusal before any
+    # output, documented without output_tokens_details): 0, exactly (thinking <= output)
+    assert messages_usage_numbers({"input_tokens": 412, "output_tokens": 5})[
+        "reasoning_tokens"] is None
+    assert messages_usage_numbers({"input_tokens": 412, "output_tokens": 0}) == {
+        "input_tokens": 412, "cached_input_tokens": 0, "cache_write_tokens": 0,
+        "output_tokens": 0, "reasoning_tokens": 0}
 
 
 def test_the_echo_reports_what_the_messages_api_does_not_echo_as_none():
@@ -474,6 +529,7 @@ def test_run_batch_meta_on_the_messages_wire(small_eps, tmp_path, monkeypatch):
     assert meta["reasoning_effort"] == "medium" and meta["service_tier_requested"] == "standard"
     assert meta["api"] == "anthropic.messages" and "request-side check" in meta["echo_note"]
     assert meta["prompt_size"] is None  # no ledger: the fake model
+    assert meta["inference_geos"] is None
     assert meta["sdk_versions"]["anthropic"] == "1.15.0"
     summary = json.loads((tmp_path / "r" / "persistgym" / "haiku-fake" / "summary.json")
                          .read_text(encoding="utf-8"))
@@ -489,7 +545,7 @@ def test_openai_meta_is_unchanged(small_eps, tmp_path):
     meta = run_batch(small_eps[:1], CELLS["W-0"], HarnessConfig(), FakeModel(),
                      experiment="persistgym", run_id="luna", results_root=tmp_path / "r",
                      raw_root=tmp_path / "raw")
-    assert not {"api", "echo_note", "prompt_size"} & set(meta)
+    assert not {"api", "echo_note", "prompt_size", "inference_geos"} & set(meta)
     assert meta["reasoning_context_requested"] == "current_turn"
 
 
@@ -557,11 +613,15 @@ def test_single_turn_full_request_on_the_registered_default_config():
 
 # --- pricing (https://platform.claude.com/docs/en/about-claude/pricing, 2026-10-17) ---------
 
-def _usage(plain, read, write, out, one_hour=0):
-    return {"input_tokens": plain, "cache_read_input_tokens": read,
-            "cache_creation_input_tokens": write, "output_tokens": out,
-            "cache_creation": {"ephemeral_5m_input_tokens": write - one_hour,
-                               "ephemeral_1h_input_tokens": one_hour}}
+def _usage(plain, read, write, out, one_hour=0, geo="global"):
+    usage = {"input_tokens": plain, "cache_read_input_tokens": read,
+             "cache_creation_input_tokens": write, "output_tokens": out,
+             "cache_creation": {"ephemeral_5m_input_tokens": write - one_hour,
+                                "ephemeral_1h_input_tokens": one_hour},
+             "inference_geo": geo}
+    if geo is None:
+        del usage["inference_geo"]
+    return usage
 
 
 @pytest.mark.parametrize("plain, read, write, out, expected", [
@@ -585,12 +645,103 @@ def test_a_one_hour_cache_write_is_priced_at_twice_input():
     assert listed == pytest.approx(1_000 * 0.20 / 1e6)
 
 
+@pytest.mark.parametrize("geo, factor", [("global", 1.0), ("us", 1.1), (None, 1.1),
+                                         ("eu", 1.1)])
+@pytest.mark.parametrize("plain, out", [(10_000, 1_000), (100_001, 1_000)])
+def test_haiku_is_priced_at_the_inference_geo_it_was_served_in(geo, factor, plain, out):
+    """US-only inference costs 1.1x every price, the > 100,000 card included
+    (https://platform.claude.com/docs/en/about-claude/pricing#data-residency-pricing); the
+    wire sends no inference_geo, so the workspace default decides. A geo not reported, or
+    not listed, is priced at the highest multiplier: the estimate errs high, never low."""
+    base = cost_usd(HAIKU, _usage(plain, 0, 0, out), "standard")[0]
+    listed, billed = cost_usd(HAIKU, _usage(plain, 0, 0, out, geo=geo), "standard")
+    assert listed == pytest.approx(base * factor) and billed == listed
+    card = 0.50 if plain > 100_000 else 0.10
+    assert base == pytest.approx((plain * card + out * card * 5) / 1e6)
+
+
+def _refusal(category, out=0, **usage):
+    """A refusal as documented
+    (https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback): empty
+    content and a usage with no output_tokens_details."""
+    return {"id": "msg_r", "type": "message", "role": "assistant", "model": HAIKU,
+            "content": [], "stop_reason": "refusal",
+            "stop_details": {"type": "refusal", "category": category, "explanation": None},
+            "usage": {"input_tokens": 412, "output_tokens": out, "inference_geo": "global",
+                      **usage}}
+
+
+@pytest.mark.parametrize("category, out, unbilled", [
+    ("cyber", 0, True), ("general_harms", 0, True), (None, 0, True),
+    ("bio", 0, False), ("frontier_llm", 0, False), ("reasoning_extraction", 0, False),
+    ("cyber", 30, False)])  # mid-stream: the input and the output streamed are billed
+def test_refusals_anthropic_does_not_bill_have_a_billed_estimate_of_zero(category, out,
+                                                                          unbilled):
+    r = _refusal(category, out)
+    assert pricing.unbilled_refusal("messages", r) is unbilled
+    assert not pricing.unbilled_refusal("responses", r)
+    listed = (412 * 0.10 + out * 0.50) / 1e6
+    ledger = UsageLedger(HAIKU)
+    ledger.add(_response())
+    first = ledger.cost_usd_list
+    assert ledger.add(r) == pytest.approx((listed, 0.0 if unbilled else listed))
+    assert ledger.cost_usd_list == pytest.approx(first + listed)
+    assert ledger.cost_usd_billed_est == pytest.approx(first + (0 if unbilled else listed))
+    assert ledger.unbilled_refusals == int(unbilled)
+    row = ledger.costs_row(timestamp_utc="t", run_id="r", milestone="M1",
+                           experiment="persistgym_haiku", cell_or_config="F-0", git_commit="g")
+    assert ("unbilled_refusals=1" in row["notes"]) is unbilled
+    # the episode's cost too: list kept, billed estimate 0
+    run = runner.EpisodeRun("e", "t", "c", "base", "F-0", model=HAIKU)
+    runner._add_usage(run, r)
+    assert run.cost_usd_list == pytest.approx(listed)
+    assert run.cost_usd_billed_est == pytest.approx(0.0 if unbilled else listed)
+
+
+def test_a_refusal_before_any_output_keeps_the_runs_reasoning_tokens():
+    """Its usage has no output_tokens_details, but no output at all: 0 thinking tokens, not
+    unknown, so one such refusal does not blank the run's reasoning-token total."""
+    ledger = UsageLedger(HAIKU)
+    for _ in range(1_000):
+        ledger.add(_response())
+    ledger.add(_refusal("cyber"))
+    assert ledger.reasoning_tokens == 250 * 1_000
+    row = ledger.costs_row(timestamp_utc="t", run_id="r", milestone="M1",
+                           experiment="persistgym_haiku", cell_or_config="F-0", git_commit="g")
+    assert row["reasoning_tokens"] == 250_000 and "not reported" not in row["notes"]
+    run = runner.EpisodeRun("e", "t", "c", "base", "F-0", model=HAIKU)
+    runner._add_usage(run, _response())
+    runner._add_usage(run, _refusal(None))
+    assert run.usage["reasoning_tokens"] == 250
+
+
+def test_haiku_ledger_counts_the_inference_geos_served():
+    ledger = UsageLedger(HAIKU)
+    for geo in ("global", "us", "global", None):
+        r = _response()
+        if geo is None:
+            del r["usage"]["inference_geo"]
+        else:
+            r["usage"]["inference_geo"] = geo
+        ledger.add(r)
+    assert ledger.served_geos() == {"None": 1, "global": 2, "us": 1}
+    row = ledger.costs_row(timestamp_utc="t", run_id="r", milestone="M1",
+                           experiment="persistgym_haiku", cell_or_config="F-0", git_commit="g")
+    assert "inference_geos=None:1;global:2;us:1" in row["notes"]
+    one = cost_usd(HAIKU, _response()["usage"], "standard")[0]
+    assert ledger.cost_usd_list == pytest.approx(one * (2 + 1.1 + 1.1))
+
+
 def test_haiku_price_record():
     p = price_for(HAIKU)
     assert (p.provider, p.api, p.source_date, p.long_threshold) == (
         "anthropic", "messages", "2026-10-17", 100_000)
     assert (p.input, p.cached, p.output, p.long) == (0.10, 0.01, 0.50, (0.50, 0.05, 2.50))
+    assert p.geo_multipliers == (("global", 1.0), ("us", 1.1))
+    assert p.worst_card() == pytest.approx((0.55, 0.055, 2.75))
     assert price_for("gpt-6-luna").source_date == pricing.PRICE_SOURCE_DATE == "2026-09-30"
+    assert price_for("gpt-6-luna").geo_multiplier("us") == 1.0  # no geo pricing on OpenAI
+    assert price_for("gpt-6-luna").worst_card() == (0.10, 0.01, 0.50)
     for unpriced in ("claude-haiku-4-5", "claude-sonnet-5-5", "claude-haiku"):
         with pytest.raises(KeyError):
             price_for(unpriced)
@@ -620,6 +771,8 @@ def test_haiku_ledger_and_costs_row(monkeypatch):
         200_001, 180_000, 19_980)
     assert row["reasoning_tokens"] == 500 and row["cost_usd_billed_est"] == row["cost_usd_list"]
     assert "max_prompt_tokens=100001; calls_over_100000=1" in row["notes"]
+    assert "inference_geos=global:2" in row["notes"]
+    assert ledger.served_geos() == {"global": 2}
     # thinking tokens not reported: the column is empty, never 0, and the notes say so
     r = _response()
     del r["usage"]["output_tokens_details"]
@@ -633,14 +786,20 @@ def test_haiku_ledger_and_costs_row(monkeypatch):
                                                 git_commit="g")
     assert (luna["provider"], luna["api"], luna["price_source_date"]) == (
         "openai", "responses", "2026-09-30")
-    assert "max_prompt_tokens" not in luna["notes"]
+    assert "max_prompt_tokens" not in luna["notes"] and "inference_geos" not in luna["notes"]
+    assert UsageLedger("gpt-6-luna").served_geos() is None
 
 
-def test_call_gate_bounds_a_messages_call_at_the_dearer_card():
+def test_call_gate_bounds_a_messages_call_at_the_dearer_card_and_geo():
     gate = CallGate(10.0, lambda: 0.0, HAIKU, RunStop())
     p = _body(SYSTEM, _turns(0, 2))
     n_bytes = len(json.dumps(p, ensure_ascii=False).encode("utf-8"))
-    assert gate.bound_usd(p) == pytest.approx((n_bytes * 0.50 * 1.25 + 32_000 * 2.50) / 1e6)
+    # $0.625 x 1.1 per input byte (a cache write on the > 100k card, US-only inference) and
+    # $2.50 x 1.1 per output token: a call served in the "us" geo stays within the bound
+    assert gate.bound_usd(p) == pytest.approx(
+        (n_bytes * 0.50 * 1.25 * 1.1 + 32_000 * 2.50 * 1.1) / 1e6)
+    worst = _usage(n_bytes, 0, 0, 32_000, geo="us")
+    assert cost_usd(HAIKU, worst, "standard")[0] <= gate.bound_usd(p)
     assert gate.bound_usd({k: v for k, v in p.items() if k != "max_tokens"}) == float("inf")
     assert gate.info()["rule"] == CallGate.RULE_MESSAGES and "max_tokens" in gate.rule
     luna = CallGate(10.0, lambda: 0.0, "gpt-6-luna", RunStop())

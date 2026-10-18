@@ -5,11 +5,16 @@ ledger, the stop at the planned spend, the retries, the costs row and the paid-r
 module docstring documents the guard and the accounting), made provider-neutral. Each
 provider's transport fills in the hooks:
 * `_preflight()`: checks that run before the guard, with no side effect (Anthropic: the
-  credentials in the environment);
+  credentials in the environment and the model);
+* `_approval_refusal()`: a check of the approval the guard found, once it has passed
+  (Anthropic: the block must list R8's experiment); a refusal, like any other failure
+  before the first call, releases the spend reservation;
 * `_default_client(timeout_s)`: the provider's SDK client, with the SDK's own retries off;
 * `_check_request(payload)`: a check of each body before it is sent (Anthropic: the
   Messages wire's request-side check, `harnesses.wire.MessagesWire.check_payload`);
-* `_call(client, payload) -> dict`: one attempt, the response as JSON types;
+* `_call(client, payload) -> dict`: one attempt, the response as JSON types; an error it
+  raises after the provider reported the attempt's usage carries the response so far
+  (`PARTIAL_RESPONSE`), which the ledger records as a failed attempt;
 * `_retry_wait(error, attempt) -> float | None`: the seconds to wait before the next
   attempt, or None to raise the error now (a provider-side spend limit raises
   `ProviderHardStop` instead);
@@ -48,6 +53,9 @@ from harnesses.wire import wire_for
 
 NOT_ECHOED = "n/a"
 """A costs row's mismatch count for an echo the provider does not give (the Messages API)."""
+PARTIAL_RESPONSE = "partial_response"
+"""The attribute of an error from `_call` that holds the response so far, as JSON types, of
+an attempt that failed after the provider reported its usage (`_record_failed_attempt`)."""
 
 
 class BudgetExceeded(RuntimeError):
@@ -121,7 +129,21 @@ class PaidTransport:
             lock=self.paid_lock, approved_block=self.approved_block,
             experiment=self.experiment, planned_usd=self.planned_usd,
             costs_path=self.costs_path, repo=self.repo, remote=self.approval_remote)
+        try:
+            self._after_guard()
+        except BaseException:
+            # No call was made: the spend `require_paid_run` reserved is released, so it does
+            # not count against the ARC stream or refuse the next PersistGym run.
+            self._release_reservation()
+            raise
+
+    def _after_guard(self) -> None:
+        """What `__post_init__` sets up once the guard has passed and reserved the run's
+        spend; if any of it raises, the reservation is released and no call is made."""
         price_for(self.model)  # refuse a model we cannot cost
+        why = self._approval_refusal()
+        if why:
+            raise PaidCallsNotAllowed(f"{why}; no paid call was made")
         if self.git is None:
             # Once, before any call: `finalize` and the runner's meta.json use this value,
             # so no process is started after the calls (common/runmeta.py).
@@ -150,6 +172,12 @@ class PaidTransport:
     # --- hooks -----------------------------------------------------------------------------
     def _preflight(self) -> None:
         """Checks before the guard, with no side effect; raise `PaidCallsNotAllowed`."""
+
+    def _approval_refusal(self) -> str | None:
+        """Why the approval the guard found (`self.approval`) does not cover this provider's
+        runs, or None; checked once the guard has passed, and a refusal releases the spend
+        reservation."""
+        return None
 
     def _default_client(self, timeout_s: float) -> Any:
         raise NotImplementedError
@@ -188,6 +216,22 @@ class PaidTransport:
         with self._lock:
             return spend_usd(self.ledger.cost_usd_list, self.ledger.cost_usd_billed_est)
 
+    def _record_failed_attempt(self, error: Exception) -> None:
+        """Record the usage a failed attempt carries (`PARTIAL_RESPONSE`: the Anthropic
+        transport attaches a stream's message so far once `message_start` reported its
+        usage) in the ledger, as a failed attempt (`UsageLedger.add_failed`), so the stop at
+        the planned spend, block spend and the costs row count it; the attempt is retried or
+        raised as before. Nothing is recorded once the run is finalized."""
+        partial = getattr(error, PARTIAL_RESPONSE, None)
+        if not isinstance(partial, dict):
+            return
+        with self._lock:
+            if self._finalized:
+                return
+            listed, _ = self.ledger.add_failed(partial)
+        self.log.warning("a failed attempt had already reported its usage: $%.6f (list) is "
+                         "in the ledger as a failed attempt", listed)
+
     def _thread_client(self) -> Any:
         client = getattr(self._clients, "client", None)
         if client is None:
@@ -222,6 +266,7 @@ class PaidTransport:
                     data = self._call(client, payload)
                     break
                 except Exception as e:
+                    self._record_failed_attempt(e)
                     wait = self._retry_wait(e, attempt)
                     if wait is None or attempt == self.max_attempts:
                         raise

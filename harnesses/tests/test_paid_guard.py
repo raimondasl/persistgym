@@ -162,6 +162,8 @@ def test_the_git_state_is_read_once_when_the_transport_is_built(repo, monkeypatc
                                                   "3221225794.*no paid call was made"):
         _make(repo, factory)
     assert len(built) == 1
+    # refused after the guard: the spend it reserved is released, not left to refuse the next
+    assert not paidlock.reservation_path(_held(repo).path, paidlock.PERSISTGYM).exists()
 
 
 def test_guard_requires_prereg(repo, monkeypatch):
@@ -505,6 +507,7 @@ def test_refuses_unknown_model_and_wrong_payload_model(repo, monkeypatch):
     factory, _ = _factory([_response()])
     with pytest.raises(KeyError):
         _make(repo, factory, model="some-other-model")
+    assert not paidlock.reservation_path(_held(repo).path, paidlock.PERSISTGYM).exists()
     t = _make(repo, factory)
     with pytest.raises(ValueError):
         t.send({"model": "gpt-6.1-sol", "input": []})

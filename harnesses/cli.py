@@ -203,13 +203,14 @@ PREREG §17.8 (amendment R8, not yet written or merged): claude-haiku-5-5's repl
 and H3 on Anthropic's Messages API (harnesses/wire.py, harnesses/anthropic_transport.py; the
 model string chooses the API). `registered.R8_IN_EFFECT` is False, so `run` and `single-turn`
 refuse every claude-haiku-5-5 paid run before the paid-run lock (`registered.haiku_refusal`),
-its pilots and validity run included, and the probes refuse every model off OpenAI's
-Responses API. These work now, at $0 (the second needs ANTHROPIC_API_KEY, and only Anthropic's
+its pilots and validity run included, and every other claude-* model too, and the probes
+refuse every model off OpenAI's Responses API. These work now, at $0 (the second needs ANTHROPIC_API_KEY, and only Anthropic's
 free token-counting endpoint is called):
     uv run python -m harnesses dry-run --model claude-haiku-5-5 --cell W-0 \
         --task-cell observed-nonrec-far
     uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 10
-Once R8 is in effect (with --approved-block and amounts from its approval line), the rules
+Once R8 is in effect (with --approved-block and amounts from its approval line, which must
+list persistgym_haiku: the Anthropic transport refuses any other block, its pilots too), the rules
 `haiku_refusal` holds these runs to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
 restated, then withheld; the main runs of F-0, W-0 and W-n-0 on all 8 task cells (and F-0

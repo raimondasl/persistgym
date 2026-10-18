@@ -77,7 +77,7 @@ from harnesses.config import HarnessConfig
 from harnesses.items import item_text
 from harnesses.paid_transport import BudgetExceeded
 from harnesses.parallel import RUN_STOPPED, ParallelPlay, RunStopped, check_parallel
-from harnesses.pricing import add_counts, cost_usd
+from harnesses.pricing import add_counts, cost_usd, unbilled_refusal
 from harnesses.session import EmptySummaryError, HarnessSession
 from harnesses.wire import wire_for
 from persistgym.config import GENERATOR_VERSION, SCHEMA_VERSION
@@ -217,7 +217,8 @@ class EpisodeRun:
 def _add_usage(run: EpisodeRun, response: dict) -> None:
     """Add one response's usage (read by the requested model's wire, in one meaning on both
     APIs: `harnesses.pricing`) and cost to the episode's (or prompt's) totals. A count the
-    provider did not report makes its total None (`pricing.add_counts`)."""
+    provider did not report makes its total None (`pricing.add_counts`). A refusal Anthropic
+    does not bill adds its list cost and a billed estimate of 0 (`pricing.unbilled_refusal`)."""
     wire = wire_for(run.model)
     add_counts(run.usage, wire.usage(response))
     try:
@@ -226,6 +227,8 @@ def _add_usage(run: EpisodeRun, response: dict) -> None:
     except KeyError:
         run.cost_usd_list = run.cost_usd_billed_est = None
         return
+    if unbilled_refusal(wire.api, response):
+        billed = 0.0
     if run.cost_usd_list is not None:
         run.cost_usd_list += listed
         run.cost_usd_billed_est += billed
@@ -762,12 +765,14 @@ def meta_echo(wire, context_requested: str, echoed: Counter, efforts: Counter) -
 
 def wire_meta(wire, transport) -> dict:
     """The meta.json fields a run on the Messages wire adds (none on the Responses wire, so
-    those runs' meta.json is as before): its `api`, the `echo_note`, and `prompt_size`, the
+    those runs' meta.json is as before): its `api`, the `echo_note`, `prompt_size`, the
     largest prompt (input + cache reads + cache writes) of its calls and how many passed the
-    price's 100,000-token threshold, from the paid transport's ledger (None without one: a
-    fake run)."""
+    price's 100,000-token threshold, and `inference_geos`, the calls per served
+    `usage.inference_geo` (priced 1.1x for "us"), both from the paid transport's ledger (None
+    without one: a fake run)."""
     if wire.echoes_reasoning:
         return {}
     ledger = getattr(transport, "ledger", None)
     return {"api": f"{wire.provider}.{wire.api}", "echo_note": MESSAGES_ECHO_NOTE,
-            "prompt_size": ledger.prompt_size() if ledger is not None else None}
+            "prompt_size": ledger.prompt_size() if ledger is not None else None,
+            "inference_geos": ledger.served_geos() if ledger is not None else None}

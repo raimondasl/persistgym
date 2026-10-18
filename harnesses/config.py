@@ -187,6 +187,11 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
         "summary cells refused")),
     "messages_empty_reply": ("PREREG §17.8 (R8, pending)", (
         "a turn with no visible text goes back as '(no reply)'; it counts 0 toward W")),
+    "messages_refusal_partial": ("PREREG §17.8 (R8, pending)", (
+        "a refusal's partial text is discarded from the history: '(no reply)', 0 toward W")),
+    "messages_inference_geo": ("PREREG §17.8 (R8, pending)", (
+        "no inference_geo sent; each call priced at the geo served (us 1.1x; none reported: "
+        "1.1x)")),
     "messages_prompt_caching": ("PREREG §17.8 (R8, pending)", (
         "top-level cache_control (5 minutes) in multi-turn cells, none in the single-turn "
         "control")),

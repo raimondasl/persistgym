@@ -86,7 +86,7 @@ def fig1(scores: dict[str, dict[str, float]], out: Path) -> None:
     x = range(len(CONFIGS))
     for i, (g, by) in enumerate(scores.items()):
         y = [by[c] for c in CONFIGS]
-        xo = [xi + (i - 1.5) * 0.05 for xi in x]   # games that tie (e.g. at 100) stay visible
+        xo = list(x)   # every point on its configuration's tick; ties share an end label
         ax.plot(xo, y, color=SLOTS[i], linewidth=2, marker="o", markersize=7, label=g,
                 markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=3)
     ends: dict[float, list[str]] = {}               # games that end at the same score share a label
@@ -126,7 +126,7 @@ def fig2(h5: dict, out: Path) -> None:
             for i, (b, _) in enumerate(bands):
                 c = r["raw"]["bands"][b][h]
                 if c["reached"]:
-                    xs.append(i + (j - 0.5) * 0.18)
+                    xs.append(i)   # both harnesses on the band's tick
                     ys.append(c["rate"])
                     ax.annotate(f"{c['cleared']}/{c['reached']}", (xs[-1], ys[-1]),
                                 xytext=(0, 8 if (j or c["rate"] < 0.1) else -14),

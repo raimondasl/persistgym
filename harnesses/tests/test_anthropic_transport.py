@@ -1,5 +1,5 @@
 """The Anthropic Messages transport (harnesses/anthropic_transport.py; PREREG §17.8, amendment
-R8, not yet merged): its credentials, model and approval refusals, its request-side check,
+R8): its credentials, model and approval refusals, its request-side check,
 its retries and hard stops (a stream that fails part way included), and its ledger, echo log
 and costs row (inference geo, refusals, failed attempts). No test here touches the network:
 the client is a stub factory (`messages.stream` only; `messages.create` fails the test), or

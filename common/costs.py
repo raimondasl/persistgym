@@ -57,10 +57,11 @@ EXPERIMENT_PHASE = {
     # PREREG §17.4 (amendment R4): sol's H1 replication, its main runs (its pilot and
     # validity runs are persistgym_pilot and persistgym_validity)
     "persistgym_sol_h1": "1a",
-    # PREREG §17.8 (amendment R8, not yet merged): claude-haiku-5-5's replication of H1/H3,
-    # its main runs and controls (its pilots and validity run are persistgym_pilot and
-    # persistgym_validity); every Haiku paid run refuses until R8 is in effect
-    # (harnesses/registered.py R8_IN_EFFECT)
+    # PREREG §17.8 (amendment R8): claude-haiku-5-5's replication of H1/H3, its main runs
+    # and controls (its pilots and validity run are persistgym_pilot and
+    # persistgym_validity); harnesses/registered.py haiku_refusal holds every Haiku paid run
+    # to R8 (its main runs after HAIKU_G1_PASSED), and every one refuses if the kill switch
+    # R8_IN_EFFECT is set False
     "persistgym_haiku": "1a",
     "arc_path": "1b",
     "statecarry_persistgym": "2",

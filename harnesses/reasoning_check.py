@@ -464,7 +464,7 @@ def echo_counts(raw_root: Path, experiments: Iterable[str] = PERSISTGYM_EXPERIME
     """Per run under results/raw/<experiment>/, and in total: responses, and how many echoed
     the requested `reasoning.context` and `reasoning.effort`. Only those four echo fields are
     read from each record. A response whose API echoes neither (the Messages API: both
-    `context_ok` and `effort_ok` null, PREREG §17.8, pending) counts in neither and in
+    `context_ok` and `effort_ok` null, PREREG §17.8) counts in neither and in
     `not_echoed`, a key a run's entry (and the total) has only when it is not 0."""
     runs: dict[str, dict] = {}
     total = {"responses": 0, "context_matched": 0, "effort_matched": 0}

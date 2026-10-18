@@ -62,15 +62,16 @@ R6's hard stop (PREREG §17.6 change 1; `registered.r6_refusal`, while
 `registered.R6_HARD_STOP`): the PersistGym stream's only paid runs left are luna's main sweep
 and controls above, plus the single-turn control's pilot (at most 10 prompts in all), which
 R6 change 1 does not list and the guard allows under CLAUDE.md's pilot rule (block
-3-persistgym's approval line lists persistgym_pilot for it). `run`,
+3-persistgym's approval line lists persistgym_pilot for it), and claude-haiku-5-5's runs
+under PREREG §17.8 (amendment R8, below), the new dated amendment R6 change 1 asks for. `run`,
 `single-turn`, `probe-echo` and `probe-replay` refuse every other paid run before the
-paid-run lock: any pilot but that one, persistgym_validity and persistgym_sol_h1 for every
-model, both probes, every sol run, any other experiment, and any model that is neither
-gpt-6-luna nor gpt-6.1-sol (or a dated snapshot of one, -YYYY-MM-DD; claude-haiku-5-5 is
-refused by R8's guard until R8 is in effect, below). So every command below
-but luna's main-sweep and single-turn commands refuses now; they are kept as the record of
-what was registered (R3's engagement check found NOT_ENGAGED on 2026-10-03 too, so R3's hard
-stop refuses its check, validity and main-sweep commands as well).
+paid-run lock: any other pilot, persistgym_sol_h1 for every model, persistgym_validity for
+every model but claude-haiku-5-5, both probes, every sol run, any other experiment, and any
+model that is not gpt-6-luna, gpt-6.1-sol or claude-haiku-5-5 (or a dated snapshot of one,
+-YYYY-MM-DD). So every command below but luna's main-sweep and single-turn commands and
+R8's pilot and validity commands (R8's main runs wait for its G1) refuses now; they are kept
+as the record of what was registered (R3's engagement check found NOT_ENGAGED on 2026-10-03
+too, so R3's hard stop refuses its check, validity and main-sweep commands as well).
 The probes keep their registered settings (medium on both models; PREREG §17.1).
 
 Repeats (PREREG §2.9; §0.3 line 10): `run --repeat-index 1` plays, of the run's matrix, only
@@ -199,25 +200,27 @@ effort and D13's --mode standard and --service-tier flex, and whatever luna's gu
 for its main runs (above: the 4 non-recoverable task cells exactly, the main split, main
 templates 0-199, the default config, G1).
 
-PREREG §17.8 (amendment R8, not yet written or merged): claude-haiku-5-5's replication of H1
-and H3 on Anthropic's Messages API (harnesses/wire.py, harnesses/anthropic_transport.py; the
-model string chooses the API). `registered.R8_IN_EFFECT` is False, so `run` and `single-turn`
-refuse every claude-haiku-5-5 paid run before the paid-run lock (`registered.haiku_refusal`),
-its pilots and validity run included, and every other claude-* model too, and the probes
-refuse every model off OpenAI's Responses API. These work now, at $0 (the second needs ANTHROPIC_API_KEY, and only Anthropic's
-free token-counting endpoint is called):
+PREREG §17.8 (amendment R8): claude-haiku-5-5's replication of H1 and H3 on Anthropic's
+Messages API (harnesses/wire.py, harnesses/anthropic_transport.py; the model string chooses
+the API). `registered.R8_IN_EFFECT` is True, so `run` and `single-turn` hold every
+claude-haiku-5-5 paid run to R8 before the paid-run lock (`registered.haiku_refusal`), and
+refuse every other claude-* model; the probes refuse every model off OpenAI's Responses API.
+Set False, `R8_IN_EFFECT` is a kill switch: every Haiku paid run refuses, its pilots and
+validity run included. These work at $0 (the second needs ANTHROPIC_API_KEY, and only
+Anthropic's free token-counting endpoint is called):
     uv run python -m harnesses dry-run --model claude-haiku-5-5 --cell W-0 \
         --task-cell observed-nonrec-far
     uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 10
-Once R8 is in effect (with --approved-block and amounts from its approval line, which must
-list persistgym_haiku: the Anthropic transport refuses any other block, its pilots too), the rules
-`haiku_refusal` holds these runs to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
+The paid runs (with --approved-block and amounts from R8's approval line, which must list
+persistgym_haiku: the Anthropic transport refuses any other block, its pilots too), under the
+rules `haiku_refusal` holds them to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
 restated, then withheld; the main runs of F-0, W-0 and W-n-0 on all 8 task cells (and F-0
 --variant restated, and each again at --repeat-index 1), and the single-turn control, on main
-templates 0-199, only once `registered.HAIKU_G1_PASSED` records its G1; all at --effort medium
-on the default config with --mode standard and --service-tier standard (the default on a
-claude-* model) and no --W:
+templates 0-199, only once `registered.HAIKU_G1_PASSED` records its G1 (empty until the
+researcher's G1 decision PR, so the main runs refuse); all at --effort medium on the default
+config with --mode standard and --service-tier standard (the default on a claude-* model) and
+no --W:
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses run --cell W-0 \
         --model claude-haiku-5-5 --split pilot --start 0 --n 1 --experiment persistgym_pilot \
         --approved-block "<block>" --planned-usd <usd>
@@ -399,7 +402,7 @@ def cmd_dry_run(a) -> int:
         if wire_for(p["model"]) is RESPONSES:
             settings = (f"reasoning.context={p['reasoning']['context']} "
                         f"reasoning.effort={p['reasoning']['effort']} ")
-        else:  # the Messages wire (PREREG §17.8, pending): no reasoning.context to send
+        else:  # the Messages wire (PREREG §17.8): no reasoning.context to send
             settings = (f"thinking={p['thinking']['type']} "
                         f"output_config.effort={p['output_config']['effort']} "
                         f"max_tokens={p['max_tokens']} "
@@ -890,7 +893,7 @@ def cmd_account_run(a) -> int:
 
 def cmd_count_tokens(a) -> int:
     """$0: the Claude token count of claude-haiku-5-5's largest requests, against its
-    100,000-token price threshold (`harnesses.token_count`; PREREG §17.8, pending): the
+    100,000-token price threshold (`harnesses.token_count`; PREREG §17.8): the
     requests are rebuilt from the generator with the fake model and sent to Anthropic's free
     token-counting endpoint only, never to the model. Writes
     results/token_count/<time>/token_count.json (or --out) and prints it."""

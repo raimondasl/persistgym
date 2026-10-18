@@ -749,7 +749,7 @@ MESSAGES_ECHO_NOTE = (
     "reasoning_context_requested, reasoning_context_echoed and reasoning_effort_echoed are "
     "null (not echoed, never a mismatch); instead every request passed the request-side check "
     "before it was sent (harnesses/wire.py MessagesWire.check_payload: adaptive thinking, the "
-    "effort, max_tokens, no thinking block), PREREG §17.8 (amendment R8, pending)")
+    "effort, max_tokens, no thinking block), PREREG §17.8 (amendment R8)")
 
 
 def meta_echo(wire, context_requested: str, echoed: Counter, efforts: Counter) -> dict:

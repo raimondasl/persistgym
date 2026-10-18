@@ -1,17 +1,21 @@
 """R8's guard for claude-haiku-5-5 (harnesses/registered.py `haiku_refusal`; PREREG §17.8,
-amendment R8, not yet written or merged): fail closed.
+amendment R8): fail closed.
 
-* `R8_IN_EFFECT` is False in the repository, and then every Haiku paid run refuses, naming
-  §17.8: pilots, the validity run, main runs and the single-turn control, with R6's hard stop
-  on or off, through `run`, `single-turn` and the probes, before the paid-run lock; and so
-  does every other claude-* string, which goes to the Messages API too.
-* With it monkeypatched True (as the R8 pull request will set it), the rules in R4's pattern:
-  pilots, the validity run with no G1, main runs only after `HAIKU_G1_PASSED`; luna's and
-  sol's runs are judged as before, and neither runs in `persistgym_haiku`.
+* `R8_IN_EFFECT` is True in the repository and `HAIKU_G1_PASSED` empty, and with no
+  monkeypatching the rules hold in R4's pattern: pilots, the validity run with no G1, main
+  runs only after `HAIKU_G1_PASSED` (so they refuse until the researcher's G1 decision PR);
+  every other claude-* string refuses, as a model R8 does not register; luna's and sol's runs
+  are judged as before, and neither runs in `persistgym_haiku`.
+* The kill switch: with `R8_IN_EFFECT` monkeypatched False, every Haiku paid run refuses,
+  naming §17.8: pilots, the validity run, main runs and the single-turn control, with R6's
+  hard stop on or off, through `run`, `single-turn` and the probes, before the paid-run lock;
+  and so does every other claude-* string, which goes to the Messages API too.
 * The CLI: `dry-run` works at $0 on the Messages wire, --service-tier defaults per wire, the
-  docstring's R8 commands parse, an end-to-end Haiku pilot (R8 on) goes through the real
-  guarded transport with a fake-backed client (and refuses under a block that does not
-  list persistgym_haiku), and `account-run` refuses a Haiku run.
+  docstring's R8 commands parse (its pilot and validity commands pass the guard, its main
+  commands wait for G1), Haiku's main runs and the probes refuse before the lock, an
+  end-to-end Haiku pilot goes through the real guarded transport with a fake-backed client
+  (and a pilot or validity run refuses under a block that does not list persistgym_haiku),
+  and `account-run` refuses a Haiku run.
 """
 
 from __future__ import annotations
@@ -52,9 +56,9 @@ def guard(experiment, cell, root, *, model=HAIKU, effort="medium", gen=DEFAULT, 
 
 
 @pytest.fixture
-def r8(monkeypatch):
-    """R8 in effect, as its pull request will set it (`registered.R8_IN_EFFECT`)."""
-    monkeypatch.setattr(registered, "R8_IN_EFFECT", True)
+def r8_off(monkeypatch):
+    """The kill switch: R8 switched off (`registered.R8_IN_EFFECT` False)."""
+    monkeypatch.setattr(registered, "R8_IN_EFFECT", False)
 
 
 @pytest.fixture
@@ -71,7 +75,7 @@ def _haiku_pilot_meta(results: Path, name: str, n: int, model: str = HAIKU) -> N
     path.write_text(json.dumps(meta), encoding="utf-8")
 
 
-# The runs R8 registers, each as (experiment, cell, guard settings); all pass once R8 is in
+# The runs R8 registers, each as (experiment, cell, guard settings); all pass while R8 is in
 # effect (main runs after G1)
 RUNS = [
     (PILOT, "W-0", {"split": "pilot", "templates": (0, 1)}),
@@ -88,10 +92,11 @@ RUNS = [
 ]
 
 
-# --- R8 not in effect: every Haiku run refuses ------------------------------------------------
+# --- the repository: R8 in effect, no Haiku G1 ---------------------------------------------------
 
-def test_the_repository_has_r8_off_and_no_haiku_g1():
-    assert registered.R8_IN_EFFECT is False and registered.HAIKU_G1_PASSED == {}
+def test_the_repository_has_r8_in_effect_and_no_haiku_g1():
+    assert registered.R8_IN_EFFECT is True and registered.HAIKU_G1_PASSED == {}
+    assert registered.R8_REF == "PREREG.md §17.8 (amendment R8)"
     assert registered.REGISTERED_EFFORT[HAIKU] == "medium" == registered.HAIKU_EFFORT
     assert registered.HAIKU_CELLS == ("F-0", "W-0", "W-n-0")
     assert registered.HAIKU_TASK_CELLS == ALL8 and registered.HAIKU_T == 200
@@ -104,34 +109,34 @@ def test_the_repository_has_r8_off_and_no_haiku_g1():
     assert "ANTHROPIC_API_KEY=" in env  # the name only, no value
 
 
-@pytest.mark.parametrize("model", [HAIKU, "claude-haiku-5-5-2026-10-01", *OTHER_CLAUDE])
-@pytest.mark.parametrize("r6_on", [True, False])
+# --- R8 in effect (the repository's default, not monkeypatched): the rules ----------------------
+
 @pytest.mark.parametrize("experiment, cell, kw", RUNS)
-def test_without_r8_every_haiku_run_refuses(tmp_path, monkeypatch, g1, r6_on, experiment,
-                                            cell, kw, model):
-    """Every claude-* string, not only claude-haiku-5-5: with R6's hard stop off, a string
-    outside Haiku's exact or dated family used to skip R8 and pass the old pilot rules."""
-    monkeypatch.setattr(registered, "R6_HARD_STOP", r6_on)
-    why = guard(experiment, cell, tmp_path, model=model, **kw)
-    assert why is not None and registered.R8_REF in why and "R8_IN_EFFECT" in why
-    assert (f"got model {model}, which is not {HAIKU}" in why) is (model in OTHER_CLAUDE)
+def test_with_r8_its_runs_pass(tmp_path, g1, experiment, cell, kw):
+    assert guard(experiment, cell, tmp_path, **kw) is None
 
 
-def test_without_r8_the_probes_refuse_haiku(tmp_path):
-    for experiment in ("toggle_pilot", "replay_probe"):
-        assert registered.R8_REF in registered.r6_refusal(experiment, HAIKU, None, tmp_path)
+def test_with_r8_the_validity_run_and_pilots_need_no_g1_and_main_runs_do(tmp_path):
+    """The repository as it is: R8 in effect and `HAIKU_G1_PASSED` empty, so the pilots and
+    the validity run pass and every main run and control refuses until the researcher's G1
+    decision PR."""
+    assert registered.HAIKU_G1_PASSED == {}
+    for experiment, cell, kw in RUNS:
+        why = guard(experiment, cell, tmp_path, **kw)
+        if experiment == MAIN:
+            assert why is not None and "HAIKU_G1_PASSED" in why and registered.R8_REF in why
+        else:
+            assert why is None
 
 
 @pytest.mark.parametrize("argv", [
-    ["run", "--cell", "W-0", "--model", HAIKU, "--split", "pilot", "--n", "1"],
-    ["run", "--cell", "F-0", "--model", HAIKU, "--split", "validity", "--n", "20",
-     "--variant", "restated", "--experiment", VALIDITY],
     ["run", "--cell", "F-0", "--model", HAIKU, "--split", "main", "--n", "200",
      "--experiment", MAIN],
-    ["single-turn", "--model", HAIKU, "--split", "pilot", "--n", "2"],
-    ["single-turn", "--model", HAIKU, "--split", "main", "--n", "200", "--experiment", MAIN],
-    ["probe-echo", "--model", HAIKU]])
-def test_the_cli_refuses_haiku_before_the_lock(monkeypatch, capsys, argv):
+    ["run", "--cell", "W-0", "--model", HAIKU, "--split", "main", "--n", "200",
+     "--experiment", MAIN],
+    ["single-turn", "--model", HAIKU, "--split", "main", "--n", "200", "--experiment", MAIN]])
+def test_with_r8_the_cli_refuses_haikus_main_runs_before_the_lock_until_g1(monkeypatch, capsys,
+                                                                           argv):
     monkeypatch.setenv(ALLOW_ENV, "1")
 
     def no_transport(*a, **k):
@@ -140,26 +145,23 @@ def test_the_cli_refuses_haiku_before_the_lock(monkeypatch, capsys, argv):
     monkeypatch.setattr(cli, "_with_paid_lock", no_transport)
     assert cli.main([*argv, "--approved-block", "4-haiku", "--planned-usd", "1"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("refused:") and "§17.8" in err
+    assert err.startswith("refused:") and "HAIKU_G1_PASSED" in err and "§17.8" in err
 
 
-# --- R8 in effect: the rules -------------------------------------------------------------------
+def test_with_r8_the_cli_refuses_the_probes_on_haiku_before_the_lock(monkeypatch, capsys):
+    monkeypatch.setenv(ALLOW_ENV, "1")
 
-@pytest.mark.parametrize("experiment, cell, kw", RUNS)
-def test_with_r8_its_runs_pass(tmp_path, r8, g1, experiment, cell, kw):
-    assert guard(experiment, cell, tmp_path, **kw) is None
-
-
-def test_with_r8_the_validity_run_and_pilots_need_no_g1_and_main_runs_do(tmp_path, r8):
-    for experiment, cell, kw in RUNS:
-        why = guard(experiment, cell, tmp_path, **kw)
-        if experiment == MAIN:
-            assert "HAIKU_G1_PASSED" in why
-        else:
-            assert why is None
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before the lock and any transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    monkeypatch.setattr(cli, "_with_paid_lock", no_transport)
+    for argv in (["probe-echo", "--model", HAIKU], ["probe-replay", "--model", HAIKU]):
+        assert cli.main([*argv, "--approved-block", "4-haiku", "--planned-usd", "1"]) == 2
+        err = capsys.readouterr().err
+        assert err.startswith("refused:") and "R6's hard stop" in err, err
 
 
-def test_with_r8_luna_g1_never_counts_for_haiku(tmp_path, r8, monkeypatch):
+def test_with_r8_luna_g1_never_counts_for_haiku(tmp_path, monkeypatch):
     monkeypatch.setitem(registered.HAIKU_G1_PASSED, HAIKU, OTHER)
     assert "HAIKU_G1_PASSED" in guard(MAIN, "F-0", tmp_path)
     assert registered.G1_PASSED[LUNA] == DEFAULT  # luna's G1 is on the default config
@@ -206,12 +208,12 @@ def test_with_r8_luna_g1_never_counts_for_haiku(tmp_path, r8, monkeypatch):
     (MAIN, "F-0", {"request": {**REQUEST, "service_tier": "flex"}}, "--service-tier flex"),
     ("persistgym", "F-0", {}, "R6's hard stop"),
     ("persistgym_sol_h1", "F-0", {}, "R6's hard stop")])
-def test_with_r8_anything_else_refuses(tmp_path, r8, g1, experiment, cell, kw, wrong):
+def test_with_r8_anything_else_refuses(tmp_path, g1, experiment, cell, kw, wrong):
     why = guard(experiment, cell, tmp_path, **kw)
     assert why is not None and wrong in why, why
 
 
-def test_with_r8_and_r6_off_haiku_is_still_held_to_r8(tmp_path, r8, g1, monkeypatch):
+def test_with_r8_and_r6_off_haiku_is_still_held_to_r8(tmp_path, g1, monkeypatch):
     monkeypatch.setattr(registered, "R6_HARD_STOP", False)
     why = guard("persistgym", "F-0", tmp_path)
     assert registered.R8_REF in why and why.endswith("got --experiment persistgym")
@@ -223,19 +225,35 @@ def test_with_r8_and_r6_off_haiku_is_still_held_to_r8(tmp_path, r8, g1, monkeypa
             assert why is not None and f"model {model}" in why, (model, experiment, cell)
 
 
-def test_with_r8_other_models_never_run_in_its_experiment(tmp_path, r8, g1):
+@pytest.mark.parametrize("model", OTHER_CLAUDE)
+@pytest.mark.parametrize("experiment, cell, kw", RUNS)
+def test_with_r8_every_other_claude_model_refuses(tmp_path, g1, experiment, cell, kw, model):
+    """R8 registers claude-haiku-5-5 (and its dated snapshots) only: with R6's hard stop on,
+    as in the repository, every other claude-* string refuses as a model that is not
+    registered, in every run R8 registers for Haiku."""
+    why = guard(experiment, cell, tmp_path, model=model, **kw)
+    assert why is not None and f"got model {model}, which is not a registered model" in why
+
+
+def test_with_r8_a_dated_haiku_snapshot_is_haiku(tmp_path, g1):
+    for experiment, cell, kw in RUNS:
+        assert guard(experiment, cell, tmp_path, model="claude-haiku-5-5-2026-10-01",
+                     **kw) is None
+
+
+def test_with_r8_other_models_never_run_in_its_experiment(tmp_path, g1):
     assert "R6's hard stop" in guard(MAIN, "F-0", tmp_path, model=LUNA)
     assert "R6's hard stop" in guard(MAIN, "F-0", tmp_path, model=SOL, effort="medium")
     for model in ("claude-haiku-4-5", "claude-sonnet-5-5", "claude-haiku-5-5-x"):
         assert "not a registered model" in guard(MAIN, "F-0", tmp_path, model=model)
 
 
-def test_with_r8_the_probes_still_refuse_haiku(tmp_path, r8):
+def test_with_r8_the_probes_still_refuse_haiku(tmp_path):
     for experiment in ("toggle_pilot", "replay_probe"):
         assert "R6's hard stop" in registered.r6_refusal(experiment, HAIKU, None, tmp_path)
 
 
-def test_haiku_and_luna_single_turn_pilots_are_counted_apart(tmp_path, r8, monkeypatch):
+def test_haiku_and_luna_single_turn_pilots_are_counted_apart(tmp_path, monkeypatch):
     """At most 10 prompts each, counted over that model's single-turn pilots only."""
     _haiku_pilot_meta(tmp_path, "haiku-st", 8)
     st = {"split": "pilot", "task_cells": NONREC, "matrix": None}
@@ -258,7 +276,7 @@ def test_haiku_and_luna_single_turn_pilots_are_counted_apart(tmp_path, r8, monke
         request=registered.LUNA_REQUEST)
 
 
-def test_lunas_main_sweep_is_unchanged_with_r8(tmp_path, r8):
+def test_lunas_main_sweep_is_unchanged_with_r8(tmp_path):
     luna_request = {"mode": "standard", "service_tier": "flex", "W": None}
     assert guard("persistgym", "F-0", tmp_path, model=LUNA, request=luna_request) is None
     assert "outside persistgym_pilot" in guard("persistgym", "F-0", tmp_path, model=LUNA,
@@ -268,6 +286,56 @@ def test_lunas_main_sweep_is_unchanged_with_r8(tmp_path, r8):
 def test_haiku_pilot_episodes_are_never_pooled():
     assert blinding.is_left_out({"model": HAIKU, "harness_cell": "W-0", "variant": "base"})
     assert not blinding.is_left_out({"model": LUNA, "harness_cell": "W-0", "variant": "base"})
+
+
+# --- the kill switch: R8 switched off (monkeypatched), every Haiku run refuses ------------------
+
+@pytest.mark.parametrize("model", [HAIKU, "claude-haiku-5-5-2026-10-01", *OTHER_CLAUDE])
+@pytest.mark.parametrize("r6_on", [True, False])
+@pytest.mark.parametrize("experiment, cell, kw", RUNS)
+def test_with_r8_off_every_haiku_run_refuses(tmp_path, monkeypatch, r8_off, g1, r6_on,
+                                             experiment, cell, kw, model):
+    """Every claude-* string, not only claude-haiku-5-5, even after G1: with R6's hard stop
+    off, a string outside Haiku's exact or dated family used to skip R8 and pass the old
+    pilot rules."""
+    monkeypatch.setattr(registered, "R6_HARD_STOP", r6_on)
+    why = guard(experiment, cell, tmp_path, model=model, **kw)
+    assert why is not None and registered.R8_REF in why and "R8_IN_EFFECT" in why
+    assert (f"got model {model}, which is not {HAIKU}" in why) is (model in OTHER_CLAUDE)
+
+
+def test_with_r8_off_the_probes_refuse_haiku(tmp_path, r8_off):
+    for experiment in ("toggle_pilot", "replay_probe"):
+        assert registered.R8_REF in registered.r6_refusal(experiment, HAIKU, None, tmp_path)
+
+
+def test_with_r8_off_lunas_main_sweep_is_unchanged(tmp_path, r8_off):
+    luna_request = {"mode": "standard", "service_tier": "flex", "W": None}
+    assert guard("persistgym", "F-0", tmp_path, model=LUNA, request=luna_request) is None
+    assert "outside persistgym_pilot" in guard("persistgym", "F-0", tmp_path, model=LUNA,
+                                               request=REQUEST)
+
+
+@pytest.mark.parametrize("argv", [
+    ["run", "--cell", "W-0", "--model", HAIKU, "--split", "pilot", "--n", "1"],
+    ["run", "--cell", "F-0", "--model", HAIKU, "--split", "validity", "--n", "20",
+     "--variant", "restated", "--experiment", VALIDITY],
+    ["run", "--cell", "F-0", "--model", HAIKU, "--split", "main", "--n", "200",
+     "--experiment", MAIN],
+    ["single-turn", "--model", HAIKU, "--split", "pilot", "--n", "2"],
+    ["single-turn", "--model", HAIKU, "--split", "main", "--n", "200", "--experiment", MAIN],
+    ["probe-echo", "--model", HAIKU]])
+def test_with_r8_off_the_cli_refuses_haiku_before_the_lock(monkeypatch, capsys, r8_off, g1,
+                                                           argv):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before the lock and any transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    monkeypatch.setattr(cli, "_with_paid_lock", no_transport)
+    assert cli.main([*argv, "--approved-block", "4-haiku", "--planned-usd", "1"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("refused:") and "§17.8" in err and "R8_IN_EFFECT" in err
 
 
 # --- the CLI -------------------------------------------------------------------------------------
@@ -302,7 +370,11 @@ def _r8_commands() -> list[list[str]]:
     return [c for c in _commands(cli.__doc__) if HAIKU in c]
 
 
-def test_the_cli_docstrings_r8_commands_parse_and_wait_for_r8(tmp_path, monkeypatch):
+def test_the_cli_docstrings_r8_commands_parse_and_main_runs_wait_for_g1(tmp_path, monkeypatch):
+    """The docstring's paid commands: a pilot, the validity run, a main run and the
+    single-turn control's main run. With R8 in effect (the repository) the first two pass the
+    guard and the main runs wait for `HAIKU_G1_PASSED`; after G1 all four pass; with the kill
+    switch off all four refuse."""
     commands = _r8_commands()
     assert {c[0] for c in commands} == {"dry-run", "count-tokens", "run", "single-turn"}
     paid = [c for c in commands if c[0] in ("run", "single-turn")]
@@ -325,10 +397,15 @@ def test_the_cli_docstrings_r8_commands_parse_and_wait_for_r8(tmp_path, monkeypa
             variant=a.variant, task_cells=tuple(c for c, n in m.templates if n),
             request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
             templates=(a.start, a.start + m.n_templates), matrix=m.name)
-    assert all(registered.R8_REF in guard_of(c) for c in paid)
-    monkeypatch.setattr(registered, "R8_IN_EFFECT", True)
+    assert [(c[0], cli.parse_args(c).experiment) for c in paid] == [
+        ("run", PILOT), ("run", VALIDITY), ("run", MAIN), ("single-turn", MAIN)]
+    why = [guard_of(c) for c in paid]
+    assert why[:2] == [None, None]
+    assert all("HAIKU_G1_PASSED" in w and registered.R8_REF in w for w in why[2:]), why
     monkeypatch.setitem(registered.HAIKU_G1_PASSED, HAIKU, DEFAULT)
     assert [guard_of(c) for c in paid] == [None] * 4
+    monkeypatch.setattr(registered, "R8_IN_EFFECT", False)
+    assert all(registered.R8_REF in w and "R8_IN_EFFECT" in w for w in map(guard_of, paid))
 
 
 def test_account_run_refuses_a_haiku_run(monkeypatch, tmp_path, capsys):
@@ -381,8 +458,9 @@ class _FakeBackedClient:
 
 
 @pytest.fixture
-def haiku_paid_env(tmp_path, monkeypatch, r8):
-    """R8 in effect; a repo whose frozen PREREG and approval line for block 4-haiku list R8's
+def haiku_paid_env(tmp_path, monkeypatch):
+    """R8 in effect (the repository's default, not monkeypatched; no Haiku G1); a repo whose
+    frozen PREREG and approval line for block 4-haiku list R8's
     experiments, beside block 1-pilots, approved before the Haiku replication (it lists the
     pilot and validity experiments, not persistgym_haiku); the CLI's own `_guarded_transport`
     building the real Anthropic transport with a fake-backed client; a dummy API key's
@@ -448,14 +526,22 @@ def test_an_end_to_end_haiku_pilot(haiku_paid_env, capsys):
     assert not (tmp / "lock" / paidlock.lock_name(cli.STREAM)).exists()  # released
 
 
-def test_a_haiku_pilot_under_a_block_approved_before_r8_refuses(haiku_paid_env, capsys):
-    """The guard alone would let it through (block 1-pilots lists persistgym_pilot); the
-    Anthropic transport refuses a block that does not list persistgym_haiku, before any
-    call, and releases the spend reservation and the lock."""
+@pytest.mark.parametrize("argv", [
+    ["--cell", "W-0", "--split", "pilot", "--n", "1"],
+    ["--cell", "F-0", "--split", "validity", "--n", "20", "--variant", "restated",
+     "--experiment", VALIDITY]])
+def test_a_haiku_pilot_or_validity_run_under_a_block_approved_before_r8_refuses(
+        haiku_paid_env, capsys, argv):
+    """With R8 in effect the settings guard lets a pilot and the validity run through (no G1
+    needed), and so does the paid guard (block 1-pilots lists persistgym_pilot and
+    persistgym_validity); the Anthropic transport refuses a block that does not list
+    persistgym_haiku, before any call, and releases the spend reservation and the lock."""
     tmp, costs_csv, fakes = haiku_paid_env
-    assert cli.main(["run", "--cell", "W-0", "--model", HAIKU, "--split", "pilot", "--n", "1",
-                     "--approved-block", "1-pilots", "--planned-usd", "1",
-                     "--run-id", "hp1"]) == 2
+    a = cli.parse_args(["run", "--model", HAIKU, *argv])
+    assert guard(a.experiment, a.cell, tmp, split=a.split, variant=a.variant,
+                 templates=(0, a.n)) is None
+    assert cli.main(["run", "--model", HAIKU, *argv, "--approved-block", "1-pilots",
+                     "--planned-usd", "1", "--run-id", "hp1"]) == 2
     err = capsys.readouterr().err
     assert "refused: block '1-pilots' lists persistgym_pilot, persistgym_validity, not " \
            "persistgym_haiku" in err

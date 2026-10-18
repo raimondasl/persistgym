@@ -10,11 +10,12 @@ its spend so far:
 3. otherwise T is the largest multiple of 10 below 200 with F(T, without W-n-0) ≤ 0.85 R;
 4. if no T ≥ 10 qualifies, no main run starts, and Claude asks the researcher.
 
-This script computes F and R and applies the rule exactly so (`size_rule`), in exact decimal
-arithmetic, so that a forecast at exactly 0.85 R fits. It decides nothing else: F, R, the
-outcome and the script's commit go into `results/decisions.md` before any main episode, and
-the pull request that records them sets `harnesses.registered.HAIKU_T` (and `HAIKU_CELLS`
-without W-n-0 if it does not run).
+This script computes F and R and applies the rule exactly so (`size_rule`), in exact rational
+arithmetic (`fractions.Fraction`: a cost per episode is kept as the runs' billed cost over
+their episodes, never rounded), so that a forecast at exactly 0.85 R fits. It decides nothing
+else: F, R, the outcome and the script's commit go into `results/decisions.md` before any
+main episode, and the pull request that records them sets `harnesses.registered.HAIKU_T` (and
+`HAIKU_CELLS` without W-n-0 if it does not run).
 
 **What F counts** (R8, Design and Order): the main runs on main templates 0 to T - 1 at
 repeat 0, plus repeat 1 on the templates divisible by 10 (§2.9), controls included:
@@ -34,16 +35,19 @@ refusals Anthropic does not bill).
 `approved_block=4-haiku;` (`common.approval.block_spend`, the paid guard's own measure). Rows
 of any other block count neither toward R nor toward any estimate.
 
-**The input rows.** Every row of block `4-haiku` must be a claude-haiku-5-5 pilot or validity
-run (`persistgym_pilot`, `persistgym_validity`). A `persistgym_haiku` row means that a main
-episode has run, after which the rule no longer applies, so the script refuses; to re-derive
-the record later, pass the ledger as it was (for example `git show
-<commit>:results/costs.csv`). Each row's episode count (`n_episodes_run`) and variant (the
-last part of its episode ids) come from its run's `meta.json` at
+**The input rows.** A `persistgym_haiku` row anywhere in the ledger, of block `4-haiku`, of
+another block or of none, means that a main episode has run, after which the rule no longer
+applies, so the script refuses; to re-derive the record later, pass the ledger as it was (for
+example `git show <commit>:results/costs.csv`). Every row of block `4-haiku` must be a
+claude-haiku-5-5 pilot or validity run (`persistgym_pilot`, `persistgym_validity`). Each
+row's episode count (`n_episodes_run`), variant (the last part of its episode ids) and task
+cells (the middle part) come from its run's `meta.json` at
 `<results root>/<experiment>/<run_id>/meta.json`, which is checked against the row (run id,
-experiment, cell, model) and the default generator config. Rows of one cell and variant are
-pooled: their billed cost over their episodes, so a run that stopped early counts with the
-episodes it played.
+experiment, cell, model) and the default generator config. A run must have played every
+episode it planned (`n_episodes_run` equal to the number of its episode ids): which episodes
+a run that stopped early played is not in its meta.json, and its one costs row cannot be
+split between them, so the script refuses such a run. Rows of one cell and variant are
+pooled (a re-run of a whole pilot, say): their billed cost over their episodes.
 
 **Which rows feed which line** (`per_episode`).
 
@@ -56,7 +60,12 @@ episodes it played.
   row. The validity run is the better estimate of both: it is F-0 on 20 templates against the
   pilot's one, with 20 times the episodes, and its episodes are the restated control's own
   variant. On luna it came within 0.5% of the main F-0 run and 0.1% of the main restated
-  control (below).
+  control (below). The authority is `results/decisions.md` (2026-10-18, item 2: the forecast
+  "from the pilots' and validity runs' costs"); PREREG §17.8's own words are "from the
+  pilots' `costs.csv` rows", and this choice was committed (2026-10-18, 05:12 UTC) after both
+  validity runs' rows were in the ledger (04:51 and 04:56 UTC). So the summary also reports F,
+  and what the rule would give, with F-0 and the restated control on F-0's pilot row
+  (`per_episode(..., pilot_only=True)`): reported, never applied.
 * **The withheld validity run** feeds no line: its episodes withhold the fact that the need
   step asks for, which no main episode does, and on luna it cost 14% more per episode than
   the main F-0 run. It counts toward the block's spend, and the summary reports its cost per
@@ -64,7 +73,10 @@ episodes it played.
 
 **Scaling the pilot sample.** Each multi-turn pilot plays pilot template 0 once on each of the
 8 task cells, the mix the main matrix plays on every template, so its mean cost per episode
-is taken as the main runs' with no reweighting, and multiplied by their episodes. One
+is taken as the main runs' with no reweighting, and multiplied by their episodes. The script
+checks this: the runs that feed a line (and the withheld validity run) must together play
+each of the 8 task cells equally often, the single-turn control's each of its 4, or it
+refuses, since one costs row per run cannot be reweighted per task cell. One
 template cannot show the spread between templates. The summary reports F-0's restated
 validity cost per episode (20 templates) over its pilot cost per episode as a check of how
 typical pilot template 0 is: a check, not a correction, so it is not applied to the W cells.
@@ -125,9 +137,11 @@ import io
 import json
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 
 from common import approval, costs, oslock
@@ -181,12 +195,13 @@ def episodes(line: str, T: int, repeat: int) -> int:
 @dataclass(frozen=True)
 class Run:
     """One run of block 4-haiku: its costs row's spend and input-side token counts, and its
-    meta.json's episode count and variant."""
+    meta.json's episode count, variant and episodes per task cell."""
 
     run_id: str
     experiment: str
     cell: str
     variant: str
+    task_cells: tuple[tuple[str, int], ...]
     billed_usd: Decimal
     input_tokens: int
     cached_input_tokens: int
@@ -236,6 +251,18 @@ def _variant(meta: dict, where: str) -> str:
     return variants.pop()
 
 
+def _task_cells(meta: dict, where: str) -> tuple[tuple[str, int], ...]:
+    """A run's planned episodes per task cell, the middle part of its episode ids
+    (`<split>-<template>/<task cell>/<variant>`), sorted by task cell."""
+    ids = (meta.get("config") or {}).get("episode_ids") or []
+    parts = [str(i).split("/") for i in ids]
+    bad = [i for i, p in zip(ids, parts, strict=True) if len(p) != 3]
+    if bad:
+        raise ValueError(f"{where}: episode id {bad[0]!r} is not <split>-<template>/<task "
+                         "cell>/<variant>")
+    return tuple(sorted(Counter(p[1] for p in parts).items()))
+
+
 def _calls_over_100000(notes: str) -> int | None:
     """The calls over the 100,000-token price threshold a Haiku costs row's notes report
     (`calls_over_100000=<n>`, `harnesses/DESIGN.md` §13.5); None if they report none."""
@@ -245,19 +272,21 @@ def _calls_over_100000(notes: str) -> int | None:
 
 def load_runs(rows: list[dict], results_root: Path) -> list[Run]:
     """Block 4-haiku's runs: each row checked against its run's meta.json, which gives its
-    episodes and variant. Refuses a main-run row (the rule applies before any main episode),
-    a row of another experiment, model or cell, and a meta.json that is missing or does not
-    match its row."""
+    episodes, variant and task cells. Refuses a main-run row of any block or none (the rule
+    applies before any main episode), a block-4-haiku row of another experiment, model or
+    cell, a meta.json that is missing or does not match its row, and a run that did not play
+    every episode it planned."""
+    for line, r in enumerate(rows, 2):  # line 1 is the header
+        if r["experiment"] == MAIN:
+            raise ValueError(
+                f"costs.csv line {line} ({r['run_id']}): a main run ({MAIN}) is in the ledger, "
+                f"whatever its block tag. R8 fixes W-n-0 and T before any main episode, so the "
+                "rule no longer applies; to re-derive the record, pass the ledger as it was "
+                "(git show <commit>:results/costs.csv)")
     out = []
     for line, r in block_rows(rows):
         where = f"costs.csv line {line} ({r['run_id']})"
         experiment, cell = r["experiment"], r["cell_or_config"]
-        if experiment == MAIN:
-            raise ValueError(
-                f"{where}: a main run ({MAIN}) of block {BLOCK} is in the ledger. R8 fixes "
-                "W-n-0 and T before any main episode, so the rule no longer applies; to "
-                "re-derive the record, pass the ledger as it was (git show "
-                "<commit>:results/costs.csv)")
         if experiment not in (PILOT, VALIDITY):
             raise ValueError(f"{where}: experiment {experiment!r} is neither {PILOT} nor "
                              f"{VALIDITY}, the only runs of block {BLOCK} before its main runs")
@@ -288,8 +317,16 @@ def load_runs(rows: list[dict], results_root: Path) -> list[Run]:
         n = meta.get("n_episodes_run")
         if not isinstance(n, int) or isinstance(n, bool) or n < 0:
             raise ValueError(f"{where}: {meta_path} has no episode count (n_episodes_run)")
+        task_cells = _task_cells(meta, where)
+        planned = sum(k for _, k in task_cells)
+        if n != planned:
+            raise ValueError(
+                f"{where}: {meta_path} ran {n} of its {planned} episodes. A run's cost per "
+                "episode is taken as the main runs' only when it played every episode it "
+                "planned: which episodes a run that stopped early played is not in its "
+                "meta.json, and its one costs row cannot be split between them")
         out.append(Run(run_id=r["run_id"], experiment=experiment, cell=cell, variant=variant,
-                       billed_usd=approval.row_spend(r, line),
+                       task_cells=task_cells, billed_usd=approval.row_spend(r, line),
                        input_tokens=int(r["input_tokens"] or 0),
                        cached_input_tokens=int(r["cached_input_tokens"] or 0),
                        cache_write_tokens=int(r["cache_write_tokens"] or 0),
@@ -306,18 +343,33 @@ class Basis:
     it is measured on."""
 
     line: str
-    usd_per_episode: Decimal
+    usd_per_episode: Fraction
     source: str
     runs: tuple[str, ...]
     episodes: int
 
 
 def _pooled(line: str, source: str, runs: list[Run]) -> Basis:
+    """The runs' billed cost over their episodes, exact (`Fraction`). Refuses unless the runs
+    together play each task cell the line's main runs play equally often (the 8, or the
+    single-turn control's 4): their mean is taken as the main runs' with no reweighting."""
+    names = ", ".join(r.run_id for r in runs)
     n = sum(r.episodes for r in runs)
     if n <= 0:
-        raise ValueError(f"{line}: its runs ({', '.join(r.run_id for r in runs)}) played no "
-                         "episode")
-    usd = sum((r.billed_usd for r in runs), Decimal(0))
+        raise ValueError(f"{line}: its runs ({names}) played no episode")
+    played: Counter[str] = Counter()
+    for r in runs:
+        played.update(dict(r.task_cells))
+    want = (registered.HAIKU_SINGLE_TURN_TASK_CELLS if line == SINGLE_TURN
+            else registered.HAIKU_TASK_CELLS)
+    if set(played) != set(want) or len(set(played.values())) != 1:
+        got = ", ".join(f"{c} {k}" for c, k in sorted(played.items()))
+        raise ValueError(
+            f"{line}: its runs ({names}) play the task cells {got}, not each of its main "
+            f"runs' {len(want)} task cells equally often. The forecast takes their mean cost "
+            "per episode as the main runs', which play every task cell equally; one costs row "
+            "per run cannot be reweighted per task cell")
+    usd = sum((Fraction(r.billed_usd) for r in runs), Fraction(0))
     return Basis(line, usd / n, source, tuple(r.run_id for r in runs), n)
 
 
@@ -325,15 +377,17 @@ def _of(runs: list[Run], experiment: str, cell: str, variant: str) -> list[Run]:
     return [r for r in runs if r.key == (experiment, cell, variant)]
 
 
-def per_episode(runs: list[Run]) -> dict[str, Basis]:
+def per_episode(runs: list[Run], pilot_only: bool = False) -> dict[str, Basis]:
     """Each line's cost per episode (module docstring, "Which rows feed which line"). Refuses
-    unless every pilot is in: R8 forecasts after the pilots."""
+    unless every pilot is in: R8 forecasts after the pilots. `pilot_only` puts F-0 and the
+    restated control on F-0's pilot row even once the restated validity run is in (PREREG
+    §17.8's own words; reported, never applied)."""
     pilot = {c: _of(runs, PILOT, c, v) for c, v in PILOT_VARIANT.items()}
     missing = [c for c, rs in pilot.items() if not rs]
     if missing:
         raise ValueError(f"block {BLOCK} has no pilot row of {', '.join(missing)}: R8 makes "
                          "the forecast after the pilots")
-    restated = _of(runs, VALIDITY, "F-0", "restated")
+    restated = [] if pilot_only else _of(runs, VALIDITY, "F-0", "restated")
     f0, f0_source = (restated, "validity, restated") if restated else (pilot["F-0"], "pilot")
     return {"F-0": _pooled("F-0", f0_source, f0),
             "W-0": _pooled("W-0", "pilot", pilot["W-0"]),
@@ -345,23 +399,28 @@ def per_episode(runs: list[Run]) -> dict[str, Basis]:
 def forecast_lines(bases: dict[str, Basis], T: int, with_w_n_0: bool,
                    factor: Decimal = Decimal(1)) -> dict[str, dict]:
     """F's lines at T: per main run, its episodes at repeats 0 and 1, its cost per episode
-    (× `factor`) and its USD. W-n-0 is left out unless `with_w_n_0`."""
+    (× `factor`) and its USD, exact (`Fraction`). W-n-0 is left out unless `with_w_n_0`."""
     out = {}
     for line in LINES:
         if line == OPTIONAL and not with_w_n_0:
             continue
         n0, n1 = episodes(line, T, 0), episodes(line, T, 1)
-        per = bases[line].usd_per_episode * factor
+        per = bases[line].usd_per_episode * Fraction(factor)
         out[line] = {"episodes_repeat_0": n0, "episodes_repeat_1": n1, "usd_per_episode": per,
                      "usd": (n0 + n1) * per}
     return out
 
 
 def total(bases: dict[str, Basis], T: int, with_w_n_0: bool,
-          factor: Decimal = Decimal(1)) -> Decimal:
+          factor: Decimal = Decimal(1)) -> Fraction:
     """F(T, with or without W-n-0): the billed cost of all main runs at T, both repeats."""
     return sum((x["usd"] for x in forecast_lines(bases, T, with_w_n_0, factor).values()),
-               Decimal(0))
+               Fraction(0))
+
+
+def limit_of(R: Decimal) -> Fraction:
+    """0.85 R, exact."""
+    return Fraction(FIT_SHARE) * Fraction(R)
 
 
 @dataclass(frozen=True)
@@ -373,8 +432,8 @@ class Outcome:
     w_n_0: bool
     T: int | None
     step: int
-    F_usd: Decimal | None
-    limit_usd: Decimal
+    F_usd: Fraction | None
+    limit_usd: Fraction
     comparisons: tuple[dict, ...]
 
     @property
@@ -382,7 +441,7 @@ class Outcome:
         return self.T is None
 
     @property
-    def margin(self) -> Decimal | None:
+    def margin(self) -> Fraction | None:
         """The factor on every cost per episode at which the outcome's F would equal 0.85 R
         (F is linear in them): above 1, it fits with room; None when no T fits."""
         if self.F_usd is None or self.F_usd <= 0:
@@ -395,10 +454,10 @@ def size_rule(bases: dict[str, Basis], R: Decimal,
     """R8's size rule, steps 1-4 as the module docstring states them, with every cost per
     episode × `factor` (1 for the rule itself; the sensitivity reading only reports another).
     A forecast at exactly 0.85 R fits."""
-    limit = FIT_SHARE * R
+    limit = limit_of(R)
     made: list[dict] = []
 
-    def fits(T: int, with_w_n_0: bool) -> tuple[bool, Decimal]:
+    def fits(T: int, with_w_n_0: bool) -> tuple[bool, Fraction]:
         f = total(bases, T, with_w_n_0, factor)
         made.append({"T": T, "w_n_0": with_w_n_0, "F_usd": f, "fits": f <= limit})
         return f <= limit, f
@@ -429,10 +488,17 @@ class Forecast:
     outcome: Outcome
     sensitivity: Outcome
     provisional: tuple[str, ...]
+    pilot_bases: dict[str, Basis] | None
+    """The bases with F-0 and the restated control on F-0's pilot row (`per_episode(...,
+    pilot_only=True)`), or None while the rule's bases are those anyway."""
+    pilot_basis: Outcome | None
+    """What the rule would give on `pilot_bases`: reported, never applied."""
+    withheld: Basis | None
+    """The withheld validity run's cost per episode (it feeds no line), or None before it."""
 
     @property
-    def limit_usd(self) -> Decimal:
-        return FIT_SHARE * self.R_usd
+    def limit_usd(self) -> Fraction:
+        return limit_of(self.R_usd)
 
     def runs_of(self, experiment: str, cell: str, variant: str) -> list[Run]:
         return _of(list(self.runs), experiment, cell, variant)
@@ -460,11 +526,17 @@ def build(costs_path: Path = costs.COSTS_CSV, results_root: Path | None = None) 
     bases = per_episode(runs)
     spent = approval.block_spend(BLOCK, rows)
     R = BLOCK_MAX_USD - spent
+    pilot_bases = (per_episode(runs, pilot_only=True)
+                   if bases["F-0"].source != "pilot" else None)
+    withheld = _of(runs, VALIDITY, "F-0", "withheld")
     return Forecast(costs_path=costs_path, costs_sha256=sha, results_root=root,
                     runs=tuple(runs), bases=bases, block_rows=len(block_rows(rows)),
                     spent_usd=spent, R_usd=R, outcome=size_rule(bases, R),
                     sensitivity=size_rule(bases, R, SENSITIVITY_FACTOR),
-                    provisional=provisional_reasons(runs))
+                    provisional=provisional_reasons(runs), pilot_bases=pilot_bases,
+                    pilot_basis=size_rule(pilot_bases, R) if pilot_bases else None,
+                    withheld=(_pooled("withheld", "validity, withheld", withheld)
+                              if withheld else None))
 
 
 # --- outputs ---------------------------------------------------------------------------------
@@ -474,7 +546,7 @@ def _rel(p: Path) -> str:
     return p.relative_to(REPO_ROOT).as_posix() if p.is_relative_to(REPO_ROOT) else str(p)
 
 
-def _f(x: Decimal | None) -> float | None:
+def _f(x: Fraction | Decimal | None) -> float | None:
     return None if x is None else float(x)
 
 
@@ -497,11 +569,8 @@ def template_check(fc: Forecast) -> dict | None:
             "validity_over_pilot": float(val / pilot) if pilot else None}
 
 
-def withheld_per_episode(fc: Forecast) -> Decimal | None:
-    withheld = fc.runs_of(VALIDITY, "F-0", "withheld")
-    if not withheld or not sum(r.episodes for r in withheld):
-        return None
-    return _pooled("withheld", "validity, withheld", withheld).usd_per_episode
+def withheld_per_episode(fc: Forecast) -> Fraction | None:
+    return fc.withheld.usd_per_episode if fc.withheld else None
 
 
 def table_rows(fc: Forecast) -> list[dict]:
@@ -512,13 +581,13 @@ def table_rows(fc: Forecast) -> list[dict]:
         for T in T_VALUES:
             for with_w in (True, False):
                 lines = forecast_lines(fc.bases, T, with_w, factor)
-                f = sum((x["usd"] for x in lines.values()), Decimal(0))
+                f = sum((x["usd"] for x in lines.values()), Fraction(0))
                 row = {"basis": basis, "T": T, "w_n_0": with_w,
                        "episodes_per_harness_cell": episodes("F-0", T, 0) + episodes("F-0", T, 1),
                        "single_turn_prompts": (episodes(SINGLE_TURN, T, 0)
                                                + episodes(SINGLE_TURN, T, 1))}
                 for line in LINES:
-                    row[f"usd_{line}"] = lines[line]["usd"] if line in lines else Decimal(0)
+                    row[f"usd_{line}"] = lines[line]["usd"] if line in lines else Fraction(0)
                 row.update(usd_total=f, limit_usd=fc.limit_usd, fits=f <= fc.limit_usd)
                 out.append(row)
     return out
@@ -533,7 +602,8 @@ def _csv(rows: list[dict]) -> str:
     w = csv.DictWriter(buf, fieldnames=CSV_FIELDS, lineterminator="\n")
     w.writeheader()
     for r in rows:
-        w.writerow({k: (f"{v:.6f}" if isinstance(v, Decimal) else v) for k, v in r.items()})
+        w.writerow({k: (f"{v:.6f}" if isinstance(v, (Decimal, Fraction)) else v)
+                    for k, v in r.items()})
     return buf.getvalue()
 
 
@@ -583,11 +653,30 @@ def to_json(fc: Forecast) -> dict:
                                                                SENSITIVITY_FACTOR)),
                         "rule_would_give": _outcome_json(s),
                         "note": "reported only: the rule's outcome is `outcome`"},
+        "pilot_basis": _pilot_basis_json(fc),
     }
 
 
-def _usd(x: Decimal | float) -> str:
-    return f"{float(x):,.2f}"
+BASIS_AUTHORITY = ("results/decisions.md, 2026-10-18, item 2: the forecast from the pilots' "
+                   "and validity runs' costs (PREREG §17.8: from the pilots' costs.csv rows)")
+
+
+def _pilot_basis_json(fc: Forecast) -> dict | None:
+    """F and the rule's outcome with F-0 and the restated control on F-0's pilot row: reported,
+    never applied. None while the rule's bases are those anyway."""
+    if fc.pilot_bases is None or fc.pilot_basis is None:
+        return None
+    return {"applied": False, "authority_for_the_rule_basis": BASIS_AUTHORITY,
+            "f0_usd_per_episode": float(fc.pilot_bases["F-0"].usd_per_episode),
+            "F_200_with_w_n_0_usd": float(total(fc.pilot_bases, T_MAX, True)),
+            "F_200_without_w_n_0_usd": float(total(fc.pilot_bases, T_MAX, False)),
+            "rule_would_give": _outcome_json(fc.pilot_basis),
+            "note": "reported only: the rule's outcome is `outcome`"}
+
+
+def _usd(x: Fraction | Decimal) -> str:
+    """USD to the cent, rounded from the exact value (half to even), never through a float."""
+    return f"{x:,.2f}"
 
 
 def _what(o: Outcome) -> str:
@@ -600,9 +689,32 @@ def _decisive(o: Outcome) -> str:
     """The rule's last comparison and the one before it, to 6 decimals."""
     def one(c: dict) -> str:
         return (f"F(T = {c['T']}, {'with' if c['w_n_0'] else 'without'} W-n-0) = "
-                f"{float(c['F_usd']):.6f} {'≤' if c['fits'] else '>'} "
-                f"{float(o.limit_usd):.6f}")
+                f"{c['F_usd']:.6f} {'≤' if c['fits'] else '>'} {o.limit_usd:.6f}")
     return "; ".join(one(c) for c in o.comparisons[-2:])
+
+
+def _pilot_basis_lines(fc: Forecast) -> list[str]:
+    """The summary's report of F with F-0 and the restated control on F-0's pilot row, once
+    the rule's bases put them on the restated validity run."""
+    if fc.pilot_bases is None or fc.pilot_basis is None:
+        return []
+    o, p = fc.outcome, fc.pilot_basis
+    return [
+        "", "## F-0's basis (reported only: it does not change the outcome)", "",
+        ("- The rule costs F-0 and the restated control from the restated validity run, as "
+         "`results/decisions.md` (2026-10-18, item 2) has it: the forecast \"from the pilots' "
+         "and validity runs' costs\". PREREG §17.8 says \"from the pilots' `costs.csv` rows\", "
+         "and this script's choice was committed after both validity runs' rows were in the "
+         "ledger (module docstring)."),
+        (f"- On F-0's pilot row instead ({fc.pilot_bases['F-0'].usd_per_episode:.6f} "
+         f"USD per episode, against the validity run's "
+         f"{fc.bases['F-0'].usd_per_episode:.6f}): F(T = {T_MAX}, with W-n-0) = "
+         f"{_usd(total(fc.pilot_bases, T_MAX, True))}, without = "
+         f"{_usd(total(fc.pilot_bases, T_MAX, False))}; on that basis the rule would give: "
+         f"{_what(p)} (step {p.step})."
+         + (" The same as the outcome." if (p.w_n_0, p.T) == (o.w_n_0, o.T) else
+            " The outcome stays the rule's, above.")),
+    ]
 
 
 def summary_lines(fc: Forecast) -> list[str]:
@@ -658,14 +770,14 @@ def summary_lines(fc: Forecast) -> list[str]:
         for line, v in forecast_lines(fc.bases, o.T, o.w_n_0).items():
             unit = " (prompts)" if line == SINGLE_TURN else ""
             lines.append(f"| {line}{unit} | {v['episodes_repeat_0']:,} | "
-                         f"{v['episodes_repeat_1']:,} | {float(v['usd_per_episode']):.6f} | "
+                         f"{v['episodes_repeat_1']:,} | {v['usd_per_episode']:.6f} | "
                          f"{_usd(v['usd'])} |")
         lines.append(f"| **F** | | | | **{_usd(o.F_usd)}** |")
     lines += ["", "## Cost per episode", "",
               "| Line | USD per episode | Basis | Episodes in the basis | Runs |",
               "|---|---|---|---|---|"]
     for b in fc.bases.values():
-        lines.append(f"| {b.line} | {float(b.usd_per_episode):.6f} | {b.source} | "
+        lines.append(f"| {b.line} | {b.usd_per_episode:.6f} | {b.source} | "
                      f"{b.episodes:,} | {', '.join(f'`{r}`' for r in b.runs)} |")
     tc, w = template_check(fc), withheld_per_episode(fc)
     counted = [r.calls_over_100000 for r in fc.runs if r.calls_over_100000 is not None]
@@ -679,7 +791,7 @@ def summary_lines(fc: Forecast) -> list[str]:
                      f"per episode, on 20 templates, is {tc['validity_over_pilot']:.3f} times "
                      "its pilot's.")
     if w is not None:
-        lines.append(f"- The withheld validity run: {float(w):.6f} USD per episode. It feeds no "
+        lines.append(f"- The withheld validity run: {w:.6f} USD per episode. It feeds no "
                      "line (its episodes lack the fact) and counts toward the block's spend.")
     shares = "; ".join(f"{r.experiment.removeprefix('persistgym_')} {r.cell}"
                        f"{'' if r.variant in ('base', 'single_turn') else ' ' + r.variant}: "
@@ -699,10 +811,11 @@ def summary_lines(fc: Forecast) -> list[str]:
                + (" The same as the outcome." if (s.w_n_0, s.T) == (o.w_n_0, o.T) else
                   " The outcome stays the rule's, above.")),
               ("- Margin: " + (f"the outcome's F would still fit 0.85 R with every cost per "
-                               f"episode up to × {float(o.margin):.3f}." if o.margin is not None
+                               f"episode up to × {o.margin:.3f}." if o.margin is not None
                                else "none (no T fits).")),
               ("- Why × 1.25: on luna, on the same episodes, each main run's cost per episode "
                "came out 0.8% to 7.7% above its pilot basis (module docstring)."),
+              *_pilot_basis_lines(fc),
               "", "## Limits", "",
               (f"- W-0 and W-n-0 rest on {fc.bases['W-0'].episodes} and "
                f"{fc.bases[OPTIONAL].episodes} pilot episodes, the single-turn control on "

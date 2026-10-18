@@ -1959,8 +1959,8 @@ def test_haiku_labels_never_say_supported(tmp_path):
                    "**Not blind to luna.**", "**Thinking is not inspected.**",
                    "Σ-n-0 and every replay-on cell (R8)",
                    "The replay read the Messages transcripts",
-                   ("a whitespace-only reply also went back as `(no reply)`, but counts its "
-                    "whitespace's tokens"),
+                   ("visible text went back as `(no reply)` and counts 0 tokens; so does a "
+                    "whitespace-only reply"),
                    "| Run kind | Task cell | Success | Content failures | Stopped responses |",
                    "All four met: ",
                    f"with a pinned snapshot ID without a date suffix (R8) (returned: `{HAIKU}`)",
@@ -2249,9 +2249,9 @@ def test_haiku_replay_matches_the_harness_on_real_episodes(tmp_path, monkeypatch
     assert any(m["content"][0]["text"] == EMPTY_REPLY_PLACEHOLDER for m in sent
                if m["role"] == "assistant")
     # whitespace-only replies were played, went back as the placeholder, and the session
-    # counted their whitespace toward W: the replay counts them so, and agrees (above)
+    # counted them as 0 tokens toward W (R8): the replay counts them so, and agrees (above)
     ws = [x for x in lines if x["kind"] == "step" and hh.MESSAGES.text(x["response"]) == "\n\n"]
-    assert ws and hh.reply_counted(ws[0]["response"], hh.MESSAGES_API) == "\n\n"
+    assert ws and hh.reply_counted(ws[0]["response"], hh.MESSAGES_API) == ""
     assert all(m["content"][0]["text"].strip() for m in sent)
     wrong_wire = hh.accounting_check(runs, results / "raw", prof.experiment, hh.RESPONSES_API)
     assert wrong_wire["bugs"] and all("does not end with a user message" in b

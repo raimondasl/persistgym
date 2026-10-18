@@ -29,12 +29,12 @@ multi-turn cells only, a top-level `cache_control` `{"type": "ephemeral"}` (5 mi
 1-hour TTL). Never sent: sampling parameters, tools, a prefill, fallbacks, a service tier.
 `MessagesWire.check_payload` asserts all of this on a body before it is sent.
 
-A turn whose visible reply is empty (thinking only, a refusal, or a stop at `max_tokens`
-while thinking) cannot be sent back as an empty assistant message: the API rejects an empty
-or whitespace-only text block. It goes back as one text block holding
-`EMPTY_REPLY_PLACEHOLDER`; its visible reply, the one W counts and the environment scores,
-is still the empty text (0 tokens toward W), as on OpenAI, where such a turn is a reasoning
-item with no message. A refusal that came after some text is treated the same way: its
+A turn whose visible reply is empty or whitespace only (thinking only, a refusal, or a stop
+at `max_tokens` while thinking) cannot be sent back as an empty assistant message: the API
+rejects an empty or whitespace-only text block. It goes back as one text block holding
+`EMPTY_REPLY_PLACEHOLDER`; the reply W counts is still the empty text (0 tokens toward W,
+PREREG §17.8), as on OpenAI, where such a turn is a reasoning item with no message, and the
+environment scores its text as returned (an invalid action). A refusal that came after some text is treated the same way: its
 partial text is discarded from the history (`MessagesWire.kept_reply`; 0 tokens toward W),
 as Anthropic advises; the step is an invalid action either way (D13).
 
@@ -288,8 +288,11 @@ class MessagesWire:
         any partial output as incomplete and discard it"
         (https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback). The
         reply the environment scores (an invalid action, D13) and the raw transcript keep
-        `text`."""
-        return "" if response.get("stop_reason") == "refusal" else self.text(response)
+        `text`. A whitespace-only reply is the empty text too: it goes back as
+        `EMPTY_REPLY_PLACEHOLDER` like an empty one and, as R8 says of a turn with no visible
+        text, adds 0 tokens toward W (PREREG §17.8)."""
+        text = self.text(response)
+        return "" if response.get("stop_reason") == "refusal" or not text.strip() else text
 
     def status(self, response: dict) -> tuple[str | None, str | None]:
         """`stop_reason` as a Responses-style status and reason: `end_turn` completed;

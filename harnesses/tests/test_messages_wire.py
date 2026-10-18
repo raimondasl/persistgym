@@ -329,11 +329,14 @@ def test_a_refused_step_is_invalid_and_its_partial_text_kept_in_the_record(small
     assert all(EMPTY_REPLY_PLACEHOLDER in [item_text(m) for m in msgs] for msgs in after)
 
 
-def test_a_whitespace_reply_goes_back_as_the_placeholder_and_counts_as_itself():
+@pytest.mark.parametrize("blank", ["\n", "\n\n", " \t "])
+def test_a_whitespace_reply_goes_back_as_the_placeholder_and_counts_0(blank):
+    # R8: a turn with no visible text adds 0 tokens toward W (PREREG §17.8)
     s, model, _ = run_synthetic(CELLS["F-0"], n_steps=3, cfg=CFG,
-                                fake=FakeModel(lambda p, i: "\n" if i == 1 else reply_text(i)))
+                                fake=FakeModel(lambda p, i: blank if i == 1 else reply_text(i)))
     assert model.calls[2]["messages"][3] == _assistant(EMPTY_REPLY_PLACEHOLDER)
-    assert (s.turns[1].reply, s.turns[1].reply_tokens) == ("\n", tokens.count("\n"))
+    assert (s.turns[1].reply, s.turns[1].reply_tokens) == ("", 0)
+    assert tokens.count(blank) > 0
 
 
 # --- the request-side check ----------------------------------------------------------------

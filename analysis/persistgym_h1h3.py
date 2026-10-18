@@ -388,10 +388,11 @@ Haiku's task cells must be luna's (`profile` refuses otherwise): the tables run 
 * **§2.8's replay on Messages transcripts** (`window_recheck`). The system prompt is the
   request's ``system``, the observation the last of its ``messages`` (text blocks), and a turn's
   reply the response's text blocks as the session kept and W counted them
-  (`MessagesWire.kept_reply`: the empty text for a refusal). A turn with no visible reply counts
-  0 tokens: the ``(no reply)`` placeholder that went back in its place is not its reply
-  (harnesses/wire.py, ``EMPTY_REPLY_PLACEHOLDER``). A whitespace-only reply also went back as
-  the placeholder, but the session counted its whitespace toward W, and so does the replay.
+  (`MessagesWire.kept_reply`: the empty text for a refusal or a whitespace-only reply). A turn
+  with no visible reply counts 0 tokens: the ``(no reply)`` placeholder that went back in its
+  place is not its reply (harnesses/wire.py, ``EMPTY_REPLY_PLACEHOLDER``). A whitespace-only
+  reply also went back as the placeholder and counts 0 tokens too, as R8 says of a turn with
+  no visible text, in the session and in the replay.
 * **Refusals and stops** (R8, Exclusions) are content failures that score 0 and stay in, as on
   luna; per cell, the step responses that stopped short are also counted by reason
   (``refusal:<category>``, ``max_output_tokens``).
@@ -1234,10 +1235,11 @@ def request_parts(payload: dict, api: str = RESPONSES_API) -> tuple[str, list[di
 def reply_counted(response: dict, api: str = RESPONSES_API) -> str:
     """A turn's visible reply as the session kept it and W counted it (harnesses/session.py,
     `Wire.kept_reply`): the Responses message text, or the Messages text blocks, which are the
-    empty text for a refusal (its partial text is discarded). A Messages turn with no visible
-    reply went back as the ``(no reply)`` placeholder, which is not its reply and counts 0. A
-    whitespace-only reply went back as the placeholder too (the API rejects a whitespace-only
-    block), but the session counted its whitespace toward W, and so does this replay."""
+    empty text for a refusal (its partial text is discarded) or a whitespace-only reply. A
+    Messages turn with no visible reply went back as the ``(no reply)`` placeholder, which is
+    not its reply and counts 0. A whitespace-only reply went back as the placeholder too (the
+    API rejects a whitespace-only block) and counts 0 as well (R8), in the session and in this
+    replay."""
     return MESSAGES.kept_reply(response) if api == MESSAGES_API else output_text(response)
 
 
@@ -3510,9 +3512,8 @@ def summary_lines(h: dict) -> list[str]:
     if rep:
         check += (" The replay read the Messages transcripts: each turn's reply as the session "
                   "kept it and W counted it (the empty text for a refusal). A turn with no "
-                  "visible text went back as `(no reply)` and counts 0 tokens; a whitespace-only "
-                  "reply also went back as `(no reply)`, but counts its whitespace's tokens, as "
-                  "the session counted them.")
+                  "visible text went back as `(no reply)` and counts 0 tokens; so does a "
+                  "whitespace-only reply, as the session counted it (R8).")
     L += ["", check, "", "## Replication (R8; outside luna's Holm family)" if rep
           else "## Confirmatory", ""]
     L += _h1_lines(h) + [""] + _h3_lines(h) + [""]

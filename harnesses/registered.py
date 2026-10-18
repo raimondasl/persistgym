@@ -82,10 +82,10 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   (`HAIKU_REQUEST`); pilots of `HAIKU_PILOT_CELLS` (the single-turn pilot at most 10 prompts,
   counted over Haiku's own); a validity run of exactly `VALIDITY_RUN` on validity templates
   0-19, with no G1; and main runs and controls in `HAIKU_EXPERIMENT` (`persistgym_haiku`):
-  F-0, W-0 and W-n-0 as the full matrix on all 8 task cells, the single-turn control on its
-  4, main templates 0 to `HAIKU_T` - 1, base episodes or the restated-at-need control in F-0,
-  after `HAIKU_G1_PASSED` (empty until the researcher's G1 decision PR: the main runs fail
-  closed). Every other `claude-*` string is on the Messages wire too, and is held to R8 as
+  the cells of `HAIKU_CELLS` (F-0 and W-0: R8's size record drops W-n-0) as the full matrix
+  on all 8 task cells, the single-turn control on its 4, main templates 0 to `HAIKU_T` - 1,
+  base episodes or the restated-at-need control in F-0, after `HAIKU_G1_PASSED` (set by the
+  researcher's G1 GO of 2026-10-18; emptied, the main runs fail closed). Every other `claude-*` string is on the Messages wire too, and is held to R8 as
   well (with R6's hard stop on or off): it refuses as a model R8 does not register. The flag
   stays as a kill switch: set False, every Haiku paid run refuses (`R8_STOP`), its pilots
   and validity run included, and so does every other `claude-*` string. The Anthropic
@@ -266,7 +266,7 @@ R8_REF = "PREREG.md §17.8 (amendment R8)"
 R8_IN_EFFECT = True
 """Whether amendment R8 (PREREG §17.8) is in effect. True since the pull request that adds R8
 to PREREG.md, merged by the researcher: `haiku_refusal` holds every claude-haiku-5-5 paid run
-to R8's rules below (its main runs still need `HAIKU_G1_PASSED`). It stays as a kill switch:
+to R8's rules below (its main runs need `HAIKU_G1_PASSED`, set on 2026-10-18). It stays as a kill switch:
 set False, every Haiku paid run refuses, pilots and validity runs included (`R8_STOP`), fail
 closed, and so does every other `claude-*` string; tests monkeypatch it to check that."""
 HAIKU_MODEL = "claude-haiku-5-5"
@@ -280,8 +280,12 @@ HAIKU_EFFORT = "medium"
 explicitly)."""
 HAIKU_GENERATOR_HASH = DEFAULT_GENERATOR_HASH
 """R8: the default generator config, the one luna plays: the same episodes as luna's."""
-HAIKU_CELLS = ("F-0", "W-0", "W-n-0")
-"""R8: the replay-off cells the Messages wire sends (no Σ cell, no replay-on cell)."""
+HAIKU_CELLS = ("F-0", "W-0")
+"""R8's main-run harness cells, as R8's size record sets them: F-0 and W-0. W-n-0, the third
+replay-off cell R8 registers, does not run: the size rule's forecast with it, $200.25, is over
+0.85 R = $148.76 (results/decisions.md, 2026-10-18, "Haiku's size record";
+results/haiku_forecast/20261018T070826Z/), so it is reported as "pre-registered, not run
+(budget)". Its pilot ran (`HAIKU_PILOT_CELLS`)."""
 HAIKU_SINGLE_TURN_CELL = LUNA_SINGLE_TURN_CELL
 """The single-turn control's cell id, as for luna (`harnesses single-turn`)."""
 HAIKU_RUN = {"split": ("main",), "variant": ("base", "restated")}
@@ -296,7 +300,9 @@ HAIKU_TASK_CELLS = tuple(c.id for c in ALL_CELLS)
 ones), as the full matrix (`HAIKU_MATRIX`)."""
 HAIKU_SINGLE_TURN_TASK_CELLS = tuple(c.id for c in ALL_CELLS if not c.recoverable)
 HAIKU_T = 200
-"""R8: luna's T, main templates 0-199 (the same episodes as luna's sweep)."""
+"""R8: luna's T, main templates 0-199 (the same episodes as luna's sweep), kept by R8's size
+record (results/decisions.md, 2026-10-18, "Haiku's size record"): F(T = 200, without W-n-0)
+= $122.97 ≤ 0.85 R = $148.76."""
 HAIKU_MATRIX = "full"
 HAIKU_VALIDITY_TEMPLATES = 20
 """R8: the validity run plays validity templates 0-19 (the spot-check package's)."""
@@ -306,7 +312,12 @@ HAIKU_SINGLE_TURN_PILOT_MAX = 10
 """CLAUDE.md: Haiku's single-turn pilots are at most 10 prompts in all, counted over Haiku's
 single-turn pilots only (`_single_turn_pilot_prompts`)."""
 HAIKU_EXPERIMENTS = (PILOT_EXPERIMENT, VALIDITY_EXPERIMENT, HAIKU_EXPERIMENT)
-HAIKU_G1_PASSED: dict[str, str] = {}
+HAIKU_G1_PASSED: dict[str, str] = {
+    # The researcher's G1 GO for Haiku, 2026-10-18: results/decisions.md, "2026-10-18: Haiku's
+    # G1: GO (researcher)", after its G1 metrics (results/gates/g1-claude-haiku-5-5-
+    # 20261018T050534Z/). Its validity runs played the default config, 3d6bc648...
+    "claude-haiku-5-5": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+}
 """Model -> the generator config hash on which the researcher recorded the Haiku
 replication's G1 gate as passed. Set only by the researcher's G1 decision PR under R8; empty,
 the main runs refuse (fail closed)."""

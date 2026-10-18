@@ -42,6 +42,14 @@ class _CountingClient:
     stream = create
 
 
+def n_requests() -> int:
+    """One largest request per main-run cell and task cell, and per single-turn task cell:
+    `registered.HAIKU_CELLS` as R8's size record leaves them (28 at the count of 2026-10-18,
+    with W-n-0; 20 without it)."""
+    return (len(registered.HAIKU_CELLS) * len(registered.HAIKU_TASK_CELLS)
+            + len(registered.HAIKU_SINGLE_TURN_TASK_CELLS))
+
+
 @pytest.fixture
 def key(monkeypatch):
     monkeypatch.setenv(anthropic_transport.KEY_ENV, "dummy-not-a-key")
@@ -70,7 +78,7 @@ def test_the_largest_requests_are_rebuilt_at_0(key):
 def test_count_tokens_counts_with_the_endpoint_only(key):
     client = _CountingClient(factor=1.25)
     report = token_count.token_count(HAIKU, SMALL, n=1, client_factory=lambda: client)
-    assert len(client.counted) == len(report["requests"]) == 3 * 8 + 4
+    assert len(client.counted) == len(report["requests"]) == n_requests()
     assert all(set(kw) == {"model", "system", "messages", "thinking"} for kw in client.counted)
     assert all(kw["model"] == HAIKU and kw["thinking"] == {"type": "adaptive"}
                for kw in client.counted)
@@ -84,7 +92,7 @@ def test_count_tokens_counts_with_the_endpoint_only(key):
                                                                 "n": 1}
     big = token_count.token_count(HAIKU, SMALL, n=1,
                                   client_factory=lambda: _CountingClient(extra=100_000))
-    assert len(big["over_threshold"]) == 28 and big["max_claude_tokens"] > 100_000
+    assert len(big["over_threshold"]) == n_requests() and big["max_claude_tokens"] > 100_000
 
 
 @pytest.mark.parametrize("env, why", [
@@ -130,7 +138,7 @@ def test_the_cli_command(key, monkeypatch, tmp_path, capsys):
                      "--out", str(out)]) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
     assert json.loads(capsys.readouterr().out) == report
-    assert len(client.counted) == 28 and report["endpoint"].endswith("(free)")
+    assert len(client.counted) == n_requests() and report["endpoint"].endswith("(free)")
     assert set(report) >= {"git_commit", "git_dirty", "sdk_versions", "prereg_version",
                            "generator_config_hash", "reply_note"}
     monkeypatch.delenv(anthropic_transport.KEY_ENV)

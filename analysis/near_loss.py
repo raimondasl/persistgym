@@ -1,6 +1,8 @@
-"""Expected near losses in luna's block-1 pilots (PREREG §2.8), pooled, before the main sweep.
+"""Expected near losses in a model's pilots (PREREG §2.8), pooled, before its main sweep.
 
-Run: `uv run python -m analysis.near_loss [--raw-root DIR]` ($0; reads files only).
+Run: `uv run python -m analysis.near_loss [--raw-root DIR] [--model MODEL]` ($0; reads files
+only). The model defaults to gpt-6-luna (its block-1 pilots); claude-haiku-5-5 for amendment R8
+(PREREG §17.8: near losses above 2% are reported, not re-tuned, and Claude stops and asks).
 
 PREREG §2.8: in near window cells `S_planned` = 1 by design, but `S_verbatim` = 0 can happen
 without a bug, when visible replies longer than R_plan or lookup responses push the evidence
@@ -30,15 +32,15 @@ MODEL = "gpt-6-luna"
 WINDOW_CELLS = ("W-0", "W-n-0")          # the replay-off window cells luna's pilots played
 
 
-def harness_cell(run_name: str) -> str:
+def harness_cell(run_name: str, model: str = MODEL) -> str:
     """`20261002T082913Z-W-0-gpt-6-luna` -> `W-0`."""
-    return run_name.split("Z-", 1)[1].rsplit(f"-{MODEL}", 1)[0]
+    return run_name.split("Z-", 1)[1].rsplit(f"-{model}", 1)[0]
 
 
-def pooled_near_losses(raw_pilot: Path) -> dict:
+def pooled_near_losses(raw_pilot: Path, model: str = MODEL) -> dict:
     runs, near, lost, missing = [], 0, 0, 0
-    for run in sorted(raw_pilot.glob(f"*-{MODEL}")):
-        if harness_cell(run.name) not in WINDOW_CELLS:
+    for run in sorted(raw_pilot.glob(f"*-{model}")):
+        if harness_cell(run.name, model) not in WINDOW_CELLS:
             continue
         runs.append(run.name)
         for line in (run / "episodes.jsonl").read_text(encoding="utf-8").splitlines():
@@ -60,8 +62,9 @@ def pooled_near_losses(raw_pilot: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--raw-root", type=Path, default=runmeta.REPO_ROOT / "results" / "raw")
+    ap.add_argument("--model", default=MODEL, help=f"default: {MODEL}")
     a = ap.parse_args(argv)
-    r = pooled_near_losses(a.raw_root / "persistgym_pilot")
+    r = pooled_near_losses(a.raw_root / "persistgym_pilot", a.model)
     print(json.dumps(r, indent=2))
     if r["rule_cannot_fire"]:
         print("Pooled near losses are 0: every near window cell is at 0%, under the 2% rule "

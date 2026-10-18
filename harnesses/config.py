@@ -181,4 +181,18 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
     "stop_on_effort_mismatch": ("PREREG §17.2 (R2)", ("stop and exclude the episode, as for "
                                                       "reasoning.context")),
     "output_items_replay": ("§7", "output items sent back verbatim, null fields dropped"),
+    # The Messages wire (claude-*; PREREG §17.8, amendment R8, not yet merged; DESIGN §13)
+    "messages_replay_off": ("PREREG §17.8 (R8, pending)", (
+        "earlier turns go back as visible text only, never a thinking block; replay-on and "
+        "summary cells refused")),
+    "messages_empty_reply": ("PREREG §17.8 (R8, pending)", (
+        "a turn with no visible text goes back as '(no reply)'; it counts 0 toward W")),
+    "messages_prompt_caching": ("PREREG §17.8 (R8, pending)", (
+        "top-level cache_control (5 minutes) in multi-turn cells, none in the single-turn "
+        "control")),
+    "messages_service_tier": ("PREREG §17.8 (R8, pending)", (
+        "no service_tier sent; standard recorded as requested, usage.service_tier as served")),
+    "messages_stop_reasons": ("PREREG §17.8 (R8, pending)", (
+        "max_tokens, refusal and any unexpected stop reason are incomplete: an invalid "
+        "action (D13)")),
 }

@@ -1,6 +1,7 @@
-"""PersistGym harness cells (PLAN.md §6, §7): payload builders for the OpenAI Responses API,
-a fake model, a runner skeleton, a guarded paid transport and the replay-toggle probes.
-See harnesses/DESIGN.md.
+"""PersistGym harness cells (PLAN.md §6, §7): payload builders for the OpenAI Responses API
+and, for claude-* models, Anthropic's Messages API (harnesses/wire.py; PREREG §17.8, not yet
+merged), a fake model, a runner skeleton, guarded paid transports and the replay-toggle
+probes. See harnesses/DESIGN.md.
 
     from harnesses import CELLS, HarnessConfig, HarnessSession, FakeModel, run_episode
 """

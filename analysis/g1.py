@@ -1,7 +1,9 @@
 """G1 gate metrics (PREREG §4.4, §10.2), computed from committed files and $0 audits.
 
-Run: `uv run python -m analysis.g1 [--audit-n 1000] [--no-write]` ($0: no API call). It writes
-`results/gates/g1-<UTC>/` with `g1.json`, `summary.md` and the two audit outputs, and prints
+Run: `uv run python -m analysis.g1 [--audit-n 1000] [--no-write] [--model MODEL]` ($0: no API
+call). The model defaults to gpt-6-luna; `--model claude-haiku-5-5` computes Haiku's own G1
+(PREREG §17.8, amendment R8: the same thresholds, audits and spot-check package). It writes
+`results/gates/g1-<UTC>/` (`g1-<model>-<UTC>/` for a model other than luna) with `g1.json`, `summary.md` and the two audit outputs, and prints
 the summary. The researcher makes the go/no-go call (CLAUDE.md, PREREG §10.2).
 
 What it computes, per PREREG §4.4 (as amended by R3 and R6) for gpt-6-luna on the default
@@ -120,12 +122,18 @@ def spot_check(spot_root: Path) -> dict:
 
 
 def summary_lines(g: dict) -> list[str]:
+    model = g.get("model", MODEL)
+    key = "luna" if model == MODEL else "llm"
+    flag = "" if model == MODEL else f" --model {model}"
     L = ["# G1 gate metrics (PREREG §4.4, §10.2)", "",
          (f"Computed {g['generated_utc']} at commit {g['git_commit'][:7]} "
-          f"(dirty: {g['git_dirty']}) by `uv run python -m analysis.g1`. "
-          f"Model {MODEL}, generator config `{CONFIG_HASH[:8]}…` (default)."), "",
+          f"(dirty: {g['git_dirty']}) by `uv run python -m analysis.g1{flag}`. "
+          f"Model {model}, generator config `{CONFIG_HASH[:8]}…` (default)."), "",
          "## LLM validity rates (F-0, validity templates 0-19 × 8 task cells)", ""]
-    runs, rule = g["luna"]["runs"], g["luna"]["rule"]
+    if model != MODEL:
+        L[3:3] = [("This is the model's own G1 under PREREG §17.8 (amendment R8): the same "
+                   "thresholds, audits and spot-check package as luna's G1."), ""]
+    runs, rule = g[key]["runs"], g[key]["rule"]
     for v, gate, ok in (("restated", f"≥ {RESTATED_MIN:.0%}", rule["restated_ok"]),
                         ("withheld", f"≤ {WITHHELD_MAX:.0%}", rule["withheld_ok"])):
         r = runs.get(v)
@@ -163,9 +171,11 @@ def summary_lines(g: dict) -> list[str]:
              f"{t['unreviewed']} |")
     L += ["", f"Complete: {sc['complete']}. Flagged episodes: {len(sc['flagged'])}."]
     L += [f"- {r['verdict']}: {r['episode_id']}: {r['notes']}" for r in sc["flagged"]]
-    L += ["", "## Reported only: gpt-6.1-sol on the default config (R4; main runs dropped by R6)", ""]
-    for v, r in g["sol_r4"].items():
-        L.append(f"- {v}: {r['correct']}/{r['n']} = {r['rate']:.1%} (`{r['run_id']}`)")
+    if "sol_r4" in g:
+        L += ["", "## Reported only: gpt-6.1-sol on the default config (R4; main runs dropped by R6)",
+              ""]
+        for v, r in g["sol_r4"].items():
+            L.append(f"- {v}: {r['correct']}/{r['n']} = {r['rate']:.1%} (`{r['run_id']}`)")
     sp = g["spend_by_phase"]
     L += ["", "## Spend to date (billed estimate; list where a row has none)", "",
           "- " + ", ".join(f"phase {p} ${v:.2f}" for p, v in sp.items())
@@ -180,18 +190,19 @@ def summary_lines(g: dict) -> list[str]:
     return L
 
 
-def compute(results: Path, audit_dir: Path, audit_n: int, spot_root: Path) -> dict:
+def compute(results: Path, audit_dir: Path, audit_n: int, spot_root: Path,
+            model: str = MODEL) -> dict:
     now = datetime.now(UTC)
-    luna = validity_runs(results, MODEL)
+    runs = validity_runs(results, model)
     audits = [run_audit("validity", VALIDITY_N, audit_dir / "audit_validity.json"),
               run_audit("main", audit_n, audit_dir / "audit_main.json")]
     return {"generated_utc": now.isoformat(timespec="seconds"), **runmeta.git_state(),
-            "prereg_version": runmeta.prereg_version(), "model": MODEL,
+            "prereg_version": runmeta.prereg_version(), "model": model,
             "config_hash": CONFIG_HASH,
-            "luna": {"runs": luna, "rule": llm_rule(luna)},
+            ("luna" if model == MODEL else "llm"): {"runs": runs, "rule": llm_rule(runs)},
             "audits": audits, "audits_pass": all(a["pass"] and a["oracles_ok"] for a in audits),
             "spotcheck": spot_check(spot_root),
-            "sol_r4": validity_runs(results, "gpt-6.1-sol"),
+            **({"sol_r4": validity_runs(results, "gpt-6.1-sol")} if model == MODEL else {}),
             "spend_by_phase": costs.spend_by_phase(costs.read_rows(results / "costs.csv"))}
 
 
@@ -201,16 +212,18 @@ def main(argv: list[str] | None = None) -> int:
                     help="main templates for the $0 audit (a multiple of 10; default 1,000)")
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--no-write", action="store_true")
+    ap.add_argument("--model", default=MODEL, help=f"default: {MODEL}")
     a = ap.parse_args(argv)
     results = REPO_ROOT / "results"
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     with tempfile.TemporaryDirectory() as tmp:
         audit_dir = Path(tmp)
-        g = compute(results, audit_dir, a.audit_n, spotcheck.RESULTS_ROOT)
+        g = compute(results, audit_dir, a.audit_n, spotcheck.RESULTS_ROOT, a.model)
         text = "\n".join(summary_lines(g)) + "\n"
         print(text)
         if not a.no_write:
-            out = a.out_dir or results / "gates" / f"g1-{stamp}"
+            name = f"g1-{stamp}" if a.model == MODEL else f"g1-{a.model}-{stamp}"
+            out = a.out_dir or results / "gates" / name
             out.mkdir(parents=True, exist_ok=True)
             for f in audit_dir.glob("audit_*.json"):
                 (out / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")

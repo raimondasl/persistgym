@@ -10,7 +10,9 @@ bounds F-0's full history at the need step at 64,000 project tokens with 1,000-t
 command measures, for free, how close the sweep's largest requests come:
 
 1. it regenerates, from the generator alone, the episodes of main templates
-   [--start, --start + --n) in every task cell, plays each in F-0, W-0 and W-n-0 with the fake
+   [--start, --start + --n) in every task cell, plays each in the cells of
+   `registered.HAIKU_CELLS` (F-0, W-0 and W-n-0 at the count of 2026-10-18; F-0 and W-0 after
+   R8's size record dropped W-n-0) with the fake
    model (`harnesses.fake.FakeModel`, $0: its default replies are about 12 project tokens,
    about luna's visible reply length) and keeps each cell's and task cell's largest Messages
    request by project tokens; and builds the single-turn control's requests on the 4

@@ -14,7 +14,8 @@ amendment R8): fail closed.
   and so does every other claude-* string, which goes to the Messages API too.
 * The CLI: `dry-run` works at $0 on the Messages wire, --service-tier defaults per wire, the
   docstring's R8 commands parse (its pilot and validity commands pass the guard, its main
-  commands wait for G1), Haiku's main runs and the probes refuse before the lock, an
+  commands wait for G1 with `HAIKU_G1_PASSED` emptied), Haiku's main runs refuse before the
+  lock without G1 and the probes refuse before it always, an
   end-to-end Haiku pilot goes through the real guarded transport with a fake-backed client
   (and a pilot or validity run refuses under a block that does not list persistgym_haiku),
   and `account-run` refuses a Haiku run.
@@ -484,7 +485,8 @@ class _FakeBackedClient:
 
 @pytest.fixture
 def haiku_paid_env(tmp_path, monkeypatch):
-    """R8 in effect (the repository's default, not monkeypatched; no Haiku G1); a repo whose
+    """R8 in effect (the repository's default, not monkeypatched; its G1 is irrelevant to a
+    pilot or validity run); a repo whose
     frozen PREREG and approval line for block 4-haiku list R8's
     experiments, beside block 1-pilots, approved before the Haiku replication (it lists the
     pilot and validity experiments, not persistgym_haiku); the CLI's own `_guarded_transport`

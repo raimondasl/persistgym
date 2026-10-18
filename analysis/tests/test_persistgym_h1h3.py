@@ -1813,16 +1813,30 @@ def test_lunas_null_reasoning_count_reads_as_before(tmp_path):
     assert hh.episode_row(r, hh.MESSAGES_API)["tiers"] == (("flex", 12),)
 
 
+@pytest.fixture
+def with_w_n_0(monkeypatch):
+    """R8's three registered cells, W-n-0 included: the size rule's other outcome (step 1).
+    The repository's size record drops W-n-0 (results/decisions.md, 2026-10-18), but the
+    analysis still reads a sweep with it, and these tests exercise that path."""
+    monkeypatch.setattr(registered, "HAIKU_CELLS", hh.R8_CELLS)
+
+
 def test_haiku_profile_reads_r8s_registered_values(monkeypatch):
     p = hh.profile(HAIKU)
     assert (p.model, p.experiment, p.out_name, p.T, p.generator_hash) == (
         "claude-haiku-5-5", "persistgym_haiku", "persistgym_h1h3_haiku", registered.HAIKU_T,
         registered.LUNA_GENERATOR_HASH)                     # luna's episodes
-    assert p.cells == ("F-0", "W-0", "W-n-0") and "Σ-n-0" not in p.cells
-    assert p.kinds == (("F-0", BASE), ("W-0", BASE), ("W-n-0", BASE), ("F-0", RESTATED),
-                       (ST, BASE))
+    # the repository's size record (2026-10-18): W-n-0 does not run, T = 200
+    assert p.T == 200 and p.cells == ("F-0", "W-0") and p.not_run == ("W-n-0",)
+    assert p.kinds == (("F-0", BASE), ("W-0", BASE), ("F-0", RESTATED), (ST, BASE))
     assert not p.echo and p.replication and p.api == hh.MESSAGES_API and p.power_path is None
     assert p.task_cells == hh.TASK_CELLS and p.nr_task_cells == hh.NR_TASK_CELLS
+    # with W-n-0 (the size rule's step 1)
+    monkeypatch.setattr(registered, "HAIKU_CELLS", hh.R8_CELLS)
+    p = hh.profile(HAIKU)
+    assert p.cells == ("F-0", "W-0", "W-n-0") and "Σ-n-0" not in p.cells and p.not_run == ()
+    assert p.kinds == (("F-0", BASE), ("W-0", BASE), ("W-n-0", BASE), ("F-0", RESTATED),
+                       (ST, BASE))
     # R8's size record sets HAIKU_T and HAIKU_CELLS; both are read at call time
     monkeypatch.setattr(registered, "HAIKU_T", 150)
     monkeypatch.setattr(registered, "HAIKU_CELLS", ("F-0", "W-0"))
@@ -1851,7 +1865,7 @@ def test_haiku_profile_reads_r8s_registered_values(monkeypatch):
     assert hh.profile(HAIKU).task_cells == hh.TASK_CELLS
 
 
-def test_haiku_runs_are_discovered_in_their_own_experiment(tmp_path):
+def test_haiku_runs_are_discovered_in_their_own_experiment(tmp_path, with_w_n_0):
     sw = HaikuSweep(tmp_path)
     sw.standard()
     luna = Sweep(tmp_path / "luna")                 # luna's sweep in the same results root
@@ -1897,7 +1911,7 @@ def test_haiku_has_no_sigma_cell(tmp_path):
         sw.compute()
 
 
-def test_haiku_estimands_equal_lunas_on_the_same_outcomes(tmp_path):
+def test_haiku_estimands_equal_lunas_on_the_same_outcomes(tmp_path, with_w_n_0):
     """The same outcomes give the same H1 and H3 quantities, intervals, p-values and model
     checks on both models (the same code, and luna's seeds, R8); only the labels differ."""
     luna = toy(tmp_path / "a")
@@ -2074,7 +2088,7 @@ def test_haiku_records_are_never_excluded_for_an_echo(tmp_path):
         assert "| Excluded by the runner |" in text and "(**over 5%**)" not in text
 
 
-def test_haiku_usage_and_reasoning_tokens(tmp_path):
+def test_haiku_usage_and_reasoning_tokens(tmp_path, with_w_n_0):
     """Usage is in the Responses meanings (the runner added the cache reads and writes to
     input_tokens): total tokens are input + output, nothing added twice. Reasoning tokens the
     provider did not report are null: missing, never 0, and §9.5's outcome is then reported as
@@ -2135,7 +2149,7 @@ def test_haiku_usage_and_reasoning_tokens(tmp_path):
     assert "Fitted on the episodes" not in text
 
 
-def test_haiku_replay_reads_messages_transcripts(tmp_path, monkeypatch):
+def test_haiku_replay_reads_messages_transcripts(tmp_path, monkeypatch, with_w_n_0):
     """§2.8's replay on Messages transcripts: the observation is the last message's text
     blocks, the reply the response's text blocks as the session kept them. Turns with no
     visible reply (thinking only, or a refusal whose partial text the session discarded) went
@@ -2189,7 +2203,7 @@ def test_transcripts_read_on_the_wrong_wire_are_a_bug(tmp_path):
     assert hh.accounting_check(runs, good.raw, "persistgym_haiku")["bugs"]
 
 
-def test_haiku_replay_matches_the_harness_on_real_episodes(tmp_path, monkeypatch):
+def test_haiku_replay_matches_the_harness_on_real_episodes(tmp_path, monkeypatch, with_w_n_0):
     """Real episodes (generator, small volume) played on the Messages wire by Haiku's W-0 and
     W-n-0 cells with the fake model: long replies push near evidence out, lookups shift turns,
     some replies are empty (thinking only) and some calls are refusals after a long partial
@@ -2333,7 +2347,7 @@ def test_haiku_power_from_a_power_table(tmp_path):
     assert "unavailable (not simulated from Haiku's validity runs (R8)" in text
 
 
-def test_haiku_main_writes_its_own_folder(tmp_path, monkeypatch, capsys):
+def test_haiku_main_writes_its_own_folder(tmp_path, monkeypatch, capsys, with_w_n_0):
     sw = haiku_toy(tmp_path)
     sw.standard()
     assert sw.main(monkeypatch=monkeypatch) == 0

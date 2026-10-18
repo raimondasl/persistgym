@@ -1,0 +1,5900 @@
+{
+  "generated_utc": "2026-10-18T06:30:02+00:00",
+  "git_commit": "2a0fda420e10055617de13e8ea8224ce16dc3013",
+  "git_dirty": false,
+  "prereg_version": "1.0",
+  "status": "FINAL",
+  "provisional_reasons": [],
+  "deviations": [],
+  "sweep_closed": "results/decisions.md, 2026-10-10: luna's sweep closed (PR #55), with its correction of 2026-10-10 (one §13 re-run)",
+  "warnings": [],
+  "inputs": {
+    "results_root": "C:\\Users\\raimo\\persistgym\\results",
+    "raw_root": "C:\\Users\\raimo\\persistgym\\results\\raw",
+    "draw_json": "C:\\Users\\raimo\\persistgym\\results\\draw\\20261002T033145Z\\draw.json",
+    "input_list": [
+      "20261010T055742Z-F-0-gpt-6-luna",
+      "20261010T073840Z-W-0-gpt-6-luna",
+      "20261010T084438Z-W-n-0-gpt-6-luna",
+      "20261010T100804Z-sigma-n-0-gpt-6-luna",
+      "20261010T113553Z-F-0-gpt-6-luna",
+      "20261010T125241Z-single-turn-gpt-6-luna",
+      "20261010T125444Z-F-0-gpt-6-luna-repeat1",
+      "20261010T130303Z-W-0-gpt-6-luna-repeat1",
+      "20261010T131136Z-W-n-0-gpt-6-luna-repeat1",
+      "20261010T132132Z-sigma-n-0-gpt-6-luna-repeat1",
+      "20261010T133022Z-F-0-gpt-6-luna-repeat1",
+      "20261010T133738Z-single-turn-gpt-6-luna-repeat1",
+      "20261010T202127Z-F-0-gpt-6-luna"
+    ],
+    "runs": [
+      {
+        "run_id": "20261010T055742Z-F-0-gpt-6-luna",
+        "cell": "F-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T05:57:44+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1599,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T073840Z-W-0-gpt-6-luna",
+        "cell": "W-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T07:38:42+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1600,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T084438Z-W-n-0-gpt-6-luna",
+        "cell": "W-n-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T08:44:41+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1600,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T100804Z-sigma-n-0-gpt-6-luna",
+        "cell": "Σ-n-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T10:08:06+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1600,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T113553Z-F-0-gpt-6-luna",
+        "cell": "F-0",
+        "variants": [
+          "restated"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T11:35:56+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1600,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T125241Z-single-turn-gpt-6-luna",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T12:52:44+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 800,
+        "records_counted": 800,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T125444Z-F-0-gpt-6-luna-repeat1",
+        "cell": "F-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-10T12:54:46+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T130303Z-W-0-gpt-6-luna-repeat1",
+        "cell": "W-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-10T13:03:05+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T131136Z-W-n-0-gpt-6-luna-repeat1",
+        "cell": "W-n-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-10T13:11:39+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T132132Z-sigma-n-0-gpt-6-luna-repeat1",
+        "cell": "Σ-n-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-10T13:21:35+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T133022Z-F-0-gpt-6-luna-repeat1",
+        "cell": "F-0",
+        "variants": [
+          "restated"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-10T13:30:24+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T133738Z-single-turn-gpt-6-luna-repeat1",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-10T13:37:40+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 80,
+        "records_counted": 80,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      },
+      {
+        "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+        "cell": "F-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-10T20:21:29+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 8,
+        "records_counted": 1,
+        "model_returned": [
+          "gpt-6-luna"
+        ]
+      }
+    ],
+    "rerun_links": {
+      "20261010T202127Z-F-0-gpt-6-luna": "20261010T055742Z-F-0-gpt-6-luna"
+    },
+    "skipped": []
+  },
+  "model": "gpt-6-luna",
+  "generator_config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+  "templates": 200,
+  "seed": 4086943125952605534,
+  "bootstrap": {
+    "seed": 4086943125952605544,
+    "resamples": 10000,
+    "method": "percentile",
+    "levels": [
+      0.9,
+      0.95
+    ]
+  },
+  "h1_separation_rule": "firth",
+  "changed_after_final": [
+    "A: the Firth fit's step cap, 100 to 1,000 (H1's model check had read 'did not converge')",
+    "B: one template with outcome variation is enough to fit a fixed-effects logit (H3's model check had returned no estimate)",
+    "C: the summary's wording, with no number changed"
+  ],
+  "primary_episodes": 8800,
+  "accounting_check": {
+    "warnings": [],
+    "missing_transcripts": [],
+    "checked": 3520,
+    "runs": [
+      {
+        "run_id": "20261010T073840Z-W-0-gpt-6-luna",
+        "episodes_checked": 1600,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      },
+      {
+        "run_id": "20261010T084438Z-W-n-0-gpt-6-luna",
+        "episodes_checked": 1600,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      },
+      {
+        "run_id": "20261010T130303Z-W-0-gpt-6-luna-repeat1",
+        "episodes_checked": 160,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      },
+      {
+        "run_id": "20261010T131136Z-W-n-0-gpt-6-luna-repeat1",
+        "episodes_checked": 160,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      }
+    ]
+  },
+  "h1": {
+    "cells": {
+      "F-0 NR": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0,
+        "exact": "1"
+      },
+      "W-0 NR": {
+        "n": 200,
+        "successes": 15,
+        "rate": 0.075,
+        "exact": "3/40"
+      },
+      "F-0 R": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0,
+        "exact": "1"
+      },
+      "W-0 R": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0,
+        "exact": "1"
+      },
+      "W-n-0 NR": {
+        "n": 200,
+        "successes": 57,
+        "rate": 0.285,
+        "exact": "57/200"
+      },
+      "W-n-0 R": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0,
+        "exact": "1"
+      }
+    },
+    "penalty_nr": {
+      "estimate": 0.925,
+      "exact": "37/40",
+      "ci90": [
+        0.895,
+        0.955
+      ],
+      "ci95": [
+        0.885,
+        0.96
+      ],
+      "undefined_resamples": 0
+    },
+    "penalty_r": {
+      "estimate": 0.0,
+      "exact": "0",
+      "ci90": [
+        0.0,
+        0.0
+      ],
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "undefined_resamples": 0
+    },
+    "delta_h1": {
+      "estimate": 0.925,
+      "exact": "37/40",
+      "ci90": [
+        0.895,
+        0.955
+      ],
+      "ci95": [
+        0.885,
+        0.96
+      ],
+      "undefined_resamples": 0
+    },
+    "computable": true,
+    "p_one_sided": 0.0,
+    "kill": false,
+    "manipulation_check": true,
+    "recoverable_within_5pp": true,
+    "model_check": {
+      "model": "§9.1 confirmatory GLM (statsmodels), W-0 x R: the logit-scale Δ_H1",
+      "rule": "firth",
+      "estimate": 101.30683512269682,
+      "logit_status": "undefined",
+      "h1_cells_no_variation": [
+        "F-0 observed-nonrec-far: all 1 (194 episodes)",
+        "F-0 observed-rec-far: all 1 (194 episodes)",
+        "W-0 observed-rec-far: all 1 (194 episodes)"
+      ],
+      "agrees": true,
+      "sign": 1,
+      "firth_estimate": 7.08616117177393,
+      "basis": "a Firth-penalized fit of the §9.1 GLM (rule 'firth')",
+      "standin_estimate": 53.552428341972366,
+      "standin_agrees": true,
+      "standin_sign_disagrees": false
+    },
+    "model_check_sensitivity": {
+      "literal": {
+        "agrees": false,
+        "sign": null,
+        "basis": "the sign of the logit-scale Δ_H1's limit, from the cells without outcome variation (rule 'literal'; an undefined sign does not agree)"
+      },
+      "probability-scale": {
+        "agrees": true,
+        "sign": null,
+        "basis": "not applicable: an H1 cell has no outcome variation, so the probability-scale sign is read (rule 'probability-scale')"
+      }
+    },
+    "scales_disagree_in_sign": false,
+    "w_n_0_alongside": {
+      "penalty_nr": {
+        "estimate": 0.715,
+        "exact": "143/200",
+        "ci90": [
+          0.6599999999999999,
+          0.765
+        ],
+        "ci95": [
+          0.65,
+          0.775
+        ],
+        "undefined_resamples": 0
+      },
+      "penalty_r": {
+        "estimate": 0.0,
+        "exact": "0",
+        "ci90": [
+          0.0,
+          0.0
+        ],
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "undefined_resamples": 0
+      },
+      "difference": {
+        "estimate": 0.715,
+        "exact": "143/200",
+        "ci90": [
+          0.6599999999999999,
+          0.765
+        ],
+        "ci95": [
+          0.65,
+          0.775
+        ],
+        "undefined_resamples": 0
+      },
+      "note": "W-n-0 against F-0: the notes-rescue condition, reported alongside H1, not tested (§3 H1)"
+    }
+  },
+  "h1_lookups": {
+    "task_cell": "observed-rec-far",
+    "mean_F0": 0.0,
+    "mean_W0": 1.005,
+    "n_F0": 200,
+    "n_W0": 200,
+    "lookups_F0": 0,
+    "lookups_W0": 201,
+    "difference": {
+      "estimate": 1.005,
+      "exact": "201/200",
+      "ci90": [
+        1.0,
+        1.015
+      ],
+      "ci95": [
+        1.0,
+        1.015
+      ],
+      "undefined_resamples": 0
+    },
+    "ratio": null,
+    "met": true,
+    "rule": "F-0 looked nothing up, so the ratio is undefined: met iff the lower bound of the 90% CI of the difference (W-0 - F-0) is above 0"
+  },
+  "h1_tokens": {
+    "R_need": {
+      "means": {
+        "F-0 near": 35156.07,
+        "F-0 far": 35087.535,
+        "W-0 near": 23049.995,
+        "W-0 far": 45874.505
+      },
+      "n": {
+        "F-0 near": 200,
+        "F-0 far": 200,
+        "W-0 near": 200,
+        "W-0 far": 200
+      },
+      "ratio": {
+        "estimate": 1.9941049762854113,
+        "exact": "7167854706646/3594522250277",
+        "ci90": [
+          1.9742748089715312,
+          2.006720733929324
+        ],
+        "ci95": [
+          1.9717431828908485,
+          2.007996227777002
+        ],
+        "undefined_resamples": 0
+      },
+      "at_least_1_30": true,
+      "episodes_left_out_need_phase_incomplete": 0,
+      "episodes_left_out_no_tokens": 0,
+      "prediction_met": true
+    },
+    "R_tok": {
+      "means": {
+        "F-0 near": 464477.83,
+        "F-0 far": 462770.685,
+        "W-0 near": 391714.54,
+        "W-0 far": 414654.37
+      },
+      "n": {
+        "F-0 near": 200,
+        "F-0 far": 200,
+        "W-0 near": 200,
+        "W-0 far": 200
+      },
+      "ratio": {
+        "estimate": 1.0624676214048083,
+        "exact": "148152124598167/139441543077123",
+        "ci90": [
+          1.0586621737795758,
+          1.0670245145884265
+        ],
+        "ci95": [
+          1.0581455980282632,
+          1.0679245417084067
+        ],
+        "undefined_resamples": 0
+      },
+      "at_least_1_30": false
+    },
+    "literal": {
+      "ratio": {
+        "estimate": 0.8960255769010087,
+        "exact": "6379298/7119549",
+        "ci90": [
+          0.8912526595208741,
+          0.9006745039545244
+        ],
+        "ci95": [
+          0.89032972219907,
+          0.9017043351766263
+        ],
+        "undefined_resamples": 0
+      },
+      "at_least_1_30": false
+    }
+  },
+  "h1_predictions": {
+    "parts": {
+      "non-recoverable drop >= 25pp (manipulation check)": true,
+      "recoverable within 5pp": true,
+      "lookups rise >= 30%": true,
+      "need-phase tokens rise >= 30% (R_need)": true
+    },
+    "all_met": true
+  },
+  "h3": {
+    "cells": {
+      "single-turn": {
+        "n": 400,
+        "successes": 400,
+        "rate": 1.0,
+        "exact": "1"
+      },
+      "F-0": {
+        "n": 400,
+        "successes": 399,
+        "rate": 0.9975,
+        "exact": "399/400"
+      }
+    },
+    "delta_h3": {
+      "estimate": 0.0025,
+      "exact": "1/400",
+      "ci90": [
+        0.0,
+        0.007499999999999951
+      ],
+      "ci95": [
+        0.0,
+        0.007499999999999951
+      ],
+      "undefined_resamples": 0
+    },
+    "computable": true,
+    "p_one_sided": 0.0,
+    "prediction_holds": true,
+    "ci90_above_margin": false,
+    "per_cell": {
+      "observed-nonrec-far": {
+        "single-turn": {
+          "n": 200,
+          "successes": 200,
+          "rate": 1.0,
+          "exact": "1"
+        },
+        "F-0": {
+          "n": 200,
+          "successes": 200,
+          "rate": 1.0,
+          "exact": "1"
+        },
+        "difference": {
+          "estimate": 0.0,
+          "exact": "0",
+          "ci90": [
+            0.0,
+            0.0
+          ],
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "undefined_resamples": 0
+        }
+      },
+      "derived-nonrec-far": {
+        "single-turn": {
+          "n": 200,
+          "successes": 200,
+          "rate": 1.0,
+          "exact": "1"
+        },
+        "F-0": {
+          "n": 200,
+          "successes": 199,
+          "rate": 0.995,
+          "exact": "199/200"
+        },
+        "difference": {
+          "estimate": 0.005,
+          "exact": "1/200",
+          "ci90": [
+            0.0,
+            0.015000000000000013
+          ],
+          "ci95": [
+            0.0,
+            0.015000000000000013
+          ],
+          "undefined_resamples": 0
+        }
+      }
+    },
+    "model_check": {
+      "model": "§9.4: template fixed effects + arm (statsmodels)",
+      "ame": 0.002499999994148867,
+      "agrees": true,
+      "ame_informative": 0.4999999988297734,
+      "n_pairs": 400,
+      "n_pairs_informative": 2,
+      "arm_logit": 20.56606852169302,
+      "arm_logit_status": "+inf",
+      "arm_logit_sign": 1,
+      "arm_logit_ci90": null,
+      "arm_logit_ci95": null,
+      "arm_no_variation": [
+        "single-turn: all 1 (2 episodes)"
+      ],
+      "powersim_model": "power_sim's: template fixed effects + derived term + arm (emulation)",
+      "powersim_ame": 0.0024999999989113327,
+      "powersim_agrees": true,
+      "powersim_disagrees": false
+    },
+    "scales_disagree_in_sign": false
+  },
+  "family": {
+    "family_of_2": {
+      "pvalues": [
+        0.0,
+        0.0
+      ],
+      "reject": [
+        true,
+        true
+      ],
+      "adjusted": [
+        0.0,
+        0.0
+      ],
+      "alpha": 0.05,
+      "tests": [
+        "H1",
+        "H3"
+      ]
+    },
+    "family_of_4_sensitivity": {
+      "pvalues": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "reject": [
+        true,
+        true,
+        false,
+        false
+      ],
+      "adjusted": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "alpha": 0.05,
+      "tests": [
+        "H1",
+        "H3",
+        "H2 success (not run)",
+        "H2 tokens (not run)"
+      ]
+    },
+    "unadjusted": {
+      "H1": true,
+      "H3": true
+    },
+    "H1": {
+      "holm_rejects": true,
+      "model_agrees": true,
+      "supported": true,
+      "supported_family_of_4": true,
+      "verdict": "supported",
+      "sensitivity_rules": {
+        "literal": {
+          "model_agrees": false,
+          "supported": false,
+          "verdict": "inconclusive: the Holm test rejects, but the model check does not agree"
+        },
+        "probability-scale": {
+          "model_agrees": true,
+          "supported": true,
+          "verdict": "supported"
+        }
+      }
+    },
+    "H3": {
+      "holm_rejects": true,
+      "model_agrees": true,
+      "supported": true,
+      "supported_family_of_4": true,
+      "verdict": "supported"
+    }
+  },
+  "glm_9_1": {
+    "n_rows": 3200,
+    "n_templates": 200,
+    "n_templates_informative": 194,
+    "n_rows_fitted": 3104,
+    "coefficients": {
+      "R": 1.7615784022580435e-06,
+      "D": -45.63259043881472,
+      "N": 1.7577883267576478e-06,
+      "R:D": 45.63259044016566,
+      "R:N": -1.7622445222944932e-06,
+      "D:N": 45.63259044274049,
+      "R:D:N": -45.63259044063442,
+      "W-0": -101.30683512078274,
+      "W-0:D": 45.84331147013037,
+      "W-0:N": 101.30683512501474,
+      "W-0:R:D": -45.84331147621503,
+      "W-0:R:N": -101.30683512524271,
+      "W-0:D:N": -91.47590365301593,
+      "W-0:R:D:N": 91.4759036558302,
+      "W-0:R": 101.30683512269682
+    },
+    "target": "W-0:R",
+    "estimate": 101.30683512269682,
+    "se_available": false,
+    "fitted_by": "statsmodels GLM (§9.1)",
+    "contrasts": {
+      "penalty_nr_logit": {
+        "estimate": 101.30683512078274,
+        "se": null,
+        "z": null,
+        "p_two_sided": null,
+        "ci90": null,
+        "ci95": null,
+        "logit_status": "+inf"
+      },
+      "penalty_r_logit": {
+        "estimate": -1.9140884432999883e-09,
+        "se": null,
+        "z": null,
+        "p_two_sided": null,
+        "ci90": null,
+        "ci95": null,
+        "logit_status": "undefined"
+      }
+    },
+    "estimate_emulated": 101.30683512269682,
+    "emulated_sign_disagrees": false,
+    "se": null,
+    "z": null,
+    "p_two_sided": null,
+    "ci90": null,
+    "ci95": null,
+    "n_templates_dropped": 6,
+    "converged": true,
+    "note": "statsmodels gives no finite cluster-robust SE (for example under quasi-separation)",
+    "emulation_route": "statsmodels",
+    "cells": [
+      "F-0",
+      "W-0"
+    ],
+    "no_variation_cells": [
+      "F-0 derived-nonrec-near: all 1 (194 episodes)",
+      "F-0 derived-rec-far: all 1 (194 episodes)",
+      "F-0 derived-rec-near: all 1 (194 episodes)",
+      "F-0 observed-nonrec-far: all 1 (194 episodes)",
+      "F-0 observed-nonrec-near: all 1 (194 episodes)",
+      "F-0 observed-rec-far: all 1 (194 episodes)",
+      "F-0 observed-rec-near: all 1 (194 episodes)",
+      "W-0 derived-rec-far: all 1 (194 episodes)",
+      "W-0 derived-rec-near: all 1 (194 episodes)",
+      "W-0 observed-nonrec-near: all 1 (194 episodes)",
+      "W-0 observed-rec-far: all 1 (194 episodes)",
+      "W-0 observed-rec-near: all 1 (194 episodes)"
+    ],
+    "logit_status": "undefined",
+    "h1_cells_no_variation": [
+      "F-0 observed-nonrec-far: all 1 (194 episodes)",
+      "F-0 observed-rec-far: all 1 (194 episodes)",
+      "W-0 observed-rec-far: all 1 (194 episodes)"
+    ]
+  },
+  "glm_9_1_with_w_n_0": {
+    "n_rows": 4800,
+    "n_templates": 200,
+    "n_templates_informative": 198,
+    "n_rows_fitted": 4752,
+    "coefficients": {
+      "R": 1.4845512497765878e-06,
+      "D": -46.90116073756059,
+      "N": 1.4862307043441836e-06,
+      "R:D": 46.901160734232015,
+      "R:N": -1.4821878071280268e-06,
+      "D:N": 46.90116073826552,
+      "R:D:N": -46.90116073449139,
+      "W-0": -103.82976062009777,
+      "W-0:D": 47.000034171620925,
+      "W-0:N": 103.82976062086932,
+      "W-0:R:D": -47.000034171969965,
+      "W-0:R:N": -103.8297606244369,
+      "W-0:D:N": -93.90119644984095,
+      "W-0:R:D:N": 93.90119645074074,
+      "W-n-0": -101.34419223150726,
+      "W-n-0:R": 101.34419222936972,
+      "W-n-0:D": 46.71241966467066,
+      "W-n-0:N": 101.3441922289523,
+      "W-n-0:R:D": -46.712419664633565,
+      "W-n-0:R:N": -101.34419223588996,
+      "W-n-0:D:N": -46.712419665801235,
+      "W-n-0:R:D:N": 46.712419663210014,
+      "W-0:R": 103.82976061683013
+    },
+    "target": "W-0:R",
+    "estimate": 103.82976061683013,
+    "se_available": false,
+    "fitted_by": "statsmodels GLM (§9.1)",
+    "contrasts": {
+      "penalty_nr_logit": {
+        "estimate": 103.82976062009777,
+        "se": null,
+        "z": null,
+        "p_two_sided": null,
+        "ci90": null,
+        "ci95": null,
+        "logit_status": "+inf"
+      },
+      "penalty_r_logit": {
+        "estimate": 3.2676439332135487e-09,
+        "se": null,
+        "z": null,
+        "p_two_sided": null,
+        "ci90": null,
+        "ci95": null,
+        "logit_status": "undefined"
+      }
+    },
+    "estimate_emulated": 103.82976061683013,
+    "emulated_sign_disagrees": false,
+    "se": null,
+    "z": null,
+    "p_two_sided": null,
+    "ci90": null,
+    "ci95": null,
+    "n_templates_dropped": 2,
+    "converged": true,
+    "note": "statsmodels gives no finite cluster-robust SE (for example under quasi-separation)",
+    "emulation_route": "statsmodels",
+    "cells": [
+      "F-0",
+      "W-0",
+      "W-n-0"
+    ],
+    "no_variation_cells": [
+      "F-0 derived-nonrec-near: all 1 (198 episodes)",
+      "F-0 derived-rec-far: all 1 (198 episodes)",
+      "F-0 derived-rec-near: all 1 (198 episodes)",
+      "F-0 observed-nonrec-far: all 1 (198 episodes)",
+      "F-0 observed-nonrec-near: all 1 (198 episodes)",
+      "F-0 observed-rec-far: all 1 (198 episodes)",
+      "F-0 observed-rec-near: all 1 (198 episodes)",
+      "W-0 derived-rec-far: all 1 (198 episodes)",
+      "W-0 derived-rec-near: all 1 (198 episodes)",
+      "W-0 observed-nonrec-near: all 1 (198 episodes)",
+      "W-0 observed-rec-far: all 1 (198 episodes)",
+      "W-0 observed-rec-near: all 1 (198 episodes)",
+      "W-n-0 derived-nonrec-near: all 1 (198 episodes)",
+      "W-n-0 derived-rec-far: all 1 (198 episodes)",
+      "W-n-0 derived-rec-near: all 1 (198 episodes)",
+      "W-n-0 observed-nonrec-near: all 1 (198 episodes)",
+      "W-n-0 observed-rec-far: all 1 (198 episodes)",
+      "W-n-0 observed-rec-near: all 1 (198 episodes)"
+    ],
+    "logit_status": "undefined",
+    "h1_cells_no_variation": [
+      "F-0 observed-nonrec-far: all 1 (198 episodes)",
+      "F-0 observed-rec-far: all 1 (198 episodes)",
+      "W-0 observed-rec-far: all 1 (198 episodes)"
+    ],
+    "sign": null,
+    "sign_disagrees": false
+  },
+  "glm_9_1_firth": {
+    "estimate": 7.08616117177393,
+    "note": null
+  },
+  "glm_h1_standin": {
+    "estimate": 53.552428341972366,
+    "n_templates_informative": 185
+  },
+  "glm_h3": {
+    "n_rows": 800,
+    "n_templates": 200,
+    "n_templates_informative": 1,
+    "n_rows_fitted": 4,
+    "coefficients": {
+      "arm": 20.56606852169302
+    },
+    "target": "arm",
+    "estimate": 20.56606852169302,
+    "se_available": false,
+    "fitted_by": "statsmodels GLM (§9.1)",
+    "contrasts": {},
+    "estimate_emulated": 20.56606852169164,
+    "emulated_sign_disagrees": false,
+    "se": null,
+    "z": null,
+    "p_two_sided": null,
+    "ci90": null,
+    "ci95": null,
+    "n_templates_dropped": 199,
+    "converged": true,
+    "note": "one template with outcome variation: point estimates only, no cluster-robust SE",
+    "emulation_route": "newton",
+    "model": "§9.4: template fixed effects + arm (statsmodels)",
+    "logit_status": "+inf",
+    "arm_no_variation": [
+      "single-turn: all 1 (2 episodes)"
+    ],
+    "ame": 0.002499999994148867,
+    "ame_informative": 0.4999999988297734,
+    "n_pairs": 400,
+    "n_pairs_informative": 2
+  },
+  "glm_h3_powersim": {
+    "model": "power_sim's: template fixed effects + derived term + arm (emulation)",
+    "n_templates_informative": 1,
+    "arm_logit": 42.88628951787693,
+    "ame": 0.0024999999989113327,
+    "ame_informative": 0.4999999997822665,
+    "n_pairs": 400,
+    "emulation_route": "newton",
+    "n_pairs_informative": 2
+  },
+  "bayesian_glmm": {
+    "status": "fitted",
+    "model": "success ~ W*R*D*N + (1|template)",
+    "family": "bernoulli",
+    "priors": "bambi's defaults",
+    "target": "W:R",
+    "seed": 4086943125952605545,
+    "chains": 4,
+    "draws": 1000,
+    "tune": 1000,
+    "n_rows": 3200,
+    "n_templates": 200,
+    "versions": {
+      "bambi": "0.21.0",
+      "pymc": "6.3.2",
+      "arviz": "1.3.0"
+    },
+    "median": 5.253022003164317,
+    "mean": 5.230792462959618,
+    "ci90": [
+      2.856909831969059,
+      7.52302001929695
+    ],
+    "ci95": [
+      2.3516544463486846,
+      8.00503859129375
+    ],
+    "p_positive": 1.0,
+    "rhat": 1.0024059488774464,
+    "ess_bulk": 2260.6023508622134,
+    "rhat_max_all": 1.0078179316101912,
+    "divergences": 2,
+    "converged": true,
+    "sign_disagrees_with_glm": false
+  },
+  "achieved_power": [
+    {
+      "scenario": "primary",
+      "T_set": 200,
+      "power_h1": 0.647,
+      "power_h3": 0.781,
+      "p_f0_observed_far": 0.95,
+      "source": "results/power_sim/20261010T030442Z/luna_decision.csv"
+    },
+    {
+      "scenario": "pessimistic",
+      "T_set": 200,
+      "power_h1": 0.4375,
+      "power_h3": 0.443,
+      "p_f0_observed_far": 0.85,
+      "source": "results/power_sim/20261010T030442Z/luna_decision.csv"
+    }
+  ],
+  "accounting": [
+    {
+      "cell": "F-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 15,
+        "rate": 0.075
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 200,
+        "successes": 15,
+        "rate": 0.075
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 16,
+        "rate": 0.08
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 200,
+        "successes": 16,
+        "rate": 0.08
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 43,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 57,
+        "rate": 0.285
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 157,
+        "successes": 14,
+        "rate": 0.08917197452229299
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 43,
+        "rate": 0.215
+      },
+      "used_given_carried": {
+        "n": 43,
+        "successes": 43,
+        "rate": 1.0
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 24,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 176,
+        "successes": 176,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 24,
+        "rate": 0.12
+      },
+      "used_given_carried": {
+        "n": 24,
+        "successes": 24,
+        "rate": 1.0
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 39,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 53,
+        "rate": 0.265
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 161,
+        "successes": 14,
+        "rate": 0.08695652173913043
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 39,
+        "rate": 0.195
+      },
+      "used_given_carried": {
+        "n": 39,
+        "successes": 39,
+        "rate": 1.0
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 24,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 176,
+        "successes": 176,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 24,
+        "rate": 0.12
+      },
+      "used_given_carried": {
+        "n": 24,
+        "successes": 24,
+        "rate": 1.0
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": null,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": null,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "0": {
+          "n": 200,
+          "S_verbatim_1": 200,
+          "S_1": 200,
+          "success": {
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 77,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 86,
+        "rate": 0.43
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 123,
+        "successes": 9,
+        "rate": 0.07317073170731707
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 77,
+        "rate": 0.385
+      },
+      "used_given_carried": {
+        "n": 77,
+        "successes": 77,
+        "rate": 1.0
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "1": {
+          "n": 200,
+          "S_verbatim_1": 0,
+          "S_1": 77,
+          "success": {
+            "n": 200,
+            "successes": 86,
+            "rate": 0.43
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": null,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": null,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "0": {
+          "n": 200,
+          "S_verbatim_1": 200,
+          "S_1": 200,
+          "success": {
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 62,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 138,
+        "successes": 138,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 62,
+        "rate": 0.31
+      },
+      "used_given_carried": {
+        "n": 62,
+        "successes": 62,
+        "rate": 1.0
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "1": {
+          "n": 200,
+          "S_verbatim_1": 0,
+          "S_1": 62,
+          "success": {
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": null,
+      "S_verbatim_1": 179,
+      "S_verbatim_0": 21,
+      "S_verbatim_unknown": 0,
+      "S_1": 189,
+      "planned_vs_verbatim_mismatch": null,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 179,
+        "successes": 178,
+        "rate": 0.994413407821229
+      },
+      "success_given_S0": {
+        "n": 21,
+        "successes": 16,
+        "rate": 0.7619047619047619
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 11,
+        "successes": 6,
+        "rate": 0.5454545454545454
+      },
+      "P_carried": {
+        "n": 21,
+        "carried": 10,
+        "rate": 0.47619047619047616
+      },
+      "used_given_carried": {
+        "n": 10,
+        "successes": 10,
+        "rate": 1.0
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "0": {
+          "n": 179,
+          "S_verbatim_1": 179,
+          "S_1": 179,
+          "success": {
+            "n": 179,
+            "successes": 178,
+            "rate": 0.994413407821229
+          }
+        },
+        "1": {
+          "n": 21,
+          "S_verbatim_1": 0,
+          "S_1": 10,
+          "success": {
+            "n": 21,
+            "successes": 16,
+            "rate": 0.7619047619047619
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 184,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 184,
+        "rate": 0.92
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 16,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 184,
+        "rate": 0.92
+      },
+      "used_given_carried": {
+        "n": 184,
+        "successes": 184,
+        "rate": 1.0
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "1": {
+          "n": 200,
+          "S_verbatim_1": 0,
+          "S_1": 184,
+          "success": {
+            "n": 200,
+            "successes": 184,
+            "rate": 0.92
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": null,
+      "S_verbatim_1": 179,
+      "S_verbatim_0": 21,
+      "S_verbatim_unknown": 0,
+      "S_1": 186,
+      "planned_vs_verbatim_mismatch": null,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 179,
+        "successes": 179,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 21,
+        "successes": 21,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 5,
+        "successes": 5,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 9,
+        "successes": 9,
+        "rate": 1.0
+      },
+      "P_carried": {
+        "n": 21,
+        "carried": 7,
+        "rate": 0.3333333333333333
+      },
+      "used_given_carried": {
+        "n": 7,
+        "successes": 7,
+        "rate": 1.0
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "0": {
+          "n": 179,
+          "S_verbatim_1": 179,
+          "S_1": 179,
+          "success": {
+            "n": 179,
+            "successes": 179,
+            "rate": 1.0
+          }
+        },
+        "1": {
+          "n": 21,
+          "S_verbatim_1": 0,
+          "S_1": 7,
+          "success": {
+            "n": 21,
+            "successes": 21,
+            "rate": 1.0
+          }
+        }
+      }
+    },
+    {
+      "cell": "Σ-n-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 181,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 19,
+        "successes": 19,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 181,
+        "rate": 0.905
+      },
+      "used_given_carried": {
+        "n": 181,
+        "successes": 181,
+        "rate": 1.0
+      },
+      "exploratory": true,
+      "by_compacted_between": {
+        "1": {
+          "n": 200,
+          "S_verbatim_1": 0,
+          "S_1": 181,
+          "success": {
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          }
+        }
+      }
+    }
+  ],
+  "cost_outcomes": [
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 461558.28,
+        "W-0": 390399.23,
+        "W-n-0": 391382.805,
+        "Σ-n-0": 281241.705
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16743844762588406,
+          "ratio": 0.8458286784498376,
+          "se": 0.0028332453049188856,
+          "ratio_ci95": [
+            0.8411447591757991,
+            0.8505386801544285
+          ],
+          "ratio_ci90": [
+            0.841896055873421,
+            0.849779670895338
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": -0.164922207868608,
+          "ratio": 0.8479596661119806,
+          "se": 0.0028457394261367334,
+          "ratio_ci95": [
+            0.8432432965156141,
+            0.8527024149778432
+          ],
+          "ratio_ci90": [
+            0.8439997904357815,
+            0.8519381207209575
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": -0.4953938700764805,
+          "ratio": 0.6093308628327011,
+          "se": 0.0035974552421564614,
+          "ratio_ci95": [
+            0.605049653276786,
+            0.6136423653656676
+          ],
+          "ratio_ci90": [
+            0.6057359236882133,
+            0.6129471373263851
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 214.0441226028216
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 234.56,
+        "W-0": 245.445,
+        "W-n-0": 442.11,
+        "Σ-n-0": 479.355
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 0.045361470850703176,
+          "ratio": 1.0464060368349473,
+          "se": 0.016467039837222114,
+          "ratio_ci95": [
+            1.013172671013296,
+            1.0807294997697896
+          ],
+          "ratio_ci90": [
+            1.0184436214383763,
+            1.0751361890589197
+          ],
+          "p_two_sided": 0.005874906744448034
+        },
+        "W-n-0": {
+          "beta": 0.6338473011949983,
+          "ratio": 1.8848482264665827,
+          "se": 0.03761119357466798,
+          "ratio_ci95": [
+            1.75090135681312,
+            2.0290422547164715
+          ],
+          "ratio_ci90": [
+            1.7717759285488466,
+            2.0051366426024217
+          ],
+          "p_two_sided": 1.0036123161157765e-63
+        },
+        "Σ-n-0": {
+          "beta": 0.7147300315619949,
+          "ratio": 2.043634890859439,
+          "se": 0.028971569191683953,
+          "ratio_ci95": [
+            1.9308238929607981,
+            2.163037023917161
+          ],
+          "ratio_ci90": [
+            1.9485315564116807,
+            2.1433799998749845
+          ],
+          "p_two_sided": 2.242801993789037e-134
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 34.02850703395316
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0,
+        "W-n-0": 0.0,
+        "Σ-n-0": 0.0
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "W-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "Σ-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.00881449075,
+        "W-0": 0.030240968450000006,
+        "W-n-0": 0.030525782575000004,
+        "Σ-n-0": 0.0096628661
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2328005328103195,
+          "ratio": 3.43082423071504,
+          "se": 0.006417396867283133,
+          "ratio_ci95": [
+            3.3879420293973905,
+            3.474249204953209
+          ],
+          "ratio_ci90": [
+            3.3948000175993123,
+            3.4672307178745636
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2421746133996603,
+          "ratio": 3.4631362647334303,
+          "se": 0.005997331415894993,
+          "ratio_ci95": [
+            3.422666959237496,
+            3.504084075648334
+          ],
+          "ratio_ci90": [
+            3.429141303728609,
+            3.4974682364564926
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.09189325851054259,
+          "ratio": 1.096247800712348,
+          "se": 0.0096548593963693,
+          "ratio_ci95": [
+            1.0756983534940043,
+            1.1171898113102003
+          ],
+          "ratio_ci90": [
+            1.0789759836033619,
+            1.1137960981793584
+          ],
+          "p_two_sided": 1.7684206554405127e-21
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 9.870211075140222e-05
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.004407245375,
+        "W-0": 0.015120484225000003,
+        "W-n-0": 0.015262891287500002,
+        "Σ-n-0": 0.00483143305
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2328005328103009,
+          "ratio": 3.430824230714976,
+          "se": 0.006417396867283219,
+          "ratio_ci95": [
+            3.3879420293973275,
+            3.474249204953144
+          ],
+          "ratio_ci90": [
+            3.3948000175992483,
+            3.4672307178744997
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2421746133996439,
+          "ratio": 3.4631362647333734,
+          "se": 0.005997331415895058,
+          "ratio_ci95": [
+            3.42266695923744,
+            3.5040840756482763
+          ],
+          "ratio_ci90": [
+            3.4291413037285525,
+            3.4974682364564353
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.09189325851052507,
+          "ratio": 1.0962478007123289,
+          "se": 0.009654859396369262,
+          "ratio_ci95": [
+            1.0756983534939855,
+            1.1171898113101808
+          ],
+          "ratio_ci90": [
+            1.0789759836033432,
+            1.113796098179339
+          ],
+          "p_two_sided": 1.768420655470728e-21
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.935105537570125e-05
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 461563.225,
+        "W-0": 391011.245,
+        "W-n-0": 392080.86,
+        "Σ-n-0": 281823.27
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16588272431347767,
+          "ratio": 0.84714557794322,
+          "se": 0.002840329864496607,
+          "ratio_ci95": [
+            0.8424426683122462,
+            0.851874741418911
+          ],
+          "ratio_ci90": [
+            0.843197006647173,
+            0.8511126398353638
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": -0.1631509494471285,
+          "ratio": 0.8494629527732069,
+          "se": 0.0028687968443480948,
+          "ratio_ci95": [
+            0.8447000475630929,
+            0.8542527139851716
+          ],
+          "ratio_ci90": [
+            0.8454639911771157,
+            0.8534808290646771
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": -0.49333887112530284,
+          "ratio": 0.6105843246069419,
+          "se": 0.0036292697645545313,
+          "ratio_ci95": [
+            0.6062565036280972,
+            0.6149430401565051
+          ],
+          "ratio_ci90": [
+            0.6069502275927022,
+            0.6142401806724325
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 216.92492789322068
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 230.145,
+        "W-0": 850.375,
+        "W-n-0": 992.045,
+        "Σ-n-0": 882.595
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3069678835996537,
+          "ratio": 3.6949531816887236,
+          "se": 0.021162575515630506,
+          "ratio_ci95": [
+            3.5448292690586025,
+            3.8514348586659444
+          ],
+          "ratio_ci90": [
+            3.5685471226325043,
+            3.825836830984619
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.4610589240939373,
+          "ratio": 4.310521627669439,
+          "se": 0.02253023858356602,
+          "ratio_ci95": [
+            4.124317155021381,
+            4.505132850897269
+          ],
+          "ratio_ci90": [
+            4.153701977764529,
+            4.473261876290373
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 1.344156886673948,
+          "ratio": 3.834951878164804,
+          "se": 0.02621243020118694,
+          "ratio_ci95": [
+            3.642905099286194,
+            4.03712298481821
+          ],
+          "ratio_ci90": [
+            3.6731194073097724,
+            4.003914459892607
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 46.801144088144405
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0,
+        "W-n-0": 0.0,
+        "Σ-n-0": 0.0
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "W-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "Σ-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.0080938799,
+        "W-0": 0.029693450425000004,
+        "W-n-0": 0.030085927250000002,
+        "Σ-n-0": 0.009247070625
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.299818288541423,
+          "ratio": 3.6686299749445026,
+          "se": 0.006123728847033209,
+          "ratio_ci95": [
+            3.624861209539731,
+            3.712927230880171
+          ],
+          "ratio_ci90": [
+            3.6318626773947362,
+            3.705769487605134
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.3129493206671365,
+          "ratio": 3.7171205418560005,
+          "se": 0.005625135074093871,
+          "ratio_ci95": [
+            3.676364140613117,
+            3.7583287710948974
+          ],
+          "ratio_ci90": [
+            3.6828864157314545,
+            3.751672889956251
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.13319860367163747,
+          "ratio": 1.1424768759031043,
+          "se": 0.007970982945690508,
+          "ratio_ci95": [
+            1.1247668437495126,
+            1.160465761616991
+          ],
+          "ratio_ci90": [
+            1.1275955157751334,
+            1.1575546317032468
+          ],
+          "p_two_sided": 1.1002734316527584e-62
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 8.490657538833416e-05
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.00404693995,
+        "W-0": 0.014846725212500002,
+        "W-n-0": 0.015042963625000001,
+        "Σ-n-0": 0.0046235353125
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2998182885414367,
+          "ratio": 3.6686299749445532,
+          "se": 0.006123728847033119,
+          "ratio_ci95": [
+            3.624861209539781,
+            3.712927230880222
+          ],
+          "ratio_ci90": [
+            3.6318626773947873,
+            3.7057694876051843
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.3129493206671565,
+          "ratio": 3.7171205418560747,
+          "se": 0.005625135074093715,
+          "ratio_ci95": [
+            3.6763641406131913,
+            3.7583287710949715
+          ],
+          "ratio_ci90": [
+            3.6828864157315295,
+            3.7516728899563248
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.13319860367157765,
+          "ratio": 1.142476875903036,
+          "se": 0.007970982945690765,
+          "ratio_ci95": [
+            1.1247668437494447,
+            1.1604657616169223
+          ],
+          "ratio_ci90": [
+            1.1275955157750654,
+            1.1575546317031782
+          ],
+          "p_two_sided": 1.1002734318011364e-62
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.245328769416878e-05
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 464477.83,
+        "W-0": 391714.54,
+        "W-n-0": 392732.57,
+        "Σ-n-0": 282391.615
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.1703804681465504,
+          "ratio": 0.8433438900623366,
+          "se": 0.003355846857703695,
+          "ratio_ci95": [
+            0.8378151336062184,
+            0.8489091308772649
+          ],
+          "ratio_ci90": [
+            0.8387015599581499,
+            0.8480119161110943
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": -0.16778493159934066,
+          "ratio": 0.8455356631339517,
+          "se": 0.0035772440612426033,
+          "ratio_ci95": [
+            0.8396281186012706,
+            0.8514847725947626
+          ],
+          "ratio_ci90": [
+            0.8405751034301115,
+            0.8505254970245657
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": -0.4976190151221213,
+          "ratio": 0.6079765206448271,
+          "se": 0.004015080708531076,
+          "ratio_ci95": [
+            0.6032108779550642,
+            0.6127798140983219
+          ],
+          "ratio_ci90": [
+            0.6039745394356373,
+            0.6120050192857179
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 308.86935149750633
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 214.74,
+        "W-0": 221.325,
+        "W-n-0": 335.805,
+        "Σ-n-0": 400.595
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 0.03020421549108895,
+          "ratio": 1.0306649902206966,
+          "se": 0.016745560360682255,
+          "ratio_ci95": [
+            0.9973869402828276,
+            1.0650533701247402
+          ],
+          "ratio_ci90": [
+            1.0026637613208835,
+            1.0594482049168914
+          ],
+          "p_two_sided": 0.07127602412595713
+        },
+        "W-n-0": {
+          "beta": 0.4471026403419821,
+          "ratio": 1.5637747974294762,
+          "se": 0.027981539244212983,
+          "ratio_ci95": [
+            1.480322295342225,
+            1.6519318967024452
+          ],
+          "ratio_ci90": [
+            1.4934324137161434,
+            1.637430388289667
+          ],
+          "p_two_sided": 1.804755305350903e-57
+        },
+        "Σ-n-0": {
+          "beta": 0.6235229478697489,
+          "ratio": 1.8654884977181618,
+          "se": 0.02435387583975256,
+          "ratio_ci95": [
+            1.7785354208404496,
+            1.9566927339992264
+          ],
+          "ratio_ci90": [
+            1.7922366892122095,
+            1.9417342341364767
+          ],
+          "p_two_sided": 1.4265474846535673e-144
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 18.039472565693174
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.045,
+        "W-0": 0.005,
+        "W-n-0": 0.015,
+        "Σ-n-0": 0.0
+      },
+      "n_rows": 800,
+      "ratios": {
+        "Σ-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "W-0": {
+          "beta": -2.1972245773362205,
+          "ratio": 0.111111111111111,
+          "se": 1.2909944487358052,
+          "ratio_ci95": [
+            0.008848324135628983,
+            1.3952561889809278
+          ],
+          "ratio_ci90": [
+            0.013290291420247593,
+            0.9289246279082458
+          ],
+          "p_two_sided": 0.08876233463003984
+        },
+        "W-n-0": {
+          "beta": -1.0986122886681096,
+          "ratio": 0.33333333333333337,
+          "se": 1.290994448735804,
+          "ratio_ci95": [
+            0.02654497240688703,
+            4.185768566942779
+          ],
+          "ratio_ci90": [
+            0.039870874260742914,
+            2.786773883724736
+          ],
+          "p_two_sided": 0.3947796742317613
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 195,
+      "dispersion_pearson": 3.2499999999999907
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.008931118375,
+        "W-0": 0.030537080900000003,
+        "W-n-0": 0.030636106350000008,
+        "Σ-n-0": 0.0092526498
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.22940008727954,
+          "ratio": 3.4191777126903156,
+          "se": 0.0055882400490893476,
+          "ratio_ci95": [
+            3.3819326568321304,
+            3.4568329464930785
+          ],
+          "ratio_ci90": [
+            3.387893190161575,
+            3.4507511231192693
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2326376343471068,
+          "ratio": 3.430265400237852,
+          "se": 0.005460340889586243,
+          "ratio_ci95": [
+            3.393750197380838,
+            3.4671734900082045
+          ],
+          "ratio_ci90": [
+            3.3995945442859967,
+            3.4612129660715967
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.03536835032097824,
+          "ratio": 1.0360012499178537,
+          "se": 0.011781969664635475,
+          "ratio_ci95": [
+            1.012351774889981,
+            1.0602031985847977
+          ],
+          "ratio_ci90": [
+            1.0161172385629398,
+            1.0562743639201368
+          ],
+          "p_two_sided": 0.002682961376338642
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.00011657203969513755
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.0044655591875,
+        "W-0": 0.015268540450000001,
+        "W-n-0": 0.015318053175000004,
+        "Σ-n-0": 0.0046263249
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2294000872795485,
+          "ratio": 3.4191777126903444,
+          "se": 0.005588240049089293,
+          "ratio_ci95": [
+            3.3819326568321597,
+            3.456832946493107
+          ],
+          "ratio_ci90": [
+            3.3878931901616043,
+            3.4507511231192978
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2326376343471264,
+          "ratio": 3.430265400237919,
+          "se": 0.005460340889586092,
+          "ratio_ci95": [
+            3.393750197380905,
+            3.467173490008271
+          ],
+          "ratio_ci90": [
+            3.3995945442860642,
+            3.4612129660716633
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.035368350320978376,
+          "ratio": 1.0360012499178537,
+          "se": 0.011781969664635536,
+          "ratio_ci95": [
+            1.012351774889981,
+            1.060203198584798
+          ],
+          "ratio_ci90": [
+            1.0161172385629398,
+            1.056274363920137
+          ],
+          "p_two_sided": 0.0026829613763386805
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 5.828601984756888e-05
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 462770.685,
+        "W-0": 414654.37,
+        "W-n-0": 413153.045,
+        "Σ-n-0": 293291.825
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.10978632076608336,
+          "ratio": 0.8960255769010941,
+          "se": 0.003249179384476892,
+          "ratio_ci95": [
+            0.8903375706189897,
+            0.9017499215525238
+          ],
+          "ratio_ci90": [
+            0.8912496096257899,
+            0.9008271373022391
+          ],
+          "p_two_sided": 2.867122546511876e-250
+        },
+        "W-n-0": {
+          "beta": -0.1134135572921666,
+          "ratio": 0.8927813675146086,
+          "se": 0.0033711158915378787,
+          "ratio_ci95": [
+            0.8869019685409807,
+            0.898699741858139
+          ],
+          "ratio_ci90": [
+            0.8878446016079019,
+            0.8977455837854595
+          ],
+          "p_two_sided": 3.982209648438982e-248
+        },
+        "Σ-n-0": {
+          "beta": -0.456063547507209,
+          "ratio": 0.6337735610889004,
+          "se": 0.0036823169466393036,
+          "ratio_ci95": [
+            0.6292159514891515,
+            0.6383641828925111
+          ],
+          "ratio_ci90": [
+            0.6299464772872586,
+            0.6376238953903114
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 300.36838285054495
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 211.78,
+        "W-0": 243.33,
+        "W-n-0": 363.015,
+        "Σ-n-0": 477.4
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 0.13887054674809013,
+          "ratio": 1.14897535178019,
+          "se": 0.014779137979553176,
+          "ratio_ci95": [
+            1.116170877843933,
+            1.1827439554313464
+          ],
+          "ratio_ci90": [
+            1.1213810746639465,
+            1.1772486524208818
+          ],
+          "p_two_sided": 5.6467152816582136e-21
+        },
+        "W-n-0": {
+          "beta": 0.5388961557228795,
+          "ratio": 1.7141137028992879,
+          "se": 0.030812349489756495,
+          "ratio_ci95": [
+            1.6136602735812253,
+            1.8208205497594236
+          ],
+          "ratio_ci90": [
+            1.629404076788916,
+            1.8032272217321454
+          ],
+          "p_two_sided": 1.719121893542202e-68
+        },
+        "Σ-n-0": {
+          "beta": 0.8128067139023812,
+          "ratio": 2.2542260836716443,
+          "se": 0.024934564243426938,
+          "ratio_ci95": [
+            2.146708773016585,
+            2.367128368868105
+          ],
+          "ratio_ci90": [
+            2.1636422002503637,
+            2.348602387084886
+          ],
+          "p_two_sided": 4.436676864464298e-233
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 20.859494981111528
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 1.005,
+        "W-n-0": 0.9,
+        "Σ-n-0": 0.69
+      },
+      "n_rows": 800,
+      "ratios": {},
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.00810932625,
+        "W-0": 0.0323675609,
+        "W-n-0": 0.03235742875,
+        "Σ-n-0": 0.008875109475
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3841419253236245,
+          "ratio": 3.9913995161300977,
+          "se": 0.00499294823787703,
+          "ratio_ci95": [
+            3.9525301833784257,
+            4.030651091384285
+          ],
+          "ratio_ci90": [
+            3.958753711071196,
+            4.0243145343469084
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.3838288422273495,
+          "ratio": 3.9901500720112395,
+          "se": 0.004829717227407741,
+          "ratio_ci95": [
+            3.952557233818421,
+            4.028100456319089
+          ],
+          "ratio_ci90": [
+            3.9585771863538777,
+            4.0219747772143135
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.09023588154805001,
+          "ratio": 1.0944324096714666,
+          "se": 0.009287730559671395,
+          "ratio_ci95": [
+            1.0746900174675884,
+            1.1145374758032651
+          ],
+          "ratio_ci90": [
+            1.0778398768949116,
+            1.1112803719880144
+          ],
+          "p_two_sided": 2.587189605597462e-22
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 8.547241070109918e-05
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.004054663125,
+        "W-0": 0.01618378045,
+        "W-n-0": 0.016178714375,
+        "Σ-n-0": 0.0044375547375
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3841419253236285,
+          "ratio": 3.9913995161301137,
+          "se": 0.0049929482378770545,
+          "ratio_ci95": [
+            3.9525301833784403,
+            4.030651091384302
+          ],
+          "ratio_ci90": [
+            3.958753711071211,
+            4.024314534346925
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.383828842227356,
+          "ratio": 3.9901500720112653,
+          "se": 0.004829717227407739,
+          "ratio_ci95": [
+            3.9525572338184465,
+            4.028100456319116
+          ],
+          "ratio_ci90": [
+            3.958577186353903,
+            4.021974777214339
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.09023588154792793,
+          "ratio": 1.0944324096713332,
+          "se": 0.009287730559672351,
+          "ratio_ci95": [
+            1.0746900174674552,
+            1.1145374758031312
+          ],
+          "ratio_ci90": [
+            1.0778398768947783,
+            1.1112803719878805
+          ],
+          "p_two_sided": 2.587189605956701e-22
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.27362053505535e-05
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 461650.265,
+        "W-0": 390487.475,
+        "W-n-0": 391707.925,
+        "Σ-n-0": 281580.19
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.167411707744858,
+          "ratio": 0.8458512961104632,
+          "se": 0.0028343208037505166,
+          "ratio_ci95": [
+            0.8411654784599404,
+            0.8505632166950889
+          ],
+          "ratio_ci90": [
+            0.8419170789900282,
+            0.8498038975406325
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": -0.16429112945864588,
+          "ratio": 0.8484949640394994,
+          "se": 0.0028473565370392023,
+          "ratio_ci95": [
+            0.8437729427797702,
+            0.8532434112292945
+          ],
+          "ratio_ci90": [
+            0.8445303422042498,
+            0.8524781976705733
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": -0.49439032844836506,
+          "ratio": 0.6099426586487892,
+          "se": 0.0036025412475337855,
+          "ratio_ci95": [
+            0.605651113169355,
+            0.6142646133228925
+          ],
+          "ratio_ci90": [
+            0.6063390375298328,
+            0.6135676969689566
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 214.4336321007915
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 313.75,
+        "W-0": 321.595,
+        "W-n-0": 560.39,
+        "Σ-n-0": 610.025
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 0.024696499474336032,
+          "ratio": 1.0250039840638063,
+          "se": 0.014408210673901157,
+          "ratio_ci95": [
+            0.9964631947540167,
+            1.0543622412527052
+          ],
+          "ratio_ci90": [
+            1.0009975991608409,
+            1.0495861011329555
+          ],
+          "p_two_sided": 0.08651819282612978
+        },
+        "W-n-0": {
+          "beta": 0.5800364794607583,
+          "ratio": 1.7861035856573215,
+          "se": 0.023846672041060304,
+          "ratio_ci95": [
+            1.7045444002692338,
+            1.8715652218821943
+          ],
+          "ratio_ci90": [
+            1.7174011596009804,
+            1.857554363966507
+          ],
+          "p_two_sided": 1.1038720401422446e-130
+        },
+        "Σ-n-0": {
+          "beta": 0.6649034494880879,
+          "ratio": 1.9443027888445676,
+          "se": 0.028195572384420012,
+          "ratio_ci95": [
+            1.8397710657485098,
+            2.0547737732633298
+          ],
+          "ratio_ci90": [
+            1.8561897404553918,
+            2.036598550416141
+          ],
+          "p_two_sided": 5.920031889674811e-123
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 27.030729183721
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0,
+        "W-n-0": 0.0,
+        "Σ-n-0": 0.0
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "W-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "Σ-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.0062967244749999995,
+        "W-0": 0.023975659475000004,
+        "W-n-0": 0.027235402925,
+        "Σ-n-0": 0.007351936750000001
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3370095523148733,
+          "ratio": 3.807639914974872,
+          "se": 0.006656046166782784,
+          "ratio_ci95": [
+            3.7582895295668353,
+            3.857638324043875
+          ],
+          "ratio_ci90": [
+            3.7661803972319,
+            3.849555834544146
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.4644881302541646,
+          "ratio": 4.325328668676729,
+          "se": 0.008826010622783946,
+          "ratio_ci95": [
+            4.251149714055393,
+            4.400801983101608
+          ],
+          "ratio_ci90": [
+            4.262989329241328,
+            4.388579620349719
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.15493420713957876,
+          "ratio": 1.1675811400750358,
+          "se": 0.019041359913803187,
+          "ratio_ci95": [
+            1.1248096569191668,
+            1.2119790315392789
+          ],
+          "ratio_ci90": [
+            1.1315789487897912,
+            1.2047287731155598
+          ],
+          "p_two_sided": 4.061317257969245e-16
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.00022369226382249613
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.0031483622374999997,
+        "W-0": 0.011987829737500002,
+        "W-n-0": 0.0136177014625,
+        "Σ-n-0": 0.0036759683750000006
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3370095523148684,
+          "ratio": 3.807639914974853,
+          "se": 0.00665604616678286,
+          "ratio_ci95": [
+            3.758289529566816,
+            3.8576383240438568
+          ],
+          "ratio_ci90": [
+            3.766180397231881,
+            3.8495558345441276
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.4644881302541513,
+          "ratio": 4.325328668676671,
+          "se": 0.008826010622784073,
+          "ratio_ci95": [
+            4.2511497140553365,
+            4.40080198310155
+          ],
+          "ratio_ci90": [
+            4.26298932924127,
+            4.388579620349661
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.15493420713953804,
+          "ratio": 1.1675811400749883,
+          "se": 0.01904135991380378,
+          "ratio_ci95": [
+            1.1248096569191195,
+            1.211979031539231
+          ],
+          "ratio_ci90": [
+            1.131578948789744,
+            1.204728773115512
+          ],
+          "p_two_sided": 4.0613172580494454e-16
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.00011184613191125044
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 461668.755,
+        "W-0": 391127.97,
+        "W-n-0": 392481.16,
+        "Σ-n-0": 282125.93
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16581285796831313,
+          "ratio": 0.8472047669762098,
+          "se": 0.0028490899147937164,
+          "ratio_ci95": [
+            0.842487063651332,
+            0.8519488881840699
+          ],
+          "ratio_ci90": [
+            0.8432437694108452,
+            0.8511843706698163
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": -0.1623591173383391,
+          "ratio": 0.8501358511905673,
+          "se": 0.0028568708599843464,
+          "ratio_ci95": [
+            0.845388933378154,
+            0.8549094232775142
+          ],
+          "ratio_ci90": [
+            0.846150320178081,
+            0.8541401548219049
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": -0.4924941218654046,
+          "ratio": 0.6111003331815045,
+          "se": 0.0036160638483630986,
+          "ratio_ci95": [
+            0.6067845600088876,
+            0.6154468024187629
+          ],
+          "ratio_ci90": [
+            0.6074763603056582,
+            0.6147459253009345
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 215.74974751932984
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 307.255,
+        "W-0": 945.23,
+        "W-n-0": 1053.84,
+        "Σ-n-0": 759.105
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.123750262416801,
+          "ratio": 3.0763697905649487,
+          "se": 0.02146703488493433,
+          "ratio_ci95": [
+            2.9496179314093225,
+            3.2085684683164093
+          ],
+          "ratio_ci90": [
+            2.9696382148899745,
+            3.1869373989219323
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2325178932148524,
+          "ratio": 3.4298546809653807,
+          "se": 0.024859881180076343,
+          "ratio_ci95": [
+            3.2667428607048223,
+            3.601110841641815
+          ],
+          "ratio_ci90": [
+            3.292433732041726,
+            3.573011361794372
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.9044620860416268,
+          "ratio": 2.470602593936309,
+          "se": 0.026825292907477958,
+          "ratio_ci95": [
+            2.344062366122188,
+            2.6039738811482818
+          ],
+          "ratio_ci90": [
+            2.363960536103166,
+            2.582055446334422
+          ],
+          "p_two_sided": 3.283522129563498e-249
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 48.05625321176906
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0,
+        "W-n-0": 0.0,
+        "Σ-n-0": 0.0
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "W-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        },
+        "Σ-n-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.008274229025,
+        "W-0": 0.024213763000000003,
+        "W-n-0": 0.029001498450000007,
+        "Σ-n-0": 0.009546002100000001
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.0737754427215278,
+          "ratio": 2.9264071523265955,
+          "se": 0.009091907174545083,
+          "ratio_ci95": [
+            2.8747210173823117,
+            2.9790225797237206
+          ],
+          "ratio_ci90": [
+            2.8829687702829885,
+            2.970500030892681
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2542017515512647,
+          "ratio": 3.5050393651028684,
+          "se": 0.008040351682124785,
+          "ratio_ci95": [
+            3.4502370948651646,
+            3.5607120940193906
+          ],
+          "ratio_ci90": [
+            3.458989692091328,
+            3.5517020993181814
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.14297669078410907,
+          "ratio": 1.1537029094424032,
+          "se": 0.004275625363155811,
+          "ratio_ci95": [
+            1.14407519313326,
+            1.1634116457071275
+          ],
+          "ratio_ci90": [
+            1.1456176374196663,
+            1.161845243805616
+          ],
+          "p_two_sided": 3.603278704579306e-245
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.00014110757693939336
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.0041371145125,
+        "W-0": 0.012106881500000001,
+        "W-n-0": 0.014500749225000003,
+        "Σ-n-0": 0.0047730010500000005
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.073775442721494,
+          "ratio": 2.9264071523264965,
+          "se": 0.009091907174545577,
+          "ratio_ci95": [
+            2.874721017382212,
+            2.979022579723623
+          ],
+          "ratio_ci90": [
+            2.8829687702828886,
+            2.9705000308925835
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.2542017515512591,
+          "ratio": 3.5050393651028493,
+          "se": 0.008040351682124901,
+          "ratio_ci95": [
+            3.450237094865145,
+            3.5607120940193715
+          ],
+          "ratio_ci90": [
+            3.458989692091308,
+            3.5517020993181623
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.142976690784142,
+          "ratio": 1.1537029094424411,
+          "se": 0.0042756253631558595,
+          "ratio_ci95": [
+            1.1440751931332975,
+            1.163411645707166
+          ],
+          "ratio_ci90": [
+            1.1456176374197038,
+            1.1618452438056543
+          ],
+          "p_two_sided": 3.603278703696554e-245
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 7.055378846969706e-05
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 462825.165,
+        "W-0": 392241.625,
+        "W-n-0": 392773.195,
+        "Σ-n-0": 283177.285
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16547132917541874,
+          "ratio": 0.8474941612130288,
+          "se": 0.0028215491213560806,
+          "ratio_ci95": [
+            0.8428203397217428,
+            0.8521939011667711
+          ],
+          "ratio_ci90": [
+            0.8435700239626355,
+            0.8514365528498067
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": -0.16411703606455202,
+          "ratio": 0.8486426942667158,
+          "se": 0.002833387931391768,
+          "ratio_ci95": [
+            0.8439429559862814,
+            0.8533686043870214
+          ],
+          "ratio_ci90": [
+            0.844696789950656,
+            0.8526070314228867
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": -0.49127621911212915,
+          "ratio": 0.6118450473624875,
+          "se": 0.0037291579558232295,
+          "ratio_ci95": [
+            0.6073893657170588,
+            0.6163334149587179
+          ],
+          "ratio_ci90": [
+            0.6081035262330379,
+            0.6156095892108742
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 232.87957055509588
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 263.875,
+        "W-0": 278.615,
+        "W-n-0": 426.285,
+        "Σ-n-0": 483.965
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 0.05435539435928129,
+          "ratio": 1.055859782093462,
+          "se": 0.01687558409482341,
+          "ratio_ci95": [
+            1.0215078880941226,
+            1.0913668826605587
+          ],
+          "ratio_ci90": [
+            1.0269543998580524,
+            1.0855787555869556
+          ],
+          "p_two_sided": 0.00127766917993461
+        },
+        "W-n-0": {
+          "beta": 0.4796326304952407,
+          "ratio": 1.6154808147797384,
+          "se": 0.018122640945102745,
+          "ratio_ci95": [
+            1.5591065096267183,
+            1.6738935068305512
+          ],
+          "ratio_ci90": [
+            1.568035463666577,
+            1.664361759279919
+          ],
+          "p_two_sided": 2.3921299083287862e-154
+        },
+        "Σ-n-0": {
+          "beta": 0.6065370838838084,
+          "ratio": 1.834069161534882,
+          "se": 0.022152985041287543,
+          "ratio_ci95": [
+            1.7561396704892052,
+            1.9154568089428867
+          ],
+          "ratio_ci90": [
+            1.7684415280385908,
+            1.9021322650255366
+          ],
+          "p_two_sided": 4.815405376322734e-165
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 15.604381692767637
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.025,
+        "W-n-0": 0.005,
+        "Σ-n-0": 0.045
+      },
+      "n_rows": 800,
+      "ratios": {},
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.00625383245,
+        "W-0": 0.0239858972,
+        "W-n-0": 0.026575825775000003,
+        "Σ-n-0": 0.006694692175
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3442715721421072,
+          "ratio": 3.8353917166373783,
+          "se": 0.006178476459774116,
+          "ratio_ci95": [
+            3.7892267737571794,
+            3.8821190966791352
+          ],
+          "ratio_ci90": [
+            3.7966112127200087,
+            3.87456834420287
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.4468075282976631,
+          "ratio": 4.249526344181745,
+          "se": 0.008775634883345484,
+          "ratio_ci95": [
+            4.177059791968275,
+            4.323250096782866
+          ],
+          "ratio_ci90": [
+            4.188626573436925,
+            4.311311556016083
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.06812053125159324,
+          "ratio": 1.0704943287243969,
+          "se": 0.02086515061451165,
+          "ratio_ci95": [
+            1.0275995902564559,
+            1.1151796075990095
+          ],
+          "ratio_ci90": [
+            1.0343781372673748,
+            1.1078715476899919
+          ],
+          "p_two_sided": 0.001095416244626417
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.000243615449009471
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.003126916225,
+        "W-0": 0.0119929486,
+        "W-n-0": 0.013287912887500001,
+        "Σ-n-0": 0.0033473460875
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.3442715721421628,
+          "ratio": 3.835391716637591,
+          "se": 0.006178476459773962,
+          "ratio_ci95": [
+            3.7892267737573913,
+            3.8821190966793493
+          ],
+          "ratio_ci90": [
+            3.79661121272022,
+            3.8745683442030847
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.446807528297679,
+          "ratio": 4.249526344181811,
+          "se": 0.008775634883345453,
+          "ratio_ci95": [
+            4.177059791968341,
+            4.3232500967829335
+          ],
+          "ratio_ci90": [
+            4.1886265734369905,
+            4.31131155601615
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.06812053125158779,
+          "ratio": 1.070494328724391,
+          "se": 0.02086515061451203,
+          "ratio_ci95": [
+            1.0275995902564494,
+            1.1151796075990041
+          ],
+          "ratio_ci90": [
+            1.0343781372673684,
+            1.1078715476899865
+          ],
+          "p_two_sided": 0.0010954162446276607
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.00012180772450473605
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 464595.985,
+        "W-0": 415068.25,
+        "W-n-0": 413871.095,
+        "Σ-n-0": 284738.2
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": -0.11272521391613673,
+          "ratio": 0.8933961192110359,
+          "se": 0.0034228796109975917,
+          "ratio_ci95": [
+            0.8874226337452984,
+            0.8994098138479761
+          ],
+          "ratio_ci90": [
+            0.8883803107004568,
+            0.8984402470514244
+          ],
+          "p_two_sided": 7.44428577043758e-238
+        },
+        "W-n-0": {
+          "beta": -0.11561361784959764,
+          "ratio": 0.8908193535077343,
+          "se": 0.0035867980816359675,
+          "ratio_ci95": [
+            0.8845788588774381,
+            0.8971038733516561
+          ],
+          "ratio_ci90": [
+            0.8855792080426073,
+            0.8960905059389762
+          ],
+          "p_two_sided": 6.069756749380689e-228
+        },
+        "Σ-n-0": {
+          "beta": -0.4895980168473986,
+          "ratio": 0.612872709177639,
+          "se": 0.003974589598316109,
+          "ratio_ci95": [
+            0.6081169464888112,
+            0.6176656641842982
+          ],
+          "ratio_ci90": [
+            0.6088790501839674,
+            0.6168925627203807
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 326.1275130088864
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 264.96,
+        "W-0": 290.675,
+        "W-n-0": 447.95,
+        "Σ-n-0": 597.82
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 0.09262693335776004,
+          "ratio": 1.097052385265682,
+          "se": 0.01705114385213546,
+          "ratio_ci95": [
+            1.060995168090231,
+            1.13433498305505
+          ],
+          "ratio_ci90": [
+            1.0667112291029108,
+            1.1282565545215726
+          ],
+          "p_two_sided": 5.5632206159876646e-08
+        },
+        "W-n-0": {
+          "beta": 0.5251027478466684,
+          "ratio": 1.690632548309138,
+          "se": 0.021349945742752275,
+          "ratio_ci95": [
+            1.6213475478247794,
+            1.762878302827114
+          ],
+          "ratio_ci90": [
+            1.6322920816970286,
+            1.7510581871050028
+          ],
+          "p_two_sided": 1.4274128441112243e-133
+        },
+        "Σ-n-0": {
+          "beta": 0.8137108340986657,
+          "ratio": 2.2562650966183795,
+          "se": 0.023359681810775024,
+          "ratio_ci95": [
+            2.15529304713325,
+            2.3619675259424775
+          ],
+          "ratio_ci90": [
+            2.1712164287711424,
+            2.344645203840679
+          ],
+          "p_two_sided": 7.441926371044041e-266
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 15.501284028693746
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.045,
+        "W-0": 1.02,
+        "W-n-0": 0.915,
+        "Σ-n-0": 0.105
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 3.120895416504895,
+          "ratio": 22.666666666596356,
+          "se": 0.3219497920002924,
+          "ratio_ci95": [
+            12.059894210808748,
+            42.60217948795223
+          ],
+          "ratio_ci90": [
+            13.347580512959965,
+            38.492202933388015
+          ],
+          "p_two_sided": 3.205909871537577e-22
+        },
+        "W-n-0": {
+          "beta": 3.012261575502034,
+          "ratio": 20.33333333326893,
+          "se": 0.32584891871120947,
+          "ratio_ci95": [
+            10.736073543971372,
+            38.509837208966104
+          ],
+          "ratio_ci90": [
+            11.897018228922118,
+            34.75193838374776
+          ],
+          "p_two_sided": 2.3667396705942803e-20
+        },
+        "Σ-n-0": {
+          "beta": 0.8472978603840444,
+          "ratio": 2.333333333325962,
+          "se": 0.3858660534479675,
+          "ratio_ci95": [
+            1.0952846597976842,
+            4.970803156702401
+          ],
+          "ratio_ci90": [
+            1.236895588546968,
+            4.40170091543932
+          ],
+          "p_two_sided": 0.02810381584223248
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.44690079146444617
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.0083125696,
+        "W-0": 0.027716323500000004,
+        "W-n-0": 0.031209662575,
+        "Σ-n-0": 0.009464996150000002
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2042527565793435,
+          "ratio": 3.3342666381456554,
+          "se": 0.006437501390016302,
+          "ratio_ci95": [
+            3.292461580269454,
+            3.3766025033893614
+          ],
+          "ratio_ci90": [
+            3.299147194182806,
+            3.3697599288245397
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.3229589657095169,
+          "ratio": 3.754514436649871,
+          "se": 0.007032259005749832,
+          "ratio_ci95": [
+            3.703121050814931,
+            3.8066210803209266
+          ],
+          "ratio_ci90": [
+            3.7113360347583315,
+            3.7981951844277555
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.12983159884062667,
+          "ratio": 1.138636619451625,
+          "se": 0.005012753632671418,
+          "ratio_ci95": [
+            1.127504498578968,
+            1.1498786504091465
+          ],
+          "ratio_ci90": [
+            1.129286878851808,
+            1.148063769654725
+          ],
+          "p_two_sided": 6.6157429194994e-148
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 9.928169381142955e-05
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.0041562848,
+        "W-0": 0.013858161750000002,
+        "W-n-0": 0.0156048312875,
+        "Σ-n-0": 0.004732498075000001
+      },
+      "n_rows": 800,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2042527565793968,
+          "ratio": 3.334266638145833,
+          "se": 0.006437501390015767,
+          "ratio_ci95": [
+            3.292461580269632,
+            3.3766025033895386
+          ],
+          "ratio_ci90": [
+            3.299147194182985,
+            3.369759928824716
+          ],
+          "p_two_sided": 0.0
+        },
+        "W-n-0": {
+          "beta": 1.3229589657094802,
+          "ratio": 3.754514436649733,
+          "se": 0.007032259005750329,
+          "ratio_ci95": [
+            3.703121050814792,
+            3.8066210803207907
+          ],
+          "ratio_ci90": [
+            3.711336034758192,
+            3.79819518442762
+          ],
+          "p_two_sided": 0.0
+        },
+        "Σ-n-0": {
+          "beta": 0.12983159884066048,
+          "ratio": 1.1386366194516637,
+          "se": 0.0050127536326714985,
+          "ratio_ci95": [
+            1.127504498579006,
+            1.1498786504091856
+          ],
+          "ratio_ci90": [
+            1.129286878851846,
+            1.1480637696547638
+          ],
+          "p_two_sided": 6.61574291841398e-148
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.9640846905714705e-05
+    }
+  ],
+  "cells": [
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 15,
+      "rate": 0.075,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 16,
+      "rate": 0.08,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 57,
+      "rate": 0.285,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 53,
+      "rate": 0.265,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 86,
+      "rate": 0.43,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 194,
+      "rate": 0.97,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 184,
+      "rate": 0.92,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": true
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false
+    }
+  ],
+  "exclusions": [
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "Σ-n-0",
+      "cell": "Σ-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_echo": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0,
+      "echo_share": 0.0,
+      "echo_over_5pct": false
+    }
+  ],
+  "echo_cells_over_5pct": [],
+  "repeats": [
+    {
+      "kind": "F-0",
+      "pairs": 160,
+      "agree": 160,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "W-0",
+      "pairs": 160,
+      "agree": 156,
+      "agreement": 0.975,
+      "repeat0_only_success": 1,
+      "repeat1_only_success": 3,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "W-n-0",
+      "pairs": 160,
+      "agree": 145,
+      "agreement": 0.90625,
+      "repeat0_only_success": 11,
+      "repeat1_only_success": 4,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "Σ-n-0",
+      "pairs": 160,
+      "agree": 154,
+      "agreement": 0.9625,
+      "repeat0_only_success": 4,
+      "repeat1_only_success": 2,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "pairs": 160,
+      "agree": 160,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "single-turn control",
+      "pairs": 80,
+      "agree": 80,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 80
+    }
+  ],
+  "model_strings": {
+    "strings": {
+      "gpt-6-luna": 8800
+    },
+    "split": null,
+    "records_with_more_than_one_string": 0
+  },
+  "dropped_records": [
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/observed-nonrec-near/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/observed-nonrec-far/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/observed-rec-near/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/observed-rec-far/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/derived-nonrec-near/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/derived-rec-near/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "F-0",
+      "episode_id": "main-000138/derived-rec-far/base",
+      "repeat": 0,
+      "kept_from": "20261010T055742Z-F-0-gpt-6-luna",
+      "dropped": [
+        {
+          "run_id": "20261010T202127Z-F-0-gpt-6-luna",
+          "exit_reason": "DONE"
+        }
+      ]
+    }
+  ]
+}

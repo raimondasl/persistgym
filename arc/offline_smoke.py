@@ -383,7 +383,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     completed = ap._run(command, Path(scratch), run_env, capture=True)
                 (run_dir / "inner.log").write_text(
                     completed.stdout + completed.stderr, encoding="utf-8"
-                )
+                , newline="\n")
                 rows.append(_collect(label, game, run_dir, completed.returncode))
     except ap.PatchError as error:
         print(f"\nERROR: {error}", file=sys.stderr)
@@ -403,7 +403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "usage": usage,
         "runs": rows,
     }
-    (out_root / "summary.json").write_text(json.dumps(summary, indent=2))
+    (out_root / "summary.json").write_text(json.dumps(summary, indent=2), newline="\n")
     print(f"\nOffline smoke runs ({out_root})")
     for row in rows:
         status = "PASS" if not row["problems"] else "FAIL"

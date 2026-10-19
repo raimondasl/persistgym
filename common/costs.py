@@ -88,7 +88,9 @@ def append_row(row: dict, path: Path = COSTS_CSV) -> None:
     if row["experiment"] not in EXPERIMENT_PHASE and not str(row["experiment"]).startswith("ext_"):
         raise ValueError(f"unknown experiment {row['experiment']!r}; add it to EXPERIMENT_PHASE")
     buf = io.StringIO(newline="")
-    csv.DictWriter(buf, fieldnames=COLUMNS).writerow(row)   # "\r\n"-terminated, as before
+    # LF-terminated, as git stores the file (rows appended before 2026-10-19 ended "\r\n" in
+    # Windows working copies; `read_rows` reads both alike)
+    csv.DictWriter(buf, fieldnames=COLUMNS, lineterminator="\n").writerow(row)
     data = buf.getvalue().encode("utf-8")
     with oslock.locked(path, os.O_RDWR | os.O_CREAT | os.O_APPEND) as fd:
         size = os.lseek(fd, 0, os.SEEK_END)
@@ -97,10 +99,8 @@ def append_row(row: dict, path: Path = COSTS_CSV) -> None:
         else:
             os.lseek(fd, size - 1, os.SEEK_SET)
             last = os.read(fd, 1)
-            if last == b"\r":
+            if last != b"\n":   # a torn last line (ended by its CR, or by nothing)
                 data = b"\n" + data
-            elif last != b"\n":
-                data = b"\r\n" + data
             os.lseek(fd, 0, os.SEEK_END)
         oslock.write_all(fd, data)
         os.fsync(fd)

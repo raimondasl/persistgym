@@ -123,7 +123,9 @@ def test_the_phase_1a_picture(built):
             r4 = f.r4_total(rows, sc, T)
             assert line[f"r4_{sc}_T{T}"] == pytest.approx(r4)
             assert line[f"total_{sc}_T{T}"] == pytest.approx(base + r4)
-    assert line["total_central_T100"] < 500
+    # No cap check here: this picture reads the live ledger, which has since gained spend the
+    # forecast of 2026-10-03 predates (luna's sweep, block 4-haiku under R8), and R4's runs never
+    # ran (R6). The forecast as committed fits the cap (next test).
 
 
 def test_the_committed_forecast_is_the_one_prereg_cites():
@@ -145,6 +147,7 @@ def test_the_committed_forecast_is_the_one_prereg_cites():
             abs=1e-3)
         assert line[f"total_central_T{T}"] == pytest.approx(total, abs=0.005)
     assert line["r4_central_T100"] == pytest.approx(279.49, abs=0.005)
+    assert line["total_central_T100"] < costs.PHASE_CAPS["1a"] == 500
     summary = (out / "summary.md").read_text(encoding="utf-8")
     for number in ("279.49", "318.87", "181.13", "186.44", "52%", "49%", "94%"):
         assert number in summary and number in section, number

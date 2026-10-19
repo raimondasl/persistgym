@@ -83,7 +83,7 @@ class MeteringTransport(httpx.BaseTransport):
         self._lock = threading.Lock()
 
     def _write(self, record: dict[str, Any]) -> None:
-        with self._lock, self._path.open("a", encoding="utf-8") as f:
+        with self._lock, self._path.open("a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(record) + "\n")
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
@@ -190,7 +190,7 @@ def scrub(data: Any) -> Any:
 
 
 def write_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2, default=str) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2, default=str) + "\n", encoding="utf-8", newline="\n")
 
 
 def _csv(value: str) -> list[str]:

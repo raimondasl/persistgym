@@ -1177,7 +1177,7 @@ def redact_keys(path: Path, values: Sequence[str]) -> bool:
     for value in found:
         text = text.replace(value, "[REDACTED]")
     if found:
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8", newline="\n")
         print(f"WARNING: a key value was found in {path} and redacted; check how it got "
               "there before committing anything", file=sys.stderr)
     return bool(found)
@@ -1296,7 +1296,7 @@ def execute(plan: Plan, granted: approval.PaidApproval, harness: Harness, paths:
             if scorecard is not None:  # ARC's scorecard: the counted run's outcome
                 path = out_dir / "scorecard.json"
                 path.write_text(json.dumps(inner.scrub(scorecard), indent=2) + "\n",
-                                encoding="utf-8")
+                                encoding="utf-8", newline="\n")
                 committed.append(path)
         for path in committed:
             redact_keys(path, [os.environ.get(k, "") for k in plan.key_names])

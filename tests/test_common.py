@@ -83,16 +83,16 @@ def test_append_rejects_bad_rows(tmp_path):
         costs.append_row(_row(experiment="mystery"), p)
 
 
-def test_append_writes_whole_rows_with_the_old_bytes(tmp_path):
-    """The locked append (common/oslock.py) writes what the csv module wrote before: one
-    "\\r\\n"-terminated row at the end of the file."""
+def test_append_writes_whole_lf_rows(tmp_path):
+    """The locked append (common/oslock.py) writes one LF-terminated row at the end of the
+    file, as git stores the ledger: no CR on any platform."""
     p = tmp_path / "costs.csv"
     header = (",".join(costs.COLUMNS) + "\n").encode()   # as committed: LF
     p.write_bytes(header)
     costs.append_row(_row(run_id="r1", notes="a, \"quoted\" note"), p)
     data = p.read_bytes()
-    assert data.startswith(header) and data.endswith(b"\r\n")
-    assert data.count(b"\r\n") == 1
+    assert data.startswith(header) and data.endswith(b"\n") and b"\r" not in data
+    assert data.count(b"\n") == 2
     (row,) = costs.read_rows(p)
     assert (row["run_id"], row["notes"]) == ("r1", "a, \"quoted\" note")
 

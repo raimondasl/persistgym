@@ -144,9 +144,9 @@ class JsonlRecorder:
         self.flush_each = flush_each  # a parallel episode's file: on disk after every call
         # kept open across requests and closed by close(), so no context manager here
         if path.suffix == ".gz":
-            self._f = gzip.open(path, "at", encoding="utf-8")  # noqa: SIM115
+            self._f = gzip.open(path, "at", encoding="utf-8", newline="\n")  # noqa: SIM115
         else:
-            self._f = path.open("a", encoding="utf-8")
+            self._f = path.open("a", encoding="utf-8", newline="\n")
 
     def __call__(self, event: dict) -> None:
         self._f.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -565,13 +565,13 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                         run_args=run_args)
         raw_dir.mkdir(parents=True, exist_ok=True)
         (raw_dir / RUN_PLAN).write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n",
-                                        encoding="utf-8")
+                                        encoding="utf-8", newline="\n")
     recorder = JsonlRecorder(raw_path)
     runs: list[EpisodeRun] = []
     play: ParallelPlay | None = None
     exit_reason = "COMPLETED"
     try:
-        with episodes_path.open("a", encoding="utf-8") as f:
+        with episodes_path.open("a", encoding="utf-8", newline="\n") as f:
             def write(r: EpisodeRun) -> None:
                 f.write(json.dumps(episode_record(r, repeat_index), ensure_ascii=False) + "\n")
                 f.flush()
@@ -631,7 +631,7 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                        "".join(json.dumps(x) + "\n" for x in play.plan.log))
         summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded)
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
-                                              encoding="utf-8")
+                                              encoding="utf-8", newline="\n")
         parallel_info = (play.info() if play is not None
                          else {"max_episodes_in_flight": parallel})
         if play is not None and play.abandoned:
@@ -658,7 +658,7 @@ def _write_raw(path: Path, text: str) -> bool:
     accounting. Returns whether it was written."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8", newline="\n")
     except OSError as e:
         print(f"warning: could not write {path}: {e}", file=sys.stderr)
         return False

@@ -229,7 +229,7 @@ def paid_run_lock(path: Path, *, run_id: str, what: str, stream: str) -> Iterato
             f"in {path.with_name(HOLDS_NAME)} (common/hold.py), then delete that file by "
             f"hand, and its spend reservation {reservation_path(path, stream)} if it is "
             f"there") from None
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
         json.dump(info, f)
     try:
         yield info
@@ -280,7 +280,7 @@ def keep(path: Path, info: dict, reason: str, *,
         held.update(token=uuid.uuid4().hex, kept_because=reason)
         if hold_not_recorded:
             held[HOLD_NOT_RECORDED] = True
-        path.write_text(json.dumps(held), encoding="utf-8")
+        path.write_text(json.dumps(held), encoding="utf-8", newline="\n")
         return held
     except (OSError, ValueError):
         return None
@@ -452,7 +452,7 @@ def record_last_run(lock: Path, *, stream: str, run_id: str, costs_csv: Path,
     if timestamp_utc:
         record["row_timestamp_utc"] = str(timestamp_utc)
     with budget_mutex(lock):
-        last_run_path(lock, stream).write_text(json.dumps(record), encoding="utf-8")
+        last_run_path(lock, stream).write_text(json.dumps(record), encoding="utf-8", newline="\n")
 
 
 def _last_run_records(lock: Path) -> list[Path]:

@@ -635,7 +635,7 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
         cfg = _probe_cfg(a, kind)
         exit_reason = "INCOMPLETE"
         try:
-            with gzip.open(raw_dir / "transcript.jsonl.gz", "at", encoding="utf-8") as raw:
+            with gzip.open(raw_dir / "transcript.jsonl.gz", "at", encoding="utf-8", newline="\n") as raw:
                 if fork:
                     def keep(t, raw=raw, trials=trials):
                         raw.write(json.dumps(t, ensure_ascii=False) + "\n")
@@ -665,7 +665,7 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
                                          cell_or_config=f"{tag}-probe")
             finally:
                 _check_accounted(transport, run_id)
-            with (out_dir / "trials.jsonl").open("a", encoding="utf-8") as f:
+            with (out_dir / "trials.jsonl").open("a", encoding="utf-8", newline="\n") as f:
                 for t in trials:
                     f.write(json.dumps(t, ensure_ascii=False) + "\n")
             echoed = {}
@@ -698,7 +698,7 @@ def _probe_locked(a, kind: str, experiment: str, held: paidlock.HeldLock) -> int
                 report = {"run_id": run_id, "model_requested": model,
                           "exit_reason": exit_reason, **report}
                 (out_dir / "fork_report.json").write_text(
-                    json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                    json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
         print(f"{model}: {exit_reason}; echoed {echoed}; results in {out_dir}")
         if fork:
             b = report["condition_b"]
@@ -722,7 +722,7 @@ def cmd_pilot_report(a) -> int:
     out = RESULTS / a.experiment / ("pooled-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"))
     out.mkdir(parents=True, exist_ok=True)
     (out / "pilot_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False)
-                                           + "\n", encoding="utf-8")
+                                           + "\n", encoding="utf-8", newline="\n")
     print(json.dumps(report, indent=2, ensure_ascii=False))
     print(f"written: {_rel(out / 'pilot_report.json')}", file=sys.stderr)
     return 0
@@ -798,7 +798,7 @@ def cmd_reasoning_check(a) -> int:
         out = results_root / PILOT_EXPERIMENT / f"{name}-{k}"
     out.mkdir(parents=True)
     path = out / registered.CHECK_FILE
-    path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps(report, indent=2, ensure_ascii=False))
     print(f"verdict: {report['verdict']} ({report['verdict_reason']})", file=sys.stderr)
     print(f"written: {_rel(path)}", file=sys.stderr)
@@ -907,7 +907,7 @@ def cmd_count_tokens(a) -> int:
     out = (Path(a.out) if a.out else RESULTS / "token_count"
            / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") / "token_count.json")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps(report, indent=2, ensure_ascii=False))
     print(f"written: {_rel(out)}", file=sys.stderr)
     return 0

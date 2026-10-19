@@ -1,3 +1,7 @@
+# Text files are stored and checked out with LF on every platform, whatever a clone's
+# core.autocrlf, so that hashes recorded in results match every checkout (2026-10-19).
+* text=auto eol=lf
+
 # The G1 spot-check CSVs (findings template and the researcher's export) are RFC 4180 with
 # CRLF line ends: keep them byte for byte, without line-end conversion.
 results/spotcheck/**/*.csv -text

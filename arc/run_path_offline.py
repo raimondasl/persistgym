@@ -83,7 +83,7 @@ def driver(argv: list[str]) -> int:
         args = ["accept", "--configs", config_ids, "--out", out,
                 "--expect-config-hashes", json.dumps(hashes), "--cost-cap-usd", str(CAP_USD)]
     code = rpi.main(args)
-    Path(out, "bodies.json").write_text(json.dumps(stub.bodies, indent=1), encoding="utf-8")
+    Path(out, "bodies.json").write_text(json.dumps(stub.bodies, indent=1), encoding="utf-8", newline="\n")
     return code
 
 
@@ -168,7 +168,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 done = ap._run(command, scratch, run_env, capture=True)
                 raw = out_root / name
                 rp.collect_outputs(scratch, raw)
-                (raw / "driver.log").write_text(done.stdout + done.stderr, encoding="utf-8")
+                (raw / "driver.log").write_text(done.stdout + done.stderr, encoding="utf-8", newline="\n")
             plan = rp.Plan(experiment="arc_pilot" if case["mode"] == "play" else "gemini_probe",
                            approved_block="offline-check", planned_usd=CAP_USD,
                            milestone="M0", run_id=name, labels=labels,

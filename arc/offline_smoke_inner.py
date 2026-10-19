@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     recorder = getattr(agent, "recorder", None)
     if recorder is not None and Path(recorder.filename).exists():
         shutil.copyfile(recorder.filename, run_dir / "recording.jsonl")
-    (args.out / "bodies.json").write_text(json.dumps(stub.bodies, indent=1))
+    (args.out / "bodies.json").write_text(json.dumps(stub.bodies, indent=1), newline="\n")
     result = {
         "config": args.config,
         "game": args.game,
@@ -321,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
         "summaries": stub.summaries,
         "usage_mode": args.usage,
     }
-    (args.out / "result.json").write_text(json.dumps(result, indent=2))
+    (args.out / "result.json").write_text(json.dumps(result, indent=2), newline="\n")
     return 0
 
 

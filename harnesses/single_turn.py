@@ -395,13 +395,13 @@ def run_controls(prompts: list[Prompt], cfg: HarnessConfig, transport: runner.Tr
                         run_args=run_args)
         raw_dir.mkdir(parents=True, exist_ok=True)
         (raw_dir / runner.RUN_PLAN).write_text(
-            json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     recorder = runner.JsonlRecorder(raw_path)
     runs: list[PromptRun] = []
     play: ParallelPlay | None = None
     exit_reason = "COMPLETED"
     try:
-        with episodes_path.open("a", encoding="utf-8") as f:
+        with episodes_path.open("a", encoding="utf-8", newline="\n") as f:
             def write(r: PromptRun) -> None:
                 f.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")
                 f.flush()
@@ -462,7 +462,7 @@ def run_controls(prompts: list[Prompt], cfg: HarnessConfig, transport: runner.Tr
         summary = blinding.run_summary([asdict(r) for r in runs], blinded=blinded,
                                        reply_actions=True)
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
-                                              encoding="utf-8")
+                                              encoding="utf-8", newline="\n")
         parallel_info = (play.info() if play is not None
                          else {"max_episodes_in_flight": parallel})
         if play is not None and play.abandoned:

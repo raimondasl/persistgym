@@ -226,10 +226,10 @@ def main(argv: list[str] | None = None) -> int:
             out = a.out_dir or results / "gates" / name
             out.mkdir(parents=True, exist_ok=True)
             for f in audit_dir.glob("audit_*.json"):
-                (out / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+                (out / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
             (out / "g1.json").write_text(json.dumps(g, indent=2, ensure_ascii=False) + "\n",
-                                         encoding="utf-8")
-            (out / "summary.md").write_text(text, encoding="utf-8")
+                                         encoding="utf-8", newline="\n")
+            (out / "summary.md").write_text(text, encoding="utf-8", newline="\n")
             print(f"written: {out.relative_to(REPO_ROOT).as_posix()}")
     return 0
 

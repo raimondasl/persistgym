@@ -67,7 +67,7 @@ DEFAULT_OUT = REPO_ROOT / "results" / "raw" / "persistgym"
 
 
 def _open(path: Path, gz: bool):
-    return gzip.open(path, "wt", encoding="utf-8") if gz else path.open("w", encoding="utf-8")
+    return gzip.open(path, "wt", encoding="utf-8", newline="\n") if gz else path.open("w", encoding="utf-8", newline="\n")
 
 
 def _rng(xs: list) -> list:
@@ -198,8 +198,8 @@ def run(args: argparse.Namespace) -> int:
         "tiktoken": metadata.version("tiktoken"), "command": " ".join(sys.argv),
         **git_state(),
     }
-    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8", newline="\n")
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
     print_summary(summary, out)
     return 0 if summary.get("validity_pass", True) else 1
 
@@ -294,7 +294,7 @@ def run_partial_memory(args: argparse.Namespace) -> int:
     pm.update(split=args.split, indices=[args.start, args.start + args.n], preset=args.preset,
               config_hash=config_hash(cfg.to_dict()), generator_version=GENERATOR_VERSION)
     if args.out:
-        Path(args.out).write_text(json.dumps(pm, indent=2) + "\n", encoding="utf-8")
+        Path(args.out).write_text(json.dumps(pm, indent=2) + "\n", encoding="utf-8", newline="\n")
     print_partial_memory(pm)
     return 0 if pm["pass"] else 1
 
@@ -414,7 +414,7 @@ def run_audit(args: argparse.Namespace) -> int:
                        and _oracles_pass(oracles_out)
                        and all(p["pass"] for p in pm.values()))
     if args.out:
-        Path(args.out).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        Path(args.out).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"audited {n_eps} episodes ({summary['episodes_per_task_cell']} per task cell) from "
           f"{args.n} templates, {args.split} {args.start}-{args.start + args.n - 1}, preset "
           f"{args.preset}")

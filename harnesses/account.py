@@ -755,7 +755,7 @@ def write(rec: Recovery) -> list[str]:
     def summary() -> None:
         rec.out_dir.mkdir(parents=True, exist_ok=True)
         (rec.out_dir / "summary.json").write_text(json.dumps(rec.summary, indent=2) + "\n",
-                                                  encoding="utf-8")
+                                                  encoding="utf-8", newline="\n")
 
     def meta() -> None:
         nonlocal parallel_path

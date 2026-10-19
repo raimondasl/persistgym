@@ -846,7 +846,7 @@ def write(out_dir: Path, run_id: str, started: str, fc: Forecast) -> Path:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "forecast.json").write_text(
-        json.dumps(to_json(fc), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        json.dumps(to_json(fc), indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     (out_dir / "forecast.csv").write_text(_csv(table_rows(fc)), encoding="utf-8", newline="")
     (out_dir / "summary.md").write_text("\n".join(summary_lines(fc)) + "\n", encoding="utf-8",
                                         newline="\n")

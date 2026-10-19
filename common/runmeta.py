@@ -131,5 +131,5 @@ def write_meta(run_dir: Path, *, git: dict | None = None, **fields) -> Path:
     meta = build_meta(git=git, **fields)
     run_dir.mkdir(parents=True, exist_ok=True)
     out = run_dir / "meta.json"
-    out.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     return out

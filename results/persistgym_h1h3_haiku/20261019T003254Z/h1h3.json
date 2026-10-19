@@ -1,0 +1,3633 @@
+{
+  "generated_utc": "2026-10-19T00:32:54+00:00",
+  "git_commit": "19ea535dfc7b60875a859038c882d1e406c2a9ea",
+  "git_dirty": false,
+  "prereg_version": "1.0",
+  "status": "FINAL",
+  "provisional_reasons": [],
+  "deviations": [],
+  "sweep_closed": "results/decisions.md, 2026-10-18: Haiku's sweep closed (R8) (PR #73)",
+  "warnings": [
+    "20261018T144829Z-W-0-claude-haiku-5-5: 3 episode(s) stopped at their need step's first call (no recorded need request), so §2.8's replay does not apply to them"
+  ],
+  "inputs": {
+    "results_root": "results",
+    "raw_root": "results/raw",
+    "draw_json": "results/draw/20261002T033145Z/draw.json",
+    "input_list": [
+      "20261018T141157Z-F-0-claude-haiku-5-5",
+      "20261018T144829Z-W-0-claude-haiku-5-5",
+      "20261018T154817Z-W-0-claude-haiku-5-5",
+      "20261018T154918Z-W-0-claude-haiku-5-5",
+      "20261018T162133Z-F-0-claude-haiku-5-5",
+      "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "20261018T225735Z-single-turn-claude-haiku-5-5",
+      "20261018T225747Z-single-turn-claude-haiku-5-5",
+      "20261018T225838Z-single-turn-claude-haiku-5-5",
+      "20261018T230235Z-F-0-claude-haiku-5-5-repeat1",
+      "20261018T230709Z-W-0-claude-haiku-5-5-repeat1",
+      "20261018T231530Z-F-0-claude-haiku-5-5-repeat1",
+      "20261018T231953Z-single-turn-claude-haiku-5-5-repeat1"
+    ],
+    "runs": [
+      {
+        "run_id": "20261018T141157Z-F-0-claude-haiku-5-5",
+        "cell": "F-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T14:11:59+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1600,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T144829Z-W-0-claude-haiku-5-5",
+        "cell": "W-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T14:48:31+00:00",
+        "exit_reason": "ABORTED_API_ERRORS",
+        "records": 1034,
+        "records_counted": 1017,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+        "cell": "W-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T15:48:20+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 8,
+        "records_counted": 1,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T154918Z-W-0-claude-haiku-5-5",
+        "cell": "W-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T15:49:20+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 584,
+        "records_counted": 582,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T162133Z-F-0-claude-haiku-5-5",
+        "cell": "F-0",
+        "variants": [
+          "restated"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T16:21:35+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 1600,
+        "records_counted": 1600,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T165717Z-single-turn-claude-haiku-5-5",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T16:57:19+00:00",
+        "exit_reason": "ABORTED_API_ERRORS",
+        "records": 356,
+        "records_counted": 354,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T225735Z-single-turn-claude-haiku-5-5",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T22:57:38+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 4,
+        "records_counted": 1,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T225747Z-single-turn-claude-haiku-5-5",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T22:57:48+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 4,
+        "records_counted": 1,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T225838Z-single-turn-claude-haiku-5-5",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 0,
+        "started_utc": "2026-10-18T22:58:39+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 444,
+        "records_counted": 444,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T230235Z-F-0-claude-haiku-5-5-repeat1",
+        "cell": "F-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-18T23:02:37+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T230709Z-W-0-claude-haiku-5-5-repeat1",
+        "cell": "W-0",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-18T23:07:11+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T231530Z-F-0-claude-haiku-5-5-repeat1",
+        "cell": "F-0",
+        "variants": [
+          "restated"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-18T23:15:32+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 160,
+        "records_counted": 160,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      },
+      {
+        "run_id": "20261018T231953Z-single-turn-claude-haiku-5-5-repeat1",
+        "cell": "single-turn",
+        "variants": [
+          "base"
+        ],
+        "repeat_index": 1,
+        "started_utc": "2026-10-18T23:19:55+00:00",
+        "exit_reason": "COMPLETED",
+        "records": 80,
+        "records_counted": 80,
+        "model_returned": [
+          "claude-haiku-5-5"
+        ]
+      }
+    ],
+    "rerun_links": {
+      "20261018T154817Z-W-0-claude-haiku-5-5": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "20261018T154918Z-W-0-claude-haiku-5-5": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "20261018T225735Z-single-turn-claude-haiku-5-5": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "20261018T225747Z-single-turn-claude-haiku-5-5": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "20261018T225838Z-single-turn-claude-haiku-5-5": "20261018T165717Z-single-turn-claude-haiku-5-5"
+    },
+    "skipped": []
+  },
+  "profile": {
+    "model": "claude-haiku-5-5",
+    "name": "Haiku",
+    "experiment": "persistgym_haiku",
+    "registered_experiment": "persistgym_haiku",
+    "out_name": "persistgym_h1h3_haiku",
+    "T": 200,
+    "api": "messages",
+    "cells": [
+      "F-0",
+      "W-0"
+    ],
+    "cells_not_run": [
+      "W-n-0"
+    ],
+    "replication": true,
+    "prereg": "PREREG.md §17.8 (amendment R8): §3 H1, §3 H3, §2.8, §2.9, §9.1-§9.5, §13 as on luna; outside the Holm family"
+  },
+  "model": "claude-haiku-5-5",
+  "generator_config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+  "templates": 200,
+  "seed": 4086943125952605534,
+  "bootstrap": {
+    "seed": 4086943125952605544,
+    "resamples": 10000,
+    "method": "percentile",
+    "levels": [
+      0.9,
+      0.95
+    ]
+  },
+  "h1_separation_rule": "firth",
+  "pre_specified": [
+    "the §9.1 GLM's harness levels are F-0 and W-0 on all 8 task cells, with W-n-0 as a third level in a sensitivity fit if it runs",
+    "H1's model check reads a Firth-penalized fit when the logit-scale Δ_H1 is not finite, with max_iter 1,000",
+    "H3's model check is fitted even when only one template has outcome variation",
+    "the Bayesian GLMM uses bambi's default priors, 4 chains × 1,000 draws after 1,000 tuning steps",
+    "the seeds are luna's: bootstrap SEED + 10 and Bayesian SEED + 11"
+  ],
+  "primary_episodes": 5600,
+  "accounting_check": {
+    "warnings": [
+      "20261018T144829Z-W-0-claude-haiku-5-5: 3 episode(s) stopped at their need step's first call (no recorded need request), so §2.8's replay does not apply to them"
+    ],
+    "missing_transcripts": [],
+    "checked": 1770,
+    "runs": [
+      {
+        "run_id": "20261018T144829Z-W-0-claude-haiku-5-5",
+        "episodes_checked": 1018,
+        "stopped_at_need_call": 3,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      },
+      {
+        "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+        "episodes_checked": 8,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      },
+      {
+        "run_id": "20261018T154918Z-W-0-claude-haiku-5-5",
+        "episodes_checked": 584,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      },
+      {
+        "run_id": "20261018T230709Z-W-0-claude-haiku-5-5-repeat1",
+        "episodes_checked": 160,
+        "stopped_at_need_call": 0,
+        "keep_start_differs": 0,
+        "user_messages_differ": 0
+      }
+    ]
+  },
+  "h1": {
+    "cells": {
+      "F-0 NR": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0,
+        "exact": "1"
+      },
+      "W-0 NR": {
+        "n": 200,
+        "successes": 0,
+        "rate": 0.0,
+        "exact": "0"
+      },
+      "F-0 R": {
+        "n": 200,
+        "successes": 198,
+        "rate": 0.99,
+        "exact": "99/100"
+      },
+      "W-0 R": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0,
+        "exact": "1"
+      }
+    },
+    "penalty_nr": {
+      "estimate": 1.0,
+      "exact": "1",
+      "ci90": [
+        1.0,
+        1.0
+      ],
+      "ci95": [
+        1.0,
+        1.0
+      ],
+      "undefined_resamples": 0
+    },
+    "penalty_r": {
+      "estimate": -0.01,
+      "exact": "-1/100",
+      "ci90": [
+        -0.025000000000000022,
+        0.0
+      ],
+      "ci95": [
+        -0.025000000000000022,
+        0.0
+      ],
+      "undefined_resamples": 0
+    },
+    "delta_h1": {
+      "estimate": 1.01,
+      "exact": "101/100",
+      "ci90": [
+        1.0,
+        1.025
+      ],
+      "ci95": [
+        1.0,
+        1.025
+      ],
+      "undefined_resamples": 0
+    },
+    "computable": true,
+    "p_one_sided": 0.0,
+    "kill": false,
+    "manipulation_check": true,
+    "recoverable_within_5pp": true,
+    "model_check": {
+      "model": "§9.1 confirmatory GLM (statsmodels), W-0 x R: the logit-scale Δ_H1",
+      "rule": "firth",
+      "estimate": 104.63867179877889,
+      "logit_status": "+inf",
+      "h1_cells_no_variation": [
+        "F-0 observed-nonrec-far: all 1 (200 episodes)",
+        "W-0 observed-nonrec-far: all 0 (200 episodes)",
+        "W-0 observed-rec-far: all 1 (200 episodes)"
+      ],
+      "agrees": true,
+      "sign": 1,
+      "firth_estimate": 8.554653592053238,
+      "basis": "a Firth-penalized fit of the §9.1 GLM (rule 'firth')",
+      "standin_estimate": 142.30901558629594,
+      "standin_agrees": true,
+      "standin_sign_disagrees": false
+    },
+    "model_check_sensitivity": {
+      "literal": {
+        "agrees": true,
+        "sign": 1,
+        "basis": "the sign of the logit-scale Δ_H1's limit, from the cells without outcome variation (rule 'literal'; an undefined sign does not agree)"
+      },
+      "probability-scale": {
+        "agrees": true,
+        "sign": null,
+        "basis": "not applicable: an H1 cell has no outcome variation, so the probability-scale sign is read (rule 'probability-scale')"
+      }
+    },
+    "scales_disagree_in_sign": false,
+    "w_n_0_alongside": {
+      "status": "pre-registered, not run (budget)",
+      "note": "W-n-0 did not run (R8's size rule): no reading"
+    }
+  },
+  "h1_lookups": {
+    "task_cell": "observed-rec-far",
+    "mean_F0": 0.0,
+    "mean_W0": 1.0,
+    "n_F0": 200,
+    "n_W0": 200,
+    "lookups_F0": 0,
+    "lookups_W0": 200,
+    "difference": {
+      "estimate": 1.0,
+      "exact": "1",
+      "ci90": [
+        1.0,
+        1.0
+      ],
+      "ci95": [
+        1.0,
+        1.0
+      ],
+      "undefined_resamples": 0
+    },
+    "ratio": null,
+    "met": true,
+    "rule": "F-0 looked nothing up, so the ratio is undefined: met iff the lower bound of the 90% CI of the difference (W-0 - F-0) is above 0"
+  },
+  "h1_tokens": {
+    "R_need": {
+      "means": {
+        "F-0 near": 48792.76,
+        "F-0 far": 48739.94,
+        "W-0 near": 32155.88,
+        "W-0 far": 63690.745
+      },
+      "n": {
+        "F-0 near": 200,
+        "F-0 far": 200,
+        "W-0 near": 200,
+        "W-0 far": 200
+      },
+      "ratio": {
+        "estimate": 1.9828338502644196,
+        "exact": "817801903949/412440963644",
+        "ci90": [
+          1.9574970851008913,
+          2.003364774705356
+        ],
+        "ci95": [
+          1.9521933898799075,
+          2.0043950889069153
+        ],
+        "undefined_resamples": 0
+      },
+      "at_least_1_30": true,
+      "episodes_left_out_need_phase_incomplete": 0,
+      "episodes_left_out_no_tokens": 0,
+      "prediction_met": true
+    },
+    "R_tok": {
+      "means": {
+        "F-0 near": 644055.655,
+        "F-0 far": 643019.81,
+        "W-0 near": 544149.465,
+        "W-0 far": 575753.85
+      },
+      "n": {
+        "F-0 near": 200,
+        "F-0 far": 200,
+        "W-0 near": 200,
+        "W-0 far": 200
+      },
+      "ratio": {
+        "estimate": 1.0597848071136158,
+        "exact": "2472116819870145/2332659237306011",
+        "ci90": [
+          1.0574723468789324,
+          1.0626815498567102
+        ],
+        "ci95": [
+          1.057145806030975,
+          1.0633339818543082
+        ],
+        "undefined_resamples": 0
+      },
+      "at_least_1_30": false
+    },
+    "literal": {
+      "ratio": {
+        "estimate": 0.895390532369446,
+        "exact": "57575385/64301981",
+        "ci90": [
+          0.8906416015361288,
+          0.9000109314398963
+        ],
+        "ci95": [
+          0.889782277545296,
+          0.9011340716658638
+        ],
+        "undefined_resamples": 0
+      },
+      "at_least_1_30": false
+    }
+  },
+  "h1_predictions": {
+    "parts": {
+      "non-recoverable drop >= 25pp (manipulation check)": true,
+      "recoverable within 5pp": true,
+      "lookups rise >= 30%": true,
+      "need-phase tokens rise >= 30% (R_need)": true
+    },
+    "all_met": true
+  },
+  "h3": {
+    "cells": {
+      "single-turn": {
+        "n": 400,
+        "successes": 399,
+        "rate": 0.9975,
+        "exact": "399/400"
+      },
+      "F-0": {
+        "n": 400,
+        "successes": 400,
+        "rate": 1.0,
+        "exact": "1"
+      }
+    },
+    "delta_h3": {
+      "estimate": -0.0025,
+      "exact": "-1/400",
+      "ci90": [
+        -0.007499999999999951,
+        0.0
+      ],
+      "ci95": [
+        -0.007499999999999951,
+        0.0
+      ],
+      "undefined_resamples": 0
+    },
+    "computable": true,
+    "p_one_sided": 0.0,
+    "prediction_holds": true,
+    "ci90_above_margin": false,
+    "per_cell": {
+      "observed-nonrec-far": {
+        "single-turn": {
+          "n": 200,
+          "successes": 199,
+          "rate": 0.995,
+          "exact": "199/200"
+        },
+        "F-0": {
+          "n": 200,
+          "successes": 200,
+          "rate": 1.0,
+          "exact": "1"
+        },
+        "difference": {
+          "estimate": -0.005,
+          "exact": "-1/200",
+          "ci90": [
+            -0.015000000000000013,
+            0.0
+          ],
+          "ci95": [
+            -0.015000000000000013,
+            0.0
+          ],
+          "undefined_resamples": 0
+        }
+      },
+      "derived-nonrec-far": {
+        "single-turn": {
+          "n": 200,
+          "successes": 200,
+          "rate": 1.0,
+          "exact": "1"
+        },
+        "F-0": {
+          "n": 200,
+          "successes": 200,
+          "rate": 1.0,
+          "exact": "1"
+        },
+        "difference": {
+          "estimate": 0.0,
+          "exact": "0",
+          "ci90": [
+            0.0,
+            0.0
+          ],
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "undefined_resamples": 0
+        }
+      }
+    },
+    "model_check": {
+      "model": "§9.4: template fixed effects + arm (statsmodels)",
+      "ame": -0.0024999999941488714,
+      "agrees": true,
+      "ame_informative": -0.4999999988297743,
+      "n_pairs": 400,
+      "n_pairs_informative": 2,
+      "arm_logit": -20.566068521680602,
+      "arm_logit_status": "-inf",
+      "arm_logit_sign": -1,
+      "arm_logit_ci90": null,
+      "arm_logit_ci95": null,
+      "arm_no_variation": [
+        "F-0: all 1 (2 episodes)"
+      ],
+      "powersim_model": "power_sim's: template fixed effects + derived term + arm (emulation)",
+      "powersim_ame": -0.0024999999989113327,
+      "powersim_agrees": true,
+      "powersim_disagrees": false
+    },
+    "scales_disagree_in_sign": false
+  },
+  "replication": {
+    "alpha_one_sided": 0.05,
+    "holm": "outside luna's Holm family (R8; R6 change 9): unadjusted p-values only",
+    "H1": {
+      "test": "H0: Δ_H1 ≤ 0",
+      "p_one_sided": 0.0,
+      "rejects_unadjusted": true,
+      "model_agrees": true,
+      "label": "the unadjusted test rejects, and the model check agrees",
+      "kill_reading": false,
+      "kill_note": "H1's kill rule reads luna only (R8): this reading neither kills nor confirms H1",
+      "sensitivity_rules": {
+        "literal": {
+          "model_agrees": true,
+          "label": "the unadjusted test rejects, and the model check agrees"
+        },
+        "probability-scale": {
+          "model_agrees": true,
+          "label": "the unadjusted test rejects, and the model check agrees"
+        }
+      }
+    },
+    "H3": {
+      "test": "H0: Δ_H3 ≥ 5pp",
+      "p_one_sided": 0.0,
+      "rejects_unadjusted": true,
+      "model_agrees": true,
+      "label": "the unadjusted test rejects, and the model check agrees",
+      "ci90_above_margin": false
+    }
+  },
+  "glm_9_1": {
+    "n_rows": 3200,
+    "n_templates": 200,
+    "n_templates_informative": 200,
+    "n_rows_fitted": 3200,
+    "coefficients": {
+      "R": -24.459944742651402,
+      "D": -2.96354308774901e-07,
+      "N": -23.221297395959027,
+      "R:D": 2.9635445575855976e-07,
+      "R:N": 24.459944742651345,
+      "D:N": -1.238647050338038,
+      "R:D:N": -2.9635445971205555e-07,
+      "W-0": -80.17872728100593,
+      "W-0:D": 2.962510436162157e-07,
+      "W-0:N": 103.40002446375212,
+      "W-0:R:D": -2.868029877647423e-07,
+      "W-0:R:N": -104.63867180465563,
+      "W-0:D:N": 1.238647041015216,
+      "W-0:R:D:N": 2.962420235395211e-07,
+      "W-0:R": 104.63867179877889
+    },
+    "target": "W-0:R",
+    "estimate": 104.63867179877889,
+    "se_available": false,
+    "fitted_by": "statsmodels GLM (§9.1)",
+    "contrasts": {
+      "penalty_nr_logit": {
+        "estimate": 80.17872728100593,
+        "se": null,
+        "z": null,
+        "p_two_sided": null,
+        "ci90": null,
+        "ci95": null,
+        "logit_status": "+inf"
+      },
+      "penalty_r_logit": {
+        "estimate": -24.459944517772954,
+        "se": null,
+        "z": null,
+        "p_two_sided": null,
+        "ci90": null,
+        "ci95": null,
+        "logit_status": "-inf"
+      }
+    },
+    "estimate_emulated": 109.70686294984668,
+    "emulated_sign_disagrees": false,
+    "se": null,
+    "z": null,
+    "p_two_sided": null,
+    "ci90": null,
+    "ci95": null,
+    "n_templates_dropped": 0,
+    "converged": true,
+    "note": "statsmodels gives no finite cluster-robust SE (for example under quasi-separation)",
+    "emulation_route": "newton",
+    "cells": [
+      "F-0",
+      "W-0"
+    ],
+    "no_variation_cells": [
+      "F-0 derived-nonrec-far: all 1 (200 episodes)",
+      "F-0 observed-nonrec-far: all 1 (200 episodes)",
+      "W-0 derived-nonrec-far: all 0 (200 episodes)",
+      "W-0 derived-nonrec-near: all 1 (200 episodes)",
+      "W-0 derived-rec-far: all 1 (200 episodes)",
+      "W-0 derived-rec-near: all 1 (200 episodes)",
+      "W-0 observed-nonrec-far: all 0 (200 episodes)",
+      "W-0 observed-nonrec-near: all 1 (200 episodes)",
+      "W-0 observed-rec-far: all 1 (200 episodes)",
+      "W-0 observed-rec-near: all 1 (200 episodes)"
+    ],
+    "logit_status": "+inf",
+    "h1_cells_no_variation": [
+      "F-0 observed-nonrec-far: all 1 (200 episodes)",
+      "W-0 observed-nonrec-far: all 0 (200 episodes)",
+      "W-0 observed-rec-far: all 1 (200 episodes)"
+    ]
+  },
+  "glm_9_1_with_w_n_0": {
+    "status": "pre-registered, not run (budget)",
+    "note": "W-n-0 did not run"
+  },
+  "glm_9_1_firth": {
+    "estimate": 8.554653592053238,
+    "note": null
+  },
+  "glm_h1_standin": {
+    "estimate": 142.30901558629594,
+    "n_templates_informative": 200
+  },
+  "glm_h3": {
+    "n_rows": 800,
+    "n_templates": 200,
+    "n_templates_informative": 1,
+    "n_rows_fitted": 4,
+    "coefficients": {
+      "arm": -20.566068521680602
+    },
+    "target": "arm",
+    "estimate": -20.566068521680602,
+    "se_available": false,
+    "fitted_by": "statsmodels GLM (§9.1)",
+    "contrasts": {},
+    "estimate_emulated": -20.566068520472935,
+    "emulated_sign_disagrees": false,
+    "se": null,
+    "z": null,
+    "p_two_sided": null,
+    "ci90": null,
+    "ci95": null,
+    "n_templates_dropped": 199,
+    "converged": true,
+    "note": "one template with outcome variation: point estimates only, no cluster-robust SE",
+    "emulation_route": "newton",
+    "model": "§9.4: template fixed effects + arm (statsmodels)",
+    "logit_status": "-inf",
+    "arm_no_variation": [
+      "F-0: all 1 (2 episodes)"
+    ],
+    "ame": -0.0024999999941488714,
+    "ame_informative": -0.4999999988297743,
+    "n_pairs": 400,
+    "n_pairs_informative": 2
+  },
+  "glm_h3_powersim": {
+    "model": "power_sim's: template fixed effects + derived term + arm (emulation)",
+    "n_templates_informative": 1,
+    "arm_logit": -42.88628951787692,
+    "ame": -0.0024999999989113327,
+    "ame_informative": -0.4999999997822665,
+    "n_pairs": 400,
+    "emulation_route": "newton",
+    "n_pairs_informative": 2
+  },
+  "bayesian_glmm": {
+    "status": "fitted",
+    "model": "success ~ W*R*D*N + (1|template)",
+    "family": "bernoulli",
+    "priors": "bambi's defaults",
+    "target": "W:R",
+    "seed": 4086943125952605545,
+    "chains": 4,
+    "draws": 1000,
+    "tune": 1000,
+    "n_rows": 3200,
+    "n_templates": 200,
+    "versions": {
+      "bambi": "0.21.0",
+      "pymc": "6.3.2",
+      "arviz": "1.3.0"
+    },
+    "median": 8.711233613057374,
+    "mean": 8.717657533285484,
+    "ci90": [
+      6.901442956084723,
+      10.603917713052342
+    ],
+    "ci95": [
+      6.551856082012744,
+      10.95553747749484
+    ],
+    "p_positive": 1.0,
+    "rhat": 0.9999967120213911,
+    "ess_bulk": 2282.622262902597,
+    "rhat_max_all": 1.004558169833249,
+    "divergences": 1,
+    "converged": true,
+    "sign_disagrees_with_glm": false
+  },
+  "power": {
+    "available": true,
+    "T": 200,
+    "alpha_one_sided": 0.05,
+    "source": "results/power_sim/20261018T232402Z/luna_power.csv",
+    "validity_glob": "results/persistgym_validity/*-F-0-claude-haiku-5-5/episodes.jsonl",
+    "rows": [
+      {
+        "scenario": "primary",
+        "templates": 200,
+        "power_h1_rejects": 0.9125,
+        "power_h1_rejects_and_model_agrees": 0.9125,
+        "power_h3_rejects": 0.8635,
+        "power_h3_rejects_and_model_agrees": 0.8635,
+        "reps": 2000.0,
+        "p_f0_onr": 0.95,
+        "p_f0_or": 0.95,
+        "true_delta_h1_pp": 10.0,
+        "true_delta_h3_pp": 0.0
+      },
+      {
+        "scenario": "pessimistic",
+        "templates": 200,
+        "power_h1_rejects": 0.5305,
+        "power_h1_rejects_and_model_agrees": 0.5305,
+        "power_h3_rejects": 0.565,
+        "power_h3_rejects_and_model_agrees": 0.565,
+        "reps": 2000.0,
+        "p_f0_onr": 0.85,
+        "p_f0_or": 0.85,
+        "true_delta_h1_pp": 10.0,
+        "true_delta_h3_pp": 0.0
+      }
+    ]
+  },
+  "accounting": [
+    {
+      "cell": "F-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 198,
+        "rate": 0.99
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 198,
+        "rate": 0.99
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 198,
+        "rate": 0.99
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "F-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 198,
+        "rate": 0.99
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 200,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 200,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 0,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_with_lookup": {
+        "n": 200,
+        "successes": 200,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": null,
+      "used_given_carried": null,
+      "exploratory": false
+    }
+  ],
+  "cost_outcomes": [
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 639782.88,
+        "W-0": 541123.415
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16748149212062236,
+          "ratio": 0.8457922709653151,
+          "se": 0.002889739448077755,
+          "ratio_ci95": [
+            0.8410154254654383,
+            0.8505962482540257
+          ],
+          "ratio_ci90": [
+            0.8417815918139384,
+            0.8498220590487612
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 487.7403519080676
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 305.95,
+        "W-0": 327.38
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.06769988580766892,
+          "ratio": 1.0700441248570134,
+          "se": 0.04233558563711287,
+          "ratio_ci95": [
+            0.9848397540333187,
+            1.1626200348349003
+          ],
+          "ratio_ci90": [
+            0.9980659169770161,
+            1.1472132347821462
+          ],
+          "p_two_sided": 0.10979287052185469
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 31.309478703385462
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.012686527125,
+        "W-0": 0.0423654869
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2057934684434946,
+          "ratio": 3.3394077417759758,
+          "se": 0.004084055954759463,
+          "ratio_ci95": [
+            3.3127838091009276,
+            3.366245643678094
+          ],
+          "ratio_ci90": [
+            3.3170498689115346,
+            3.3619163131522805
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 3.458159809224691e-05
+    },
+    {
+      "task_cell": "observed-nonrec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.012686527125,
+        "W-0": 0.0423654869
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2057934684434946,
+          "ratio": 3.3394077417759758,
+          "se": 0.004084055954759463,
+          "ratio_ci95": [
+            3.3127838091009276,
+            3.366245643678094
+          ],
+          "ratio_ci90": [
+            3.3170498689115346,
+            3.3619163131522805
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 3.458159809224691e-05
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 640134.29,
+        "W-0": 541464.84
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16739984888287185,
+          "ratio": 0.845861327003722,
+          "se": 0.0028092427901279535,
+          "ratio_ci95": [
+            0.8412168002593795,
+            0.850531497112144
+          ],
+          "ratio_ci90": [
+            0.84196179315047,
+            0.8497789214915494
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 460.17205715938076
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 311.96,
+        "W-0": 621.165
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.6887217726621521,
+          "ratio": 1.9911687395819995,
+          "se": 0.028835847239987576,
+          "ratio_ci95": [
+            1.8817544327977314,
+            2.106944923516881
+          ],
+          "ratio_ci90": [
+            1.8989308642004843,
+            2.0878869390318044
+          ],
+          "p_two_sided": 4.4679973249391864e-126
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 28.896422271559175
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.0124090843,
+        "W-0": 0.04224767455
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2251205027444467,
+          "ratio": 3.4045763188631377,
+          "se": 0.004702757365936691,
+          "ratio_ci95": [
+            3.373339717332128,
+            3.436102166469837
+          ],
+          "ratio_ci90": [
+            3.3783423332204543,
+            3.4310140203921398
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.3875948732478235e-05
+    },
+    {
+      "task_cell": "observed-nonrec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.0124090843,
+        "W-0": 0.04224767455
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2251205027444467,
+          "ratio": 3.4045763188631377,
+          "se": 0.004702757365936691,
+          "ratio_ci95": [
+            3.373339717332128,
+            3.436102166469837
+          ],
+          "ratio_ci90": [
+            3.3783423332204543,
+            3.4310140203921398
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.3875948732478235e-05
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 644055.655,
+        "W-0": 544149.465
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16856118222098873,
+          "ratio": 0.8448795702290258,
+          "se": 0.0030789774449134725,
+          "ratio_ci95": [
+            0.8397963415114906,
+            0.8499935673756641
+          ],
+          "ratio_ci90": [
+            0.8406115221601044,
+            0.8491692885152099
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 557.1134200181028
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 459.515,
+        "W-0": 461.865
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.005101055147130603,
+          "ratio": 1.0051140876794031,
+          "se": 0.03395409981474797,
+          "ratio_ci95": [
+            0.940402073301196,
+            1.074279138608439
+          ],
+          "ratio_ci90": [
+            0.9505177250613451,
+            1.0628463863589692
+          ],
+          "p_two_sided": 0.8805801203123513
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 39.320997961959385
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.02,
+        "W-0": 0.01
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.6931471805596587,
+          "ratio": 0.5000000000001433,
+          "se": 1.2247448713914315,
+          "ratio_ci95": [
+            0.045338305003298864,
+            5.514101155346524
+          ],
+          "ratio_ci90": [
+            0.06669180318725358,
+            3.7485866036371376
+          ],
+          "p_two_sided": 0.571426204958424
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 196,
+      "dispersion_pearson": 1.9999999999995959
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.012863809974999998,
+        "W-0": 0.0426273049
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.1980770675051655,
+          "ratio": 3.3137386964338567,
+          "se": 0.004603999557271561,
+          "ratio_ci95": [
+            3.2839711094585624,
+            3.343776111980962
+          ],
+          "ratio_ci90": [
+            3.288738847086711,
+            3.3389285859442506
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.44832511108446e-05
+    },
+    {
+      "task_cell": "observed-rec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.012863809974999998,
+        "W-0": 0.0426273049
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.1980770675051655,
+          "ratio": 3.3137386964338567,
+          "se": 0.004603999557271561,
+          "ratio_ci95": [
+            3.2839711094585624,
+            3.343776111980962
+          ],
+          "ratio_ci90": [
+            3.288738847086711,
+            3.3389285859442506
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 4.44832511108446e-05
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 643019.81,
+        "W-0": 575753.85
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.11049530686371695,
+          "ratio": 0.8953905323694202,
+          "se": 0.0032375912066227143,
+          "ratio_ci95": [
+            0.8897267649861561,
+            0.9010903538113394
+          ],
+          "ratio_ci90": [
+            0.8906349260910709,
+            0.9001715315336898
+          ],
+          "p_two_sided": 2.753192321424032e-255
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 634.3500726555692
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 444.32,
+        "W-0": 491.61
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.10114069566778355,
+          "ratio": 1.1064323010443262,
+          "se": 0.02702960382344807,
+          "ratio_ci95": [
+            1.0493423615952366,
+            1.1666282441253915
+          ],
+          "ratio_ci90": [
+            1.0583181041396705,
+            1.156733908269872
+          ],
+          "p_two_sided": 0.00018267127959446474
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 30.64275354882951
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 1.0
+      },
+      "n_rows": 400,
+      "ratios": {},
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.012624179975,
+        "W-0": 0.046382664025
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.301311748456351,
+          "ratio": 3.6741130200897283,
+          "se": 0.0036170428686818448,
+          "ratio_ci95": [
+            3.648158335723635,
+            3.700252358075142
+          ],
+          "ratio_ci90": [
+            3.652318759163846,
+            3.6960373325912337
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 2.7627036637795552e-05
+    },
+    {
+      "task_cell": "observed-rec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.012624179975,
+        "W-0": 0.046382664025
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.301311748456351,
+          "ratio": 3.6741130200897283,
+          "se": 0.0036170428686818448,
+          "ratio_ci95": [
+            3.648158335723635,
+            3.700252358075142
+          ],
+          "ratio_ci90": [
+            3.652318759163846,
+            3.6960373325912337
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 2.7627036637795552e-05
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 640159.845,
+        "W-0": 541635.745
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16712418466957357,
+          "ratio": 0.8460945328427651,
+          "se": 0.0028552311930589115,
+          "ratio_ci95": [
+            0.8413728845130983,
+            0.8508426782979746
+          ],
+          "ratio_ci90": [
+            0.8421302192105389,
+            0.8500775084137465
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 476.186067777428
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 468.225,
+        "W-0": 502.26
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.0701689642841071,
+          "ratio": 1.0726894121416035,
+          "se": 0.02945314476505437,
+          "ratio_ci95": [
+            1.012519583270414,
+            1.1364348837620368
+          ],
+          "ratio_ci90": [
+            1.021960511204821,
+            1.1259364352191525
+          ],
+          "p_two_sided": 0.017200532441159974
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 33.0090457788715
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.01224550935,
+        "W-0": 0.04178037870000001
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2272675340413322,
+          "ratio": 3.411893903502976,
+          "se": 0.005764761488353631,
+          "ratio_ci95": [
+            3.3735608182064407,
+            3.4506625598496674
+          ],
+          "ratio_ci90": [
+            3.3796945824783906,
+            3.444399996707456
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 6.807513828017492e-05
+    },
+    {
+      "task_cell": "derived-nonrec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.01224550935,
+        "W-0": 0.04178037870000001
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2272675340413322,
+          "ratio": 3.411893903502976,
+          "se": 0.005764761488353631,
+          "ratio_ci95": [
+            3.3735608182064407,
+            3.4506625598496674
+          ],
+          "ratio_ci90": [
+            3.3796945824783906,
+            3.444399996707456
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 6.807513828017492e-05
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 640595.45,
+        "W-0": 542378.945
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16643321677624767,
+          "ratio": 0.8466793590244673,
+          "se": 0.002864837707493624,
+          "ratio_ci95": [
+            0.8419385945353428,
+            0.8514468176788045
+          ],
+          "ratio_ci90": [
+            0.8426989893789654,
+            0.8506785293837645
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 479.54756368043184
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 491.62,
+        "W-0": 881.935
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.5844122967991554,
+          "ratio": 1.7939363736219365,
+          "se": 0.02832114248377799,
+          "ratio_ci95": [
+            1.6970710909875202,
+            1.8963305248050388
+          ],
+          "ratio_ci90": [
+            1.712284018926139,
+            1.8794824205753708
+          ],
+          "p_two_sided": 1.3260953769516128e-94
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 39.11790897601802
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.0,
+        "W-0": 0.0
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": null,
+          "ratio": 0.0,
+          "se": null,
+          "ratio_ci95": null,
+          "ratio_ci90": null,
+          "p_two_sided": null,
+          "note": "no events in this cell: ratio 0, no interval"
+        }
+      },
+      "note": "no events in the reference cell (F-0): no ratio is finite"
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.012320881325,
+        "W-0": 0.04179875902500001
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.221571158944478,
+          "ratio": 3.3925137268209475,
+          "se": 0.005921523498622504,
+          "ratio_ci95": [
+            3.35336790688152,
+            3.4321165187542877
+          ],
+          "ratio_ci90": [
+            3.3596309093738324,
+            3.4257183890517395
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 7.102355046445012e-05
+    },
+    {
+      "task_cell": "derived-nonrec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.012320881325,
+        "W-0": 0.04179875902500001
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.221571158944478,
+          "ratio": 3.3925137268209475,
+          "se": 0.005921523498622504,
+          "ratio_ci95": [
+            3.35336790688152,
+            3.4321165187542877
+          ],
+          "ratio_ci90": [
+            3.3596309093738324,
+            3.4257183890517395
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 7.102355046445012e-05
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 643719.18,
+        "W-0": 544662.07
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.16709702780011504,
+          "ratio": 0.8461175104335414,
+          "se": 0.002962840432596776,
+          "ratio_ci95": [
+            0.8412182936185544,
+            0.8510452600628793
+          ],
+          "ratio_ci90": [
+            0.8420040400166787,
+            0.8502510765246126
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 515.4163366721529
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 582.425,
+        "W-0": 613.44
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.05188203807195642,
+          "ratio": 1.0532514916084057,
+          "se": 0.03746632801953973,
+          "ratio_ci95": [
+            0.9786799398612307,
+            1.133505101507064
+          ],
+          "ratio_ci90": [
+            0.9903027371883709,
+            1.1202015938327334
+          ],
+          "p_two_sided": 0.16612451305466203
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 50.3832740692463
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.01,
+        "W-0": 0.01
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -2.0981966164512755e-12,
+          "ratio": 0.9999999999979018,
+          "se": 1.4999999999984452,
+          "ratio_ci95": [
+            0.05286858479085021,
+            18.914824445402406
+          ],
+          "ratio_ci90": [
+            0.0848152056433515,
+            11.790338682910349
+          ],
+          "p_two_sided": 0.9999999999988839
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 197,
+      "dispersion_pearson": 1.9999999999972276
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.012385354925000001,
+        "W-0": 0.042168220650000005
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2251521519172566,
+          "ratio": 3.4046840725925467,
+          "se": 0.005856800783154145,
+          "ratio_ci95": [
+            3.3658247623517394,
+            3.443992023537791
+          ],
+          "ratio_ci90": [
+            3.3720422573835895,
+            3.4376418648915905
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 7.053114276844308e-05
+    },
+    {
+      "task_cell": "derived-rec-near",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.012385354925000001,
+        "W-0": 0.042168220650000005
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.2251521519172566,
+          "ratio": 3.4046840725925467,
+          "se": 0.005856800783154145,
+          "ratio_ci95": [
+            3.3658247623517394,
+            3.443992023537791
+          ],
+          "ratio_ci90": [
+            3.3720422573835895,
+            3.4376418648915905
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 7.053114276844308e-05
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "tokens_total",
+      "label": "total tokens (input + output)",
+      "means": {
+        "F-0": 645370.98,
+        "W-0": 576607.28
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": -0.11266390338225148,
+          "ratio": 0.8934508954832399,
+          "se": 0.003709055354652216,
+          "ratio_ci95": [
+            0.886979402660902,
+            0.8999696049818883
+          ],
+          "ratio_ci90": [
+            0.8880166763126718,
+            0.8989183693648753
+          ],
+          "p_two_sided": 1.1622306016515611e-202
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 797.8579185527394
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "reasoning_tokens",
+      "label": "reasoning tokens",
+      "means": {
+        "F-0": 623.955,
+        "W-0": 715.71
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 0.13719680659734612,
+          "ratio": 1.14705387407746,
+          "se": 0.05611447873743049,
+          "ratio_ci95": [
+            1.0275881446545374,
+            1.2804084952521937
+          ],
+          "ratio_ci90": [
+            1.0459198136581875,
+            1.2579669806944669
+          ],
+          "p_two_sided": 0.014487428774182376
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 95.80840151111408
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "n_lookups",
+      "label": "lookups",
+      "means": {
+        "F-0": 0.025,
+        "W-0": 1.0
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 3.6888794541139314,
+          "ratio": 39.9999999999998,
+          "se": 0.6612003702723148,
+          "ratio_ci95": [
+            10.945742214817594,
+            146.17556019490527
+          ],
+          "ratio_ci90": [
+            13.481274209307095,
+            118.68314338531805
+          ],
+          "p_two_sided": 2.4181569228256158e-08
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 0.6605841708542638
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "cost_list",
+      "label": "USD, list",
+      "means": {
+        "F-0": 0.01260960745,
+        "W-0": 0.04607287102500001
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.295765276096334,
+          "ratio": 3.6537910634592037,
+          "se": 0.005136884524444657,
+          "ratio_ci95": [
+            3.6171888646532016,
+            3.690763638545672
+          ],
+          "ratio_ci90": [
+            3.6230486972229077,
+            3.6847942854445632
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 5.555971147499515e-05
+    },
+    {
+      "task_cell": "derived-rec-far",
+      "outcome": "cost_billed",
+      "label": "USD, billed estimate",
+      "means": {
+        "F-0": 0.01260960745,
+        "W-0": 0.04607287102500001
+      },
+      "n_rows": 400,
+      "ratios": {
+        "W-0": {
+          "beta": 1.295765276096334,
+          "ratio": 3.6537910634592037,
+          "se": 0.005136884524444657,
+          "ratio_ci95": [
+            3.6171888646532016,
+            3.690763638545672
+          ],
+          "ratio_ci90": [
+            3.6230486972229077,
+            3.6847942854445632
+          ],
+          "p_two_sided": 0.0
+        }
+      },
+      "n_templates": 200,
+      "n_templates_all_zero": 0,
+      "dispersion_pearson": 5.555971147499515e-05
+    }
+  ],
+  "cells": [
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 10
+      },
+      "episodes_with_a_refusal": 4
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 3
+      },
+      "episodes_with_a_refusal": 1
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 4
+      },
+      "episodes_with_a_refusal": 1
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 8
+      },
+      "episodes_with_a_refusal": 3
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 10
+      },
+      "episodes_with_a_refusal": 4
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 12
+      },
+      "episodes_with_a_refusal": 3
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 10
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 12
+      },
+      "episodes_with_a_refusal": 4
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 6
+      },
+      "episodes_with_a_refusal": 3
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 0,
+      "rate": 0.0,
+      "content_failures": {
+        "incomplete": 1,
+        "unparsed": 177
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 7
+      },
+      "episodes_with_a_refusal": 3
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 3
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 2
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 5
+      },
+      "episodes_with_a_refusal": 4
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 0,
+      "rate": 0.0,
+      "content_failures": {
+        "incomplete": 1,
+        "unparsed": 172
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 14
+      },
+      "episodes_with_a_refusal": 4
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 4
+      },
+      "episodes_with_a_refusal": 3
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 7
+      },
+      "episodes_with_a_refusal": 5
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 10
+      },
+      "episodes_with_a_refusal": 3
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 5
+      },
+      "episodes_with_a_refusal": 1
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 5
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 4
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 7
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 9
+      },
+      "episodes_with_a_refusal": 2
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "unparsed": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 1
+      },
+      "episodes_with_a_refusal": 1
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 7
+      },
+      "episodes_with_a_refusal": 4
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {},
+      "episodes_with_a_refusal": 0
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 1
+      },
+      "episodes_with_a_refusal": 1
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {},
+      "episodes_with_a_refusal": 0
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 200,
+      "rate": 1.0,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {},
+      "episodes_with_a_refusal": 0
+    }
+  ],
+  "exclusions": [
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0",
+      "cell": "F-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 2
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 2
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 1
+    },
+    {
+      "kind": "W-0",
+      "cell": "W-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "cell": "F-0",
+      "variant": "restated",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 2
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 2
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "single-turn control",
+      "cell": "single-turn",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 2
+    }
+  ],
+  "repeats": [
+    {
+      "kind": "F-0",
+      "pairs": 160,
+      "agree": 160,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "W-0",
+      "pairs": 160,
+      "agree": 160,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "F-0 restated-at-need",
+      "pairs": 160,
+      "agree": 160,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 160
+    },
+    {
+      "kind": "single-turn control",
+      "pairs": 80,
+      "agree": 80,
+      "agreement": 1.0,
+      "repeat0_only_success": 0,
+      "repeat1_only_success": 0,
+      "repeat1_records": 80
+    }
+  ],
+  "model_strings": {
+    "strings": {
+      "claude-haiku-5-5": 5600
+    },
+    "split": null,
+    "records_with_more_than_one_string": 0
+  },
+  "service_tiers_served": {
+    "standard": 116589
+  },
+  "dropped_records": [
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/observed-nonrec-near/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/observed-nonrec-far/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/observed-rec-near/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/observed-rec-far/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/derived-nonrec-near/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/derived-nonrec-far/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000114/derived-rec-near/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154817Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000127/observed-nonrec-far/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154918Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "W-0",
+      "episode_id": "main-000127/observed-rec-far/base",
+      "repeat": 0,
+      "kept_from": "20261018T144829Z-W-0-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T154918Z-W-0-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "single-turn",
+      "episode_id": "main-000081/observed-nonrec-near/single_turn",
+      "repeat": 0,
+      "kept_from": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T225735Z-single-turn-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "single-turn",
+      "episode_id": "main-000081/observed-nonrec-far/single_turn",
+      "repeat": 0,
+      "kept_from": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T225735Z-single-turn-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "single-turn",
+      "episode_id": "main-000081/derived-nonrec-far/single_turn",
+      "repeat": 0,
+      "kept_from": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T225735Z-single-turn-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "single-turn",
+      "episode_id": "main-000084/observed-nonrec-near/single_turn",
+      "repeat": 0,
+      "kept_from": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T225747Z-single-turn-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "single-turn",
+      "episode_id": "main-000084/observed-nonrec-far/single_turn",
+      "repeat": 0,
+      "kept_from": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T225747Z-single-turn-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    },
+    {
+      "cell": "single-turn",
+      "episode_id": "main-000084/derived-nonrec-far/single_turn",
+      "repeat": 0,
+      "kept_from": "20261018T165717Z-single-turn-claude-haiku-5-5",
+      "dropped": [
+        {
+          "run_id": "20261018T225747Z-single-turn-claude-haiku-5-5",
+          "exit_reason": "DONE"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+[
+  {
+    "model": "gpt-6-luna",
+    "cited_output": "results/persistgym_h1h3/20261010T232227Z",
+    "counted_repeat0_records": 8800,
+    "w0_nonrec_far_choices": {
+      "observed-nonrec-far": {
+        "episodes": 200,
+        "chose_an_option": 198,
+        "correct": 15,
+        "chose_none_by_need_outcome": {
+          "wrong": 2
+        }
+      },
+      "derived-nonrec-far": {
+        "episodes": 200,
+        "chose_an_option": 189,
+        "correct": 16,
+        "chose_none_by_need_outcome": {
+          "wrong": 11
+        }
+      }
+    },
+    "refusals_by_run_kind": {
+      "F-0": {
+        "episodes": 1600,
+        "with_refusal": 0,
+        "need_step_refusals": 0,
+        "categories": {}
+      },
+      "F-0 restated": {
+        "episodes": 1600,
+        "with_refusal": 0,
+        "need_step_refusals": 0,
+        "categories": {}
+      },
+      "W-0": {
+        "episodes": 1600,
+        "with_refusal": 0,
+        "need_step_refusals": 0,
+        "categories": {}
+      },
+      "W-n-0": {
+        "episodes": 1600,
+        "with_refusal": 0,
+        "need_step_refusals": 0,
+        "categories": {}
+      },
+      "single-turn": {
+        "episodes": 800,
+        "with_refusal": 0,
+        "need_step_refusals": 0,
+        "categories": {}
+      },
+      "\u03a3-n-0": {
+        "episodes": 1600,
+        "with_refusal": 0,
+        "need_step_refusals": 0,
+        "categories": {}
+      }
+    },
+    "refusal_templates": {},
+    "refusal_templates_by_skin": {}
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "cited_output": "results/persistgym_h1h3_haiku/20261019T003254Z",
+    "counted_repeat0_records": 5600,
+    "w0_nonrec_far_choices": {
+      "observed-nonrec-far": {
+        "episodes": 200,
+        "chose_an_option": 0,
+        "correct": 0,
+        "chose_none_by_need_outcome": {
+          "unparsed": 177,
+          "wrong": 22,
+          "incomplete": 1
+        }
+      },
+      "derived-nonrec-far": {
+        "episodes": 200,
+        "chose_an_option": 0,
+        "correct": 0,
+        "chose_none_by_need_outcome": {
+          "wrong": 27,
+          "unparsed": 172,
+          "incomplete": 1
+        }
+      }
+    },
+    "refusals_by_run_kind": {
+      "F-0": {
+        "episodes": 1600,
+        "with_refusal": 22,
+        "need_step_refusals": 10,
+        "categories": {
+          "refusal:bio": 69
+        }
+      },
+      "F-0 restated": {
+        "episodes": 1600,
+        "with_refusal": 17,
+        "need_step_refusals": 6,
+        "categories": {
+          "refusal:bio": 48
+        }
+      },
+      "W-0": {
+        "episodes": 1600,
+        "with_refusal": 26,
+        "need_step_refusals": 2,
+        "categories": {
+          "refusal:bio": 48
+        }
+      },
+      "single-turn": {
+        "episodes": 800,
+        "with_refusal": 1,
+        "need_step_refusals": 1,
+        "categories": {
+          "refusal:bio": 1
+        }
+      }
+    },
+    "refusal_templates": {
+      "main-000034": {
+        "episodes": 2,
+        "skin": "biobank"
+      },
+      "main-000044": {
+        "episodes": 1,
+        "skin": "biobank"
+      },
+      "main-000069": {
+        "episodes": 3,
+        "skin": "biobank"
+      },
+      "main-000087": {
+        "episodes": 7,
+        "skin": "biobank"
+      },
+      "main-000088": {
+        "episodes": 1,
+        "skin": "biobank"
+      },
+      "main-000119": {
+        "episodes": 2,
+        "skin": "biobank"
+      },
+      "main-000122": {
+        "episodes": 1,
+        "skin": "biobank"
+      },
+      "main-000145": {
+        "episodes": 13,
+        "skin": "biobank"
+      },
+      "main-000157": {
+        "episodes": 2,
+        "skin": "archive"
+      },
+      "main-000162": {
+        "episodes": 3,
+        "skin": "biobank"
+      },
+      "main-000166": {
+        "episodes": 8,
+        "skin": "biobank"
+      },
+      "main-000167": {
+        "episodes": 2,
+        "skin": "biobank"
+      },
+      "main-000171": {
+        "episodes": 1,
+        "skin": "biobank"
+      },
+      "main-000193": {
+        "episodes": 20,
+        "skin": "biobank"
+      }
+    },
+    "refusal_templates_by_skin": {
+      "biobank": 13,
+      "archive": 1
+    }
+  }
+]

@@ -1251,3 +1251,20 @@ It is FINAL: 5,600 primary episodes, 10,000 bootstrap resamples, the Bayesian fi
 - **Not a comparison or ranking of the models.** Between-model differences are described, not tested, and none is a difference in memory.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the results and the reporting rules above. It adds no spending approval. The pull request is $0. Block `4-haiku`'s runs are finished, at $129.69 billed of $180, and no further run is planned.
+
+## 2026-10-19: Haiku's results go into the preprint's v1 (researcher); a correction; the descriptive readings script
+**Decision (researcher, 2026-10-19).** PLAN A10 targeted R8's results for the AGENT paper and an arXiv v2, after the preprint's v1. The results were final and independently checked before v1 was posted. Claude proposed adding them to v1 as a short, clearly labelled replication subsection. In the researcher's words: "Yes".
+
+**Correction** to the entry "2026-10-19: Haiku's H1/H3 replication results" (item 4): W-0 sent 0.84 to 0.90 times F-0's tokens, not 0.85 to 0.90. The smallest ratio is 0.8449, in observed-recoverable-near (`h1h3.json`, `cost_outcomes`). The independent check of the preprint's text found the double rounding.
+
+**The descriptive readings script.** The preprint's §4 states three readings that `analysis.persistgym_h1h3` does not print:
+- how many W-0 episodes chose an option with the fact evicted;
+- refusals by run kind;
+- the refusal templates' skins.
+
+`analysis/replication_readings.py` computes them from each model's counted records, read exactly as its cited H1/H3 output counted them. Its output is `results/replication_readings/20261019T012704Z/`:
+- **Choices with the fact evicted.** gpt-6-luna chose an option in 387 of its 400 W-0 not-recoverable far episodes and was right in 31. claude-haiku-5-5 chose none of 400.
+- **Refusals.** Episodes with a refusal: F-0 22, F-0 restated 17, W-0 26 of 1,600 each, and single-turn 1 of 800. Need-step refusals: 10, 6, 2 and 1. gpt-6-luna had none.
+- **Where they are.** 14 templates hold a refused episode: 13 in the biobank skin and 1 in the archive skin.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the decision, the correction and the script. It adds no spending approval. The pull request is $0.

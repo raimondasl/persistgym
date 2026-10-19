@@ -1,0 +1,46 @@
+{
+  "experiment": "replication_readings",
+  "run_id": "20261019T012704Z",
+  "cell_or_config": "descriptive",
+  "config": {
+    "cited_outputs": {
+      "gpt-6-luna": "results/persistgym_h1h3/20261010T232227Z",
+      "claude-haiku-5-5": "results/persistgym_h1h3_haiku/20261019T003254Z"
+    },
+    "repeat": 0,
+    "nr_far_cells": [
+      "observed-nonrec-far",
+      "derived-nonrec-far"
+    ]
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": null,
+  "started_utc": "2026-10-19T01:27:04+00:00",
+  "finished_utc": "2026-10-19T01:27:06+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "readings.json",
+    "summary.md"
+  ],
+  "paid_calls": 0,
+  "config_hash": "60bdb0273e64397b489989ca0ee98da8e470d0d4d3f72d5d831f39c511ebbf3a",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "2f3c5ba0360fcb0b02e09776f4b0cca0c9c27bfe",
+  "git_dirty": false
+}

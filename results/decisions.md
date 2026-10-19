@@ -1166,3 +1166,88 @@ In R8's order, one at a time, in the PersistGym stream, each with `--parallel 16
 Results go into the AGENT paper and an arXiv v2, not v1.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts the power ruling and closes the sweep. It adds no spending approval. The pull request is $0.
+
+## 2026-10-19: Haiku's H1/H3 replication results (R8, FINAL), the independent check, and how to report them
+**The output.** `results/persistgym_h1h3_haiku/20261019T003254Z/`, at `19ea535` with a clean tree:
+- `uv run python -m analysis.persistgym_h1h3 --model claude-haiku-5-5`, with the 13 runs as `--run` and the five `--rerun` links;
+- `--sweep-closed` set to this log's entry "2026-10-18: Haiku's sweep closed (R8)" (PR #73), and `--power-path results/power_sim/20261018T232402Z/luna_power.csv`.
+
+It is FINAL: 5,600 primary episodes, 10,000 bootstrap resamples, the Bayesian fit run, and no key excluded or pending. It was run once.
+
+**The results, next to luna's.** The table is descriptive; no contrast between the models is tested (§15, R8). Haiku's figures are exact values from `h1h3.json`.
+
+| | gpt-6-luna (`results/persistgym_h1h3/20261010T232227Z/`) | claude-haiku-5-5 |
+|---|---|---|
+| F-0 / W-0 success, observed-far, not recoverable | 200/200 / 15/200 | 200/200 / 0/200 |
+| F-0 / W-0 success, observed-far, recoverable | 200/200 / 200/200 | 198/200 / 200/200 |
+| Penalty_NR | +92.5pp | +100.0pp |
+| Penalty_R | +0.0pp | −1.0pp [−2.5, 0.0] |
+| Δ_H1, 90% CI | +92.5pp [+89.5, +95.5] | +101.0pp [+100.0, +102.5] |
+| H1's four predictions (manipulation, recoverable, lookups, R_need) | all met; R_need 1.994 | all met; R_need 1.983 [1.957, 2.003] |
+| Single-turn / F-0 success, H3's cells | 400/400 / 399/400 | 399/400 / 400/400 |
+| Δ_H3, 90% CI | +0.25pp [0.00, +0.75] | −0.25pp [−0.75, 0.00] |
+| H3's prediction (90% upper bound ≤ 5pp) | holds | holds |
+| Label | H1 and H3 **supported** (confirmatory, Holm family of 2) | R8's replication label for both: **the unadjusted test rejects, and the model check agrees** |
+
+**How each label was reached.**
+- **luna.** luna's "supported" came after two code fixes made once the result had been read: the Firth fit's iteration cap, and H3's one-template fit. As first computed, both read "inconclusive". Under the "literal" rule, H1 would read "inconclusive".
+- **Haiku.** Haiku's label is the same under all three rules. Its rules were fixed before any Haiku data existed, but R8 itself was designed with luna's results known.
+- **H1's model check on Haiku.** The logit-scale Δ_H1 is not finite, so the check is the Firth fit's W-0 × R coefficient, 8.555. The Bayesian GLMM gives a posterior median of 8.711, 90% [6.901, 10.604].
+- **H3's model check on Haiku is degenerate.** One template (193) has outcome variation, so the fixed-effects logit is saturated. Its AME equals the observed Δ_H3 by construction, and the check adds nothing beyond the bootstrap's point estimate. On luna, likewise, only template 145 had outcome variation.
+- **The bootstrap p-values** are below 0.0001: 0 of 10,000 resamples fell on the null side.
+
+**What the report must say with the numbers** (from the independent check's wording review, verified by Claude on the records).
+1. **Haiku's W-0 failures with the fact evicted are abstentions, not guesses.**
+   - **Haiku.** In W-0's two not-recoverable far cells, no reply chose one of the 10 options, 0 of 400:
+     - 349 did not parse as an action;
+     - 49 parsed as an action other than a choice;
+     - 2 were refusals.
+     The replies say the record is unavailable and decline to choose. They score 0 (§2.6). Haiku also chose no option in its withheld validity run (0/160).
+   - **luna.** luna chose an option in 387 of 400 and was right in 31 (7.75%), near chance (0.10, §2.2).
+   - So the 7.5pp difference in Penalty_NR (100.0 vs 92.5) reflects answering policy, not memory. Penalty_NR is a manipulation check, and no lower bound or test against chance is registered.
+2. **Refusals set Haiku's small non-zero values.** These are F-0's −1.0pp Penalty_R, Δ_H1's 1pp above 100, Δ_H3's −0.25pp, and H3's only template with variation.
+   - Both F-0 failures in observed-recoverable-far are need-step refusals, category `bio`, in templates 145 and 193. So is the single-turn arm's one failure, in template 193.
+   - Without the refusals, Penalty_R and Δ_H3 would both be 0.
+   - The refusals shift Δ_H1 by +1pp and Δ_H3 by −0.25pp, which changes no reading.
+   - Refusals cluster in templates with lab sample-tracking or biobank settings: 13 of the 14 templates with any refusal, and 66 episodes in all. They are a property of these synthetic scenarios, not a general claim about the model.
+   - Need-step refusals were 10 of 1,600 in F-0 and 2 of 1,600 in W-0. The difference is descriptive, not tested.
+3. **H3 is at the ceiling on both models** (≥ 399/400 in each arm). At these tasks the single-prompt arm was at most 5pp ahead at 90% confidence on each model. That is non-inferiority, not absence, and it says nothing about harder tasks.
+4. **The costs are within-model readings.**
+   - On Haiku, W-0's billed cost per episode was 3.3 to 3.7 times F-0's, although it sent 0.85 to 0.90 times the tokens.
+   - The reason is caching. F-0's growing prefix was served mostly from the prompt cache: cache reads were 92-93% of its input. W-0's sliding window rewrote most of its prompt each turn, so its cache reads were 39-43%, and the rest was billed as cache writes at 1.25 times the input price.
+   - luna shows the same pattern under its own provider's cache pricing.
+   - The ratios depend on each provider's prices and tokenizer, and are not compared across models.
+5. **Power is a design figure.** At T = 200, one-sided 0.05 unadjusted, it was simulated at true Δ_H1 = 10pp and Δ_H3 = 0, under the power ruling of 2026-10-18:
+   - primary (W-0's no-memory success 0.023, luna's template SD 0.92): H1 0.9125, H3 0.8635;
+   - pessimistic: H1 0.5305, H3 0.565.
+   It describes the simulation's scenarios, not these runs.
+6. **The repeats agree.** At repeat 1 (§2.9), every run kind agreed with repeat 0 on every pair (160, 160, 160 and 80 pairs).
+
+**Deviations to list in every write-up** (§13), each recorded in this log on 2026-10-18:
+- **The power ruling.** Haiku's validity runs (160/160 and 0/160) do not identify the template SD or W-0's no-memory level, so substitutes were chosen before any result was read.
+- **The size rule's F-0 basis.** The forecast costed F-0 from the restated validity run rather than "the pilots' `costs.csv` rows". The outcome was the same on either basis: W-n-0 not run, T = 200.
+- **W-n-0 was pre-registered but not run,** for budget, under the size rule.
+- **Two rate-limit aborts** were continued, and their §13 re-runs were made, at `--parallel` 8 and 3 (R8 allows up to 16).
+- **An implementation fix before any main episode.** A whitespace-only reply counts 0 tokens toward W (`ecd0632`). It affected no episode.
+
+**The independent check** (CLAUDE.md: before a number goes public). Three separate agents worked from the run folders, PREREG and DESIGN §7.8, with no code from `analysis/persistgym_h1h3.py` or `analysis/power_sim.py`:
+- **Estimands.** The first agent wrote its own duplicate resolution, success counts and a template-cluster bootstrap with its own seed, and recomputed R_need and R_tok from the raw transcripts. It matched all 27 quantities. The intervals agreed within bootstrap noise: R_need's lower 90% bound was 1.955, against 1.957.
+- **Model checks.** The second agent wrote its own Firth fit (Newton on the penalized likelihood, checked with L-BFGS-B), H3's AME and one quasi-Poisson cost ratio. It matched all 11.
+- **Wording.** The third agent checked luna's and Haiku's numbers against both outputs. It matched all 25 and produced the wording points above.
+- **Result:** 63 quantities compared, 0 disagreements.
+
+**Reporting defects in `summary.md`, not fixed** (no number or label changes; the text above governs):
+- It does not say that W-0's not-recoverable far failures are abstentions, or that refusals set Penalty_R and Δ_H3.
+- Its H3 caveat keeps R8's conditional ("If both models are at the ceiling"), although both are. Its label row does not say the check is degenerate.
+- Its Deviations section lists only the sweep's closing; the list above is the full one.
+- Its power line says the run "measured the template SD" on Haiku's validity runs, but the SD was not identified, and it prints 0.912 / 0.530 for 0.9125 / 0.5305. The power run's own `summary.md` keeps luna's assumption text; this log's power ruling governs.
+- Smaller points:
+  - it prints "p = 0.0000" for p < 0.0001, and −0.2pp for the exact −0.25pp;
+  - it says "1770 window-cell episodes" where it means records (1,760 counted episodes, plus 10 dropped or stopped records);
+  - it has "1 divergent transitions".
+
+**What it does not show.**
+- **Not a confirmation, and nothing generalized.** The replication neither confirms nor kills H1 or H3, and luna's labels are unchanged. The same pattern appeared on one model from a second provider, on the same synthetic episodes. With one model per provider, the agreement cannot be attributed to any one factor, and it says nothing about other models, other providers or real tasks.
+- **Not a comparison or ranking of the models.** Between-model differences are described, not tested, and none is a difference in memory.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the results and the reporting rules above. It adds no spending approval. The pull request is $0. Block `4-haiku`'s runs are finished, at $129.69 billed of $180, and no further run is planned.

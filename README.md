@@ -1,7 +1,8 @@
 # persistgym: when the harness decides success
 
 Code, pre-registration and data for the preprint *When the harness decides success: state that
-cannot be re-observed* (Raimondas Lencevicius, 2026).
+cannot be re-observed* (Raimondas Lencevicius, 2026), [arXiv:2610.26632](https://arxiv.org/abs/2610.26632).
+The tag `preprint-v1` marks the state of the repository that its v1 describes.
 
 An agent harness decides what a language model sees across turns: it drops old turns, summarizes
 them, or replays the model's own earlier reasoning. The study asks when these choices change whether
@@ -9,7 +10,8 @@ an agent succeeds, not only what it costs. It has two parts:
 
 - **PersistGym-lite,** a generated environment in which a fact needed late in an episode is either
   shown or derived, and either recoverable by a lookup or not. A pre-registered probe compares a
-  full-history harness with a truncated window on a low-cost reasoning model.
+  full-history harness with a truncated window on a low-cost reasoning model, with a
+  pre-registered replication on one model from a second provider.
 - **A decomposition of ARC-AGI-3's harness gap,** the score difference between the benchmark's
   Standard and Provider Adapter harnesses, one component at a time, for one model on four games:
   the loss policy, the note-taking instruction and native reasoning replay.
@@ -21,7 +23,7 @@ on one counted run per configuration and game.
 
 | Path | Contents |
 |---|---|
-| `PREREG.md` | The pre-registration: hypotheses, predictions, thresholds and analyses, frozen on 2026-10-01 before the first paid run (PR #4), with dated amendments R1 to R7 in §17 |
+| `PREREG.md` | The pre-registration: hypotheses, predictions, thresholds and analyses, frozen on 2026-10-01 before the first paid run (PR #4), with dated amendments R1 to R8 in §17 |
 | `PLAN.md` | The study plan: designs, milestones, gates, budget and kill criteria, with the amendments that cut its scope |
 | `results/decisions.md` | The decisions log: every gate, approval, ruling, deviation and correction, in order |
 | `results/costs.csv` | The cost ledger: one row per paid call batch (tokens, list and billed-estimate cost) |
@@ -70,6 +72,20 @@ carry a `Co-Authored-By` line. The researcher designed the study, made every dec
 
 This is a one-off study of harness mechanisms, not a model leaderboard: figures plot effects
 against task properties, not models against each other.
+
+## Citing
+
+```bibtex
+@misc{lencevicius2026harness,
+  title         = {When the harness decides success: state that cannot be re-observed},
+  author        = {Lencevicius, Raimondas},
+  year          = {2026},
+  eprint        = {2610.26632},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.AI},
+  url           = {https://arxiv.org/abs/2610.26632}
+}
+```
 
 ## License
 

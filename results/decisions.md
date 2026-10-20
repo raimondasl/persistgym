@@ -1268,3 +1268,25 @@ It is FINAL: 5,600 primary episodes, 10,000 bootstrap resamples, the Bayesian fi
 - **Where they are.** 14 templates hold a refused episode: 13 in the biobank skin and 1 in the archive skin.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the decision, the correction and the script. It adds no spending approval. The pull request is $0.
+
+## 2026-10-20: The preprint is on arXiv (2610.26632); the scoop check before posting
+**Posted.** The researcher submitted preprint v0.10 from their own account on 2026-10-19 (15:59 UTC). arXiv announced it as [arXiv:2610.26632](https://arxiv.org/abs/2610.26632) v1:
+- **Title:** "When the harness decides success: state that cannot be re-observed";
+- **Categories:** cs.AI primary, cross-listed to cs.CL and cs.LG;
+- **ACM classes:** I.2.7 and I.2.11.
+
+The repository was made public before announcement. The tag `preprint-v1` (commit `56063ed`) marks the state the v1 describes. v1 includes R8's replication, by the researcher's decision of 2026-10-19 above. Colleagues' comments go into a v2.
+
+**Scoop check, 2026-10-19,** before submitting (D31, as on 2026-10-16; read-only, $0):
+- **arXiv, all fields, "ARC-AGI-3", newest first.** Nothing after the check of 2026-10-16. The newest entry is still 2610.22289 (15 Oct).
+- **arXiv, abstracts on context compaction, context truncation, reasoning replay, retained reasoning or "agent harness", newest first.** Twelve entries of 15 and 16 Oct. None tests whether dropping or compacting context changes success for facts that cannot be re-observed, and none decomposes ARC's harness gap.
+- **One related paper, for v2 and the AGENT paper.** *Harness-Delta Attribution* (arXiv 2610.22466, 15 Oct) splits the gains of automated harness evolution into overfitting, test-time scaling and a residual. It does not use ARC-AGI-3 or our components.
+- **`arcprize/arc-agi-3-benchmarking`:** no pull request after #57 (16 Oct).
+- **The ARC Prize blog:** no post since 2026-09-03.
+- **Result: D31 does not fire.**
+
+**For AGENT'27** (due 2026-11-13; IEEE proceedings, single-anonymous review):
+- IEEE allows a preprint on arXiv before submission ([IEEE Author Center, "Post Your Paper"](https://conferences.ieeeauthorcenter.ieee.org/get-published/post-your-paper/)).
+- If the paper is accepted, IEEE requires the arXiv entry to be updated with the IEEE citation and DOI, or replaced with the accepted version, its DOI and IEEE's copyright notice. Claude reminds the researcher at camera-ready (2027-01-29).
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the posting and the check. It adds no spending approval. The pull request is $0.

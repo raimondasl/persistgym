@@ -21,9 +21,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from analysis.figures import BLUES, HARNESS_CELLS, INK, SURFACE, plt, _save
-from common import runmeta
 from matplotlib.colors import LinearSegmentedColormap
+
+from analysis.figures import BLUES, HARNESS_CELLS, INK, SURFACE, _save, plt
+from common import runmeta
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 H1H3_OUTPUT = "20261010T232227Z"

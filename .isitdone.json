@@ -1,3 +1,4 @@
 {
-  "timeout": 600
+  "timeout": 2400,
+  "profile": "claim-gated"
 }

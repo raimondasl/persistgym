@@ -27,16 +27,29 @@ stops, no echo exclusion), at repeat 0, and reports:
 5. **Model strings:** the strings the cell's runs and R8's runs report, to compare.
 
 The answering policy matters for reading these: in W-0, Haiku chose no option once the fact was
-evicted (0 of 400), where luna guessed. So success here is not comparable with luna's. The
-comparable readings across models are P(carried) and success given carried.
+evicted (0 of 400), where luna guessed. So success here is not comparable with luna's.
+P(carried) and success given carried do not depend on answering policy, but P(carried) is a
+lower bound whose gap can differ between the models (paraphrase is not measured). They are
+described side by side, never compared.
+
+**Before any reading,** as `analysis.persistgym_h1h3` does for R8 (R8's "Exclusions and errors";
+§13, §2.8):
+- the repeat-0 sweep must be complete (`persistgym_h1h3.completeness`), or closed with
+  ``--sweep-closed``. Otherwise the script refuses, unless ``--allow-incomplete`` is passed,
+  and the output is then PROVISIONAL;
+- §2.8's accounting check (`persistgym_h1h3.accounting_check`): condition 1 on the records,
+  and condition 2's drop-oldest replay from the raw transcripts under ``--raw-root``
+  (default ``results/raw``). A bug stops the analysis (`AccountingBug`). Missing transcripts
+  refuse likewise, or make the output PROVISIONAL with ``--allow-incomplete``;
+- the per-cell exclusion counts (`persistgym_h1h3.exclusion_table`) are reported.
 
 Nothing here is a test. It ranks nothing, and differences from luna's W-n-0 are described, not
-tested. It reads committed run folders only (meta.json, episodes.jsonl), never the raw
-transcripts or any model text.
+tested. Apart from the replay of §2.8, which reads the raw transcripts' message lengths as the
+H1/H3 analysis does, it reads committed run folders only (meta.json, episodes.jsonl).
 
 Run: ``uv run python -m analysis.haiku_notes [--rerun RUN=ORIGINAL ...] [--sweep-closed]``. It
-writes ``results/haiku_notes/<UTC>/notes.json``, ``summary.md`` and ``meta.json``; ``--no-write``
-only prints. ``--experiment`` and ``--cell`` read another Haiku experiment and cell with the
+writes ``results/haiku_notes/<UTC>/notes.json``, ``summary.md`` and ``meta.json``. With
+``--no-write`` it only prints. ``--experiment`` and ``--cell`` read another Haiku experiment and cell with the
 same code (the tests read R8's W-0 runs, whose readings are known).
 """
 
@@ -68,7 +81,7 @@ OUTPUTS = ("notes.json", "summary.md", "meta.json")
 def counted(root: Path, experiment: str, cell: str, links: dict[str, str],
             sweep_closed: bool) -> tuple[list, dict, list[str]]:
     """The runs, every key's resolution and the warnings, for Haiku's `cell` in `experiment`."""
-    # discovery accepts R8's main-run cells and `cell`; only `cell`'s records are read
+    # discovery accepts R8's main-run cells and `cell`. Only `cell`'s records are read.
     cells = tuple(dict.fromkeys((*registered.HAIKU_CELLS, cell)))
     prof = replace(hh.profile(registered.HAIKU_MODEL), experiment=experiment, cells=cells)
     runs, skipped = hh.discover(root / "results", prof=prof)
@@ -110,7 +123,8 @@ def by_template(resolved: dict, cell: str, task_cell: str, T: int) -> np.ndarray
 
 def contrast(a: np.ndarray, b: np.ndarray, idx: np.ndarray) -> dict:
     """mean(a) - mean(b) in percentage points, with its 90% percentile interval over the
-    template resamples `idx` (paired: the same templates for both)."""
+    template resamples `idx`, the same resamples for both sides. Each side's mean is over its
+    own templates with a counted episode, as in R8's analysis."""
     if np.all(np.isnan(a)) or np.all(np.isnan(b)):
         return {"pp": None, "ci90": None}
     point = 100 * (np.nanmean(a) - np.nanmean(b))
@@ -147,10 +161,31 @@ def interval(success_by_template: np.ndarray, idx: np.ndarray) -> list[float] | 
 
 
 def readings(root: Path, experiment: str, cell: str, links: dict[str, str],
-             sweep_closed: bool) -> dict:
+             sweep_closed: bool, *, raw_root: Path | None = None,
+             allow_incomplete: bool = False) -> dict:
     runs, resolved, warn = counted(root, experiment, cell, links, sweep_closed)
-    table, warn2 = hh.episode_table(resolved, api=hh.MESSAGES_API)
     T = registered.HAIKU_T
+    kinds = ((cell, hh.BASE),)
+    incomplete, deviations = hh.completeness(resolved, T, sweep_closed, kinds)
+    if incomplete and not allow_incomplete:
+        raise hh.Refusal("the repeat-0 sweep is incomplete:\n" + "\n".join(
+            f"  - {x}" for x in incomplete) + "\nWait for the runs (a transport failure needs "
+            "its §13 re-run), pass --sweep-closed once the researcher has closed the sweep, or "
+            "pass --allow-incomplete to see what exists (PROVISIONAL).")
+    raw = raw_root or root / "results" / "raw"
+    check = hh.accounting_check(runs, raw, experiment, hh.MESSAGES_API)
+    if check["bugs"]:
+        raise hh.AccountingBug(
+            "PREREG §2.8's bug stop: window-accounting bug(s), so no result is reported until "
+            "they are found:\n" + "\n".join(f"  - {b}" for b in check["bugs"]))
+    if check["missing_transcripts"]:
+        incomplete.append("no raw transcript for run(s) "
+                          + ", ".join(check["missing_transcripts"])
+                          + f" under {raw}: §2.8's replay cannot be made")
+        if not allow_incomplete:
+            raise hh.Refusal(incomplete[-1] + "\nPass --raw-root, or --allow-incomplete "
+                             "(PROVISIONAL).")
+    table, warn2 = hh.episode_table(resolved, api=hh.MESSAGES_API)
     prim = table[(table.repeat == 0) & (table.status == "counted") & (table.cell == cell)
                  & (table.variant == hh.BASE) & (table.template < T)].reset_index(drop=True)
     seed, _ = hh.read_seed(root / "results")
@@ -177,7 +212,13 @@ def readings(root: Path, experiment: str, cell: str, links: dict[str, str],
     models = {"this_cell": sorted({str(m) for run in runs for m in run.model_returned}),
               "r8": sorted({str(m) for run in r8_runs for m in run.model_returned})}
     return {"experiment": experiment, "cell": cell, "model": registered.HAIKU_MODEL,
-            "prereg": registered.R9_REF, "T": T, "bootstrap": {
+            "prereg": registered.R9_REF, "T": T,
+            "status": hh.PROVISIONAL if incomplete else hh.FINAL,
+            "incomplete": incomplete, "deviations": deviations,
+            "accounting_check": {"checked": check["checked"], "bugs": check["bugs"],
+                                 "missing_transcripts": check["missing_transcripts"]},
+            "exclusions": hh.exclusion_table(resolved, T, kinds=kinds, echo=False),
+            "bootstrap": {
                 "resamples": BOOT, "seed": boot_seed,
                 "interval": "90% percentile, template-cluster"},
             "runs": [hh.run_row(r, resolved) for r in runs],
@@ -186,7 +227,7 @@ def readings(root: Path, experiment: str, cell: str, links: dict[str, str],
             "cells": cells, "accounting": hh.accounting(prim, cells=(cell,)),
             "choices_nr_far": choices,
             "within_haiku": within_haiku(resolved, r8_resolved, cell, T, idx),
-            "model_strings": models, "warnings": [*warn, *warn2]}
+            "model_strings": models, "warnings": [*warn, *warn2, *check["warnings"]]}
 
 
 def _pct(x: float | None) -> str:
@@ -204,8 +245,10 @@ def _frac_rate(d: dict | None) -> str:
 def summary(r: dict) -> str:
     lines = [f"# {r['model']} {r['cell']} ({r['experiment']}): R9's descriptive readings",
              "",
-             (f"{r['prereg']}. Exploratory: no test, no label. Repeat 0, "
-              f"{r['counted_repeat_0']} counted episodes. Not a model comparison."),
+             (f"**{r['status']}.** {r['prereg']}. Exploratory: no test, no label. Repeat 0, "
+              f"{r['counted_repeat_0']} counted episodes. Not a model comparison. §2.8's "
+              f"accounting check: {r['accounting_check']['checked']} need steps replayed, "
+              f"{len(r['accounting_check']['bugs'])} bugs."),
              "",
              "| Task cell | Success | 90% interval | Refused episodes | Stopped responses |",
              "|---|---|---|---|---|"]
@@ -216,15 +259,18 @@ def summary(r: dict) -> str:
                      f"{c.get('episodes_with_a_refusal', 0)} | "
                      f"{c.get('stopped_responses') or '-'} |")
     lines += ["", "**§2.8 accounting** (P(carried) is a lower bound):", "",
-              ("| Task cell | S verbatim 0 | P(carried) | Used given carried | Success, not carried, "
-               "no lookup |"),
-              "|---|---|---|---|---|"]
+              ("| Task cell | S verbatim 0 | Near losses | P(carried) | Used given carried | "
+               "Not carried: success, no lookup | Not carried: success, lookup |"),
+              "|---|---|---|---|---|---|---|"]
     for a in r["accounting"]:
         pc = a.get("P_carried") or {}
+        near = a.get("near_losses")
         lines.append(f"| {a['task_cell']} | {a['S_verbatim_0']} | "
+                     f"{'-' if near is None else near} | "
                      f"{_frac(pc.get('carried'), pc.get('n'))} | "
                      f"{_frac_rate(a.get('used_given_carried'))} | "
-                     f"{_frac_rate(a.get('rescued_without_lookup'))} |")
+                     f"{_frac_rate(a.get('rescued_without_lookup'))} | "
+                     f"{_frac_rate(a.get('rescued_with_lookup'))} |")
     lines += ["", "**Choices with the fact evicted** (not-recoverable far cells):", ""]
     for tc, c in r["choices_nr_far"].items():
         lines.append(f"- {tc}: chose an option in {c['chose_an_option']} of {c['episodes']}, "
@@ -242,6 +288,15 @@ def summary(r: dict) -> str:
                                        f"{v['ci90'][1]:+.1f}]"))
     ms = r["model_strings"]
     lines += ["", f"Model strings: this cell {ms['this_cell']}, R8's runs {ms['r8']}."]
+    lines += ["", "**Exclusions** (per task cell, repeat 0; §13):", ""]
+    for e in r["exclusions"]:
+        rest = {k: v for k, v in e.items() if k not in ("kind", "cell", "variant", "task_cell")
+                and v not in (0, None, {}, [])}
+        lines.append(f"- {e.get('task_cell')}: {rest or 'none'}")
+    for x in r["incomplete"]:
+        lines.append(f"- incomplete: {x}")
+    for x in r["deviations"]:
+        lines.append(f"- deviation: {x}")
     if r["not_counted"]:
         lines += ["", f"Keys not counted (pending or excluded): {len(r['not_counted'])}."]
     for w in r["warnings"]:
@@ -266,11 +321,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cell", default=registered.HAIKU_NOTES_CELL)
     ap.add_argument("--rerun", action="append", default=[], metavar="RUN=ORIGINAL")
     ap.add_argument("--sweep-closed", action="store_true")
+    ap.add_argument("--allow-incomplete", action="store_true")
+    ap.add_argument("--raw-root", type=Path, default=None)
     ap.add_argument("--no-write", action="store_true")
     ap.add_argument("--out-dir", type=Path, default=None)
     a = ap.parse_args(argv)
     now = datetime.now(UTC)
-    r = readings(a.results_root, a.experiment, a.cell, _links(a.rerun), a.sweep_closed)
+    r = readings(a.results_root, a.experiment, a.cell, _links(a.rerun), a.sweep_closed,
+                 raw_root=a.raw_root, allow_incomplete=a.allow_incomplete)
     text = summary(r)
     sys.stdout.reconfigure(encoding="utf-8")
     print(text)
@@ -286,7 +344,9 @@ def main(argv: list[str] | None = None) -> int:
         out, git=runmeta.git_state(), experiment="haiku_notes", run_id=run_id,
         cell_or_config=a.cell, config={"experiment": a.experiment, "cell": a.cell,
                                        "rerun_links": r["rerun_links"],
-                                       "sweep_closed": a.sweep_closed},
+                                       "sweep_closed": a.sweep_closed,
+                                       "allow_incomplete": a.allow_incomplete,
+                                       "status": r["status"]},
         model_requested=None, model_returned=None, reasoning_effort=None,
         reasoning_context_requested=None, reasoning_context_echoed=None, template_id=None,
         repeat_index=0, seeds={"bootstrap": r["bootstrap"]["seed"]},

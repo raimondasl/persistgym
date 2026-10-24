@@ -1982,12 +1982,14 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 
 **What it changes.**
 1. **One run is added:** Haiku in W-n-0 on all 8 task cells as the full matrix, main templates 0-199 at repeat 0, base episodes, with R8's settings: `output_config.effort` medium, the default generator config, the standard tier, the episode's own W, and the Messages API as R8 describes it. Its experiment is `persistgym_haiku_notes`, in phase 1a. Not run: repeat 1 (§2.9), so W-n-0's within-template noise on Haiku is not estimated.
-2. **R6 (§17.6) and R8.** R9 is the new dated amendment that R8's change 4 requires before any later paid run. For this run only, it supersedes the parts of R6 that R8's change 4 lists for R8's runs:
+2. **R6 (§17.6) and R8.** R9 is the new dated amendment that R8's change 4 requires before any later paid run. For this run only, it supersedes these of the parts of R6 that R8's change 4 lists for R8's runs:
    - change 1's hard stop and its scope;
-   - change 10 (R8's settings replace D13 for Haiku);
+   - change 6: the run plays Haiku's T = 200, from R8's size record;
+   - change 7: it runs only after Haiku's own G1 (R8), and a failure stops this run only;
+   - change 10: R8's settings replace D13 for Haiku;
    - the project total of about $560.
 
-   The run is bounded by block `5-haiku-notes`'s $100. R6 and R8 otherwise stand. After this run no further paid run is made, and any later paid run needs a new dated amendment.
+   Change 9 (the Holm family) does not arise, since R9 tests nothing. The run is bounded by block `5-haiku-notes`'s $100. R6 and R8 otherwise stand. After this run no further paid run is made, and any later paid run needs a new dated amendment.
 3. **Nothing of R8 changes.** R8's size record, its cells (F-0 and W-0), its runs, its analysis and its reported results stay as they are. Under R8, W-n-0 stays "pre-registered, not run (budget)". R9's run does not trigger R8's "if W-n-0 runs" clauses: its episodes are never pooled into R8's analysis, its §9.1 GLM or its sensitivity fits. It is reported under R9.
 4. **Nothing else changes:** no hypothesis, prediction, threshold or blockquote, nor luna's runs, analyses or Holm family.
 
@@ -1998,14 +2000,14 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
 4. **Within Haiku, against R8's runs,** as luna's W-n-0 was reported alongside H1 (§3 H1): W-n-0's penalty against R8's F-0 on the observed far cells, not recoverable and recoverable, their difference, and W-n-0's lift over R8's W-0 in the not-recoverable cell. These use the same templates and the same resamples, in percentage points. R8's records are those its cited analysis output counted (`results/persistgym_h1h3_haiku/20261019T003254Z/`).
 5. **Model strings:** those R9's run reports, against R8's.
 
-No hypothesis is tested, and no confirmatory or replication label is given. Readings are set against task properties and against Haiku's own R8 cells. Differences from luna's W-n-0 are described, not tested, and never ranked. The script, `analysis/haiku_notes.py`, is in the pull request that adds R9, so it is fixed before any of the run's outcomes exists. Its tests read R8's W-0 runs and reproduce R8's published Δ_H1.
+No hypothesis is tested, and no confirmatory or replication label is given. Readings are set against task properties and against Haiku's own R8 cells. Differences from luna's W-n-0 are described, not tested, and never ranked. The script, `analysis/haiku_notes.py`, is in the pull request that adds R9, so it is fixed before any of the run's outcomes exists. Like R8's analysis, it refuses an incomplete sweep and stops on a §2.8 bug, and it reports the exclusions per cell. Its tests read R8's W-0 runs and reproduce R8's published Δ_H1.
 
-**Budget.** Block `5-haiku-notes`, at most $100 billed, in phase 1a ($221.59 of its $500 cap spent before R9). The forecast is $70.25: 1,600 episodes at $0.043905 each, the W-n-0 pilot's cost per episode in R8's committed forecast (`results/haiku_forecast/20261018T070826Z/`). For comparison, Haiku's W-0 at repeat 0 cost $69.82 over its three runs (the aborted run, its §13 re-run and its continuation), against $68.06 from its own pilot (1,600 × $0.042535). Per counted episode it came in 1.5% above that estimate. The run's `--planned-usd` is $100, at which it stops.
+**Budget.** Block `5-haiku-notes`, at most $100 billed, in phase 1a ($221.59 of its $500 cap spent before R9). The forecast is $70.25: 1,600 episodes at $0.043905 each, the W-n-0 pilot's cost per episode in R8's committed forecast (`results/haiku_forecast/20261018T070826Z/`). For comparison, Haiku's W-0 at repeat 0 was forecast at $68.06 from its own pilot (1,600 × $0.042535). Its three runs (the aborted run, its §13 re-run and its continuation) cost $69.82 in all, 2.6% above that. The 1,600 counted episodes' own costs, $69.09, were 1.5% above it, and the difference is the 26 records that do not count. On the 2.6% basis, W-n-0 would cost about $72. The run's `--planned-usd` is $100, at which it stops.
 
 **What it does not show.** Everything R8 says it does not show also holds here: no model comparison, one model per provider, the same synthetic task family, thinking not inspected. In addition:
 - **Exploratory and not blind.** The run was decided after R8's results, which it might qualify, were seen.
-- **Success is not comparable with luna's.** In W-0, Haiku chose no option once the fact was evicted, where luna guessed near chance. Episodes whose notes did not carry the fact will therefore differ between the models on answering policy alone. The readings comparable across models are P(carried) and success given carried. P(carried) is a lower bound on both models.
-- **Time.** R8's F-0 and W-0 ran on 2026-10-18, and R9's run is about a week later, on a model without a dated snapshot. Item 5 compares the returned model strings.
+- **Success is not comparable with luna's.** In W-0, Haiku chose no option once the fact was evicted, where luna guessed near chance. Episodes whose notes did not carry the fact will therefore differ between the models on answering policy alone. P(carried) and success given carried do not depend on answering policy. But P(carried) is a lower bound whose gap can differ between the models, since how often each paraphrases its notes is not measured. So they are described side by side, never compared.
+- **Time.** R8's F-0 and W-0 ran on 2026-10-18, and R9's run is about six days later, on the same dateless ID, which Anthropic states is a pinned snapshot (§17.8, Model). Serving, load and routing may still differ. Item 5 compares the returned model strings.
 - **One notes instruction.** It tests the Standard harness's one sentence, not note-taking in general.
 
 **As implemented** (the pull request that adds this amendment).

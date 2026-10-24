@@ -1068,7 +1068,7 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        dated snapshot of it refuses, and with the kill switch `R8_IN_EFFECT` False every such
        run refuses (with R6's hard stop off as well). A Haiku run in R9's
        `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9) is held to `_haiku_notes_refusal`, which also
-       reads `repeat_index` (R9 registers repeat 0 only); no other rule reads it."""
+       reads `repeat_index` (R9 registers repeat 0 only). No other rule reads it."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)

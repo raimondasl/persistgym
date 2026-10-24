@@ -1304,10 +1304,10 @@ The repository was made public before announcement. The tag `preprint-v1` (commi
   - W-n-0 against Haiku's own F-0 and W-0 from R8;
   - the returned model strings.
 - **The script,** `analysis/haiku_notes.py`, is in this pull request, before the run exists. On R8's W-0 runs it reproduces R8's published Δ_H1, +101.0 pp [+100.0, +102.5].
-- **Success is not comparable across models:** Haiku did not answer once the fact was evicted, where luna guessed. P(carried) and success given carried are the comparable readings.
+- **Success is not comparable across models:** Haiku did not answer once the fact was evicted, where luna guessed. P(carried) and success given carried do not depend on answering policy, but P(carried) is a lower bound whose gap can differ between the models. They are described side by side, not compared.
 
 **Cost** (from the committed ledger and R8's committed forecast, `results/haiku_forecast/20261018T070826Z/`):
-- **Forecast:** $70.25, that is 1,600 episodes at the W-n-0 pilot's $0.043905 per episode. For comparison, Haiku's W-0 at repeat 0 cost $69.82 over its three runs (the aborted run, its §13 re-run and its continuation), against $68.06 from its own pilot (1,600 × $0.042535). Per counted episode it came in 1.5% above that estimate.
+- **Forecast:** $70.25, that is 1,600 episodes at the W-n-0 pilot's $0.043905 per episode. For comparison, Haiku's W-0 at repeat 0 was forecast at $68.06 from its own pilot (1,600 × $0.042535). Its three runs (the aborted run, its §13 re-run and its continuation) cost $69.82, 2.6% above that. The counted episodes' own costs, $69.09, were 1.5% above it. On the 2.6% basis W-n-0 would cost about $72.
 - **Limit:** $100 billed. The run's `--planned-usd` is $100, at which it stops.
 - **Phase 1a:** $221.59 spent of its $500 cap. At most $321.59 after this block.
 - **Project total so far:** $750.11 billed (87 ledger rows).

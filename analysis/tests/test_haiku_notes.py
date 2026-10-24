@@ -13,10 +13,16 @@ from analysis import haiku_notes as hn
 R8_OUT = hn.REPO_ROOT / "results" / "persistgym_h1h3_haiku" / "20261019T003254Z" / "meta.json"
 
 
+def r8_links() -> dict:
+    return dict(json.loads(R8_OUT.read_text(encoding="utf-8"))["config"]["inputs"]["rerun_links"])
+
+
 @pytest.fixture(scope="module")
 def w0():
-    links = json.loads(R8_OUT.read_text(encoding="utf-8"))["config"]["inputs"]["rerun_links"]
-    return hn.readings(hn.REPO_ROOT, "persistgym_haiku", "W-0", dict(links), sweep_closed=True)
+    """R8's W-0 read by R9's code. Without the raw transcripts (a checkout without results/raw)
+    the output is PROVISIONAL and §2.8's replay is skipped."""
+    return hn.readings(hn.REPO_ROOT, "persistgym_haiku", "W-0", r8_links(), sweep_closed=True,
+                       allow_incomplete=True)
 
 
 def test_defaults_are_r9s_run():
@@ -70,3 +76,25 @@ def test_the_within_haiku_contrast_reproduces_r8s_delta_h1(w0):
     assert wh["difference"]["ci90"] == pytest.approx([100.0, 102.5])
     assert wh["lift_over_w0_nr"]["pp"] == pytest.approx(0.0)
     assert w0["model_strings"] == {"this_cell": ["claude-haiku-5-5"], "r8": ["claude-haiku-5-5"]}
+
+
+def test_the_accounting_check_and_exclusions_on_r8s_w0(w0):
+    exc = {e["task_cell"]: e for e in w0["exclusions"]}
+    assert sum(e["keys"] for e in exc.values()) == 1600
+    if w0["accounting_check"]["missing_transcripts"]:
+        assert w0["status"] == "PROVISIONAL"
+        pytest.skip("no raw transcripts in this checkout: §2.8's replay not made")
+    assert w0["status"] == "FINAL" and w0["incomplete"] == []
+    assert w0["accounting_check"]["bugs"] == [] and w0["accounting_check"]["checked"] > 0
+
+
+def test_an_incomplete_sweep_refuses_or_is_provisional(monkeypatch):
+    """With one more template than R8 played, template 200 is missing: the script refuses, or
+    with --allow-incomplete reports PROVISIONAL."""
+    from harnesses import registered
+    monkeypatch.setattr(registered, "HAIKU_T", 201)
+    with pytest.raises(hn.hh.Refusal, match="incomplete"):
+        hn.readings(hn.REPO_ROOT, "persistgym_haiku", "W-0", r8_links(), sweep_closed=False)
+    r = hn.readings(hn.REPO_ROOT, "persistgym_haiku", "W-0", r8_links(), sweep_closed=False,
+                    allow_incomplete=True)
+    assert r["status"] == "PROVISIONAL" and r["incomplete"]

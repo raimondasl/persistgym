@@ -1207,7 +1207,7 @@ All 39 items were decided by the researcher on 2026-10-01. The text above carrie
 | D39 | §4.3, §4.4 | Controls and validity | Accepted, with D2's partial-memory heuristics added to the per-cell baselines. As implemented (PR #25, generator 0.3.0): the withheld control replaces each fact and clue binding with an equal-length binding for a stand-in entity whose values are never an option, clue or distractor value; the rule sentence, which names no entity, is kept verbatim [Amended 2026-10-02, see §17.3] |
 
 ## 17. Amendment log
-Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5), R6 (2026-10-09, §17.6) R7 (2026-10-10, §17.7) and R8 (2026-10-18, §17.8), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void; A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
+Amendments made: R1 (2026-10-02, §17.1), R2 (2026-10-02, §17.2), R3 (2026-10-02, §17.3), R4 (2026-10-03, §17.4), R5 (2026-10-07, §17.5), R6 (2026-10-09, §17.6), R7 (2026-10-10, §17.7), R8 (2026-10-18, §17.8) and R9 (2026-10-24, §17.9), at the end of this file. Under R6, phase 2 is not run, so A-SC is void, and the failure labels are not made, so A-judge is void. A-cfg was not triggered. Pre-declared amendments, each merged by PR before the event it guards:
 - **A-cfg:** only if the block-1 pilot forces an ARC config change after the freeze record (§7.1) is filled; merged before the first block-2 run. It writes the new values into the §7.1 tables themselves and is merged together with the regenerated `arc/config_freeze.json`: the ARC launcher reads §7.1, so a table added only to this log would make every paid ARC run refuse (PR #23).
 - **A-SC:** the StateCarry code commit and config hash, before any G3 evaluation run and again before any held-out run (§8). [Amended 2026-10-09, see §17.6]
 - **A-judge:** the LLM-judge model and prompt, before failure labelling (§9.7). [Amended 2026-10-09, see §17.6]
@@ -1970,3 +1970,49 @@ If an arm has fewer than 20 scorable trials after 40 attempts, the toggle is not
   - the Anthropic transport (`harnesses/anthropic_transport.py`), the payload snapshot tests of Haiku's cells, and `harnesses count-tokens`;
   - the `anthropic` SDK 1.15.0 in `uv.lock`, and `ANTHROPIC_API_KEY` (the name only) in `.env.example`.
 - **Not yet written,** each a $0 pull request before the step that needs it: the size rule's forecast script, before the size record; and the extension of `analysis/persistgym_h1h3.py`, before any main episode.
+
+### 17.9 Amendment R9 (2026-10-24): one exploratory run of claude-haiku-5-5's notes cell (W-n-0)
+**Status.** Proposed by Claude at the researcher's request of 2026-10-24. It takes effect when the researcher merges the pull request that adds it. That merge adopts the run below, its analysis and the code that enforces it, together with PLAN amendment A11. The version line and the "Frozen" status line are unchanged. R9 adds no spending approval of its own: the run needs block `5-haiku-notes`'s approval line in `results/decisions.md` (§12), which the same pull request adds.
+
+**Reason.** R8 (§17.8) registered W-n-0 on claude-haiku-5-5 ("Haiku"), but R8's size rule dropped it before any main episode, because the forecast with it exceeded R8's limit (`results/decisions.md`, 2026-10-18, "Haiku's size record"). The note-taking instruction's reading therefore rests on gpt-6-luna alone. On luna, W-n-0 scored 28.5% in the observed, not-recoverable far cell, its notes carried the fact in at least 21.5% of those episodes, and the model used the fact in all of them. One run of W-n-0 on Haiku describes whether that reading recurs on a second provider's model. The occasion is practical: the researcher holds Anthropic API credits that expire on 2026-10-25.
+
+**Timing, stated.**
+- R9 is written after R8's results were read, Haiku's included, and after the preprint was published. In W-0, Haiku chose no option in any of the 400 not-recoverable far episodes. The run is therefore exploratory. It is not a replication in R4's or R8's sense.
+- No main episode of Haiku in W-n-0 exists. Its one pilot (8 episodes, R8) stays blinded under §11, and its outcomes are not read.
+
+**What it changes.**
+1. **One run is added:** Haiku in W-n-0 on all 8 task cells as the full matrix, main templates 0-199 at repeat 0, base episodes, with R8's settings: `output_config.effort` medium, the default generator config, the standard tier, the episode's own W, and the Messages API as R8 describes it. Its experiment is `persistgym_haiku_notes`, in phase 1a. Not run: repeat 1 (§2.9), so W-n-0's within-template noise on Haiku is not estimated.
+2. **R6 (§17.6) and R8.** R9 is the new dated amendment that R8's change 4 requires before any later paid run. For this run only, it supersedes these of the parts of R6 that R8's change 4 lists for R8's runs:
+   - change 1's hard stop and its scope;
+   - change 6: the run plays Haiku's T = 200, from R8's size record;
+   - change 7: it runs only after Haiku's own G1 (R8), and a failure stops this run only;
+   - change 10: R8's settings replace D13 for Haiku;
+   - the project total of about $560.
+
+   Change 9 (the Holm family) does not arise, since R9 tests nothing. The run is bounded by block `5-haiku-notes`'s $100. R6 and R8 otherwise stand. After this run no further paid run is made, and any later paid run needs a new dated amendment.
+3. **Nothing of R8 changes.** R8's size record, its cells (F-0 and W-0), its runs, its analysis and its reported results stay as they are. Under R8, W-n-0 stays "pre-registered, not run (budget)". R9's run does not trigger R8's "if W-n-0 runs" clauses: its episodes are never pooled into R8's analysis, its §9.1 GLM or its sensitivity fits. It is reported under R9.
+4. **Nothing else changes:** no hypothesis, prediction, threshold or blockquote, nor luna's runs, analyses or Holm family.
+
+**Analysis (descriptive only).** On R9's run at repeat 0, with R8's "Exclusions and errors" (§17.8) as they apply to Haiku: §13's exclusions on the Messages API, refusals and empty replies scored as invalid actions (0 at the need step), and a run stopped by the request-side check. §2.8's accounting check, its bug stop and its near-loss counts apply as on R8's window cell. The readings:
+1. **Success per task cell,** with a 90% percentile interval from §9.1's template-cluster bootstrap: 10,000 template resamples with seed SEED + 10, the same resamples as R8's analysis. Each cell's step responses that stopped short are counted by reason.
+2. **§2.8's accounting** per task cell, as for luna's W-n-0: S_verbatim, P(carried) (a lower bound, since the string match misses paraphrase), success given carried, and success among the episodes not carried.
+3. **Choices with the fact evicted:** in the 2 not-recoverable far cells, the episodes that chose one of the 10 options at the need step, and how many were correct, as reported for Haiku's W-0 (`analysis/replication_readings.py`).
+4. **Within Haiku, against R8's runs,** as luna's W-n-0 was reported alongside H1 (§3 H1): W-n-0's penalty against R8's F-0 on the observed far cells, not recoverable and recoverable, their difference, and W-n-0's lift over R8's W-0 in the not-recoverable cell. These use the same templates and the same resamples, in percentage points. R8's records are those its cited analysis output counted (`results/persistgym_h1h3_haiku/20261019T003254Z/`).
+5. **Model strings:** those R9's run reports, against R8's.
+
+No hypothesis is tested, and no confirmatory or replication label is given. Readings are set against task properties and against Haiku's own R8 cells. Differences from luna's W-n-0 are described, not tested, and never ranked. The script, `analysis/haiku_notes.py`, is in the pull request that adds R9, so it is fixed before any of the run's outcomes exists. Like R8's analysis, it refuses an incomplete sweep and stops on a §2.8 bug, and it reports the exclusions per cell. Its tests read R8's W-0 runs and reproduce R8's published Δ_H1.
+
+**Budget.** Block `5-haiku-notes`, at most $100 billed, in phase 1a ($221.59 of its $500 cap spent before R9). The forecast is $70.25: 1,600 episodes at $0.043905 each, the W-n-0 pilot's cost per episode in R8's committed forecast (`results/haiku_forecast/20261018T070826Z/`). For comparison, Haiku's W-0 at repeat 0 was forecast at $68.06 from its own pilot (1,600 × $0.042535). Its three runs (the aborted run, its §13 re-run and its continuation) cost $69.82 in all, 2.6% above that. The 1,600 counted episodes' own costs, $69.09, were 1.5% above it, and the difference is the 26 records that do not count. On the 2.6% basis, W-n-0 would cost about $72. The run's `--planned-usd` is $100, at which it stops.
+
+**What it does not show.** Everything R8 says it does not show also holds here: no model comparison, one model per provider, the same synthetic task family, thinking not inspected. In addition:
+- **Exploratory and not blind.** The run was decided after R8's results, which it might qualify, were seen.
+- **Success is not comparable with luna's.** In W-0, Haiku chose no option once the fact was evicted, where luna guessed near chance. Episodes whose notes did not carry the fact will therefore differ between the models on answering policy alone. P(carried) and success given carried do not depend on answering policy. But P(carried) is a lower bound whose gap can differ between the models, since how often each paraphrases its notes is not measured. So they are described side by side, never compared.
+- **Time.** R8's F-0 and W-0 ran on 2026-10-18, and R9's run is about six days later, on the same dateless ID, which Anthropic states is a pinned snapshot (§17.8, Model). Serving, load and routing may still differ. Item 5 compares the returned model strings.
+- **One notes instruction.** It tests the Standard harness's one sentence, not note-taking in general.
+
+**As implemented** (the pull request that adds this amendment).
+- `harnesses/registered.py`: `R9_IN_EFFECT` (a kill switch), `HAIKU_NOTES_EXPERIMENT`, `HAIKU_NOTES_CELL` and `_haiku_notes_refusal`. The check runs inside `haiku_refusal`, after R8's kill switch, so switching R8 off stops this run too. `r6_refusal` passes the run on to it, as it does R8's runs. `check_run_settings` takes the run's `repeat_index`, which `harnesses run` passes, and the check refuses any repeat but 0.
+- `common/costs.py` and `common/paidlock.py` place `persistgym_haiku_notes` in phase 1a and in the PersistGym stream.
+- The Anthropic transport admits a run in `persistgym_haiku_notes` under a block that lists it, and judges R8's runs as before. The general guard admits a run only in its own block's experiments, so block `5-haiku-notes` covers this run and nothing of R8's, and block `4-haiku` does not cover this run.
+- `harnesses/DESIGN.md` §13.10 describes the guard.
+- Tests: `harnesses/tests/test_haiku_notes_guard.py`, `analysis/tests/test_haiku_notes.py`, and the echo-count test's list of PersistGym experiments.

@@ -63,6 +63,9 @@ EXPERIMENT_PHASE = {
     # to R8 (its main runs after HAIKU_G1_PASSED), and every one refuses if the kill switch
     # R8_IN_EFFECT is set False
     "persistgym_haiku": "1a",
+    # PREREG §17.9 (amendment R9): claude-haiku-5-5's W-n-0 cell, one exploratory run with R8's
+    # settings (harnesses/registered.py _haiku_notes_refusal; kill switch R9_IN_EFFECT)
+    "persistgym_haiku_notes": "1a",
     "arc_path": "1b",
     "statecarry_persistgym": "2",
     "statecarry_arc_dev": "2",

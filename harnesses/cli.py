@@ -212,7 +212,8 @@ Anthropic's free token-counting endpoint is called):
         --task-cell observed-nonrec-far
     uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 10
 The paid runs (with --approved-block and amounts from R8's approval line, which must list
-persistgym_haiku: the Anthropic transport refuses any other block, its pilots too), under the
+persistgym_haiku: the Anthropic transport refuses any other block, its pilots too, except for
+R9's W-n-0 run, whose block lists persistgym_haiku_notes), under the
 rules `haiku_refusal` holds them to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
 restated, then withheld; the main runs of `registered.HAIKU_CELLS` on all 8 task cells (F-0
@@ -503,7 +504,8 @@ def cmd_run(a) -> int:
         RESULTS, split=a.split, variant=a.variant,
         task_cells=tuple(c for c, n in matrix.templates if n),
         request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
-        templates=(a.start, a.start + matrix.n_templates), matrix=matrix.name)
+        templates=(a.start, a.start + matrix.n_templates), matrix=matrix.name,
+        repeat_index=matrix.repeat_index)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2

@@ -1319,3 +1319,42 @@ The repository was made public before announcement. The tag `preprint-v1` (commi
 approved_block: 5-haiku-notes | experiments: persistgym_haiku_notes | max_usd: 100
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R9 (`PREREG.md` §17.9), PLAN amendment A11 and the code that enforces them. It also approves block `5-haiku-notes` up to $100 billed.
+
+## 2026-10-24: R9's W-n-0 run on claude-haiku-5-5: results (exploratory)
+**The run.** `20261024T060051Z-W-n-0-claude-haiku-5-5` in `persistgym_haiku_notes`, started after the researcher merged PR #80.
+- **Outcome:** 1,600 episodes, all ending normally (exit `COMPLETED`), with no API error, no rate-limit stop and no continuation.
+- **Model string:** `claude-haiku-5-5` on all 38,857 responses, the same as R8's runs.
+- **Cost:** $70.96 billed, against a forecast of $70.25.
+- **Spend:** block `5-haiku-notes` $70.96 of $100. Phase 1a $292.54 of $500. Project total $821.07 over 88 ledger rows.
+- **No further paid run** is made without a new amendment (R9, A11).
+
+**The analysis** (`analysis/haiku_notes.py`, fixed in PR #80 before the run existed; output `results/haiku_notes/20261024T073307Z/`, from a clean commit):
+- **Status:** FINAL. The sweep is complete with no exclusion. §2.8's accounting check replayed all 1,600 need steps and found 0 bugs.
+- **Re-derivation:** a separate script re-derived every reading from the run's records and R8's, with no mismatch.
+
+**Readings** (descriptive, not tested; 200 episodes per task cell):
+
+| Task cell | Success (90% interval) | P(carried), lower bound | Success given carried |
+|---|---|---|---|
+| observed, not recoverable, far | 4/200 = 2.0% (0.5 to 3.5) | 8/200 = 4.0% | 4/8 |
+| derived, not recoverable, far | 9/200 = 4.5% (2.5 to 7.0) | 72/200 = 36.0% | 9/72 |
+| observed, recoverable, far | 198/200 = 99.0% | 4/200 = 2.0% | 2/4 |
+| derived, recoverable, far | 199/200 = 99.5% | 51/200 = 25.5% | 51/51 |
+| the four near cells | 195 to 199 of 200 each | - | - |
+
+- **Within Haiku, against R8's runs** (observed far cells, the same templates):
+  - W-n-0's penalty against F-0 is +98.0 pp [+96.5, +99.5] not recoverable and +0.0 pp [−1.5, +1.5] recoverable;
+  - their difference is +98.0 pp [+95.5, +100.5];
+  - W-n-0's lift over W-0 in the not-recoverable cell is +2.0 pp [+0.5, +3.5].
+- **Choices with the fact evicted:** an option was chosen in 4 of 200 (observed) and 9 of 200 (derived) not-recoverable far episodes, all of them correct. Every other episode in those cells resolved to no option.
+- **Refusals:** 50 episodes of 1,600 had a refused step, all category "bio", 18 of them in the derived not-recoverable far cell. In R8's W-0 the count was 26 of 1,600.
+- **Unexplained, reported as such:** in the derived not-recoverable far cell, the notes carried the fact in 72 episodes, but only 9 succeeded. The other 63 all resolved to no option at the need step: 55 unparsed replies and 8 other actions. None had a refusal at the need step. In 61 of the 63, the notes held both the derived value and its entity by the string match. These readings cannot say why a carried fact went unused. Finding out would mean reading the model's replies, which R9 does not register.
+
+**What this does and does not show.**
+- On Haiku, the note-taking instruction recovered almost none of what the window lost: 2.0% and 4.5% in the not-recoverable far cells, against 0% for W-0.
+- luna's W-n-0 scored 28.5% and 26.5% in the same cells. luna's notes carried the fact in at least 21.5% and 19.5% of episodes, and luna used it every time (43/43, 39/39). This is described side by side, not compared:
+  - success differs between the models on answering policy (Haiku declines where luna guesses);
+  - P(carried) is a lower bound whose gap can differ between them.
+- The run is exploratory, decided after R8's results, on one model, on synthetic tasks. It is not a test of note-taking in general, only of the Standard harness's one sentence.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the run and its readings. It adds no spending approval. The pull request is $0.

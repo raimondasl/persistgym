@@ -1,0 +1,728 @@
+{
+  "experiment": "persistgym_haiku_notes",
+  "cell": "W-n-0",
+  "model": "claude-haiku-5-5",
+  "prereg": "PREREG.md \u00a717.9 (amendment R9)",
+  "T": 200,
+  "status": "FINAL",
+  "incomplete": [],
+  "deviations": [],
+  "accounting_check": {
+    "checked": 1600,
+    "bugs": [],
+    "missing_transcripts": []
+  },
+  "exclusions": [
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "keys": 200,
+      "never_played": 0,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    }
+  ],
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 4086943125952605544,
+    "interval": "90% percentile, template-cluster"
+  },
+  "runs": [
+    {
+      "run_id": "20261024T060051Z-W-n-0-claude-haiku-5-5",
+      "cell": "W-n-0",
+      "variants": [
+        "base"
+      ],
+      "repeat_index": 0,
+      "started_utc": "2026-10-24T06:00:52+00:00",
+      "exit_reason": "COMPLETED",
+      "records": 1600,
+      "records_counted": 1600,
+      "model_returned": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ],
+  "rerun_links": {},
+  "sweep_closed": false,
+  "counted_repeat_0": 1600,
+  "not_counted": [],
+  "cells": [
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "successes": 195,
+      "rate": 0.975,
+      "content_failures": {
+        "incomplete": 2,
+        "unparsed": 2
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 9
+      },
+      "episodes_with_a_refusal": 5,
+      "interval_90": [
+        0.955,
+        0.99
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "successes": 4,
+      "rate": 0.02,
+      "content_failures": {
+        "incomplete": 1,
+        "unparsed": 159
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 12
+      },
+      "episodes_with_a_refusal": 5,
+      "interval_90": [
+        0.005,
+        0.035
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {},
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 3
+      },
+      "episodes_with_a_refusal": 3,
+      "interval_90": [
+        0.985,
+        1.0
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "successes": 198,
+      "rate": 0.99,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 5
+      },
+      "episodes_with_a_refusal": 2,
+      "interval_90": [
+        0.975,
+        1.0
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 15
+      },
+      "episodes_with_a_refusal": 7,
+      "interval_90": [
+        0.985,
+        1.0
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "successes": 9,
+      "rate": 0.045,
+      "content_failures": {
+        "incomplete": 1,
+        "unparsed": 160
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 39
+      },
+      "episodes_with_a_refusal": 18,
+      "interval_90": [
+        0.025,
+        0.07
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "unparsed": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 7
+      },
+      "episodes_with_a_refusal": 4,
+      "interval_90": [
+        0.985,
+        1.0
+      ]
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "successes": 199,
+      "rate": 0.995,
+      "content_failures": {
+        "incomplete": 1
+      },
+      "exploratory": false,
+      "stopped_responses": {
+        "refusal:bio": 9
+      },
+      "episodes_with_a_refusal": 6,
+      "interval_90": [
+        0.985,
+        1.0
+      ]
+    }
+  ],
+  "accounting": [
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 195,
+        "rate": 0.975
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 8,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 4,
+        "rate": 0.02
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 192,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 8,
+        "rate": 0.04
+      },
+      "used_given_carried": {
+        "n": 8,
+        "successes": 4,
+        "rate": 0.5
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "observed-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 4,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 198,
+        "rate": 0.99
+      },
+      "rescued_with_lookup": {
+        "n": 196,
+        "successes": 196,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 4,
+        "rate": 0.02
+      },
+      "used_given_carried": {
+        "n": 4,
+        "successes": 2,
+        "rate": 0.5
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-nonrec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-nonrec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 72,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 9,
+        "rate": 0.045
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 128,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 72,
+        "rate": 0.36
+      },
+      "used_given_carried": {
+        "n": 72,
+        "successes": 9,
+        "rate": 0.125
+      },
+      "exploratory": false
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-rec-near",
+      "n": 200,
+      "S_planned": 1,
+      "S_verbatim_1": 200,
+      "S_verbatim_0": 0,
+      "S_verbatim_unknown": 0,
+      "S_1": 200,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": 0,
+      "residual_at_S1": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "success_given_S0": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_with_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "rescued_without_lookup": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "P_carried": {
+        "n": 0,
+        "carried": 0,
+        "rate": null
+      },
+      "used_given_carried": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "exploratory": false,
+      "near_loss_share": 0.0
+    },
+    {
+      "cell": "W-n-0",
+      "task_cell": "derived-rec-far",
+      "n": 200,
+      "S_planned": 0,
+      "S_verbatim_1": 0,
+      "S_verbatim_0": 200,
+      "S_verbatim_unknown": 0,
+      "S_1": 51,
+      "planned_vs_verbatim_mismatch": 0,
+      "near_losses": null,
+      "residual_at_S1": {
+        "n": 0,
+        "successes": 0,
+        "rate": null
+      },
+      "success_given_S0": {
+        "n": 200,
+        "successes": 199,
+        "rate": 0.995
+      },
+      "rescued_with_lookup": {
+        "n": 148,
+        "successes": 148,
+        "rate": 1.0
+      },
+      "rescued_without_lookup": {
+        "n": 1,
+        "successes": 0,
+        "rate": 0.0
+      },
+      "P_carried": {
+        "n": 200,
+        "carried": 51,
+        "rate": 0.255
+      },
+      "used_given_carried": {
+        "n": 51,
+        "successes": 51,
+        "rate": 1.0
+      },
+      "exploratory": false
+    }
+  ],
+  "choices_nr_far": {
+    "observed-nonrec-far": {
+      "episodes": 200,
+      "chose_an_option": 4,
+      "correct": 4
+    },
+    "derived-nonrec-far": {
+      "episodes": 200,
+      "chose_an_option": 9,
+      "correct": 9
+    }
+  },
+  "within_haiku": {
+    "penalty_against_f0_nr": {
+      "pp": 98.0,
+      "ci90": [
+        96.5,
+        99.5
+      ]
+    },
+    "penalty_against_f0_r": {
+      "pp": 0.0,
+      "ci90": [
+        -1.5000000000000013,
+        1.5000000000000013
+      ]
+    },
+    "difference": {
+      "pp": 98.0,
+      "ci90": [
+        95.5,
+        100.5
+      ]
+    },
+    "lift_over_w0_nr": {
+      "pp": 2.0,
+      "ci90": [
+        0.5,
+        3.5000000000000004
+      ]
+    },
+    "note": "observed far cells, repeat 0, the same templates; described, not tested"
+  },
+  "model_strings": {
+    "this_cell": [
+      "claude-haiku-5-5"
+    ],
+    "r8": [
+      "claude-haiku-5-5"
+    ]
+  },
+  "warnings": []
+}

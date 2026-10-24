@@ -326,6 +326,26 @@ R8_STOP = (f"{HAIKU_MODEL} runs only under {R8_REF}, which is switched off "
            "pilots and its validity run included, until the researcher's pull request sets it "
            "True again")
 
+# --- R9 (PREREG §17.9): claude-haiku-5-5's notes cell, one exploratory run ---
+R9_REF = "PREREG.md §17.9 (amendment R9)"
+R9_IN_EFFECT = True
+"""Whether amendment R9 (PREREG §17.9) is in effect. True since the pull request that adds R9,
+merged by the researcher: `haiku_refusal` lets claude-haiku-5-5's W-n-0 cell run in
+`HAIKU_NOTES_EXPERIMENT`, as an exploratory run with R8's settings, after `HAIKU_G1_PASSED`
+(`_haiku_notes_refusal`). A kill switch: set False, every run in that experiment refuses
+(`R9_STOP`), and R8's runs are unaffected. With `R8_IN_EFFECT` False it refuses too (R8's
+`R8_STOP` comes first). Tests monkeypatch it."""
+HAIKU_NOTES_EXPERIMENT = "persistgym_haiku_notes"
+"""R9: the experiment of the exploratory W-n-0 run. It is kept apart from R8's
+`persistgym_haiku`, so R8's runs, its size record (`HAIKU_CELLS`) and the inputs of its
+analysis stay as they are."""
+HAIKU_NOTES_CELL = "W-n-0"
+"""R9: the one harness cell it runs, R8's third replay-off cell, which R8's size record did not
+run (`HAIKU_CELLS`)."""
+R9_STOP = (f"{HAIKU_NOTES_EXPERIMENT} runs only under {R9_REF}, which is switched off "
+           "(harnesses/registered.py R9_IN_EFFECT is False): every run in it refuses until the "
+           "researcher's pull request sets it True again")
+
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
 DERIVED_FAR_EPISODES = 8  # 2 derived-far task cells x 2 pilot templates x 2 arms
@@ -694,7 +714,8 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
       refuses. So a pilot of another request cannot use up the allowance;
     * claude-haiku-5-5 (R8, PREREG §17.8): while `R8_IN_EFFECT` is True, its runs in R8's
       three experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new
-      dated amendment R6 change 1 asks for, and every other Haiku run refuses (another
+      dated amendment R6 change 1 asks for, and so do its runs in R9's
+      `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9), and every other Haiku run refuses (another
       `claude-*` model as one that is not registered); with the kill switch off
       (`R8_IN_EFFECT` False) every Haiku run refuses (`R8_STOP`), and so does every other
       model on the Messages wire (any `claude-*` string, `_on_messages_wire`);
@@ -710,7 +731,8 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
         return (f"{R6_STOP}; got model {model}, which is not a registered model (the "
                 f"registered ones: {', '.join(REGISTERED_EFFORT)}, or a dated snapshot "
                 "-YYYY-MM-DD of one)")
-    if family == HAIKU_MODEL and experiment in HAIKU_EXPERIMENTS and cell is not None:
+    if (family == HAIKU_MODEL and experiment in (*HAIKU_EXPERIMENTS, HAIKU_NOTES_EXPERIMENT)
+            and cell is not None):
         return None
     if family == LUNA_MODEL and experiment == LUNA_EXPERIMENT:
         return None
@@ -861,9 +883,14 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
       (`HAIKU_RUN`), and only once `HAIKU_G1_PASSED` records Haiku's G1 on the default config.
     `task_cells`, `request`, `templates` and, for a main harness-cell run, `matrix` left as
     None refuse. The engagement checks, R3's and R6's rules for the OpenAI models, and luna's
-    and sol's G1 are never read for Haiku."""
+    and sol's G1 are never read for Haiku. A run in R9's `HAIKU_NOTES_EXPERIMENT` (PREREG
+    §17.9) is held to `_haiku_notes_refusal` instead."""
     if not R8_IN_EFFECT:
         return f"{R8_STOP}; got --experiment {experiment}, cell {cell}{_not_haiku(model)}"
+    if experiment == HAIKU_NOTES_EXPERIMENT:
+        return _haiku_notes_refusal(model, effort, cell, generator_hash, split=split,
+                                    variant=variant, task_cells=task_cells, request=request,
+                                    templates=templates, matrix=matrix)
     single = cell == HAIKU_SINGLE_TURN_CELL
     wrong = [what for what, bad in (
         (f"--experiment {experiment}", experiment not in HAIKU_EXPERIMENTS),
@@ -943,6 +970,49 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
                 f"Haiku replication's G1 gate as passed on generator config "
                 f"{generator_hash[:12]} (harnesses/registered.py HAIKU_G1_PASSED, set by its "
                 f"G1 decision PR; {R8_REF})")
+    return None
+
+
+def _haiku_notes_refusal(model: str, effort: str, cell: str, generator_hash: str, *,
+                         split: str, variant: str, task_cells: tuple[str, ...] | None,
+                         request: dict | None, templates: tuple[int, int] | None,
+                         matrix: str | None) -> str | None:
+    """Why a run in R9's `HAIKU_NOTES_EXPERIMENT` must refuse, or None (PREREG §17.9; fail
+    closed). With `R9_IN_EFFECT` False every such run refuses (`R9_STOP`). While it is True,
+    the run is claude-haiku-5-5's `HAIKU_NOTES_CELL` (W-n-0) with R8's settings: --effort
+    medium on the default generator config with `HAIKU_REQUEST`, the full matrix on all 8
+    task cells, main templates within 0 to `HAIKU_T` - 1, base episodes, and only once
+    `HAIKU_G1_PASSED` records Haiku's G1 on that config. `task_cells`, `request`, `templates`
+    and `matrix` left as None refuse. R9 registers repeat 0 only. The guard does not see the
+    repeat index, so block `5-haiku-notes`'s cap bounds any other run."""
+    if not R9_IN_EFFECT:
+        return f"{R9_STOP}; got cell {cell}{_not_haiku(model)}"
+    wrong = [what for what, bad in (
+        (f"model {model}", model_family(model) != HAIKU_MODEL),
+        (f"--effort {effort}", effort != HAIKU_EFFORT),
+        (f"generator config {generator_hash[:12]}", generator_hash != HAIKU_GENERATOR_HASH),
+        (f"cell {cell}", cell != HAIKU_NOTES_CELL),
+        (f"--split {split}", split != "main"),
+        (f"--variant {variant}", variant != "base")) if bad]
+    wrong += _request_wrong(request, HAIKU_REQUEST)
+    if matrix != HAIKU_MATRIX:
+        wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
+                      None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+    if task_cells is None:
+        wrong.append("task cells (not given)")
+    elif sorted(task_cells) != sorted(HAIKU_TASK_CELLS):
+        wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
+    wrong += _haiku_templates_wrong(templates, HAIKU_T, "main")
+    if wrong:
+        return (f"{HAIKU_NOTES_EXPERIMENT} runs {HAIKU_MODEL}'s {HAIKU_NOTES_CELL} cell only "
+                f"({R9_REF}): cell {HAIKU_NOTES_CELL} on all 8 task cells (the full matrix), "
+                f"--split main, main templates 0-{HAIKU_T - 1}, --variant base, at --effort "
+                f"{HAIKU_EFFORT} on the default generator config, with --mode standard, "
+                "--service-tier standard and no --W; got " + "; ".join(wrong))
+    if HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
+        return (f"{HAIKU_NOTES_EXPERIMENT} runs {HAIKU_MODEL} only after the researcher has "
+                f"recorded the Haiku replication's G1 gate as passed on generator config "
+                f"{generator_hash[:12]} (harnesses/registered.py HAIKU_G1_PASSED; {R9_REF})")
     return None
 
 

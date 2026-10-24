@@ -1290,3 +1290,25 @@ The repository was made public before announcement. The tag `preprint-v1` (commi
 - If the paper is accepted, IEEE requires the arXiv entry to be updated with the IEEE citation and DOI, or replaced with the accepted version, its DOI and IEEE's copyright notice. Claude reminds the researcher at camera-ready (2027-01-29).
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the posting and the check. It adds no spending approval. The pull request is $0.
+
+## 2026-10-24: Amendment R9: one exploratory run of claude-haiku-5-5's notes cell (W-n-0); block 5-haiku-notes
+**Request.** The researcher asked on 2026-10-24 whether anything useful could run on Anthropic API credits of about $70 that expire on 2026-10-25, spending more if worthwhile. Claude proposed the one run the tooling already supports: W-n-0 on claude-haiku-5-5, which R8's size rule dropped before any main episode (2026-10-18, "Haiku's size record"). The researcher asked for the amendment pull request.
+
+**Amendment R9** (`PREREG.md` §17.9):
+- **The run:** Haiku in W-n-0 on all 8 task cells, main templates 0-199 at repeat 0, with R8's settings, in its own experiment `persistgym_haiku_notes`.
+- **Exploratory:** it was decided after R8's results were read. Nothing of R8 changes, and under R8, W-n-0 stays "pre-registered, not run (budget)".
+- **The analysis is descriptive:** success per task cell, the carried-fact accounting of luna's W-n-0, and the share of not-recoverable far episodes with no option chosen. The script is a $0 pull request, written before any of the run's outcomes is read.
+
+**Cost** (from the committed ledger and R8's committed forecast, `results/haiku_forecast/20261018T070826Z/`):
+- **Forecast:** $70.25, that is 1,600 episodes at the W-n-0 pilot's $0.043905 per episode. Haiku's W-0 main run at repeat 0 cost $69.82, 2.6% above its own pilot-based estimate, which would put W-n-0 near $72.
+- **Limit:** $100 billed. The run's `--planned-usd` is $100, at which it stops.
+- **Phase 1a:** $221.59 spent of its $500 cap. At most $321.59 after this block.
+- **Project total so far:** $750.11 billed (87 ledger rows).
+
+**The run** (one command, after this merge). It uses `--parallel 8`, as Haiku's W-0 needed under the organization's 10M input tokens per minute. A run stopped by the rate limit is continued at lower parallelism (`harnesses/DESIGN.md` §7.8-§7.9):
+
+    PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-n-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --experiment persistgym_haiku_notes --approved-block 5-haiku-notes --planned-usd 100 --parallel 8
+
+approved_block: 5-haiku-notes | experiments: persistgym_haiku_notes | max_usd: 100
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R9 (`PREREG.md` §17.9) and the code that enforces it. It also approves block `5-haiku-notes` up to $100 billed.

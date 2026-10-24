@@ -22,7 +22,10 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   After the guard it refuses unless the approved block lists R8's experiment
   `persistgym_haiku` (`registered.HAIKU_EXPERIMENT`): only an approval line written for the
   Haiku replication covers its pilots and validity run too, never a block approved before
-  it; the refusal releases the spend reservation.
+  it; the refusal releases the spend reservation. A block that lists R9's
+  `persistgym_haiku_notes` (`registered.HAIKU_NOTES_EXPERIMENT`, PREREG §17.9) passes this
+  check too. The guard admits a run only in its block's own experiments, so such a block
+  covers that experiment's W-n-0 run and nothing of R8's.
 * **The request-side check.** Before each call the body must pass
   `harnesses.wire.MessagesWire.check_payload` with the model's registered effort and D13's
   32,000 cap: adaptive thinking, exactly the fields the wire sends, no thinking block in the
@@ -202,13 +205,15 @@ class AnthropicMessagesTransport(PaidTransport):
             raise PaidCallsNotAllowed(f"{why}; no paid call was made")
 
     def _approval_refusal(self) -> str | None:
-        if registered.HAIKU_EXPERIMENT in self.approval.experiments:
+        if {registered.HAIKU_EXPERIMENT, registered.HAIKU_NOTES_EXPERIMENT} & set(
+                self.approval.experiments):
             return None
         return (f"block {self.approval.approved_block!r} lists "
                 f"{', '.join(self.approval.experiments)}, not {registered.HAIKU_EXPERIMENT}: "
                 f"a {registered.HAIKU_MODEL} run, its pilots and validity run included, needs "
                 f"an approval line written for the Haiku replication ({registered.R8_REF}), "
-                "which lists it")
+                f"which lists it, or for R9's notes run ({registered.R9_REF}), which lists "
+                f"{registered.HAIKU_NOTES_EXPERIMENT}")
 
     def _default_client(self, timeout_s: float) -> Any:
         # max_retries=0: retries are handled by the transport so that every attempt is visible.

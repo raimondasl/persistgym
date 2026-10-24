@@ -1,0 +1,44 @@
+{
+  "experiment": "haiku_notes_replies",
+  "run_id": "20261024T234538Z",
+  "cell_or_config": "W-n-0",
+  "config": {
+    "run": "20261024T060051Z-W-n-0-claude-haiku-5-5",
+    "pattern": "\\b(retract\\w*|invent(?:ed|ing)?|made[- ]up|fabricat\\w*|unsupported|no (?:source|basis)|(?:can'?t|cannot|couldn'?t) (?:verify|source|trace|confirm)|never (?:saw|verified)|not (?:verified|supported|sourced))\\b",
+    "exploratory": true
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": null,
+  "started_utc": "2026-10-24T23:45:38+00:00",
+  "finished_utc": "2026-10-24T23:45:50+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": "results/raw/persistgym_haiku_notes/20261024T060051Z-W-n-0-claude-haiku-5-5/transcript.jsonl.gz",
+  "outputs": [
+    "replies.json",
+    "summary.md",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261024T060051Z-W-n-0-claude-haiku-5-5"
+  ],
+  "config_hash": "603c5c268c6daa5211f203686298abce9e89656fd4988c90180045b0ce999147",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "17889282f1186b147d61c8a91a21e064e725f8a8",
+  "git_dirty": false
+}

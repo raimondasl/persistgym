@@ -27,6 +27,12 @@ it compares nothing across models.
 Run: ``uv run python -m analysis.haiku_notes_replies [--raw-root DIR]``. It writes
 ``results/haiku_notes_replies/<UTC>/replies.json``, ``summary.md`` and ``meta.json``. With
 ``--no-write`` it only prints.
+
+**Hand checks.** Two separate readers checked these pattern readings against the replies
+(``handcheck.md`` in the output folder). Their codings are data files beside the output:
+``handcoded_need_replies.jsonl`` (each failed carried episode's need-step reply, coded) and
+``handcoded_retractions.jsonl`` (each failed carried derived episode's first retraction step).
+``--tally-handcoded DIR`` tallies them and writes ``handcoded_tally.json`` there.
 """
 
 from __future__ import annotations
@@ -171,20 +177,44 @@ def summary(t: dict, rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def tally_handcoded(folder: Path) -> dict:
+    """Counts from the two hand codings in `folder` (see the module docstring)."""
+    need = [json.loads(x) for x in
+            (folder / "handcoded_need_replies.jsonl").read_text(encoding="utf-8").splitlines()]
+    retr = [json.loads(x) for x in
+            (folder / "handcoded_retractions.jsonl").read_text(encoding="utf-8").splitlines()]
+    codes = Counter((r["task_cell"], r["code"]) for r in need)
+    return {"need_replies": {f"{tc} {code}": n for (tc, code), n in sorted(codes.items())},
+            "need_replies_borderline": sum(1 for r in need if r.get("borderline")),
+            "retractions": {"episodes": len(retr),
+                            "with_a_retraction": sum(r["first_retraction_step"] is not None
+                                                     for r in retr),
+                            "lag": {str(k): v for k, v in sorted(Counter(
+                                r["lag"] for r in retr if r["lag"] is not None).items())},
+                            "found_by_hand_only": sum(r["source"] == "hand" for r in retr)}}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--results-root", type=Path, default=REPO_ROOT)
     ap.add_argument("--raw-root", type=Path, default=None)
     ap.add_argument("--no-write", action="store_true")
     ap.add_argument("--out-dir", type=Path, default=None)
+    ap.add_argument("--tally-handcoded", type=Path, default=None, metavar="DIR")
     a = ap.parse_args(argv)
+    sys.stdout.reconfigure(encoding="utf-8")
+    if a.tally_handcoded:
+        t = tally_handcoded(a.tally_handcoded)
+        print(json.dumps(t, indent=2))
+        (a.tally_handcoded / "handcoded_tally.json").write_text(
+            json.dumps(t, indent=2) + "\n", encoding="utf-8", newline="\n")
+        return 0
     now = datetime.now(UTC)
     recs = episodes(a.results_root)
     trails = steps(a.raw_root or a.results_root / "results" / "raw", set(recs))
     rows = [episode_reading(recs[e], trails[e]) for e in sorted(recs)]
     t = tally(rows)
     text = summary(t, rows)
-    sys.stdout.reconfigure(encoding="utf-8")
     print(text)
     if a.no_write:
         return 0

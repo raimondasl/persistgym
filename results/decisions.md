@@ -1358,3 +1358,23 @@ approved_block: 5-haiku-notes | experiments: persistgym_haiku_notes | max_usd: 1
 - The run is exploratory, decided after R8's results, on one model, on synthetic tasks. It is not a test of note-taking in general, only of the Standard harness's one sentence.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the run and its readings. It adds no spending approval. The pull request is $0.
+
+## 2026-10-24: Exploratory: why Haiku's carried notes went unused (the researcher's OK to read the replies)
+**Decision.** After R9's readings left open why carried notes went unused, the researcher asked Claude to read the model's replies (2026-10-24). R9 does not register this. It is exploratory, $0, and done after the readings were seen.
+
+**Method.**
+- `analysis/haiku_notes_replies.py` reads the raw transcripts of the not-recoverable far cells. A text pattern flags need-step replies that disown the model's own earlier figure, and routine-step retractions of it before the need step. Output: `results/haiku_notes_replies/20261024T234538Z/`.
+- Two separate readers, each an AI assistant instance separate from the script's author and each with its own code, checked it against the replies (`handcheck.md`):
+  - one hand-coded every failed carried episode's need-step reply (`handcoded_need_replies.jsonl`);
+  - the other re-derived the pattern counts with no mismatch, checked every flagged retraction, and searched the unflagged episodes for missed ones (`handcoded_retractions.jsonl`).
+- `--tally-handcoded` tallies both files.
+
+**Findings** (derived-fact, not-recoverable far cell; the 63 episodes whose notes carried the fact but failed):
+- **At the need step, 62 of 63 replies declined to rely on Haiku's own earlier figure**, calling it retracted, invented, unsupported or unverifiable (hand-coded; 58 to 63 if every borderline case flipped). The text pattern catches 40, with no false positive.
+- **All 63 had retracted or doubted the figure in a routine reply before the need step,** unprompted. The pattern finds 45, and a hand reading the rest. The first retraction came at the step the window first dropped an evidence step (41), the next step (21), or one step before (1).
+- **The retracted figure was correct every time:** the model had derived it from evidence shown earlier in the episode. Its own reply holding the figure was still in the window. It retracted the figure once the evidence behind it had left the window.
+- **The 9 successful carried episodes** chose an option and presented the value as their own carried figure. Four of them also said the source could not be seen.
+
+**Reading.** On this model, the notes failed by retraction, not by loss: Haiku did not treat its own note as reliable once the evidence behind it had scrolled out of view. This is one model on synthetic tasks, exploratory, and the coding is by text reading, not a validated scheme. It does not show how often other models do this, or whether a different notes instruction would avoid it.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the reading. It adds no spending approval. The pull request is $0.

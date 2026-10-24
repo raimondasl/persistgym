@@ -804,3 +804,11 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - **Budget:** block `4-haiku`, $180, phase 1a (which has spent $91.90 of $500). After R8's runs no further paid run is made without a new amendment (A7 otherwise stands).
 - **Timing:** pilots and the validity gate first, then the researcher's G1 decision, then the main runs; results targeted for 2026-10-23/24, for the AGENT 2027 paper and an arXiv v2, not the preprint's v1.
 - **What it does not show:** a model comparison. The two models differ in provider, training, API and serving path at once; differences are described, not tested.
+
+## 26. Amendment A11 (2026-10-24): one exploratory run of claude-haiku-5-5's notes cell
+**Why.** A10's size rule dropped W-n-0 from Haiku's replication for budget, so the note-taking instruction's reading rests on gpt-6-luna alone. The researcher holds about $70 of Anthropic API credits that expire on 2026-10-25, and asked whether any useful run fits.
+- **The change:** `PREREG.md` §17.9 (amendment R9) adds one run: Haiku in W-n-0 on all 8 task cells, main templates 0-199 at repeat 0, with R8's settings, in its own experiment `persistgym_haiku_notes`.
+- **Status:** exploratory, decided after R8's results were read. Its analysis is descriptive, set against Haiku's own R8 cells. Nothing of R8 changes.
+- **Budget:** block `5-haiku-notes`, $100, phase 1a ($221.59 of $500 spent). The forecast is $70.25. With it the project total is at most about $850, against A7's target of about $560, which A10 had already passed. After this run no further paid run is made without a new amendment (A7 and A10 otherwise stand).
+- **Timing:** the run on 2026-10-24, before the credits expire. Its readings are for the AGENT 2027 paper and an arXiv v2.
+- **What it does not show:** a model comparison. Haiku did not answer once the fact was evicted, where luna guessed, so success is not comparable across the models. The notes' P(carried) and success given carried are.

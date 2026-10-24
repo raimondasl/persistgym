@@ -4,15 +4,18 @@
 * The repository: `R9_IN_EFFECT` is True, the run's experiment `persistgym_haiku_notes` is in
   phase 1a and the PersistGym stream, and R8's values stay as R8's size record set them
   (`HAIKU_CELLS` F-0 and W-0: W-n-0 still refuses in `persistgym_haiku`).
-* The rules: W-n-0 on all 8 task cells as the full matrix, main templates within 0-199, base
-  episodes, R8's effort, config and request settings, after `HAIKU_G1_PASSED`. Every other
-  cell, split, variant, matrix, task-cell set, template range, effort, config, request or
-  claude-* model refuses, naming §17.9.
+* The rules: W-n-0 on all 8 task cells as the full matrix, main templates within 0-199 at
+  repeat 0, base episodes, R8's effort, config and request settings, after
+  `HAIKU_G1_PASSED`. Every other cell, split, variant, matrix, task-cell set, template range,
+  repeat, effort, config or request refuses, naming §17.9. Every other claude-* model refuses
+  too: under R6's hard stop as an unregistered model, and with the stop off under §17.9.
 * The kill switches: with `R9_IN_EFFECT` False every run in the experiment refuses and R8's
   runs still pass; with `R8_IN_EFFECT` False it refuses too.
-* The blocks: the Anthropic transport admits a block that lists the experiment. Block
-  `5-haiku-notes` cannot fund R8's runs, and block `4-haiku` cannot fund R9's. An end-to-end
-  W-n-0 run goes through the real guarded transport with a fake-backed client.
+* The blocks: the Anthropic transport admits R9's run under a block that lists its
+  experiment, and admits R8's runs exactly as before (a block must list persistgym_haiku).
+  Block `5-haiku-notes` cannot fund R8's runs, and block `4-haiku` cannot fund R9's. An
+  end-to-end W-n-0 run goes through the real guarded transport with a fake-backed client, and
+  a repeat-1 run refuses before the lock.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ from harnesses.fake import FakeModel
 from harnesses.openai_transport import ALLOW_ENV
 from harnesses.tests.test_haiku_guard import (
     ALL8,
+    DEFAULT,
     HAIKU,
     MAIN,
     NONREC,
@@ -43,6 +47,16 @@ from harnesses.tests.test_haiku_guard import (
 )
 
 NOTES = "persistgym_haiku_notes"
+
+
+def guard_at(repeat_index, *args, **kw):
+    """`guard` with the run's repeat index, which `harnesses run` passes."""
+    kw.setdefault("templates", (0, 200))
+    return registered.check_run_settings(
+        args[0], kw.pop("model", HAIKU), kw.pop("effort", "medium"), args[1], DEFAULT, args[2],
+        split="main", variant="base", task_cells=ALL8,
+        request={"mode": "standard", "service_tier": "standard", "W": None},
+        matrix="full", repeat_index=repeat_index, **kw)
 
 
 @pytest.fixture
@@ -68,6 +82,14 @@ def test_the_repository_has_r9_in_effect_beside_r8s_values():
 @pytest.mark.parametrize("templates", [(0, 200), (0, 1), (120, 200), (199, 200)])
 def test_r9s_run_passes(tmp_path, templates):
     assert guard(NOTES, "W-n-0", tmp_path, templates=templates) is None
+
+
+def test_repeat_0_passes_and_repeat_1_refuses(tmp_path):
+    assert guard_at(0, NOTES, "W-n-0", tmp_path) is None
+    why = guard_at(1, NOTES, "W-n-0", tmp_path)
+    assert why is not None and "--repeat-index 1" in why and registered.R9_REF in why
+    # R8's runs ran at repeat 1 too: the repeat index changes nothing for them
+    assert guard_at(1, MAIN, "W-0", tmp_path) is None
 
 
 def test_a_dated_haiku_snapshot_is_haiku(tmp_path):
@@ -118,6 +140,13 @@ def test_every_other_claude_model_refuses(tmp_path, model):
     assert why is not None and model in why
 
 
+@pytest.mark.parametrize("model", OTHER_CLAUDE)
+def test_with_r6_off_every_other_claude_model_refuses_under_r9(tmp_path, monkeypatch, model):
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    why = guard(NOTES, "W-n-0", tmp_path, model=model)
+    assert why is not None and f"model {model}" in why and registered.R9_REF in why
+
+
 @pytest.mark.parametrize("model", ["gpt-6-luna", "gpt-6.1-sol"])
 def test_openai_models_never_run_in_r9s_experiment(tmp_path, model):
     assert guard(NOTES, "W-n-0", tmp_path, model=model) is not None
@@ -154,17 +183,25 @@ def test_with_r6_off_r9s_run_is_still_held_to_r9(tmp_path, monkeypatch):
 
 # --- the blocks ----------------------------------------------------------------------------------
 
-def _approval_refusal(*experiments: str) -> str | None:
-    fake_self = SimpleNamespace(approval=SimpleNamespace(approved_block="b",
-                                                         experiments=experiments))
+def _approval_refusal(experiment: str, *experiments: str) -> str | None:
+    """The transport's block check for a run in `experiment` under a block that lists
+    `experiments` (the general guard has already required `experiment` among them)."""
+    fake_self = SimpleNamespace(approval=SimpleNamespace(
+        approved_block="b", experiment=experiment, experiments=experiments))
     return AnthropicMessagesTransport._approval_refusal(fake_self)
 
 
-def test_the_transport_admits_a_block_that_lists_either_haiku_experiment():
-    assert _approval_refusal(NOTES) is None
-    assert _approval_refusal(PILOT, VALIDITY, MAIN) is None
-    why = _approval_refusal(PILOT, VALIDITY)
-    assert why is not None and MAIN in why and NOTES in why and "§17.9" in why
+def test_the_transport_admits_r9s_run_under_its_block():
+    assert _approval_refusal(NOTES, NOTES) is None
+
+
+@pytest.mark.parametrize("experiment", [PILOT, VALIDITY, MAIN])
+def test_the_transport_judges_r8s_runs_as_before(experiment):
+    assert _approval_refusal(experiment, PILOT, VALIDITY, MAIN) is None
+    # a block that lists R9's experiment beside R8's pilot and validity ones funds no R8 run
+    if experiment != MAIN:
+        why = _approval_refusal(experiment, NOTES, PILOT, VALIDITY)
+        assert why is not None and MAIN in why and "§17.9" in why
 
 
 @pytest.fixture
@@ -234,3 +271,17 @@ def test_neither_block_funds_the_others_runs(notes_paid_env, capsys, argv, block
     assert (f"refused: block '{block}' is approved for" in (err := capsys.readouterr().err)
             and f"not for experiment '{experiment}'" in err), err
     assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)
+
+
+def test_a_repeat_1_run_refuses_before_the_lock(monkeypatch, capsys):
+    monkeypatch.setenv(ALLOW_ENV, "1")
+
+    def no_transport(*a, **k):
+        raise AssertionError("must refuse before the lock and any transport")
+    monkeypatch.setattr(cli, "_guarded_transport", no_transport)
+    monkeypatch.setattr(cli, "_with_paid_lock", no_transport)
+    assert cli.main(["run", "--cell", "W-n-0", "--model", HAIKU, "--split", "main", "--n", "200",
+                     "--repeat-index", "1", "--experiment", NOTES, "--approved-block",
+                     "5-haiku-notes", "--planned-usd", "1"]) == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "--repeat-index 1" in err and "§17.9" in err

@@ -90,7 +90,14 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   stays as a kill switch: set False, every Haiku paid run refuses (`R8_STOP`), its pilots
   and validity run included, and so does every other `claude-*` string. The Anthropic
   transport also refuses any model but Haiku, and an approved block that does not list
-  `persistgym_haiku` (harnesses/anthropic_transport.py).
+  `persistgym_haiku` (harnesses/anthropic_transport.py), except for a run in R9's experiment.
+
+* R9 (§17.9), one exploratory run of Haiku's W-n-0 cell, which R8's size record did not run:
+  `R9_IN_EFFECT` is True, so `_haiku_notes_refusal` (inside `haiku_refusal`, after R8's kill
+  switch) lets W-n-0 run in `HAIKU_NOTES_EXPERIMENT` (`persistgym_haiku_notes`) with R8's
+  settings, as the full matrix on all 8 task cells, main templates 0-199 at repeat 0, base
+  episodes, after `HAIKU_G1_PASSED`. Anything else in that experiment refuses. R8's values
+  (`HAIKU_CELLS`, `HAIKU_T`) are unchanged, and W-n-0 still refuses in `persistgym_haiku`.
 
 `check_run_settings` is the guard `harnesses run` and `harnesses single-turn` apply before
 they take the paid-run lock: first R6's hard stop (`r6_refusal`); then, for the runs it lets
@@ -864,7 +871,7 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
                   results_root: Path, *, split: str, variant: str,
                   task_cells: tuple[str, ...] | None = None, request: dict | None = None,
                   templates: tuple[int, int] | None = None,
-                  matrix: str | None = None) -> str | None:
+                  matrix: str | None = None, repeat_index: int = 0) -> str | None:
     """Why a paid run of claude-haiku-5-5 must refuse, or None (PREREG §17.8, amendment R8;
     fail closed). With the kill switch `R8_IN_EFFECT` False every Haiku run refuses
     (`R8_STOP`). While it is True, in the R4 pattern, every Haiku run is in R8's experiments
@@ -890,7 +897,8 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
     if experiment == HAIKU_NOTES_EXPERIMENT:
         return _haiku_notes_refusal(model, effort, cell, generator_hash, split=split,
                                     variant=variant, task_cells=task_cells, request=request,
-                                    templates=templates, matrix=matrix)
+                                    templates=templates, matrix=matrix,
+                                    repeat_index=repeat_index)
     single = cell == HAIKU_SINGLE_TURN_CELL
     wrong = [what for what, bad in (
         (f"--experiment {experiment}", experiment not in HAIKU_EXPERIMENTS),
@@ -976,15 +984,15 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
 def _haiku_notes_refusal(model: str, effort: str, cell: str, generator_hash: str, *,
                          split: str, variant: str, task_cells: tuple[str, ...] | None,
                          request: dict | None, templates: tuple[int, int] | None,
-                         matrix: str | None) -> str | None:
+                         matrix: str | None, repeat_index: int = 0) -> str | None:
     """Why a run in R9's `HAIKU_NOTES_EXPERIMENT` must refuse, or None (PREREG §17.9; fail
     closed). With `R9_IN_EFFECT` False every such run refuses (`R9_STOP`). While it is True,
     the run is claude-haiku-5-5's `HAIKU_NOTES_CELL` (W-n-0) with R8's settings: --effort
     medium on the default generator config with `HAIKU_REQUEST`, the full matrix on all 8
-    task cells, main templates within 0 to `HAIKU_T` - 1, base episodes, and only once
-    `HAIKU_G1_PASSED` records Haiku's G1 on that config. `task_cells`, `request`, `templates`
-    and `matrix` left as None refuse. R9 registers repeat 0 only. The guard does not see the
-    repeat index, so block `5-haiku-notes`'s cap bounds any other run."""
+    task cells, main templates within 0 to `HAIKU_T` - 1, base episodes, repeat 0 only
+    (`repeat_index`, which `harnesses run` passes), and only once `HAIKU_G1_PASSED` records
+    Haiku's G1 on that config. `task_cells`, `request`, `templates` and `matrix` left as None
+    refuse."""
     if not R9_IN_EFFECT:
         return f"{R9_STOP}; got cell {cell}{_not_haiku(model)}"
     wrong = [what for what, bad in (
@@ -993,7 +1001,8 @@ def _haiku_notes_refusal(model: str, effort: str, cell: str, generator_hash: str
         (f"generator config {generator_hash[:12]}", generator_hash != HAIKU_GENERATOR_HASH),
         (f"cell {cell}", cell != HAIKU_NOTES_CELL),
         (f"--split {split}", split != "main"),
-        (f"--variant {variant}", variant != "base")) if bad]
+        (f"--variant {variant}", variant != "base"),
+        (f"--repeat-index {repeat_index}", repeat_index != 0)) if bad]
     wrong += _request_wrong(request, HAIKU_REQUEST)
     if matrix != HAIKU_MATRIX:
         wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
@@ -1006,9 +1015,9 @@ def _haiku_notes_refusal(model: str, effort: str, cell: str, generator_hash: str
     if wrong:
         return (f"{HAIKU_NOTES_EXPERIMENT} runs {HAIKU_MODEL}'s {HAIKU_NOTES_CELL} cell only "
                 f"({R9_REF}): cell {HAIKU_NOTES_CELL} on all 8 task cells (the full matrix), "
-                f"--split main, main templates 0-{HAIKU_T - 1}, --variant base, at --effort "
-                f"{HAIKU_EFFORT} on the default generator config, with --mode standard, "
-                "--service-tier standard and no --W; got " + "; ".join(wrong))
+                f"--split main, main templates 0-{HAIKU_T - 1}, --variant base, repeat 0, at "
+                f"--effort {HAIKU_EFFORT} on the default generator config, with --mode "
+                "standard, --service-tier standard and no --W; got " + "; ".join(wrong))
     if HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
         return (f"{HAIKU_NOTES_EXPERIMENT} runs {HAIKU_MODEL} only after the researcher has "
                 f"recorded the Haiku replication's G1 gate as passed on generator config "
@@ -1021,7 +1030,7 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        variant: str, task_cells: tuple[str, ...] | None = None,
                        request: dict | None = None,
                        templates: tuple[int, int] | None = None,
-                       matrix: str | None = None) -> str | None:
+                       matrix: str | None = None, repeat_index: int = 0) -> str | None:
     """Why `harnesses run` (and `single-turn`) must refuse these settings before any paid
     call, or None. In order:
     0. R6's hard stop (`r6_refusal`, while `R6_HARD_STOP`): every run but luna's in
@@ -1057,7 +1066,9 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        by prefix), is judged by `haiku_refusal` alone, right after step 0 and before the
        pilot rules, so its pilots are held to R8 too; one that is not claude-haiku-5-5 or a
        dated snapshot of it refuses, and with the kill switch `R8_IN_EFFECT` False every such
-       run refuses (with R6's hard stop off as well)."""
+       run refuses (with R6's hard stop off as well). A Haiku run in R9's
+       `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9) is held to `_haiku_notes_refusal`, which also
+       reads `repeat_index` (R9 registers repeat 0 only); no other rule reads it."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)
@@ -1067,7 +1078,8 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
     if family == HAIKU_MODEL or _on_messages_wire(model):
         return haiku_refusal(experiment, model, effort, cell, generator_hash, results_root,
                              split=split, variant=variant, task_cells=task_cells,
-                             request=request, templates=templates, matrix=matrix)
+                             request=request, templates=templates, matrix=matrix,
+                             repeat_index=repeat_index)
     sol = family in ENGAGEMENT_REQUIRED
     if experiment == PILOT_EXPERIMENT:
         if not (sol and effort in ABOVE_DEFAULT_EFFORT):

@@ -21,7 +21,8 @@ def test_run_on_committed_outputs(tmp_path):
     assert af.main(["--out-dir", str(tmp_path)]) == 0
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted(af.OUTPUTS)
     meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
-    assert meta["config"] == {"h1h3_output": af.H1H3_OUTPUT, "h1h3_haiku_output": af.H1H3_HAIKU_OUTPUT}
+    assert meta["config"] == {"h1h3_output": af.H1H3_OUTPUT, "h1h3_haiku_output": af.H1H3_HAIKU_OUTPUT,
+                              "haiku_notes_output": af.HAIKU_NOTES_OUTPUT}
 
 
 def test_the_figure_shows_the_counted_rates():
@@ -33,3 +34,8 @@ def test_the_figure_shows_the_counted_rates():
     assert haiku[("W-0", "observed-nonrec-far")] == 0.0       # 0 of 200
     assert luna[("W-n-0", "observed-nonrec-far")] == 0.285    # 28.5% (paper, §IV)
     assert not any(k == "W-n-0" for k, _ in haiku)            # R8 dropped W-n-0
+    notes = af.notes_rates(json.loads((af.RESULTS / "haiku_notes" / af.HAIKU_NOTES_OUTPUT
+                                       / "notes.json").read_text(encoding="utf-8")))
+    assert notes[("W-n-0", "observed-nonrec-far")] == 0.02    # R9: 4 of 200 (exploratory)
+    assert notes[("W-n-0", "derived-nonrec-far")] == 0.045    # 9 of 200
+    assert len(notes) == 8

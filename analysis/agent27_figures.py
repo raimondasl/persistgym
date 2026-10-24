@@ -6,9 +6,11 @@ Run: ``uv run python -m analysis.agent27_figures [--results-root DIR] [--out-dir
 1. ``fig_persistgym_two_models``: success rate by task cell (rows) and harness cell (columns), repeat
    0, in two panels of the same form: gpt-6-luna (the confirmatory model, from
    ``results/persistgym_h1h3/<H1H3_OUTPUT>``) and claude-haiku-5-5 (the replication, from
-   ``results/persistgym_h1h3_haiku/<H1H3_HAIKU_OUTPUT>``). Each panel shows only the harness cells
-   that model ran. The panels follow the study's order (confirmatory, then replication), share one
-   color scale, and are not compared: the figure plots effects against task properties.
+   ``results/persistgym_h1h3_haiku/<H1H3_HAIKU_OUTPUT>``), with W-n-0 from amendment R9's
+   exploratory run (``results/haiku_notes/<HAIKU_NOTES_OUTPUT>/notes.json``, PREREG §17.9). Each
+   panel shows only the harness cells that model ran. The panels follow the study's order
+   (confirmatory, then replication), share one color scale, and are not compared: the figure
+   plots effects against task properties.
 
 The ARC path figure is ``analysis.figures``' ``fig1_arc_path``, which already fits a column.
 """
@@ -29,6 +31,8 @@ from common import runmeta
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 H1H3_OUTPUT = "20261010T232227Z"
 H1H3_HAIKU_OUTPUT = "20261019T003254Z"
+HAIKU_NOTES_OUTPUT = "20261024T073307Z"
+"""R9's readings (FINAL): Haiku's W-n-0 per task cell, exploratory (PREREG §17.9)."""
 PANELS = (("gpt-6-luna", "persistgym_h1h3", H1H3_OUTPUT),
           ("claude-haiku-5-5", "persistgym_h1h3_haiku", H1H3_HAIKU_OUTPUT))
 TASK_ROWS = (("observed-nonrec-far", "observed, not recov., far"),
@@ -45,6 +49,11 @@ OUTPUTS = ("fig_persistgym_two_models.png", "fig_persistgym_two_models.pdf", "me
 def rates(h: dict) -> dict[tuple[str, str], float]:
     """(harness cell, task cell) -> success rate, repeat 0, base variant."""
     return {(c["kind"], c["task_cell"]): c["rate"] for c in h["cells"] if c.get("variant") == "base"}
+
+
+def notes_rates(notes: dict) -> dict[tuple[str, str], float]:
+    """(W-n-0, task cell) -> success rate, from R9's readings (`analysis.haiku_notes`)."""
+    return {(notes["cell"], c["task_cell"]): c["rate"] for c in notes["cells"]}
 
 
 def label(v: float) -> str:
@@ -89,10 +98,14 @@ def main(argv: list[str] | None = None) -> int:
     git = runmeta.git_state()
     panels = [(name, rates(json.loads((root / exp / run / "h1h3.json").read_text(encoding="utf-8"))))
               for name, exp, run in PANELS]
+    notes = json.loads((root / "haiku_notes" / HAIKU_NOTES_OUTPUT / "notes.json")
+                       .read_text(encoding="utf-8"))
+    panels[1][1].update(notes_rates(notes))  # Haiku's panel gains R9's W-n-0
     fig_two_models(panels, out)
     runmeta.write_meta(
         out, git=git, experiment="figures_agent27", run_id=run_id, cell_or_config="agent27",
-        config={"h1h3_output": H1H3_OUTPUT, "h1h3_haiku_output": H1H3_HAIKU_OUTPUT},
+        config={"h1h3_output": H1H3_OUTPUT, "h1h3_haiku_output": H1H3_HAIKU_OUTPUT,
+                "haiku_notes_output": HAIKU_NOTES_OUTPUT},
         model_requested=None, model_returned=None, reasoning_effort=None,
         reasoning_context_requested=None, reasoning_context_echoed=None, template_id=None,
         repeat_index=None, seeds=None, started_utc=now.isoformat(timespec="seconds"),

@@ -49,7 +49,7 @@ NR_FAR = ("observed-nonrec-far", "derived-nonrec-far")
 DISOWN = re.compile(
     r"\b(retract\w*|invent(?:ed|ing)?|made[- ]up|fabricat\w*|unsupported|"
     r"no (?:source|basis)|(?:can'?t|cannot|couldn'?t) (?:verify|source|trace|confirm)|"
-    r"never (?:saw|verified)|not (?:verified|supported|sourced))\b", re.I)
+    r"never (?:saw|verified)|not (?:verified|supported|sourced))\b", re.IGNORECASE)
 """Self-disowning language: the reply calls an earlier figure of its own retracted, invented,
 made up, unsupported or unverifiable."""
 ENTITY = re.compile(r"EVENT: \S+ (\S+) needs")
@@ -150,18 +150,18 @@ def tally(rows: list[dict]) -> dict:
 
 def summary(t: dict, rows: list[dict]) -> str:
     lines = ["# claude-haiku-5-5 W-n-0: the replies behind unused notes (exploratory)", "",
-             "Not registered (R9 registers descriptive readings only). Approved by the researcher "
+             ("Not registered (R9 registers descriptive readings only). Approved by the researcher "
              "on 2026-10-24 after those readings were seen. Text-pattern categories, not a "
-             "validated coding. Not a model comparison.", "",
-             "| Cell, notes carried the fact | Episodes | Correct | Failed | Failed: declined | "
-             "Failed: need reply disowns its figure | Failed: retracted before the need step |",
+             "validated coding. Not a model comparison."), "",
+             ("| Cell, notes carried the fact | Episodes | Correct | Failed | Failed: declined | "
+             "Failed: need reply disowns its figure | Failed: retracted before the need step |"),
              "|---|---|---|---|---|---|---|"]
     for k, v in t.items():
         lines.append(f"| {k} | {v['episodes']} | {v['correct']} | {v['failed']} | "
                      f"{v['failed_declined']} | {v['failed_need_reply_disowns']} | "
                      f"{v['failed_retracted_before_need']} |")
-    lines += ["", "Retraction lag (steps from the first dropped evidence step to the first "
-              "retraction), failed episodes:", ""]
+    lines += ["", ("Retraction lag (steps from the first dropped evidence step to the first "
+              "retraction), failed episodes:"), ""]
     lines += [f"- {k}: {v['retraction_lag_steps'] or '-'}" for k, v in t.items()]
     lines += ["", "Excerpts (need-step replies, failed carried episodes, first 3 per cell):", ""]
     for tc in NR_FAR:

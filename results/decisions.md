@@ -1378,3 +1378,68 @@ approved_block: 5-haiku-notes | experiments: persistgym_haiku_notes | max_usd: 1
 **Reading.** On this model, the notes failed by retraction, not by loss: Haiku did not treat its own note as reliable once the evidence behind it had scrolled out of view. This is one model on synthetic tasks, exploratory, and the coding is by text reading, not a validated scheme. It does not show how often other models do this, or whether a different notes instruction would avoid it.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the reading. It adds no spending approval. The pull request is $0.
+
+## 2026-10-27: Scoop check of 2026-10-26 (D31); new related work, ARC data points and venue dates
+**The check** (read-only, $0). A separate Claude session searched on 2026-10-26 for work posted from 2026-09-29 to 2026-10-26. It covered arXiv listings, the ARC Prize results pages and blog, the pull requests of `arcprize/arc-agi-3-benchmarking`, and the groups `docs/premise-check.md` names as likely to scoop. On 2026-10-27 Claude re-checked the items marked *verified* below against the original pages. The others were read only through a summarizing fetch tool, so re-open the source before quoting a number from them.
+
+**Result: D31 does not fire.**
+- No work decomposes ARC-AGI-3's Standard-to-Provider-Adapter gap component by component.
+- No work manipulates re-observability and derivedness together.
+- The three new ARC results pages report per-configuration scores only (verified).
+- The groups named in `docs/premise-check.md` posted nothing related. The ARC Prize blog has no post since 2026-09-03.
+
+**Closest new work: CTXAgent** ([arXiv 2610.34425](https://arxiv.org/abs/2610.34425), 25 Oct; verified in its HTML version):
+- Seven models are given two tools to manage their own context (compact and curate) and compared with no context management. Two of them, Opus 5.5 and Sol 6.1, also run in three production harnesses.
+- Its benchmark plants *ephemeral observations*. The bench writes a value to a file, asks the agent to print it, and deletes the file before the next turn, so only the conversation holds the value. Probes at distances of 3 to 90 turns are labelled by whether a compaction came between.
+- Retention was 1.000 in every distance and compaction cell. Across all sessions the harnesses kept every planted fact and ephemeral observation except one.
+- It has no derived facts, no truncation-window arm, and no manipulated re-observability. Its probes mostly target values only the conversation holds. Its own harness archives compacted tool results that the agent can restore, and its longest session places probes up to 200 turns after the value. It does not cite 2610.26632.
+- **Not simply consistent with ours.** In luna's exploratory summary-with-notes cell (Σ-n-0), the summary or notes held an observed fact in 38.5% of the not-recoverable far episodes, against 92% for derived facts (preprint v1, §4; `results/persistgym_h1h3/20261010T232227Z/summary.md`). These are lower bounds, since string matching misses paraphrase. Success was 43% and 92%. A compaction came between the fact and the need step in all 400 episodes. The designs differ: CTXAgent's facts are stated to the agent or printed on request, while ours sit among other observations, and the models differ. So the two results do not contradict each other. Still, "compaction keeps facts that cannot be re-observed" does not carry over to our probe. A question for v2.
+- Cited in the AGENT draft's related work (§II).
+
+**Also verified, and cited in the AGENT draft:**
+- *What Does a Harness Buy? Tokens, Mostly* ([arXiv 2610.04433](https://arxiv.org/abs/2610.04433), 3 Oct). On a 45-task hard subset of SWE-bench Verified, swapping production harnesses flipped as many tasks as rerunning one (13% each). Cost per task differed by up to 3× across harnesses. The one success effect that cleared the noise was a loss: one harness trailed by up to 9 points on the 447-task pool, and on one model half of that came from runs its output cap cut short. With that exception, it is observational support for H1's recoverable arm, since code can be read again.
+- *Same Simulation, Different Evidence* ([arXiv 2610.26836](https://arxiv.org/abs/2610.26836), 19 Oct). Reading a long simulator report through a section index instead of in context cost two models from one provider 11.3 and 7.9 points of accuracy. Two models from another provider showed no detectable cost. So a lookup of recoverable evidence is not always free. This bounds H1's "costs only effort": our recoverable fact is one short value that a lookup returns exactly.
+
+**New ARC-AGI-3 data points for v2** (verified: the JSON embedded in each results page, read with `arc/public` and cached under `results/raw/arc_public/pages/`; the Sol page is the cached copy of 2026-10-14, the other two were fetched on 2026-10-27; 55-task headline score per configuration; gap = Adapter − Standard from unrounded values; re-derived by a separate parser with the same values):
+
+| Model (page) | Effort | Standard | Provider Adapter | Gap (pp) |
+|---|---|---|---|---|
+| [GPT-6.1 Sol](https://arcprize.org/results/openai-gpt-6-1-sol) (released 2026-09-29) | max | 52.73% | 96.18% | 43.4 |
+| | xhigh | 39.93% | 96.37% | 56.4 |
+| | high | 26.72% | 94.99% | 68.3 |
+| | medium | 10.57% | 91.02% | 80.5 |
+| | low | 3.92% | 82.79% | 78.9 |
+| [Gemini 4 Argon](https://arcprize.org/results/google-gemini-4-argon) (2026-10-13) | high | none | 97.30% | none |
+| | medium | 46.27% | 97.34% | 51.1 |
+| | low | 49.79% | 97.46% | 47.7 |
+| [Claude Haiku 5.5](https://arcprize.org/results/anthropic-claude-haiku-5-5) (2026-10-07) | max | 0.45% | 2.82% | 2.4 |
+
+- **The gap's relation to effort differs by model.** Sol's gap narrows from about 80 points at low and medium effort to 43.4 at max. Gemini 3.8 Flash's widens with effort (`docs/background.md` §3). Any v2 statement about gap and effort must be made per model.
+- **Argon's Standard runs are incomplete.** Its page says API issues prevented complete Standard evaluation: runs completed on 42 of 55 tasks at low, 46 at medium and 19 at high. Its scores keep the partial credit of incomplete runs. It withholds the high Standard headline score, though the page's table of public games still lists Standard-high runs. This is the early-ending confound our exit-reason rules address, now stated on ARC's own page.
+- **Haiku 5.5 is near the floor under both harnesses**, at max, the only effort with scores. This supports keeping Haiku off the ARC leg, as with luna.
+- Added to `docs/background.md` §3 in this pull request.
+
+**Upstream harness** (verified with `gh`):
+- Since the 2026-10-19 check, #58 (records Anthropic thinking-token usage, merged 2026-10-26) and #59 (a certifi upgrade) were merged. #57 is still open.
+- #50, open at the 2026-10-09 check, was merged on 2026-10-13: a generic Provider Adapter for open-weight models that replays their readable reasoning. It makes an ARC replay on/off ablation on open weights (our dropped E1) easier for anyone, which raises scoop exposure for any later ARC replay work.
+- #55 (merged 2026-10-15) saves diagnostics for action-parse failures.
+- None reports ablation results. All postdate the pin `4ca00e6`, so our runs are unaffected. v2 mentions them as upstream changes.
+
+**Other related work for v2** (not re-verified; abstracts read by the search session):
+- arXiv 2610.30499, *Can LLMs Improve Their Own Harness? A Controlled Study on ARC-AGI-3* (21 Oct): model-written harnesses revised and tested on held-out games. Not a component decomposition.
+- arXiv 2610.25516, *Bud ContextCompact 2.0* (18 Oct): compaction against truncation for small models.
+- arXiv 2610.11450 (8 Oct): a file-only state agent on ARC-AGI-3 whose notes are appended but never revised. Bears on stale carried state in the notes cells.
+- arXiv 2610.32483, *When Agents Fail: Model or Harness—Who's to Blame?* (23 Oct): harness rankings flip with model and benchmark.
+- arXiv 2610.10590, *Agent-Controlled Forgetting for Tool-Using Agents* (6 Oct): evicted tool results kept in a recoverable archive, a design counterpart to the re-observability dial.
+- arXiv 2609.37590, *FOCUS* (29 Sep): decision-preserving context compression.
+- arXiv 2610.34523 (25 Oct): a think-aloud dataset of human play on ARC-AGI-3. Low relevance.
+- Already tracked: VISTA, RACE, Harness-Delta, and 2610.22289 (now at v3, 22 Oct).
+
+**Venues** (verified on the pages, 2026-10-27):
+- **AGENT 2027:** the workshop page now gives the paper deadline as Fri 13 Nov 2026 AoE, notification 11 Dec 2026 and camera-ready 29 Jan 2027. This resolves the Nov 13 / Nov 27 mismatch recorded in `PLAN.md` §13, which this pull request updates.
+- **ICSE 2027 Industry Challenge:** double-anonymous review. With a public preprint and repository under the author's name, it is no alternative to AGENT unless its rules allow that. `PLAN.md` §13 is updated.
+- ICLR 2027 workshops: per the search session, unchanged from `PLAN.md` §13 (not re-verified).
+
+**Not covered:** the OpenAI blog (HTTP 403 earlier), and Kaggle team write-ups (the competition page did not render for the search session).
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the check. It adds no spending approval. The pull request is $0.

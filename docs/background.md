@@ -127,7 +127,26 @@ Source: [arcprize/arc-agi-3-benchmarking](https://github.com/arcprize/arc-agi-3-
 | medium | 3.99% (~$50/game) | 24.20% (~$70/game) | +20.2pp |
 | low | 5.99% (~$49/game) | 15.07% (~$57/game) | +9.1pp |
 
-The gap grows with reasoning effort.
+For this model, the gap grows with reasoning effort. GPT-6.1 Sol's gap instead narrows from medium effort upward (below), so a statement about gap and effort must be made per model.
+
+**Added 2026-10-27** (the JSON embedded in each results page, cached under `results/raw/arc_public/pages/`; gap from unrounded values; `results/decisions.md`, 2026-10-27):
+
+| Model | Effort | Standard | Provider Adapter | Gap |
+|---|---|---|---|---|
+| GPT-6.1 Sol ([results](https://arcprize.org/results/openai-gpt-6-1-sol), released 2026-09-29) | max | 52.73% | 96.18% | +43.4pp |
+| | xhigh | 39.93% | 96.37% | +56.4pp |
+| | high | 26.72% | 94.99% | +68.3pp |
+| | medium | 10.57% | 91.02% | +80.5pp |
+| | low | 3.92% | 82.79% | +78.9pp |
+| Gemini 4 Argon ([results](https://arcprize.org/results/google-gemini-4-argon), 2026-10-13) | high | none | 97.30% | none |
+| | medium | 46.27% | 97.34% | +51.1pp |
+| | low | 49.79% | 97.46% | +47.7pp |
+| Claude Haiku 5.5 ([results](https://arcprize.org/results/anthropic-claude-haiku-5-5), 2026-10-07) | max | 0.45% | 2.82% | +2.4pp |
+
+- Sol's gap is about 80pp at low and medium effort and narrows from medium upward, to 43.4pp at max. The series is not monotone (low 78.9pp, medium 80.5pp).
+- Argon's page says API issues prevented complete Standard runs: 42 of 55 tasks completed at low, 46 at medium and 19 at high. Its scores keep the partial credit of incomplete runs. It leaves the high Standard point out of its chart.
+- Haiku 5.5 has ARC-AGI-3 scores only at max, near the floor under both harnesses.
+- The Sol page is the cached copy of 2026-10-14. The Argon and Haiku pages were fetched on 2026-10-27.
 
 **Other cheap models:**
 - **GPT-6 Luna** is at the floor under both harnesses: Standard 0.03-0.19%, Adapter 0.05-0.59%, about $4/game ([results](https://arcprize.org/results/openai-gpt-6-luna)). Luna on ARC would measure noise.

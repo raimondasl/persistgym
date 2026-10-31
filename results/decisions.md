@@ -1443,3 +1443,26 @@ approved_block: 5-haiku-notes | experiments: persistgym_haiku_notes | max_usd: 1
 **Not covered:** the OpenAI blog (HTTP 403 earlier), and Kaggle team write-ups (the competition page did not render for the search session).
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the check. It adds no spending approval. The pull request is $0.
+
+## 2026-10-31: Exploratory: the unit of S0's limit against S1's trigger (ARC path)
+**Question.** S0 trims once its character estimate exceeds 175,000. S1 summarizes once a request reports 175,000 provider tokens. So the S0→S1 step (σ_loss = 0.860) also changes the unit of the limit. If the provider counted well under one token per character, S1 would hold much more history before losing any, and the step's share could come from a larger window rather than from the summary. The researcher asked Claude to check this from the existing runs (2026-10-31). Exploratory, $0, after the results were read.
+
+**Method.** `analysis/arc_trigger.py` reads the counted S0, S1, S2 and S4 runs on the four path games (as H4 finds them). Output: `results/arc_trigger/20261031T163137Z/` (commit `88a3961`, clean). It replays S0's own histories, rebuilt from its step files. Trimmed at 175,000 characters, the replay reproduces all 1,048 requests S0 sent. Then it trims them as the harness would with its estimate in tokens, at each game's S0 rate: S0 with its limit in tokens. Before the script, two independent analyses in a scratch workflow, plus a critic, measured the same quantities with their own code. The script's numbers agree with theirs.
+
+**Findings:**
+- **The unit barely matters on these games.** The request text ran at a median 0.982, 0.989 and 0.988 provider tokens per character on FT09, SB26 and CD82 (S0). So 175,000 tokens is 176,878 to 178,276 characters there, 1.011× to 1.019× S0's limit. On R11L the S0 rate was 0.861 (203,192 characters, 1.161×), because S0's visible replies there were long.
+- **S0 with its limit in tokens changes no request on FT09, SB26 or CD82.** On R11L it changes 210 of 361 requests and keeps 0.65 more earlier replies per step. The three unchanged games hold 97.8% of the summed S1 − S0 RHAE (215.37 points).
+- **S1 lost history as early as S0.** The first loss came before step 12, 8, 6 and 8 in S0 (its first trim) and 13, 7, 7 and 9 in S1 (its first summary), on FT09, SB26, R11L and CD82.
+- **S1 showed less verbatim history than S0, not more.** Per call step, its earlier history held 0.605× S0's characters and 0.611× its earlier replies, plus the summary.
+- **S1's trigger fires on output as well.** It counts the request's `total_tokens`, reply and thinking included. In 30 of the 116 triggers read, the request alone was under 175,000 tokens. The check runs after the request is sent, so one request per cycle exceeds the limit: a median 1.094× and at most 1.510× S0's limit, in characters.
+
+**Reading.** The S0→S1 share does not come from the unit of the limit. Which part of the loss policy does the work stays open. The candidates are the summary's content, the reset of history at each summary, and the summary working together with the notes instruction. On FT09, S2 (summary, no notes instruction) scored 18.06, about S0's 18.11, while S1 (both) scored 100. One run per cell, so this is a lead, not a result. Tests that would separate these parts include S1 with an empty summary, and S0 without the notes sentence. Neither is proposed here, and any run needs its own approval.
+
+**Corrections:**
+- `arc/README.md` said that with fewer than one provider token per character, S1 "keeps more history than S0 before anything is lost". The data do not support that, and this pull request corrects it.
+- Preprint v1 (§5) calls S1's trigger "a later trigger than S0's 175k characters". On these games it is barely later, and on SB26 S1 lost history first. To be corrected in v2.
+- The AGENT draft gets a sentence disclosing the two limits and how close they were.
+
+**What it does not show:** what would happen in a run with S0's limit in tokens. The replay holds S0's requests fixed, but a new run would make different moves. One counted run per configuration and game.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the reading. It adds no spending approval. The pull request is $0.

@@ -40,6 +40,20 @@ def test_rebuild_aligns_trimmed_requests():
                                        u3["content"]]
 
 
+def test_rebuild_refuses_a_request_that_does_not_extend_the_history():
+    s, u1, u2, u3 = _m("system", 4, "S"), _m("user", 5, "1"), _m("user", 5, "2"), _m("user", 5, "3")
+    a = lambda t: {"role": "assistant", "content": t}
+    # step 3 carries an earlier reply that differs from the recorded one
+    steps = [_step(1, [s, u1], reply="a1"),
+             _step(2, [s, u1, a("a1"), u2], reply="a2"),
+             _step(3, [s, u2, a("b2"), u3], reply="a3")]
+    with pytest.raises(cc.Refusal):
+        at.rebuild(steps)
+    # a window of just the system prompt and the new observation is a valid suffix
+    steps[2]["messages_sent"] = [s, u3]
+    assert len(at.rebuild(steps)) == 3
+
+
 def test_replay_reproduces_what_was_sent_and_counts_extra_replies(monkeypatch):
     monkeypatch.setattr(at, "LIMIT", 30)
     s = {"role": "system", "content": "s" * 4}
@@ -66,6 +80,50 @@ def test_tokens_per_char_skips_retries_and_the_step_after_a_summary():
     steps = [_step(1, sent, prompt=90), _step(2, sent, prompt=500, retries=1),
              _step(3, sent, prompt=10), _step(4, sent, prompt=80)]
     assert at.tokens_per_char(steps, after_compaction={3}) == [0.9, 0.8]
+
+
+def test_reply_shares_count_only_earlier_replies():
+    sent = [{"role": "system", "content": "s" * 10}, {"role": "user", "content": "u" * 60},
+            {"role": "assistant", "content": "a" * 30}, {"role": "user", "content": "v" * 100}]
+    steps = [_step(1, sent), _step(2, sent, retries=1)]
+    assert at.reply_shares(steps, after_compaction=set()) == [0.15]
+
+
+def _h(changed_steps):
+    """A minimal compute() result for summary_lines: two games, one whose replay changes."""
+    def cfg(rhae, chars_, replies_):
+        return {"run_id": "r", "rhae": rhae, "call_steps": 10, "first_loss_before": 5,
+                "compactions": 1, "verbatim_chars_mean": chars_, "verbatim_replies_mean": replies_,
+                "verbatim_chars_vs_S0": 0.5, "verbatim_replies_vs_S0": 0.5}
+    q = {"n": 3, "median": 0.98, "q1": 0.97, "q3": 0.99, "min": 0.9, "max": 1.0, "mean": 0.98}
+    per_game = {}
+    for g, ch in (("AA01", 0), ("BB02", changed_steps)):
+        rp = {"call_steps": 10, "reproduced": 10, "steps_changed": ch,
+              "extra_replies_mean": 0.5 if ch else 0.0, "replies_mean_at_chars": 2.0,
+              "limit_chars_equivalent": 178_000}
+        row = {c: cfg(10.0 if c == "S0" else 50.0, 1000, 4) for c in at.CONFIGS}
+        for c in at.RATE_CONFIGS:
+            row[c].update(tokens_per_char=dict(q, median=0.98 if g == "AA01" else 0.86),
+                          reply_share=dict(q, median=0.01 if g == "AA01" else 0.25))
+        row["S0"].update(replay=rp, replay_q1=rp, limit_ratio=1.017)
+        row["delta_S1_minus_S0"] = 40.0
+        per_game[g] = row
+    pooled = {c: {"verbatim_chars_per_step": 1000, "verbatim_replies_per_step": 4}
+              for c in at.CONFIGS}
+    for c in at.CONFIGS[1:]:
+        pooled[c].update(verbatim_chars_vs_S0=0.6, verbatim_replies_vs_S0=0.6, triggers=2,
+                         triggers_prompt_under_limit=1,
+                         trigger_request_chars_over_limit=dict(q, median=1.09))
+    return {"generated_utc": "t", "git_commit": "abcdef0", "git_dirty": False, "limit": 175_000,
+            "path_games": ["AA01", "BB02"], "per_game": per_game, "pooled": pooled,
+            "games_replay_unchanged": ["AA01"], "delta_sum": 80.0,
+            "delta_share_replay_unchanged": 0.5}
+
+
+def test_summary_names_the_game_whose_window_changes():
+    text = "\n".join(at.summary_lines(_h(changed_steps=4)))
+    assert "changes no window on AA01. On BB02 it changes 4 of 10 windows" in text
+    assert "The lowest S0 rate is BB02's" in text and ";" not in text.split("## What")[1]
 
 
 def test_verbatim_leaves_out_system_bridge_and_current_observation():

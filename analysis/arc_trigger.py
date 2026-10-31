@@ -24,9 +24,12 @@ does the unit difference let S1 keep?
 * 175,000 provider tokens expressed in characters, at each game's S0 rate;
 * the step before which each run first lost history (S0's first trim, the others' first summary);
 * a replay of S0's own histories: rebuilt from its step files, trimmed at 175,000 characters
-  (which must reproduce every request S0 sent, or the script refuses), then trimmed as if the
-  harness estimated tokens at the game's S0 rate, which is S0 with its limit in tokens;
-* the verbatim history each config showed per call step;
+  (which must reproduce the recorded request of every S0 call step, or the script refuses), then
+  trimmed as if the harness estimated tokens at the game's median S0 rate (and, as a
+  sensitivity reading, its lower-quartile rate): S0's windows with its limit in tokens, on S0's
+  own moves;
+* the share of each request's characters that are the model's earlier replies;
+* the verbatim history each config showed per call step, pooled and per game;
 * S1's trigger: whether the request alone was under 175,000 tokens (the trigger also counts the
   reply), and the request's size against S0's limit;
 * the counted runs' S1 − S0 RHAE per game.
@@ -95,8 +98,10 @@ def chars(messages) -> int:
 
 
 def tokens_per_char(steps: list[dict], after_compaction: set[int]) -> list[float]:
-    """prompt_tokens / request characters on clean call steps: no retries (usage sums them)
-    and not the first step after a summary (its usage may include the summary call)."""
+    """prompt_tokens / request characters on clean call steps: no retries (a step's usage
+    sums its attempts) and not the first step after a summary. That second exclusion is a
+    conservative choice: a step file's usage does not include the summary call (that is in
+    compaction_NNN.json; only ARC's action metadata adds it)."""
     return [d["usage"]["prompt_tokens"] / chars(d["messages_sent"]) for d in steps
             if is_call(d) and d["retries"] == 0 and d["step"] not in after_compaction]
 
@@ -108,12 +113,21 @@ def verbatim(messages: list[dict]) -> tuple[int, int]:
     return chars(kept), sum(1 for m in kept if m["role"] == "assistant")
 
 
+def reply_shares(steps: list[dict], after_compaction: set[int]) -> list[float]:
+    """The share of request characters that are the model's earlier replies, on the clean
+    call steps ``tokens_per_char`` reads (the summary bridge is a user message)."""
+    return [sum(len(m["content"]) for m in d["messages_sent"] if m["role"] == "assistant")
+            / chars(d["messages_sent"]) for d in steps
+            if is_call(d) and d["retries"] == 0 and d["step"] not in after_compaction]
+
+
 # --- the S0 replay --------------------------------------------------------------------------
 
 def rebuild(steps: list[dict]) -> list[tuple[dict, list[tuple[str, str]]]]:
     """S0's untrimmed conversation before each step: the first request, then each later
-    request's messages that extend the history (found by aligning the request after its
-    system prompt with a suffix of the history), then the step's reply."""
+    request's new message, then the step's reply. Refuses unless each later request, after its
+    system prompt, is a suffix of the history plus exactly one new user message (the
+    observation, or a forced RESET's GAME_OVER frame)."""
     full: list[tuple[str, str]] | None = None
     out = []
     for d in steps:
@@ -127,8 +141,9 @@ def rebuild(steps: list[dict]) -> list[tuple[dict, list[tuple[str, str]]]]:
                 if len(tail) <= len(body) and body[:len(tail)] == tail:
                     new = body[len(tail):]
                     break
-            if new is None:
-                raise cc.Refusal(f"step {d['step']}: its request does not extend the history")
+            if new is None or len(new) != 1 or new[0][0] != "user":
+                raise cc.Refusal(f"step {d['step']}: its request is not the history's suffix "
+                                 "plus one new user message")
             full = full + new
         out.append((d, full[:]))
         if d.get("assistant_response") is not None:
@@ -190,6 +205,7 @@ def read_run(raw: Path, config: str) -> dict:
     calls = [d for d in steps if is_call(d)]
     v = [verbatim(d["messages_sent"]) for d in calls]
     run = {"call_steps": len(calls), "rates": tokens_per_char(steps, after),
+           "reply_shares": reply_shares(steps, after),
            "verbatim_chars": [c for c, _ in v], "verbatim_replies": [r for _, r in v],
            "compactions": len(comps)}
     if config == "S0":
@@ -230,7 +246,9 @@ def compute(root: Path, raw_root: Path, generated: str, git: dict) -> dict:
         r = read_run(raw, c)
         r.update(run_id=u.counted.run_id, rhae=u.counted.rhae)
         if c == "S0":
-            r["replay"] = replay(load_steps(raw), st.median(r["rates"]))
+            steps = load_steps(raw)
+            r["replay"] = replay(steps, st.median(r["rates"]))
+            r["replay_q1"] = replay(steps, _q(r["rates"])["q1"])
         runs[(g, c)] = r
     games = list(d.games)
     out = {"generated_utc": generated, **git, "status": "EXPLORATORY", "limit": LIMIT,
@@ -246,8 +264,15 @@ def compute(root: Path, raw_root: Path, generated: str, git: dict) -> dict:
                       "verbatim_replies_mean": st.mean(r["verbatim_replies"])}
             if c in RATE_CONFIGS:
                 row[c]["tokens_per_char"] = _q(r["rates"])
+                row[c]["reply_share"] = _q(r["reply_shares"])
+        for c in CONFIGS[1:]:
+            row[c]["verbatim_chars_vs_S0"] = (row[c]["verbatim_chars_mean"]
+                                              / row["S0"]["verbatim_chars_mean"])
+            row[c]["verbatim_replies_vs_S0"] = (row[c]["verbatim_replies_mean"]
+                                                / row["S0"]["verbatim_replies_mean"])
         s0 = row["S0"]
         s0["replay"] = runs[(g, "S0")]["replay"]
+        s0["replay_q1"] = runs[(g, "S0")]["replay_q1"]
         s0["limit_ratio"] = s0["replay"]["limit_chars_equivalent"] / LIMIT
         row["delta_S1_minus_S0"] = row["S1"]["rhae"] - s0["rhae"]
         out["per_game"][g] = row
@@ -286,60 +311,73 @@ def _f(x, nd=3) -> str:
 
 def summary_lines(h: dict) -> list[str]:
     games, lim = h["path_games"], h["limit"]
+    pg = h["per_game"]
+    unchanged = h["games_replay_unchanged"]
+    changed = [g for g in games if g not in unchanged]
     L = ["# S0's character limit against S1's token trigger (exploratory)", "",
          (f"Computed {h['generated_utc']} at commit {h['git_commit'][:7]} (dirty: "
-          f"{h['git_dirty']}). **Exploratory:** written after the ARC path results were read; "
-          "no test, no verdict; it enters no hypothesis, gate or kill rule."), "",
+          f"{h['git_dirty']}). **Exploratory:** written after the ARC path results were read. "
+          "No test, no verdict. It enters no hypothesis, gate or kill rule."), "",
          (f"S0 drops its oldest user/assistant pair while the request's characters (system "
-          f"prompt included, at 1 character per token) exceed {lim:,}. S1 summarizes once a "
-          f"request reports {lim:,} provider tokens. Counted runs of each config on the "
-          f"{len(games)} path games."), "",
+          f"prompt included, at 1 character per token) exceed {lim:,}. S1 summarizes once a call "
+          f"reports {lim:,} provider tokens, its reply and thinking included. Counted runs of "
+          f"each config on the {len(games)} path games."), "",
          "## Provider tokens per character of request text", "",
-         ("Clean call steps only: no retries (a step's usage sums them) and not the first step "
-          "after a summary. Median [quartiles]."), "",
-         "| Game | " + " | ".join(RATE_CONFIGS) + " | 175k tokens in characters (S0 rate) |",
-         "|---|" + "---|" * (len(RATE_CONFIGS) + 1)]
+         ("Clean call steps only: no retries (a step's usage sums its attempts) and not the "
+          "first step after a summary. Median [quartiles]. Reply share: the median share of "
+          "request characters that are the model's earlier replies."), "",
+         ("| Game | " + " | ".join(RATE_CONFIGS) + " | S0 reply share | 175k tokens in "
+          "characters (S0 median rate) |"),
+         "|---|" + "---|" * (len(RATE_CONFIGS) + 2)]
     for g in games:
-        row = h["per_game"][g]
-        cells = [f"{_f(row[c]['tokens_per_char']['median'])} [{_f(row[c]['tokens_per_char']['q1'])}"
-                 f", {_f(row[c]['tokens_per_char']['q3'])}]" for c in RATE_CONFIGS]
+        row = pg[g]
+        cells = [f"{_f(row[c]['tokens_per_char']['median'])} "
+                 f"[{_f(row[c]['tokens_per_char']['q1'])}, "
+                 f"{_f(row[c]['tokens_per_char']['q3'])}]" for c in RATE_CONFIGS]
         s0 = row["S0"]
-        L.append(f"| {g} | " + " | ".join(cells) + f" | {s0['replay']['limit_chars_equivalent']:,.0f}"
-                 f" ({s0['limit_ratio']:.3f}× S0's limit) |")
+        L.append(f"| {g} | " + " | ".join(cells)
+                 + f" | {_f(s0['reply_share']['median'])} | "
+                 f"{s0['replay']['limit_chars_equivalent']:,.0f} "
+                 f"({s0['limit_ratio']:.3f}× S0's limit) |")
     L += ["", "## When each run first lost history", "",
           ("The step whose request was the first to have lost history: S0's first trim, the "
            "others' first summary."), "",
           "| Game | " + " | ".join(CONFIGS) + " |", "|---|" + "---|" * len(CONFIGS)]
     for g in games:
-        L.append(f"| {g} | " + " | ".join(str(h["per_game"][g][c]["first_loss_before"])
+        L.append(f"| {g} | " + " | ".join(str(pg[g][c]["first_loss_before"])
                                          for c in CONFIGS) + " |")
-    L += ["", "## S0 with its limit in tokens (replay of S0's own histories)", "",
-          (f"S0's untrimmed history before each call step is rebuilt from its step files. Trimmed "
-           f"at {lim:,} characters it reproduces every request S0 sent (checked; the script "
-           f"refuses otherwise). It is then trimmed as the harness would with its estimate in "
-           f"tokens: characters × the game's S0 rate, against {lim:,}. That is S0 with its "
-           "limit in tokens. Earlier replies kept = assistant messages in the window."), "",
+    L += ["", "## S0's windows with its limit in tokens (a replay of S0's own histories)", "",
+          (f"S0's untrimmed history before each call step is rebuilt from its step files. "
+           f"Trimmed at {lim:,} characters it reproduces the recorded request of every S0 call "
+           f"step (checked: the script refuses otherwise). It is then trimmed as the harness "
+           f"would with its estimate in tokens: characters × the game's median S0 rate, "
+           f"against {lim:,}. That approximates S0's windows with its limit in tokens, on S0's "
+           "own moves. The last column repeats it at the game's lower-quartile S0 rate. "
+           "Earlier replies kept = assistant messages in the window."), "",
           ("| Game | Call steps | Reproduced at 175k characters | Steps whose window changes | "
-           "Earlier replies kept, at 175k characters | Extra replies kept per step |"),
-          "|---|---|---|---|---|---|"]
+           "Earlier replies kept, at 175k characters | Extra replies kept per step | Steps "
+           "changed at the lower-quartile rate |"),
+          "|---|---|---|---|---|---|---|"]
     for g in games:
-        rp = h["per_game"][g]["S0"]["replay"]
+        rp, rq = pg[g]["S0"]["replay"], pg[g]["S0"]["replay_q1"]
         L.append(f"| {g} | {rp['call_steps']} | {rp['reproduced']} | {rp['steps_changed']} | "
-                 f"{_f(rp['replies_mean_at_chars'], 2)} | {_f(rp['extra_replies_mean'], 2)} |")
+                 f"{_f(rp['replies_mean_at_chars'], 2)} | {_f(rp['extra_replies_mean'], 2)} | "
+                 f"{rq['steps_changed']} |")
     share = h["delta_share_replay_unchanged"]
-    L += ["", (f"On {', '.join(h['games_replay_unchanged']) or 'no game'} the window never "
-               f"changes. Those games hold {_f(share * 100 if share is not None else None, 1)}% "
-               f"of the summed S1 − S0 RHAE ({_f(h['delta_sum'], 2)} points over the "
-               f"{len(games)} games)."), "",
+    L += ["", (f"At the median rate the window never changes on {', '.join(unchanged) or 'no game'}"
+               f". Those games hold {_f(share * 100 if share is not None else None, 1)}% of the "
+               f"summed S1 − S0 RHAE ({_f(h['delta_sum'], 2)} points over the {len(games)} "
+               "games)."), "",
           "| Game | S0 RHAE | S1 RHAE | S1 − S0 |", "|---|---|---|---|"]
     for g in games:
-        row = h["per_game"][g]
+        row = pg[g]
         L.append(f"| {g} | {_f(row['S0']['rhae'], 2)} | {_f(row['S1']['rhae'], 2)} | "
                  f"{_f(row['delta_S1_minus_S0'], 2)} |")
     L += ["", "## Verbatim history per call step", "",
           ("The earlier history the model saw verbatim: every message but the system prompt, "
-           "the summary bridge and the current observation. Means over all "
-           "call steps of the counted runs."), "",
+           "the summary bridge and the current observation. Pooled: means over all call steps "
+           "of the counted runs, so each game weighs by its steps, and the step mix differs by "
+           "config. Per game below."), "",
           "| Config | Characters | Earlier replies | Characters vs S0 | Replies vs S0 |",
           "|---|---|---|---|---|"]
     for c in CONFIGS:
@@ -347,27 +385,60 @@ def summary_lines(h: dict) -> list[str]:
         L.append(f"| {c} | {p['verbatim_chars_per_step']:,.0f} | "
                  f"{_f(p['verbatim_replies_per_step'], 2)} | "
                  f"{_f(p.get('verbatim_chars_vs_S0'))} | {_f(p.get('verbatim_replies_vs_S0'))} |")
-    L += ["", "## The summary trigger", "",
+    L += ["", "Per game, each config against S0 (characters / earlier replies):", "",
+          "| Game | S0 characters / replies | " + " | ".join(CONFIGS[1:]) + " |",
+          "|---|---|" + "---|" * len(CONFIGS[1:])]
+    for g in games:
+        s0 = pg[g]["S0"]
+        L.append(f"| {g} | {s0['verbatim_chars_mean']:,.0f} / "
+                 f"{_f(s0['verbatim_replies_mean'], 2)} | "
+                 + " | ".join(f"{_f(pg[g][c]['verbatim_chars_vs_S0'])} / "
+                              f"{_f(pg[g][c]['verbatim_replies_vs_S0'])}" for c in CONFIGS[1:])
+                 + " |")
+    L += ["", ("S4's characters are the readable projection the harness logs (`messages_sent`). "
+               "It leaves out the replayed reasoning items that the provider counts as prompt "
+               "tokens. So S4's characters undercount what it sent, and they are not "
+               "like-for-like with S0-S2."), "",
+          "## The summary trigger", "",
           ("For each summary, the last call before it, when it had no retries. The trigger is "
-           "the request's `total_tokens`, so it counts the reply and its thinking too."), "",
+           "the call's `total_tokens`, so it counts the reply and its thinking too. It is "
+           "checked after the request is sent, so the request that trips it can be past the "
+           "limit."), "",
           ("| Config | Triggers read | Request alone under 175k tokens | Request characters ÷ "
-           "175k: median [max] |"), "|---|---|---|---|"]
+           "175k: median [min, max] |"), "|---|---|---|---|"]
     for c in CONFIGS[1:]:
         p = h["pooled"][c]
         q = p["trigger_request_chars_over_limit"]
         L.append(f"| {c} | {p['triggers']} | {p['triggers_prompt_under_limit']} | "
-                 f"{_f(q.get('median'))} [{_f(q.get('max'))}] |")
-    L += ["", "## What it does not show", "",
+                 f"{_f(q.get('median'))} [{_f(q.get('min'))}, {_f(q.get('max'))}] |")
+    L += ["", "For S4 the characters are the readable projection only (above).", ""]
+    extra = "".join(f". On {g} it changes {pg[g]['S0']['replay']['steps_changed']} of "
+                    f"{pg[g]['S0']['replay']['call_steps']} windows and keeps "
+                    f"{pg[g]['S0']['replay']['extra_replies_mean']:.2f} more earlier replies per "
+                    "step" for g in changed)
+    low = min(games, key=lambda g: pg[g]["S0"]["tokens_per_char"]["median"])
+    margins = [(pg[g]["S0"]["limit_ratio"] - 1) * 100 for g in unchanged]
+    margin = (f"{min(margins):.1f}-{max(margins):.1f}%" if margins else "n/a")
+    others = [pg[g]["S0"]["reply_share"]["median"] for g in games if g != low]
+    L += ["## What it does not show", "",
           ("- **Which part of the loss policy does the work.** S0→S1 also replaces dropped turns "
            "by a summary, resets the history at each summary, checks its trigger after the "
-           "request is sent and counts the reply. This script shows only that the unit of the "
-           "limit lets S1 keep almost no extra history on these games."),
+           "request is sent and counts the reply. This script shows only that a limit in "
+           "tokens, replayed on S0's own histories at each game's median S0 rate, changes no "
+           f"window on {', '.join(unchanged) or 'no game'}{extra}. It measures S0's histories, "
+           "not S1's."),
           ("- **Stochastic runs.** One counted run per config and game. The replay holds S0's "
-           "own requests fixed; a run with the token limit would make different moves."),
-          ("- **The rate is S0's.** The replay uses each game's median S0 rate. Where replies are "
-           "long (R11L's S0 wrote long visible replies), the rate is lower and the unit matters "
-           "more."),
-          "- **Exploratory, after the results were read.** Nothing here is a test or enters a decision."]
+           "own moves, observations and replies fixed. A run with the token limit would make "
+           "different moves."),
+          ("- **One rate per game.** Where the window never changes, the token limit sits only "
+           f"{margin} above S0's character limit, so a rate a little below the median can change "
+           "a few windows (the last replay column). The lowest S0 rate is "
+           f"{low}'s ({_f(pg[low]['S0']['tokens_per_char']['median'])}), where earlier replies "
+           f"are a median {_f(pg[low]['S0']['reply_share']['median'])} of the request's "
+           f"characters, against at most {_f(max(others) if others else None)} on the other "
+           "games. That is an association, not a measured cause."),
+          ("- **Exploratory, after the results were read.** Nothing here is a test or enters a "
+           "decision.")]
     return L
 
 

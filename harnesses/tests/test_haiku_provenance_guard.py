@@ -5,13 +5,15 @@ closed.
 * The repository: `R10_IN_EFFECT` is True, the experiment `persistgym_haiku_provenance` is in
   phase 1a and the PersistGym stream, and R8's and R9's values are unchanged.
 * The rules: W-np-0 and W-npd-0, each as a pilot (`persistgym_pilot`, pilot templates 0-1 on
-  the 4 far task cells, at most 2 per cell) or a main run in R10's experiment (the full matrix
-  on the 4 far task cells, main templates within 0-199 at repeat 0), base episodes, with R8's
-  effort, config and request settings, the main runs after `HAIKU_G1_PASSED` and after a GO
-  pilot check for both cells. Anything else refuses, naming §17.10: another cell in R10's
-  experiment, R10's cells in R8's or R9's experiments, another pilot shape, near task cells,
-  another split, variant, matrix, template range, repeat, effort, config or request, and every
-  other model, with R6's hard stop on or off.
+  the 4 far task cells, at most 2 per cell counting unfinished runs, each under a new run id,
+  none once the cell's newest pilot has passed any pilot check) or a main run in R10's
+  experiment (the full matrix on the 4 far task cells, main templates within 0-199 at repeat
+  0), base episodes, on exactly claude-haiku-5-5 with R8's effort, config and request
+  settings, the main runs after `HAIKU_G1_PASSED` and after a GO pilot check that names each
+  cell's newest pilot, which passed. Anything else refuses, naming §17.10: another cell in
+  R10's experiment, R10's cells in R8's or R9's experiments, another pilot shape, near task
+  cells, another split, variant, matrix, template range, repeat, effort, config or request,
+  and every other model, with R6's hard stop on or off.
 * The kill switches: with `R10_IN_EFFECT` False every run of the two cells and every run in
   the experiment refuses, and R8's and R9's runs still pass. With `R8_IN_EFFECT` False they
   refuse too.
@@ -748,3 +750,89 @@ def test_single_turn_refuses_a_padded_block_name_before_the_lock(prov_paid_env, 
     err = capsys.readouterr().err
     assert "is not a block name" in err, err
     assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)
+
+
+def write_unfinished_pilot(results_root, run_id, cell, started="2026-11-01T09:00:00+00:00"):
+    """A paid pilot that wrote its raw run plan but no meta.json (a costs row it could not
+    append, a killed process)."""
+    folder = results_root / "raw" / PILOT / run_id
+    folder.mkdir(parents=True)
+    (folder / "run_plan.json").write_text(json.dumps(
+        {"run_id": run_id, "harness_cell": cell, "harness_config": {"model": HAIKU},
+         "started_utc": started}), encoding="utf-8")
+
+
+def test_an_unfinished_pilot_counts_and_holds_the_main_runs(tmp_path):
+    write_pilot_go(tmp_path)
+    assert main_guard("W-np-0", tmp_path) is None
+    write_unfinished_pilot(tmp_path, "crashed-np", "W-np-0")
+    why = main_guard("W-np-0", tmp_path)
+    assert why is not None and "unfinished" in why and "crashed-np" in why
+    # it counts toward the 2 pilots of its cell, and another cell's count is its own
+    pilots, _ = registered._provenance_pilots(tmp_path, "W-np-0")
+    assert [r["run_id"] for r in pilots] == ["pilot-W-np-0", "crashed-np"]
+    assert "2 pilot runs" in pilot_guard("W-np-0", tmp_path)
+    # folders with neither file (reports, logs) are not runs
+    (tmp_path / PILOT / "pooled-20261002T084145Z").mkdir()
+    (tmp_path / "raw" / PILOT / "check_logs").mkdir()
+    assert [r["run_id"] for r in registered._provenance_pilots(tmp_path, "W-npd-0")[0]] == [
+        "pilot-W-npd-0"]
+
+
+def test_any_check_with_a_pass_blocks_a_further_pilot_of_that_cell(tmp_path):
+    """A later check that leaves a cell out (one --run forgotten) does not hide its pass."""
+    write_pilot_meta(tmp_path, "np1", "W-np-0", started="2026-11-01T01:00:00")
+    write_pilot_meta(tmp_path, "npd1", "W-npd-0", started="2026-11-01T01:10:00")
+    write_pilot_go(tmp_path, go=False, stamp="20261101T020000Z", runs=[
+        {"run_id": "np1", "cell": "W-np-0", "passed": True},
+        {"run_id": "npd1", "cell": "W-npd-0", "passed": False}])
+    write_pilot_meta(tmp_path, "npd2", "W-npd-0", started="2026-11-01T03:00:00")
+    write_pilot_go(tmp_path, go=False, stamp="20261101T040000Z", runs=[
+        {"run_id": "npd2", "cell": "W-npd-0", "passed": True}])
+    why = pilot_guard("W-np-0", tmp_path)
+    assert why is not None and "np1 passed R10's pilot check 20261101T020000Z" in why
+    write_pilot_go(tmp_path, stamp="20261101T050000Z", runs=[
+        {"run_id": "np1", "cell": "W-np-0", "passed": True},
+        {"run_id": "npd2", "cell": "W-npd-0", "passed": True}])
+    assert main_guard("W-npd-0", tmp_path) is None
+
+
+def test_no_pilot_reuses_a_run_id_of_another_pilot(prov_paid_env, capsys):
+    """An R8 pilot under R8's block may not take an R10 pilot's run id: it would replace that
+    pilot's meta.json and drop it from the count."""
+    tmp, costs_csv, _ = prov_paid_env
+    assert cli.main(_pilot("W-np-0", "p1")) == 0
+    capsys.readouterr()
+    rows = len(costs.read_rows(costs_csv))
+    assert cli.main(["run", "--cell", "W-0", "--model", HAIKU, "--split", "pilot", "--n", "1",
+                     "--task-cell", *FAR, "--experiment", PILOT, "--approved-block", "4-haiku",
+                     "--planned-usd", "1", "--run-id", "p1"]) == 2
+    err = capsys.readouterr().err
+    assert "--run-id p1 is already used" in err, err
+    assert len(costs.read_rows(costs_csv)) == rows
+    assert json.loads((tmp / "results" / PILOT / "p1" / "meta.json").read_text(
+        encoding="utf-8"))["cell_or_config"] == "W-np-0"
+
+
+@pytest.mark.parametrize("run_id", ["np+1", "np~1", "np1."])
+def test_an_r10_run_id_must_be_a_plain_name(prov_paid_env, capsys, run_id):
+    _, costs_csv, fakes = prov_paid_env
+    code = cli.main(_pilot("W-np-0", run_id))
+    err = capsys.readouterr().err
+    assert code == 2 and "refused:" in err, err
+    assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)
+
+
+def test_the_pilot_check_never_writes_a_go_the_gate_rejects(prov_paid_env, capsys):
+    """Given a cell's older pilot while a newer one exists, the check fails that run, as the
+    gate would."""
+    from analysis import haiku_provenance_pilot as hpp
+    tmp, costs_csv, _ = prov_paid_env
+    assert cli.main(_pilot("W-np-0", "p1")) == 0 and cli.main(_pilot("W-npd-0", "p2")) == 0
+    assert cli.main(_pilot("W-np-0", "p3")) == 0
+    capsys.readouterr()
+    c = hpp.check(tmp / "results", tmp / "raw", costs_csv, ["p1", "p2"])
+    assert not c["go"]
+    (r1,) = [r for r in c["runs"] if r["run_id"] == "p1"]
+    assert not r1["passed"] and any("newest pilot is p3" in x for x in r1["problems"])
+    assert hpp.check(tmp / "results", tmp / "raw", costs_csv, ["p3", "p2"])["go"]

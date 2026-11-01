@@ -15,8 +15,12 @@ pass these conditions:
 
 It reports those and nothing else: no outcome, no per-episode token count, nothing PREREG §11
 withholds from a pilot. A failed condition means Claude stops and tells the researcher before
-any main run. The guard reads the latest check this script writes: R10's main runs refuse
-until it says GO for both cells (`harnesses.registered._provenance_pilot_go`).
+any main run. The guard reads the latest check this script writes. R10's main runs refuse
+until that check says GO and names, for each cell, that cell's newest pilot, which passed
+(`harnesses.registered._provenance_pilot_go`). A pilot run after the check makes it stale until
+this script is run again. So that it never writes a GO the guard rejects, a run also fails here
+when the guard would not vouch for it (`harnesses.registered.named_pilot_refusal`: a plain run
+id, a Haiku pilot of that cell, and the cell's newest pilot).
 
 Run: ``uv run python -m analysis.haiku_provenance_pilot --run RUN_ID --run RUN_ID``. It writes
 ``results/haiku_provenance_pilot/<UTC>/check.json`` and ``meta.json``; ``--no-write`` only
@@ -113,6 +117,9 @@ def check_run(results: Path, raw: Path, costs_path: Path, run_id: str) -> dict:
         tier = row.get("service_tier_served") or None
         geos = served_geos(row.get("notes") or "")
     models = list(meta.get("model_returned") or [])
+    gate = registered.named_pilot_refusal(results, "this check", {"run_id": run_id, "cell": cell})
+    if gate:
+        problems.append(gate)
     conditions = {
         "completed": completed,
         "no_api_error": endings.get("API_ERROR", 0) == 0 and episodes > 0,

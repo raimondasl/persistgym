@@ -116,35 +116,46 @@ def _counted(resolved: dict, cell: str, T: int, task_cells=FAR) -> list:
             and hh.template_index(r.record["template_id"]) < T]
 
 
-def replies(resolved: dict, cell: str, T: int, raw: Path, experiment: str) -> dict | None:
+def replies(resolved: dict, cell: str, T: int, raw: Path,
+            experiment: str) -> tuple[dict | None, list[str]]:
     """Reading 5 for one cell: `haiku_notes_replies`'s pattern tally over its counted NR-far
-    episodes, each read from the transcript of the run that holds its counted record. None if
-    a transcript is missing."""
+    episodes, each read from the transcript of the run that holds its counted record, and the
+    runs holding such records whose transcript is missing. The tally is None when any is."""
     by_run: dict[str, dict[str, dict]] = {}
     for r in _counted(resolved, cell, T, NR_FAR):
         by_run.setdefault(r.run_id, {})[r.record["episode_id"]] = r.record
+    missing = sorted(run_id for run_id in by_run
+                     if not (raw / experiment / run_id / "transcript.jsonl.gz").is_file())
+    if missing:
+        return None, missing
     rows = []
     for run_id, recs in sorted(by_run.items()):
-        path = raw / experiment / run_id / "transcript.jsonl.gz"
-        if not path.is_file():
-            return None
-        trails = hnr.steps(raw, set(recs), path=path)
+        trails = hnr.steps(raw, set(recs), path=raw / experiment / run_id / "transcript.jsonl.gz")
         rows += [hnr.episode_reading(rec, trails[eid]) for eid, rec in sorted(recs.items())]
-    return hnr.tally(rows)
+    return hnr.tally(rows), []
+
+
+def _mean(values: list) -> tuple[float | None, int]:
+    """The mean of `values` and how many are missing (None); the mean is None when any is,
+    so a missing value never counts as 0."""
+    missing = sum(v is None for v in values)
+    if missing or not values:
+        return None, missing
+    return sum(float(v) for v in values) / len(values), 0
 
 
 def costs_per_episode(resolved: dict, cell: str, T: int) -> dict:
     """Reading 6: mean billed cost and mean output tokens per counted episode, by far task
-    cell."""
+    cell, with the number of records missing each (a returned model string the price table
+    does not know leaves the cost missing)."""
     out = {}
     for tc in FAR:
         recs = [r.record for r in _counted(resolved, cell, T, (tc,))]
-        n = len(recs)
-        out[tc] = {"n": n,
-                   "cost_usd_billed_mean": (sum(float(x.get("cost_usd_billed_est") or 0)
-                                                for x in recs) / n if n else None),
-                   "output_tokens_mean": (sum(int((x.get("usage") or {}).get("output_tokens")
-                                                  or 0) for x in recs) / n if n else None)}
+        cost, cost_missing = _mean([x.get("cost_usd_billed_est") for x in recs])
+        tokens, tokens_missing = _mean([(x.get("usage") or {}).get("output_tokens")
+                                        for x in recs])
+        out[tc] = {"n": len(recs), "cost_usd_billed_mean": cost, "cost_missing": cost_missing,
+                   "output_tokens_mean": tokens, "output_tokens_missing": tokens_missing}
     return out
 
 
@@ -237,8 +248,14 @@ def readings(root: Path, experiment: str, cells: tuple[str, ...], links: dict[st
     arms = []
     for c in cells:
         a = arm(resolved, prim, c, T, idx)
-        a["replies_nr_far"] = (None if check["missing_transcripts"]
-                               else replies(resolved, c, T, raw, experiment))
+        a["replies_nr_far"], missing = replies(resolved, c, T, raw, experiment)
+        if missing and not check["missing_transcripts"]:
+            incomplete.append(f"no raw transcript for run(s) {', '.join(missing)} under {raw}, "
+                              f"which hold counted not-recoverable far records of {c}: the "
+                              "replies reading cannot be made")
+            if not allow_incomplete:
+                raise hh.Refusal(incomplete[-1] + "\nPass --raw-root, or --allow-incomplete "
+                                 "(PROVISIONAL).")
         arms.append(a)
     pending = sorted(f"{k[0]} {k[1]} r{k[2]}" for k, r in resolved.items()
                      if r.status != "counted" and r.record is None)
@@ -344,9 +361,11 @@ def summary(r: dict) -> str:
     for b in blocks:
         for tc, c in b["costs"].items():
             cost, out = c["cost_usd_billed_mean"], c["output_tokens_mean"]
+            gone = {k: c.get(k) for k in ("cost_missing", "output_tokens_missing") if c.get(k)}
             lines.append(f"| {b['cell']} | {tc} | {c['n']} | "
                          f"{'n/a' if cost is None else f'{cost:.5f}'} | "
-                         f"{'n/a' if out is None else f'{out:.0f}'} |")
+                         f"{'n/a' if out is None else f'{out:.0f}'} |"
+                         + (f" missing: {gone}" if gone else ""))
     ms = r["model_strings"]
     lines += ["", f"Model strings: the arms {ms['arms']}, R9's run {ms['r9']}."]
     lines += ["", "**Exclusions** (per arm and task cell, repeat 0; §13):", ""]

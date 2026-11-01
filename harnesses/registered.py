@@ -383,6 +383,14 @@ HAIKU_PROVENANCE_TASK_CELLS = tuple(c.id for c in ALL_CELLS if c.distance == "fa
 HAIKU_PROVENANCE_BLOCK = "6-haiku-provenance"
 """R10: the one approval block that funds its runs, pilots included, and funds nothing else
 (`provenance_block_refusal`)."""
+HAIKU_PROVENANCE_PILOT_TEMPLATES = (0, 2)
+"""R10: each cell's pilot plays pilot templates 0-1 on the 4 far task cells (8 episodes)."""
+HAIKU_PROVENANCE_PILOT_MAX_RUNS = 2
+"""R10: at most 2 pilot runs per cell, so one re-run after a failure the researcher has been
+told about (`_provenance_pilots`); any more needs a pull request."""
+PROVENANCE_PILOT_CHECK = "haiku_provenance_pilot"
+"""R10: the folder under results/ where `analysis.haiku_provenance_pilot` writes its check;
+the main runs need its latest check to say GO (`_provenance_pilot_go`)."""
 R10_STOP = (f"claude-haiku-5-5's {', '.join(HAIKU_PROVENANCE_CELLS)} cells and "
             f"{HAIKU_PROVENANCE_EXPERIMENT} run only under {R10_REF}, which is switched off "
             "(harnesses/registered.py R10_IN_EFFECT is False): every such run refuses until the "
@@ -937,7 +945,7 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
         return _haiku_provenance_refusal(experiment, model, effort, cell, generator_hash,
                                          split=split, variant=variant, task_cells=task_cells,
                                          request=request, templates=templates, matrix=matrix,
-                                         repeat_index=repeat_index)
+                                         repeat_index=repeat_index, results_root=results_root)
     if experiment == HAIKU_NOTES_EXPERIMENT:
         return _haiku_notes_refusal(model, effort, cell, generator_hash, split=split,
                                     variant=variant, task_cells=task_cells, request=request,
@@ -1069,22 +1077,81 @@ def _haiku_notes_refusal(model: str, effort: str, cell: str, generator_hash: str
     return None
 
 
+def _provenance_pilots(results_root: Path, cell: str) -> tuple[list[str], str | None]:
+    """R10: the run ids of the earlier pilots of `cell` under results/persistgym_pilot/ (a run
+    folder whose meta.json names that cell and a Haiku model), and why they cannot be read,
+    or None."""
+    base = results_root / PILOT_EXPERIMENT
+    if not base.is_dir():
+        return [], None
+    runs = []
+    for meta_path in sorted(base.glob("*/meta.json")):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            return [], f"cannot read {meta_path}: {e}"
+        if (meta.get("cell_or_config") == cell
+                and model_family(str(meta.get("model_requested"))) == HAIKU_MODEL):
+            runs.append(str(meta.get("run_id") or meta_path.parent.name))
+    return runs, None
+
+
+def _provenance_pilot_go(results_root: Path) -> str | None:
+    """Why R10's main runs may not start yet, or None (PREREG §17.10, "From pilot to main"):
+    the latest check `analysis.haiku_provenance_pilot` wrote under results/
+    `PROVENANCE_PILOT_CHECK`/ must say GO, cover both of R10's cells, and name pilot runs
+    that exist under results/persistgym_pilot/ as runs of those cells."""
+    checks = sorted((results_root / PROVENANCE_PILOT_CHECK).glob("*/check.json"))
+    if not checks:
+        return (f"{HAIKU_PROVENANCE_EXPERIMENT}'s main runs start only after both R10 pilots "
+                f"pass analysis.haiku_provenance_pilot ({R10_REF}): no check under "
+                f"results/{PROVENANCE_PILOT_CHECK}/")
+    latest = checks[-1]
+    try:
+        check = json.loads(latest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return f"cannot read R10's pilot check {latest}: {e} ({R10_REF})"
+    if check.get("go") is not True:
+        return (f"R10's latest pilot check, {latest.parent.name}, says STOP: the main runs do "
+                f"not start, and the researcher is told ({R10_REF})")
+    cells = []
+    for run in check.get("runs") or []:
+        meta_path = results_root / PILOT_EXPERIMENT / str(run.get("run_id")) / "meta.json"
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return (f"R10's pilot check {latest.parent.name} names pilot run "
+                    f"{run.get('run_id')!r}, which has no readable {meta_path} ({R10_REF})")
+        if meta.get("cell_or_config") != run.get("cell"):
+            return (f"R10's pilot check {latest.parent.name} names run {run.get('run_id')!r} "
+                    f"as {run.get('cell')}, but its meta.json says "
+                    f"{meta.get('cell_or_config')!r} ({R10_REF})")
+        cells.append(run.get("cell"))
+    if sorted(cells) != sorted(HAIKU_PROVENANCE_CELLS):
+        return (f"R10's pilot check {latest.parent.name} covers {', '.join(map(str, cells))}, "
+                f"not one pilot of each of {', '.join(HAIKU_PROVENANCE_CELLS)} ({R10_REF})")
+    return None
+
+
 def _haiku_provenance_refusal(experiment: str, model: str, effort: str, cell: str,
                               generator_hash: str, *, split: str, variant: str,
                               task_cells: tuple[str, ...] | None, request: dict | None,
                               templates: tuple[int, int] | None, matrix: str | None,
-                              repeat_index: int = 0) -> str | None:
+                              repeat_index: int = 0,
+                              results_root: Path | None = None) -> str | None:
     """Why a run of R10's cells, or a run in its `HAIKU_PROVENANCE_EXPERIMENT`, must refuse,
     or None (PREREG §17.10; fail closed). With `R10_IN_EFFECT` False every such run refuses
-    (`R10_STOP`). While it is True, the run is claude-haiku-5-5 in a cell of
-    `HAIKU_PROVENANCE_CELLS` with R8's settings (--effort medium on the default generator
-    config with `HAIKU_REQUEST`), base episodes, repeat 0, and either
-    * a pilot (`persistgym_pilot`, --split pilot) on a non-empty set of the 4 far task cells
-      (`harnesses run` caps a pilot at 10 episodes); it needs no G1, as R8's pilots; or
-    * a main run in `HAIKU_PROVENANCE_EXPERIMENT`: the full matrix on the 4 far task cells,
-      main templates within 0 to `HAIKU_T` - 1, and only once `HAIKU_G1_PASSED` records
-      Haiku's G1 on that config.
-    `task_cells`, `request`, `templates` and, for a main run, `matrix` left as None refuse."""
+    (`R10_STOP`), whatever the model. While it is True, the run is claude-haiku-5-5 in a cell
+    of `HAIKU_PROVENANCE_CELLS` with R8's settings (--effort medium on the default generator
+    config with `HAIKU_REQUEST`), base episodes, repeat 0, the full matrix on the 4 far task
+    cells, and either
+    * a pilot (`persistgym_pilot`, --split pilot) on pilot templates 0-1
+      (`HAIKU_PROVENANCE_PILOT_TEMPLATES`), at most `HAIKU_PROVENANCE_PILOT_MAX_RUNS` per cell
+      over the pilots under results/persistgym_pilot/; it needs no G1, as R8's pilots; or
+    * a main run in `HAIKU_PROVENANCE_EXPERIMENT` on main templates within 0 to `HAIKU_T` - 1,
+      only once `HAIKU_G1_PASSED` records Haiku's G1 on that config and R10's latest pilot
+      check says GO for both cells (`_provenance_pilot_go`).
+    `task_cells`, `request`, `templates`, `matrix` and `results_root` left as None refuse."""
     if not R10_IN_EFFECT:
         return f"{R10_STOP}; got --experiment {experiment}, cell {cell}{_not_haiku(model)}"
     pilot = experiment == PILOT_EXPERIMENT
@@ -1101,30 +1168,41 @@ def _haiku_provenance_refusal(experiment: str, model: str, effort: str, cell: st
     wrong += _request_wrong(request, HAIKU_REQUEST)
     if task_cells is None:
         wrong.append("task cells (not given)")
-    elif pilot:
-        if not task_cells or not set(task_cells) <= set(HAIKU_PROVENANCE_TASK_CELLS):
-            wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
     elif sorted(task_cells) != sorted(HAIKU_PROVENANCE_TASK_CELLS):
         wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
-    if not pilot:
-        if matrix != HAIKU_MATRIX:
-            wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
-                          None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+    if matrix != HAIKU_MATRIX:
+        wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
+                      None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+    if pilot:
+        if templates != HAIKU_PROVENANCE_PILOT_TEMPLATES:
+            wrong.append("pilot templates (not given)" if templates is None else
+                         f"pilot templates {templates[0]}-{templates[1] - 1}")
+    else:
         wrong += _haiku_templates_wrong(templates, HAIKU_T, "main")
+    if results_root is None:
+        wrong.append("results folder (not given)")
     if wrong:
         return (f"{HAIKU_MODEL}'s R10 cells run only as {R10_REF} registers them: a cell of "
                 f"{', '.join(HAIKU_PROVENANCE_CELLS)} at --effort {HAIKU_EFFORT} on the "
                 "default generator config, with --mode standard, --service-tier standard and "
-                "no --W, --variant base, repeat 0, either as a pilot (--experiment "
-                f"{PILOT_EXPERIMENT}, --split pilot, far task cells) or in --experiment "
-                f"{HAIKU_PROVENANCE_EXPERIMENT} on the 4 far task cells "
-                f"({', '.join(HAIKU_PROVENANCE_TASK_CELLS)}) as the full matrix, --split main, "
-                f"main templates 0-{HAIKU_T - 1}; got " + "; ".join(wrong))
-    if not pilot and HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
+                "no --W, --variant base, repeat 0, as the full matrix on the 4 far task cells "
+                f"({', '.join(HAIKU_PROVENANCE_TASK_CELLS)}), either as a pilot (--experiment "
+                f"{PILOT_EXPERIMENT}, --split pilot, pilot templates 0-1) or in --experiment "
+                f"{HAIKU_PROVENANCE_EXPERIMENT} (--split main, main templates "
+                f"0-{HAIKU_T - 1}); got " + "; ".join(wrong))
+    if pilot:
+        earlier, why = _provenance_pilots(results_root, cell)
+        if why:
+            return f"{R10_REF}: {why}"
+        if len(earlier) >= HAIKU_PROVENANCE_PILOT_MAX_RUNS:
+            return (f"{cell} has had {len(earlier)} pilot runs ({', '.join(earlier)}), the most "
+                    f"{R10_REF} allows: another needs the researcher's pull request")
+        return None
+    if HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
         return (f"{HAIKU_PROVENANCE_EXPERIMENT} runs {HAIKU_MODEL} only after the researcher "
                 "has recorded the Haiku replication's G1 gate as passed on generator config "
                 f"{generator_hash[:12]} (harnesses/registered.py HAIKU_G1_PASSED; {R10_REF})")
-    return None
+    return _provenance_pilot_go(results_root)
 
 
 def provenance_block_refusal(approved_block: str | None, cell: str) -> str | None:
@@ -1133,8 +1211,10 @@ def provenance_block_refusal(approved_block: str | None, cell: str) -> str | Non
     `HAIKU_PROVENANCE_BLOCK` only, and that block funds no other cell. The general guard
     admits a run only in its block's experiments, but R10's pilots share `persistgym_pilot`
     with R8's, so the cell decides. `harnesses run` and `single-turn` check it before the
-    paid-run lock."""
+    paid-run lock, and refuse a block name that is not exactly a name (padding) before it. The
+    name is compared as the paid guard reads it, stripped (common/approval.py)."""
     mine = cell in HAIKU_PROVENANCE_CELLS
+    approved_block = None if approved_block is None else str(approved_block).strip()
     if mine and approved_block != HAIKU_PROVENANCE_BLOCK:
         return (f"cell {cell} runs under block {HAIKU_PROVENANCE_BLOCK} only ({R10_REF}), got "
                 f"--approved-block {approved_block}")
@@ -1189,14 +1269,19 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9) is held to `_haiku_notes_refusal`, which also
        reads `repeat_index` (R9 registers repeat 0 only), and a Haiku run of R10's cells or in
        R10's `HAIKU_PROVENANCE_EXPERIMENT` (PREREG §17.10) to `_haiku_provenance_refusal`,
-       which reads it too. No other rule reads it."""
+       which reads it too. No other rule reads it. Any run of R10's cells, or in R9's or R10's
+       experiment, goes to `haiku_refusal` whatever its model, so with R6's hard stop off no
+       other model runs there either."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)
     if why:
         return why
     family = model_family(model)
-    if family == HAIKU_MODEL or _on_messages_wire(model):
+    # R9's and R10's experiments and R10's cells are Haiku's only: any model in them is judged
+    # by `haiku_refusal`, which refuses every other model, with R6's hard stop off too
+    if (family == HAIKU_MODEL or _on_messages_wire(model) or cell in HAIKU_PROVENANCE_CELLS
+            or experiment in (HAIKU_NOTES_EXPERIMENT, HAIKU_PROVENANCE_EXPERIMENT)):
         return haiku_refusal(experiment, model, effort, cell, generator_hash, results_root,
                              split=split, variant=variant, task_cells=task_cells,
                              request=request, templates=templates, matrix=matrix,

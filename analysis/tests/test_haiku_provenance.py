@@ -157,3 +157,25 @@ def test_a_record_off_the_far_cells_refuses(copied):
     with pytest.raises(hp.hh.Refusal, match="far task cells only"):
         hp.readings(copied, PROV, registered.HAIKU_PROVENANCE_CELLS, {}, sweep_closed=False,
                     allow_incomplete=True)
+
+
+def test_the_replies_reading_names_a_run_with_no_transcript(tmp_path):
+    """Reading 5 never returns nothing silently: a run holding counted not-recoverable far
+    records with no transcript is named, so the output is refused or PROVISIONAL."""
+    _, resolved, _ = hp.read(ROOT, registered.HAIKU_NOTES_EXPERIMENT, ("W-n-0",), {},
+                             sweep_closed=False)
+    tally, missing = hp.replies(resolved, "W-n-0", registered.HAIKU_T, tmp_path,
+                                registered.HAIKU_NOTES_EXPERIMENT)
+    assert tally is None and missing == [R9_RUN]
+
+
+def test_a_missing_cost_is_not_counted_as_zero():
+    assert hp._mean([1.0, None, 3.0]) == (None, 1)
+    assert hp._mean([1.0, 3.0]) == (2.0, 0)
+    assert hp._mean([]) == (None, 0)
+
+
+def test_r9s_costs_have_no_missing_value(r9):
+    for c in r9["arms"][0]["costs"].values():
+        assert c["cost_missing"] == 0 and c["output_tokens_missing"] == 0
+        assert c["cost_usd_billed_mean"] > 0

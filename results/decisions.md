@@ -1476,13 +1476,13 @@ The S1→S2 step (σ_notes = −0.427, entry of 2026-10-12) points to the last, 
 **Approval.** The researcher's merge of the pull request that adds this entry records the reading. It adds no spending approval. The pull request is $0.
 
 ## 2026-11-01: Amendment R10: two exploratory variants of claude-haiku-5-5's notes instruction (W-np-0, W-npd-0); block 6-haiku-provenance
-**Request.** The researcher holds Anthropic API credits that expire on 2026-11-05 and asked on 2026-10-31 how to use them. Claude proposed a notes instruction that asks for each carried fact's source, aimed at R9's finding that Haiku retracted its own correct figures once the evidence left the window (2026-10-24, "why Haiku's carried notes went unused"). R9's failed replies already named sources and still retracted, so Claude asked whether to add an arm that also says older messages may be dropped. The researcher chose both arms.
+**Request.** The researcher holds Anthropic API credits that expire on 2026-11-05 and asked on 2026-10-31 how to use them. Claude proposed a notes instruction that asks for each carried fact's source, aimed at R9's finding that Haiku retracted its own correct figures once the evidence left the window (2026-10-24, "why Haiku's carried notes went unused"). Several of R9's failed replies already named a source and still retracted (`results/haiku_notes_replies/20261024T234538Z/handcoded_need_replies.jsonl`), so Claude asked whether to add an arm that also says older messages may be dropped. The researcher chose both arms.
 
 **Amendment R10** (`PREREG.md` §17.10) and **PLAN amendment A12** (`PLAN.md` §27):
 - **Two cells,** each W-n-0 with text added after the notes instruction:
   - W-np-0 adds: "For each fact you carry forward, also note where it came from: the message you read it in, or the facts and steps you worked it out from."
   - W-npd-0 adds that and then: "Older messages may be dropped from this conversation as it grows, so your notes may become the only record of what they said."
-- **The runs:** each cell runs an 8-episode pilot (pilot templates 0-1 on the 4 far task cells, blinded), then the 4 far task cells on main templates 0-199 at repeat 0, with R8's settings, in its own experiment `persistgym_haiku_provenance`: 1,600 main episodes.
+- **The runs:** each cell runs an 8-episode pilot in `persistgym_pilot` (pilot templates 0-1 on the 4 far task cells, blinded, at most 2 pilot runs per cell), then the 4 far task cells on main templates 0-199 at repeat 0, with R8's settings: 1,600 main episodes. Both main runs are in R10's own experiment, `persistgym_haiku_provenance`.
 - **Exploratory:** decided after R9's readings and its replies were read. Nothing of R8 or R9 changes.
 - **The analysis is descriptive:**
   - success per arm and far task cell;
@@ -1492,7 +1492,8 @@ The S1→S2 step (σ_notes = −0.427, entry of 2026-10-12) points to the last, 
   - R9's text patterns on the replies, as pointers;
   - cost per episode and the returned model strings.
 - **The script,** `analysis/haiku_provenance.py`, is in this pull request, before any run exists. Read on R9's run as an arm, it reproduces R9's far-cell readings (4/200 and 9/200 not recoverable, notes carrying the fact in 8 and 72) and R9's pattern counts.
-- **The reference is not concurrent.** R9's W-n-0 ran on 2026-10-24, so an arm minus W-n-0 mixes the instruction with any change in serving. W-npd-0 minus W-np-0 compares two runs made close together.
+- **The reference is not concurrent.** R9's W-n-0 ran on 2026-10-24, so an arm minus W-n-0 mixes the instruction with any change in serving. W-npd-0 minus W-np-0 compares two runs made one after the other, which differ by design only in the disclosure sentence.
+- **In-sample wording:** Claude wrote the sentences after reading R9's replies on the same 800 far episodes they are read on, and tried no other wording.
 
 **Cost** (from the committed ledger and R9's committed records):
 - **Forecast:** $73.38, that is 1,616 episodes (16 pilot, 1,600 main) at $0.045408, R9's cost per episode on the 4 far task cells ($36.33 for 800). The added text (32 and 57 project tokens per request) and longer notes may add about 5%, so about $77. The window bounds each request at about W, which bounds the increase.
@@ -1506,7 +1507,7 @@ The S1→S2 step (σ_notes = −0.427, entry of 2026-10-12) points to the last, 
        PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-np-0 --model claude-haiku-5-5 --split pilot --start 0 --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot --approved-block 6-haiku-provenance --planned-usd 2
        PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-npd-0 --model claude-haiku-5-5 --split pilot --start 0 --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot --approved-block 6-haiku-provenance --planned-usd 2
 
-2. **The check before the main runs** (§17.10): both pilots ended `COMPLETED`, with no API error and no request-side check stop, every request's system prompt ends in its cell's notes text (read from the raw transcripts), and the cost per episode is at most $0.0568 (1.25 × $0.045408). `analysis/haiku_provenance_pilot.py` checks these and reports nothing else, so the pilots' outcomes stay blinded:
+2. **The check before the main runs** (§17.10): both pilots ended `COMPLETED`, with no API error and no request-side check stop, each played exactly its 8 registered episodes, every request's system prompt ends in its cell's notes text (read from the raw transcripts), the cost per episode is at most $0.0568 (1.25 × $0.045408), and the serving path is R9's (model string claude-haiku-5-5, standard tier, global geo). `analysis/haiku_provenance_pilot.py` checks these and reports nothing else, so the pilots' outcomes stay blinded. The guard refuses the main runs until its latest check says GO for both cells:
 
        uv run python -m analysis.haiku_provenance_pilot --run <W-np-0 pilot run> --run <W-npd-0 pilot run>
 

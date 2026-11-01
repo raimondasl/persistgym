@@ -251,7 +251,7 @@ from pathlib import Path
 
 import openai
 
-from common import costs, paidlock, runmeta
+from common import approval, costs, paidlock, runmeta
 from harnesses import (
     account,
     blinding,
@@ -460,8 +460,23 @@ def _check_accounted(transport: PaidTransport, run_id: str) -> None:
               f"{transport.paid_lock.path}", file=sys.stderr)
 
 
+def _block_name_refusal(approved_block: str | None) -> str | None:
+    """Why --approved-block is not exactly a block name, or None (not given: the paid guard
+    refuses that). The guard strips the name before it looks up the approval, but R10's block
+    rule (`registered.provenance_block_refusal`) must see the same name, so padding refuses,
+    as the ARC launcher refuses it (arc/run_path.py)."""
+    if approved_block is None or approval.NAME_RE.fullmatch(approved_block):
+        return None
+    return (f"--approved-block {approved_block!r} is not a block name ([A-Za-z0-9._-]+, no "
+            "spaces)")
+
+
 def cmd_run(a) -> int:
     cell = get_cell(a.cell)
+    why = _block_name_refusal(a.approved_block)
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
+        return 2
     if not 1 <= a.parallel <= MAX_PARALLEL:
         print(f"refused: --parallel is 1 to {MAX_PARALLEL} episodes at once (PREREG §4.6), "
               f"got {a.parallel}", file=sys.stderr)
@@ -954,6 +969,10 @@ def cmd_single_turn(a) -> int:
     def refuse(why: str) -> int:
         print(f"refused: {why}", file=sys.stderr)
         return 2
+
+    why = _block_name_refusal(a.approved_block)
+    if why:
+        return refuse(why)
 
     if not 1 <= a.parallel <= MAX_PARALLEL:
         return refuse(f"--parallel is 1 to {MAX_PARALLEL} prompts at once (PREREG §4.6), got "

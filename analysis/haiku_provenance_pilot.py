@@ -1,17 +1,22 @@
 """R10's check between its pilots and its main runs (PREREG §17.10; $0, blinded).
 
 R10 starts its two main runs only after both pilots, W-np-0 and W-npd-0 in `persistgym_pilot`,
-pass four conditions:
+pass these conditions:
 1. the run ended `COMPLETED` (meta.json), so no request-side check stop;
-2. no episode ended `API_ERROR` (the raw episodes, read for their endings only);
-3. every request's system prompt ends with the notes separator and the cell's notes text
+2. no episode ended `API_ERROR` (the raw episodes, read for their endings and ids only);
+3. the run played exactly the registered pilot: pilot templates 0-1 on the 4 far task cells,
+   base episodes, 8 episodes (`registered_episodes`);
+4. every request's system prompt ends with the notes separator and the cell's notes text
    (`CellSpec.notes_instruction`), read from the raw transcript;
-4. the cost per episode (the run's costs.csv row, billed estimate, over the episodes run) is at
-   most `COST_LIMIT`, 1.25 times the forecast's $0.045408.
+5. the cost per episode (the run's costs.csv row, billed estimate, over the episodes run) is at
+   most `COST_LIMIT`, 1.25 times the forecast's $0.045408;
+6. the serving path is R9's: the returned model string is exactly claude-haiku-5-5 (meta.json),
+   and the costs row reports the standard tier served and the global inference geo only.
 
 It reports those and nothing else: no outcome, no per-episode token count, nothing PREREG §11
 withholds from a pilot. A failed condition means Claude stops and tells the researcher before
-any main run.
+any main run. The guard reads the latest check this script writes: R10's main runs refuse
+until it says GO for both cells (`harnesses.registered._provenance_pilot_go`).
 
 Run: ``uv run python -m analysis.haiku_provenance_pilot --run RUN_ID --run RUN_ID``. It writes
 ``results/haiku_provenance_pilot/<UTC>/check.json`` and ``meta.json``; ``--no-write`` only
@@ -38,10 +43,32 @@ FORECAST_PER_EPISODE = 0.045408
 """R9's billed cost per episode on the 4 far task cells (PREREG §17.10, Budget)."""
 COST_LIMIT = 1.25 * FORECAST_PER_EPISODE
 OUTPUTS = ("check.json", "meta.json")
+MODEL_RETURNED = [registered.HAIKU_MODEL]
+"""The model string R9's run returned (results/haiku_notes/20261024T073307Z/)."""
+
+
+def registered_episodes() -> list[str]:
+    """The episode ids of R10's registered pilot: pilot templates 0-1 x the 4 far task cells,
+    base episodes."""
+    start, stop = registered.HAIKU_PROVENANCE_PILOT_TEMPLATES
+    return sorted(f"pilot-{t:06d}/{tc}/base" for t in range(start, stop)
+                  for tc in registered.HAIKU_PROVENANCE_TASK_CELLS)
+
+
+def served_geos(notes: str) -> dict[str, int] | None:
+    """The `inference_geos=<geo>:<calls>;...` field of a costs row's notes, or None."""
+    for part in notes.split("; "):
+        if part.startswith("inference_geos="):
+            out = {}
+            for entry in part.removeprefix("inference_geos=").split(";"):
+                geo, _, n = entry.partition(":")
+                out[geo] = int(n) if n.isdigit() else 0
+            return out
+    return None
 
 
 def check_run(results: Path, raw: Path, costs_path: Path, run_id: str) -> dict:
-    """The four conditions for one pilot run of an R10 cell."""
+    """The conditions for one pilot run of an R10 cell (the module docstring)."""
     meta = json.loads((results / PILOT / run_id / "meta.json").read_text(encoding="utf-8"))
     cell = meta.get("cell_or_config")
     problems = []
@@ -53,10 +80,13 @@ def check_run(results: Path, raw: Path, costs_path: Path, run_id: str) -> dict:
         problems.append(f"model {meta.get('model_requested')!r}")
     completed = meta.get("exit_reason") == "COMPLETED"
     endings: Counter = Counter()
+    ids = []
     for line in (raw / PILOT / run_id / "episodes.jsonl").read_text(
             encoding="utf-8").splitlines():
         if line.strip():
-            endings[str(json.loads(line).get("exit_reason"))] += 1
+            rec = json.loads(line)
+            endings[str(rec.get("exit_reason"))] += 1
+            ids.append(str(rec.get("episode_id")))
     episodes = sum(endings.values())
     suffix = None
     requests = bad_system = 0
@@ -71,23 +101,32 @@ def check_run(results: Path, raw: Path, costs_path: Path, run_id: str) -> dict:
                 if not str(payload.get("system") or "").endswith(suffix):
                     bad_system += 1
     rows = [r for r in costs.read_rows(costs_path) if r["run_id"] == run_id]
+    tier = geos = None
     if len(rows) != 1:
         problems.append(f"{len(rows)} costs.csv rows for the run, not 1")
         per_episode = None
     else:
-        spend = costs.spend_usd(*(None if rows[0][k] in (None, "") else float(rows[0][k])
+        row = rows[0]
+        spend = costs.spend_usd(*(None if row[k] in (None, "") else float(row[k])
                                   for k in ("cost_usd_list", "cost_usd_billed_est")))
         per_episode = spend / episodes if episodes else None
+        tier = row.get("service_tier_served") or None
+        geos = served_geos(row.get("notes") or "")
+    models = list(meta.get("model_returned") or [])
     conditions = {
         "completed": completed,
         "no_api_error": endings.get("API_ERROR", 0) == 0 and episodes > 0,
+        "registered_episodes": sorted(ids) == registered_episodes(),
         "system_prompts_end_with_notes_text": requests > 0 and bad_system == 0,
         "cost_per_episode_within_limit": per_episode is not None and per_episode <= COST_LIMIT,
+        "model_string": models == MODEL_RETURNED,
+        "standard_tier_global_geo": tier == "standard" and bool(geos) and set(geos) == {"global"},
     }
     return {"run_id": run_id, "cell": cell, "exit_reason": meta.get("exit_reason"),
             "episodes": episodes, "episode_endings": dict(sorted(endings.items())),
             "requests": requests, "requests_without_the_notes_text": bad_system,
             "cost_per_episode_usd": per_episode, "cost_limit_usd": COST_LIMIT,
+            "model_returned": models, "service_tier_served": tier, "inference_geos": geos,
             "conditions": conditions, "problems": problems,
             "passed": all(conditions.values()) and not problems}
 
@@ -108,7 +147,9 @@ def summary(c: dict) -> str:
             f"- {r['run_id']} ({r['cell']}): {r['exit_reason']}, {r['episodes']} episodes "
             f"{r['episode_endings']}, {r['requests']} requests, "
             f"{r['requests_without_the_notes_text']} without the notes text, cost per episode "
-            f"{'n/a' if cost is None else f'${cost:.5f}'} (limit ${r['cost_limit_usd']:.5f}); "
+            f"{'n/a' if cost is None else f'${cost:.5f}'} (limit ${r['cost_limit_usd']:.5f}), "
+            f"model {r['model_returned']}, tier {r['service_tier_served']}, geos "
+            f"{r['inference_geos']}; "
             + ", ".join(f"{k} {'yes' if v else 'NO'}" for k, v in r["conditions"].items())
             + (f"; problems: {'; '.join(r['problems'])}" if r["problems"] else ""))
     if not c["both_cells_piloted"]:

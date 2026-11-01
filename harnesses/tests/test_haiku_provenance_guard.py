@@ -728,7 +728,7 @@ def test_the_not_haiku_note_names_the_messages_api_for_claude_models_only(tmp_pa
 def test_a_run_of_r10s_cells_never_reuses_a_run_id(prov_paid_env, capsys):
     """The pilot count and the pilot check read one folder per run: a second run under a used
     run id refuses before the lock, and costs nothing."""
-    tmp, costs_csv, fakes = prov_paid_env
+    _, costs_csv, fakes = prov_paid_env
     assert cli.main(_pilot("W-np-0", "p1")) == 0
     capsys.readouterr()
     rows = len(costs.read_rows(costs_csv))

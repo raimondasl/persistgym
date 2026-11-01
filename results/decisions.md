@@ -1474,3 +1474,46 @@ The S1→S2 step (σ_notes = −0.427, entry of 2026-10-12) points to the last, 
 **What it does not show:** what would happen in a run with S0's limit in tokens. The replay holds S0's moves, observations and replies fixed. It uses one median rate per game, plus the lower quartile, but a new run would make different moves. One counted run per configuration and game.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the reading. It adds no spending approval. The pull request is $0.
+
+## 2026-11-01: Amendment R10: two exploratory variants of claude-haiku-5-5's notes instruction (W-np-0, W-npd-0); block 6-haiku-provenance
+**Request.** The researcher holds Anthropic API credits that expire on 2026-11-05 and asked on 2026-10-31 how to use them. Claude proposed a notes instruction that asks for each carried fact's source, aimed at R9's finding that Haiku retracted its own correct figures once the evidence left the window (2026-10-24, "why Haiku's carried notes went unused"). R9's failed replies already named sources and still retracted, so Claude asked whether to add an arm that also says older messages may be dropped. The researcher chose both arms.
+
+**Amendment R10** (`PREREG.md` §17.10) and **PLAN amendment A12** (`PLAN.md` §27):
+- **Two cells,** each W-n-0 with text added after the notes instruction:
+  - W-np-0 adds: "For each fact you carry forward, also note where it came from: the message you read it in, or the facts and steps you worked it out from."
+  - W-npd-0 adds that and then: "Older messages may be dropped from this conversation as it grows, so your notes may become the only record of what they said."
+- **The runs:** each cell runs an 8-episode pilot (pilot templates 0-1 on the 4 far task cells, blinded), then the 4 far task cells on main templates 0-199 at repeat 0, with R8's settings, in its own experiment `persistgym_haiku_provenance`: 1,600 main episodes.
+- **Exploratory:** decided after R9's readings and its replies were read. Nothing of R8 or R9 changes.
+- **The analysis is descriptive:**
+  - success per arm and far task cell;
+  - the carried-fact accounting;
+  - the choices made with the fact evicted;
+  - each arm against R9's W-n-0 on the same episodes, and W-npd-0 against W-np-0;
+  - R9's text patterns on the replies, as pointers;
+  - cost per episode and the returned model strings.
+- **The script,** `analysis/haiku_provenance.py`, is in this pull request, before any run exists. Read on R9's run as an arm, it reproduces R9's far-cell readings (4/200 and 9/200 not recoverable, notes carrying the fact in 8 and 72) and R9's pattern counts.
+- **The reference is not concurrent.** R9's W-n-0 ran on 2026-10-24, so an arm minus W-n-0 mixes the instruction with any change in serving. W-npd-0 minus W-np-0 compares two runs made close together.
+
+**Cost** (from the committed ledger and R9's committed records):
+- **Forecast:** $73.38, that is 1,616 episodes (16 pilot, 1,600 main) at $0.045408, R9's cost per episode on the 4 far task cells ($36.33 for 800). The added text (32 and 57 project tokens per request) and longer notes may add about 5%, so about $77. The window bounds each request at about W, which bounds the increase.
+- **Limit:** $100 billed. Each pilot's `--planned-usd` is $2, and each main run's is $48, at which it stops.
+- **Phase 1a:** $292.54 spent of its $500 cap. At most $392.54 after this block.
+- **Project total so far:** $821.07 billed (88 ledger rows). At most $921.07 after this block.
+
+**The runs** (after this merge, in this order). The paid-run lock runs one PersistGym run at a time.
+1. The two pilots:
+
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-np-0 --model claude-haiku-5-5 --split pilot --start 0 --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot --approved-block 6-haiku-provenance --planned-usd 2
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-npd-0 --model claude-haiku-5-5 --split pilot --start 0 --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot --approved-block 6-haiku-provenance --planned-usd 2
+
+2. **The check before the main runs** (§17.10): both pilots ended `COMPLETED`, with no API error and no request-side check stop, every request's system prompt ends in its cell's notes text (read from the raw transcripts), and the cost per episode is at most $0.0568 (1.25 × $0.045408). The pilots' outcomes stay blinded. If any condition fails, Claude stops and tells the researcher before any main run.
+3. The two main runs, with `--parallel 8` as R9 used under the organization's input-token rate limit:
+
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-np-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_haiku_provenance --approved-block 6-haiku-provenance --planned-usd 48 --parallel 8
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-npd-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_haiku_provenance --approved-block 6-haiku-provenance --planned-usd 48 --parallel 8
+
+A run that stops early is continued only after the researcher is told the cause (`harnesses/DESIGN.md` §7.9), at lower parallelism if the cause is the rate limit. Each continuation or §13 re-run is recorded here with its original (§7.8).
+
+approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_haiku_provenance | max_usd: 100
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R10 (`PREREG.md` §17.10), PLAN amendment A12 and the code that enforces them. It also approves block `6-haiku-provenance` up to $100 billed.

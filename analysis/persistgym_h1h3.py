@@ -445,7 +445,7 @@ from statsmodels.tools import sm_exceptions
 from analysis import power_sim as ps
 from common import runmeta
 from harnesses import registered
-from harnesses.cells import CELLS, NOTES_INSTRUCTION
+from harnesses.cells import CELLS, NOTES_INSTRUCTION, NOTES_VARIANT_CELLS
 from harnesses.items import item_text, output_text
 from harnesses.wire import MESSAGES, MESSAGES_API, RESPONSES_API
 from persistgym import tokens
@@ -467,9 +467,13 @@ BASE, RESTATED = "base", "restated"
 KINDS = (("F-0", BASE), ("W-0", BASE), ("W-n-0", BASE), ("Σ-n-0", BASE), ("F-0", RESTATED),
          (SINGLE_TURN, BASE))
 """The run kinds of R6 change 1: (harness cell, variant)."""
-WINDOW_CELLS = tuple(c for c in HARNESS_CELLS if CELLS[c].history == "window")
-CARRY_CELLS = tuple(c for c in HARNESS_CELLS
-                    if CELLS[c].notes or CELLS[c].history == "summary")
+SPECS = {**CELLS, **NOTES_VARIANT_CELLS}
+"""Every harness cell's spec: PLAN §6's table and R10's two variants of W-n-0 (PREREG §17.10),
+which `analysis.haiku_provenance` reads with this module's discovery and §2.8 check."""
+WINDOW_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS)
+                     if SPECS[c].history == "window")
+CARRY_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS)
+                    if SPECS[c].notes or SPECS[c].history == "summary")
 SUMMARY_CELLS = tuple(c for c in HARNESS_CELLS if CELLS[c].history == "summary")
 OBS_NR_FAR, OBS_R_FAR = "observed-nonrec-far", "observed-rec-far"
 OBS_R = {"near": "observed-rec-near", "far": "observed-rec-far"}
@@ -1039,14 +1043,16 @@ def kind_label(cell: str, variant: str) -> str:
 
 
 def completeness(resolved: dict, templates: int, sweep_closed: bool = False,
-                 kinds: tuple = KINDS) -> tuple[list[str], list[str]]:
+                 kinds: tuple = KINDS,
+                 task_cells: tuple[str, ...] | None = None) -> tuple[list[str], list[str]]:
     """Why the repeat-0 sweep is incomplete for templates 0..templates-1 (empty if complete),
     and its deviations: for a closed sweep, the keys excluded with no final record and the
     keys never played; in any sweep, the keys the request-side check stopped (R8); per run
-    kind of `kinds` (luna's by default; §13: listed in every write-up)."""
+    kind of `kinds` (luna's by default; §13: listed in every write-up), over `task_cells`
+    (default all 8, the single-turn control's 4; R10 plays the 4 far ones)."""
     reasons, deviations = [], []
     for cell, variant in kinds:
-        cells = NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS
+        cells = task_cells or (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS)
         missing, pending, closed, checked = [], [], Counter(), []
         for t in range(templates):
             for tc in cells:
@@ -1210,12 +1216,14 @@ def far_window_bugs(runs: list[Run]) -> list[str]:
     return out
 
 
-def _system_tokens(instructions: str, notes: bool, settings: dict) -> tuple[int, str | None]:
+def _system_tokens(instructions: str, notes: bool, settings: dict,
+                   notes_text: str = NOTES_INSTRUCTION) -> tuple[int, str | None]:
     """Project tokens of the system prompt W counts: the request's instructions without the
-    notes sentence (D5), or 0 when the run's config does not count it."""
+    notes sentence (D5; `notes_text`, the cell's notes text, to which R10's cells add), or 0
+    when the run's config does not count it."""
     text = instructions
     if notes:
-        suffix = settings["notes_separator"] + NOTES_INSTRUCTION
+        suffix = settings["notes_separator"] + notes_text
         if not text.endswith(suffix):
             return 0, "the instructions do not end with the notes sentence"
         text = text[: -len(suffix)]
@@ -1244,11 +1252,13 @@ def reply_counted(response: dict, api: str = RESPONSES_API) -> str:
 
 
 def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
-                   settings: dict, api: str = RESPONSES_API) -> dict[str, dict]:
+                   settings: dict, api: str = RESPONSES_API,
+                   notes_text: str = NOTES_INSTRUCTION) -> dict[str, dict]:
     """§2.8 condition 2 for one window-cell run: for each episode in `wanted` ({episode_id:
     {"need_step", "evidence_steps"}}), the drop-oldest rule replayed on the project-token counts
     of the turns its transcript shows were sent, read on the run's wire (`api`:
-    `request_parts`, `reply_counted`). Returns {episode_id: {"S", "keep",
+    `request_parts`, `reply_counted`), with the cell's notes text `notes_text` taken off the
+    system prompt as the session leaves it out of W. Returns {episode_id: {"S", "keep",
     "user_messages_sent", "user_messages_expected"} or {"problem": why}}."""
     tok = settings["tokenizer"]
     W = settings["W"]
@@ -1267,7 +1277,7 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
             payload = ev.get("payload") or {}
             instructions, items = request_parts(payload, api)
             if eid not in system:
-                system[eid] = _system_tokens(instructions, notes, settings)
+                system[eid] = _system_tokens(instructions, notes, settings, notes_text)
             turn = int(ev["turn"])
             if turn != len(turns[eid]):
                 problems[eid] = (f"transcript turn {turn} where turn {len(turns[eid])} was "
@@ -1369,8 +1379,9 @@ def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIME
         if not path.is_file():
             missing.append(run.run_id)
             continue
-        got = window_recheck(path, wanted, notes=CELLS[run.cell].notes, settings=run.window,
-                             api=api)
+        spec = SPECS[run.cell]
+        got = window_recheck(path, wanted, notes=spec.notes, settings=run.window, api=api,
+                             notes_text=spec.notes_instruction or NOTES_INSTRUCTION)
         n_keep = n_users = n_stopped = 0
         for eid, (s_verbatim, keep_start, ending) in expect.items():
             g = got[eid]
@@ -2391,7 +2402,7 @@ def h1_predictions(h1: dict, lookups: dict, tok: dict) -> dict:
 
 def s_planned(cell: str, distance: str) -> int | None:
     """S_planned of §2.8: 1 in F cells; window 1 near, 0 far; summary 0 far, unset near."""
-    history = CELLS[cell].history
+    history = SPECS[cell].history
     if history == "full":
         return 1
     if history == "window":
@@ -2405,11 +2416,13 @@ def _rate(df: pd.DataFrame) -> dict:
     return {"n": n, "successes": k, "rate": k / n if n else None}
 
 
-def accounting(prim: pd.DataFrame, cells: tuple[str, ...] = HARNESS_CELLS) -> list[dict]:
-    """§2.8 and §9.6 per harness cell of `cells` x task cell (base, repeat 0)."""
+def accounting(prim: pd.DataFrame, cells: tuple[str, ...] = HARNESS_CELLS,
+               task_cells: tuple[str, ...] | None = None) -> list[dict]:
+    """§2.8 and §9.6 per harness cell of `cells` x task cell of `task_cells` (default all 8;
+    base, repeat 0)."""
     rows = []
     for cell in cells:
-        for tc in TASK_CELLS:
+        for tc in task_cells or TASK_CELLS:
             sub = prim[(prim.cell == cell) & (prim.variant == BASE) & (prim.task_cell == tc)]
             dist = TaskCell.from_id(tc).distance
             planned = s_planned(cell, dist)
@@ -2454,13 +2467,15 @@ def accounting(prim: pd.DataFrame, cells: tuple[str, ...] = HARNESS_CELLS) -> li
 
 # --- cells, exclusions, repeats, model strings ----------------------------------------------
 
-def cell_table(prim: pd.DataFrame, kinds: tuple = KINDS, stopped: bool = False) -> list[dict]:
-    """Each run kind's success per task cell, with its content failures. With `stopped` (Haiku,
-    R8: refusals are counted per cell, with their category), also the step responses that
-    stopped short, by reason (``refusal:<category>``, ``max_output_tokens``, ...)."""
+def cell_table(prim: pd.DataFrame, kinds: tuple = KINDS, stopped: bool = False,
+               task_cells: tuple[str, ...] | None = None) -> list[dict]:
+    """Each run kind's success per task cell (of `task_cells`, default all 8 or the
+    single-turn control's 4), with its content failures. With `stopped` (Haiku, R8: refusals
+    are counted per cell, with their category), also the step responses that stopped short,
+    by reason (``refusal:<category>``, ``max_output_tokens``, ...)."""
     rows = []
     for cell, variant in kinds:
-        for tc in (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
+        for tc in task_cells or (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
             sub = prim[(prim.cell == cell) & (prim.variant == variant) & (prim.task_cell == tc)]
             outcomes = Counter(str(x) for x in sub.need_outcome)
             rows.append({"kind": kind_label(cell, variant), "cell": cell, "variant": variant,
@@ -2477,16 +2492,17 @@ def cell_table(prim: pd.DataFrame, kinds: tuple = KINDS, stopped: bool = False) 
 
 
 def exclusion_table(resolved: dict, templates: int, kinds: tuple = KINDS,
-                    echo: bool = True) -> list[dict]:
+                    echo: bool = True, task_cells: tuple[str, ...] | None = None) -> list[dict]:
     """Per run kind and task cell, over the repeat-0 keys of templates 0..T-1: keys with a
     record (or excluded by the request-side check), keys never played, exclusions by reason
     (echo, transport, no final record in a closed sweep), pending keys and dropped duplicates
     (§13: counts per cell). With `echo` False (Haiku, R8: no echo) a record-holding exclusion
     is the runner's own mark, ``excluded_by_runner``, with no echo share, and the keys the
-    request-side check stopped are counted as ``excluded_request_check``."""
+    request-side check stopped are counted as ``excluded_request_check``. Over `task_cells`
+    (default all 8, the single-turn control's 4)."""
     rows = []
     for cell, variant in kinds:
-        for tc in (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
+        for tc in task_cells or (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
             c: Counter = Counter()
             for t in range(templates):
                 r = resolved.get((cell, episode_id_of(cell, variant, t, tc), 0))

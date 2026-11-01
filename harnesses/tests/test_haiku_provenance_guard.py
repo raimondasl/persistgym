@@ -1,0 +1,383 @@
+"""R10's guard for claude-haiku-5-5's two notes-instruction variants (harnesses/registered.py
+`_haiku_provenance_refusal`, `provenance_block_refusal`; PREREG §17.10, amendment R10): fail
+closed.
+
+* The repository: `R10_IN_EFFECT` is True, the experiment `persistgym_haiku_provenance` is in
+  phase 1a and the PersistGym stream, and R8's and R9's values are unchanged.
+* The rules: W-np-0 and W-npd-0, each as a pilot (`persistgym_pilot`, pilot templates, far
+  task cells) or a main run in R10's experiment (the full matrix on the 4 far task cells,
+  main templates within 0-199 at repeat 0), base episodes, with R8's effort, config and
+  request settings, the main runs after `HAIKU_G1_PASSED`. Anything else refuses, naming
+  §17.10: another cell in R10's experiment, R10's cells in R8's or R9's experiments, near task
+  cells, another split, variant, matrix, template range, repeat, effort, config or request,
+  and every other model.
+* The kill switches: with `R10_IN_EFFECT` False every run of the two cells and every run in
+  the experiment refuses, and R8's and R9's runs still pass; with `R8_IN_EFFECT` False they
+  refuse too.
+* The blocks: R10's cells run under block `6-haiku-provenance` only, and that block funds
+  them only (`provenance_block_refusal`). The transport admits a pilot or a main run under a
+  block that lists R10's experiment. End to end, through the real guarded transport with a
+  fake-backed client: a blinded W-np-0 pilot and a W-npd-0 main run under block 6, each
+  request carrying its cell's notes text; and the cross-funding runs refuse with no call.
+"""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from common import costs, paidlock
+from common.tests.gitrepo import FROZEN_PREREG, approval_line, decisions_text, guarded_repo
+from harnesses import anthropic_transport, cli, registered
+from harnesses.anthropic_transport import AnthropicMessagesTransport
+from harnesses.cells import DISCLOSURE_SENTENCE, PROVENANCE_SENTENCE
+from harnesses.fake import FakeModel
+from harnesses.openai_transport import ALLOW_ENV
+from harnesses.tests.test_haiku_guard import (
+    ALL8,
+    DEFAULT,
+    HAIKU,
+    MAIN,
+    NONREC,
+    OTHER,
+    OTHER_CLAUDE,
+    PILOT,
+    RUNS,
+    VALIDITY,
+    _FakeBackedClient,
+    guard,
+)
+
+PROV = "persistgym_haiku_provenance"
+NOTES = "persistgym_haiku_notes"
+BLOCK = "6-haiku-provenance"
+FAR = ("observed-nonrec-far", "observed-rec-far", "derived-nonrec-far", "derived-rec-far")
+CELLS = ("W-np-0", "W-npd-0")
+
+
+def main_guard(cell, root, repeat_index=0, **kw):
+    """R10's main run of `cell`, with any setting replaced by `kw`."""
+    kw.setdefault("task_cells", FAR)
+    kw.setdefault("templates", (0, 200))
+    return registered.check_run_settings(
+        kw.pop("experiment", PROV), kw.pop("model", HAIKU), kw.pop("effort", "medium"), cell,
+        kw.pop("gen", DEFAULT), root, split=kw.pop("split", "main"),
+        variant=kw.pop("variant", "base"), task_cells=kw.pop("task_cells"),
+        request=kw.pop("request", {"mode": "standard", "service_tier": "standard", "W": None}),
+        templates=kw.pop("templates"), matrix=kw.pop("matrix", "full"),
+        repeat_index=repeat_index, **kw)
+
+
+def pilot_guard(cell, root, **kw):
+    """R10's pilot of `cell` on pilot templates 0-1 and the far task cells."""
+    kw.setdefault("templates", (0, 2))
+    return main_guard(cell, root, experiment=PILOT, split="pilot", **kw)
+
+
+@pytest.fixture
+def no_g1(monkeypatch):
+    monkeypatch.setattr(registered, "HAIKU_G1_PASSED", {})
+
+
+# --- the repository ------------------------------------------------------------------------------
+
+def test_the_repository_has_r10_in_effect_beside_r8s_and_r9s_values():
+    assert registered.R10_IN_EFFECT is True
+    assert registered.R9_IN_EFFECT is True and registered.R8_IN_EFFECT is True
+    assert registered.R10_REF == "PREREG.md §17.10 (amendment R10)"
+    assert registered.HAIKU_PROVENANCE_EXPERIMENT == PROV
+    assert registered.HAIKU_PROVENANCE_CELLS == CELLS
+    assert registered.HAIKU_PROVENANCE_TASK_CELLS == FAR
+    assert registered.HAIKU_PROVENANCE_BLOCK == BLOCK
+    assert costs.EXPERIMENT_PHASE[PROV] == "1a"
+    assert paidlock.EXPERIMENT_STREAM[PROV] == paidlock.PERSISTGYM
+    assert registered.HAIKU_CELLS == ("F-0", "W-0") and registered.HAIKU_T == 200
+    assert registered.HAIKU_NOTES_CELL == "W-n-0"
+    assert PROV not in registered.HAIKU_EXPERIMENTS
+    assert not set(CELLS) & set(registered.HAIKU_PILOT_CELLS)
+
+
+# --- the rules -----------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("cell", CELLS)
+@pytest.mark.parametrize("templates", [(0, 200), (0, 1), (100, 200), (199, 200)])
+def test_r10s_main_runs_pass(tmp_path, cell, templates):
+    assert main_guard(cell, tmp_path, templates=templates) is None
+
+
+@pytest.mark.parametrize("cell", CELLS)
+@pytest.mark.parametrize("task_cells", [FAR, FAR[:1], ("derived-rec-far", "observed-rec-far")])
+def test_r10s_pilots_pass_without_g1(tmp_path, no_g1, cell, task_cells):
+    assert pilot_guard(cell, tmp_path, task_cells=task_cells) is None
+
+
+@pytest.mark.parametrize("cell", CELLS)
+def test_main_runs_need_g1(tmp_path, no_g1, cell):
+    why = main_guard(cell, tmp_path)
+    assert why is not None and "HAIKU_G1_PASSED" in why and registered.R10_REF in why
+
+
+def test_repeat_1_refuses(tmp_path):
+    why = main_guard("W-np-0", tmp_path, repeat_index=1)
+    assert why is not None and "--repeat-index 1" in why and registered.R10_REF in why
+
+
+def test_a_dated_haiku_snapshot_is_haiku(tmp_path):
+    assert main_guard("W-npd-0", tmp_path, model=f"{HAIKU}-2026-10-01") is None
+
+
+@pytest.mark.parametrize("cell, kw, wrong", [
+    ("W-n-0", {}, "cell W-n-0"),
+    ("W-0", {}, "cell W-0"),
+    ("F-0", {}, "cell F-0"),
+    ("Σ-n-0", {}, "cell Σ-n-0"),
+    ("single-turn", {"task_cells": NONREC, "matrix": None}, "cell single-turn"),
+    ("W-np-0", {"task_cells": ALL8}, "task cells"),
+    ("W-np-0", {"task_cells": FAR[:3]}, "task cells"),
+    ("W-np-0", {"task_cells": NONREC}, "task cells"),
+    ("W-np-0", {"task_cells": None}, "task cells (not given)"),
+    ("W-np-0", {"split": "pilot", "templates": (0, 1)}, "--split pilot"),
+    ("W-np-0", {"split": "validity", "templates": (0, 20)}, "--split validity"),
+    ("W-npd-0", {"variant": "restated"}, "--variant restated"),
+    ("W-npd-0", {"matrix": "d11"}, "--matrix d11"),
+    ("W-npd-0", {"matrix": "custom"}, "--cell-templates"),
+    ("W-npd-0", {"matrix": None}, "run matrix (not given)"),
+    ("W-npd-0", {"templates": (0, 201)}, "main templates 0-200"),
+    ("W-npd-0", {"templates": (200, 210)}, "main templates 200-209"),
+    ("W-npd-0", {"templates": None}, "main templates (not given)"),
+    ("W-np-0", {"effort": "high"}, "--effort high"),
+    ("W-np-0", {"gen": OTHER}, "generator config 000000000000"),
+    ("W-np-0", {"request": {"mode": "standard", "service_tier": "standard", "W": 24000}},
+     "--W 24000"),
+    ("W-np-0", {"request": None}, "--W (not given)"),
+])
+def test_anything_else_in_r10s_experiment_refuses(tmp_path, cell, kw, wrong):
+    why = main_guard(cell, tmp_path, **kw)
+    assert why is not None and wrong in why and registered.R10_REF in why, why
+
+
+@pytest.mark.parametrize("cell", CELLS)
+@pytest.mark.parametrize("experiment, kw, wrong", [
+    (MAIN, {"task_cells": ALL8}, f"--experiment {MAIN}"),
+    (NOTES, {"task_cells": ALL8}, f"--experiment {NOTES}"),
+    (VALIDITY, {"split": "validity", "templates": (0, 20)}, f"--experiment {VALIDITY}"),
+    (PILOT, {"split": "pilot", "task_cells": ("observed-nonrec-near",)}, "task cells"),
+    (PILOT, {"split": "pilot", "task_cells": ()}, "task cells (none)"),
+    (PILOT, {"split": "main"}, "--split main"),
+    (PILOT, {"split": "pilot", "variant": "withheld"}, "--variant withheld"),
+    (PILOT, {"split": "pilot", "effort": "low"}, "--effort low"),
+])
+def test_r10s_cells_refuse_anywhere_else(tmp_path, cell, experiment, kw, wrong):
+    why = main_guard(cell, tmp_path, experiment=experiment, **kw)
+    assert why is not None and wrong in why and registered.R10_REF in why, why
+
+
+@pytest.mark.parametrize("model", OTHER_CLAUDE)
+def test_every_other_claude_model_refuses(tmp_path, model):
+    why = main_guard("W-np-0", tmp_path, model=model)
+    assert why is not None and model in why
+
+
+@pytest.mark.parametrize("model", OTHER_CLAUDE)
+def test_with_r6_off_every_other_claude_model_refuses_under_r10(tmp_path, monkeypatch, model):
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    why = main_guard("W-np-0", tmp_path, model=model)
+    assert why is not None and f"model {model}" in why and registered.R10_REF in why
+
+
+@pytest.mark.parametrize("model", ["gpt-6-luna", "gpt-6.1-sol"])
+@pytest.mark.parametrize("cell", CELLS)
+def test_openai_models_never_run_r10s_cells(tmp_path, model, cell):
+    assert main_guard(cell, tmp_path, model=model) is not None
+    assert pilot_guard(cell, tmp_path, model=model) is not None
+
+
+def test_r8s_and_r9s_runs_are_unchanged(tmp_path):
+    for experiment, cell, kw in RUNS:
+        assert guard(experiment, cell, tmp_path, **kw) is None, (experiment, cell, kw)
+    assert guard(NOTES, "W-n-0", tmp_path) is None
+    assert guard(MAIN, "W-n-0", tmp_path) is not None
+
+
+# --- the kill switches ---------------------------------------------------------------------------
+
+def test_with_r10_off_its_runs_refuse_and_r8s_and_r9s_pass(tmp_path, monkeypatch):
+    monkeypatch.setattr(registered, "R10_IN_EFFECT", False)
+    for why in (main_guard("W-np-0", tmp_path), pilot_guard("W-npd-0", tmp_path),
+                main_guard("W-0", tmp_path)):
+        assert why is not None and registered.R10_REF in why and "R10_IN_EFFECT" in why
+    for experiment, cell, kw in RUNS:
+        assert guard(experiment, cell, tmp_path, **kw) is None
+    assert guard(NOTES, "W-n-0", tmp_path) is None
+
+
+@pytest.mark.parametrize("r6_on", [True, False])
+def test_with_r8_off_r10s_runs_refuse_too(tmp_path, monkeypatch, r6_on):
+    monkeypatch.setattr(registered, "R8_IN_EFFECT", False)
+    monkeypatch.setattr(registered, "R6_HARD_STOP", r6_on)
+    for why in (main_guard("W-np-0", tmp_path), pilot_guard("W-np-0", tmp_path)):
+        assert why is not None and registered.R8_REF in why
+
+
+def test_with_r6_off_r10s_runs_are_still_held_to_r10(tmp_path, monkeypatch):
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    assert main_guard("W-npd-0", tmp_path) is None
+    assert registered.R10_REF in main_guard("W-n-0", tmp_path)
+
+
+# --- the blocks ----------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("block, cell, refused", [
+    (BLOCK, "W-np-0", False),
+    (BLOCK, "W-npd-0", False),
+    ("4-haiku", "W-np-0", True),        # R8's block funds no R10 cell, its pilots included
+    ("5-haiku-notes", "W-npd-0", True),
+    (None, "W-np-0", True),
+    (BLOCK, "W-n-0", True),             # R10's block funds no other cell
+    (BLOCK, "W-0", True),
+    (BLOCK, "single-turn", True),
+    ("4-haiku", "W-0", False),          # other blocks and cells as before
+    ("5-haiku-notes", "W-n-0", False),
+])
+def test_the_block_rule(block, cell, refused):
+    why = registered.provenance_block_refusal(block, cell)
+    assert (why is not None) == refused, why
+    if refused:
+        assert registered.R10_REF in why
+
+
+def _approval_refusal(experiment: str, *experiments: str) -> str | None:
+    """The transport's block check for a run in `experiment` under a block that lists
+    `experiments` (the general guard has already required `experiment` among them)."""
+    fake_self = SimpleNamespace(approval=SimpleNamespace(
+        approved_block="b", experiment=experiment, experiments=experiments))
+    return AnthropicMessagesTransport._approval_refusal(fake_self)
+
+
+def test_the_transport_admits_r10s_runs_under_its_block():
+    assert _approval_refusal(PROV, PILOT, PROV) is None
+    assert _approval_refusal(PILOT, PILOT, PROV) is None
+
+
+def test_the_transport_judges_r8s_and_r9s_runs_as_before():
+    for experiment in (PILOT, VALIDITY, MAIN):
+        assert _approval_refusal(experiment, PILOT, VALIDITY, MAIN) is None
+    assert _approval_refusal(NOTES, NOTES) is None
+    # a block that lists R10's experiment beside a validity one funds no validity run
+    why = _approval_refusal(VALIDITY, VALIDITY, PROV)
+    assert why is not None and "§17.10" in why
+
+
+@pytest.fixture
+def prov_paid_env(tmp_path, monkeypatch):
+    """A repo whose frozen PREREG and decisions hold block 6-haiku-provenance (the pilot and
+    R10's experiment) beside block 4-haiku (R8's three) and 5-haiku-notes (R9's); the CLI's
+    own guarded transport builds the real Anthropic transport with a fake-backed client; a
+    dummy key's variable; a lock of its own."""
+    guarded_repo(tmp_path, prereg=FROZEN_PREREG, decisions=decisions_text(
+        "4-haiku", experiments=(PILOT, VALIDITY, MAIN))
+        + approval_line("5-haiku-notes", (NOTES,)) + "\n"
+        + approval_line(BLOCK, (PILOT, PROV)) + "\n")
+    costs_csv = tmp_path / "costs.csv"
+    costs_csv.write_text(",".join(costs.COLUMNS) + "\n", encoding="utf-8")
+    monkeypatch.setenv(ALLOW_ENV, "1")
+    monkeypatch.setenv(anthropic_transport.KEY_ENV, "dummy-not-a-key")
+    for name in anthropic_transport.REFUSED_ENV:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(cli, "RAW", tmp_path / "raw")
+    (tmp_path / "lock").mkdir()
+    monkeypatch.setattr(cli, "LOCK_PATH", tmp_path / "lock" / paidlock.lock_name(cli.STREAM))
+    fakes = []
+
+    def transport(**kw):
+        fake = FakeModel(ids="payload")
+        fakes.append(fake)
+        return AnthropicMessagesTransport(
+            **kw, costs_path=costs_csv, repo=tmp_path,
+            client_factory=lambda timeout: _FakeBackedClient(fake))
+    monkeypatch.setattr(cli, "AnthropicMessagesTransport", transport)
+
+    def not_openai(**kw):
+        raise AssertionError("a claude-* model gets the Anthropic transport")
+    monkeypatch.setattr(cli, "OpenAIResponsesTransport", not_openai)
+    return tmp_path, costs_csv, fakes
+
+
+def test_an_end_to_end_r10_pilot_is_blinded(prov_paid_env, capsys):
+    """W-np-0 on pilot templates 0-1 x the 4 far task cells (8 episodes) under block 6: the
+    provenance sentence in every request's system prompt, the disclosure sentence in none,
+    and the episodes kept under results/raw/ (PREREG §11)."""
+    tmp, costs_csv, fakes = prov_paid_env
+    assert cli.main(["run", "--cell", "W-np-0", "--model", HAIKU, "--split", "pilot", "--n", "2",
+                     "--task-cell", *FAR, "--experiment", PILOT, "--approved-block", BLOCK,
+                     "--planned-usd", "1", "--run-id", "pp"]) == 0
+    capsys.readouterr()
+    (row,) = costs.read_rows(costs_csv)
+    (fake,) = fakes
+    assert (row["run_id"], row["experiment"], row["cell_or_config"]) == ("pp", PILOT, "W-np-0")
+    assert row["notes"].startswith(f"approved_block={BLOCK};")
+    systems = [p["system"] for p in fake.calls]
+    assert systems and all(s.endswith(PROVENANCE_SENTENCE) for s in systems)
+    assert not any(DISCLOSURE_SENTENCE in s for s in systems)
+    folder = tmp / "results" / PILOT / "pp"
+    meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["exit_reason"] == "COMPLETED" and meta["n_episodes_run"] == 8
+    assert not (folder / "episodes.jsonl").exists()
+    assert (tmp / "raw" / PILOT / "pp" / "episodes.jsonl").is_file()
+    assert not (tmp / "lock" / paidlock.lock_name(cli.STREAM)).exists()
+
+
+def test_an_end_to_end_r10_main_run(prov_paid_env, capsys):
+    """W-npd-0 on main template 0 x the 4 far task cells under block 6, with both sentences in
+    every request's system prompt."""
+    tmp, costs_csv, fakes = prov_paid_env
+    assert cli.main(["run", "--cell", "W-npd-0", "--model", HAIKU, "--split", "main", "--n", "1",
+                     "--task-cell", *FAR, "--experiment", PROV, "--approved-block", BLOCK,
+                     "--planned-usd", "1", "--run-id", "pm", "--parallel", "4"]) == 0
+    capsys.readouterr()
+    (row,) = costs.read_rows(costs_csv)
+    (fake,) = fakes
+    assert (row["run_id"], row["experiment"], row["cell_or_config"]) == ("pm", PROV, "W-npd-0")
+    systems = [p["system"] for p in fake.calls]
+    assert systems and all(
+        s.endswith(PROVENANCE_SENTENCE + " " + DISCLOSURE_SENTENCE) for s in systems)
+    meta = json.loads((tmp / "results" / PROV / "pm" / "meta.json").read_text(encoding="utf-8"))
+    assert meta["exit_reason"] == "COMPLETED" and meta["n_episodes_run"] == 4
+    recs = [json.loads(x) for x in (tmp / "results" / PROV / "pm" / "episodes.jsonl")
+            .read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert sorted(r["task_cell"] for r in recs) == sorted(FAR)
+
+
+@pytest.mark.parametrize("argv, block, why", [
+    # R8's block, an R10 pilot: the general guard and the transport admit it, the cell does not
+    (["--cell", "W-np-0", "--split", "pilot", "--n", "2", "--task-cell", *FAR,
+      "--experiment", PILOT], "4-haiku", "runs under block 6-haiku-provenance only"),
+    # R10's block, an R8 pilot
+    (["--cell", "W-0", "--split", "pilot", "--n", "1", "--task-cell", *FAR,
+      "--experiment", PILOT], BLOCK, "funds W-np-0, W-npd-0 only"),
+    # R9's block, an R10 main run
+    (["--cell", "W-np-0", "--split", "main", "--n", "1", "--task-cell", *FAR,
+      "--experiment", PROV], "5-haiku-notes", "runs under block 6-haiku-provenance only"),
+])
+def test_no_other_block_funds_r10_and_r10s_funds_nothing_else(prov_paid_env, capsys, argv,
+                                                              block, why):
+    _, costs_csv, fakes = prov_paid_env
+    assert cli.main(["run", "--model", HAIKU, *argv, "--approved-block", block,
+                     "--planned-usd", "1", "--run-id", "x"]) == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and why in err and "§17.10" in err, err
+    assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)
+
+
+def test_r10s_block_funds_no_r9_run(prov_paid_env, capsys):
+    """The general guard: block 6 does not list R9's experiment."""
+    _, costs_csv, fakes = prov_paid_env
+    assert cli.main(["run", "--cell", "W-n-0", "--model", HAIKU, "--split", "main", "--n", "1",
+                     "--experiment", NOTES, "--approved-block", BLOCK, "--planned-usd", "1",
+                     "--run-id", "x"]) == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err, err
+    assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)

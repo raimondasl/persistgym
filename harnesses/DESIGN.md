@@ -788,3 +788,24 @@ Anything else in the experiment refuses, naming §17.9. Set False, `R9_IN_EFFECT
 The transport admits the run under a block that lists the experiment (block `5-haiku-notes`), and judges R8's runs as before. The general guard admits a run only in its block's experiments, so neither block funds the other's runs.
 
 The run's descriptive readings are `analysis/haiku_notes.py`. Tests: `tests/test_haiku_notes_guard.py`, and `analysis/tests/test_haiku_notes.py`.
+
+### 13.11 R10: two variants of the notes instruction (`cells.NOTES_VARIANT_CELLS`, `registered._haiku_provenance_refusal`, `R10_IN_EFFECT`)
+PREREG §17.10 (amendment R10) adds two cells outside PLAN §6's table. Each is W-n-0 with more text after the notes instruction, separated by one space (`CellSpec.notes_extra`; `CellSpec.notes_instruction` is the whole notes text the session appends after `notes_separator`):
+
+| Cell | Notes text after the separator |
+|---|---|
+| W-np-0 | the notes instruction, then `PROVENANCE_SENTENCE`: "For each fact you carry forward, also note where it came from: the message you read it in, or the facts and steps you worked it out from." |
+| W-npd-0 | as W-np-0, then `DISCLOSURE_SENTENCE`: "Older messages may be dropped from this conversation as it grows, so your notes may become the only record of what they said." |
+
+Everything else is W-n-0's. The notes text never counts toward W (D5), so both cells evict at W-n-0's steps, and their bodies differ from W-n-0's in `system` only (`tests/test_notes_variant_cells.py`, which asserts both sentences literally). `get_cell` finds them, and `CELLS`, `REPLAY_OFF_CELLS` and `REPLAY_PAIRS` leave them out, so no rule or analysis that iterates PLAN §6's cells sees them. Every existing cell's `notes_instruction` is the notes instruction or None, so its requests are unchanged.
+
+`registered.R10_IN_EFFECT` is True. `haiku_refusal` hands any run of the two cells, and any run in `persistgym_haiku_provenance` (phase 1a, stream PersistGym), to `_haiku_provenance_refusal`, after R8's kill switch. The rules are:
+- a cell of `HAIKU_PROVENANCE_CELLS`, with R8's effort, config and request settings, base episodes, repeat 0;
+- either a pilot (`persistgym_pilot`, `--split pilot`, a non-empty set of the 4 far task cells, at most 10 episodes as every pilot), with no G1 needed;
+- or a main run in `persistgym_haiku_provenance`: the full matrix on the 4 far task cells, main templates within 0-199, only after `HAIKU_G1_PASSED`.
+
+Anything else refuses, naming §17.10: the two cells in R8's or R9's experiments or in the validity experiment, any other cell in R10's experiment, near task cells. Set False, `R10_IN_EFFECT` refuses every such run (`R10_STOP`), and R8's and R9's runs are unaffected.
+
+**The block rule** (`registered.provenance_block_refusal`). R10's pilots run in `persistgym_pilot`, which R8's block `4-haiku` also lists, so the general guard, which checks the experiment only, would let that block fund them. `harnesses run` and `single-turn` therefore refuse, before the paid-run lock, a run of R10's cells under any block but `6-haiku-provenance`, and any other cell under that block. The transport admits a pilot or a run in `persistgym_haiku_provenance` under a block that lists that experiment, and judges R8's and R9's runs as before.
+
+The runs' descriptive readings are `analysis/haiku_provenance.py`. Its §2.8 replay takes each cell's notes text off the system prompt (`persistgym_h1h3._system_tokens`). Tests: `tests/test_haiku_provenance_guard.py`, `tests/test_notes_variant_cells.py`, and `analysis/tests/test_haiku_provenance.py`.

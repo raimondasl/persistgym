@@ -213,7 +213,8 @@ Anthropic's free token-counting endpoint is called):
     uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 10
 The paid runs (with --approved-block and amounts from R8's approval line, which must list
 persistgym_haiku: the Anthropic transport refuses any other block, its pilots too, except for
-R9's W-n-0 run, whose block lists persistgym_haiku_notes), under the
+R9's W-n-0 run, whose block lists persistgym_haiku_notes, and R10's two cells, W-np-0 and
+W-npd-0, which run under block 6-haiku-provenance only, their pilots included), under the
 rules `haiku_refusal` holds them to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
 restated, then withheld; the main runs of `registered.HAIKU_CELLS` on all 8 task cells (F-0
@@ -262,7 +263,7 @@ from harnesses import (
     token_count,
 )
 from harnesses.anthropic_transport import AnthropicMessagesTransport
-from harnesses.cells import CELLS, get_cell
+from harnesses.cells import CELLS, NOTES_VARIANT_CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.matrix import RunMatrix
@@ -376,7 +377,7 @@ def _run_what(a, cell, n_episodes: int) -> str:
 
 def cmd_cells(a) -> int:
     print(f"{'cell':<8}{'ascii':<12}{'history':<9}{'notes':<7}{'reasoning.context':<19}role")
-    for c in CELLS.values():
+    for c in (*CELLS.values(), *NOTES_VARIANT_CELLS.values()):
         print(f"{c.cell_id:<8}{c.ascii_id:<12}{c.history:<9}{c.notes!s:<7}"
               f"{c.reasoning_context:<19}{c.role}{' (optional)' if c.optional else ''}")
     return 0
@@ -506,6 +507,8 @@ def cmd_run(a) -> int:
         request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
         templates=(a.start, a.start + matrix.n_templates), matrix=matrix.name,
         repeat_index=matrix.repeat_index)
+    # R10 (PREREG §17.10): its cells run under its block only, and its block funds them only
+    why = why or registered.provenance_block_refusal(a.approved_block, cell.cell_id)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2
@@ -982,6 +985,9 @@ def cmd_single_turn(a) -> int:
         task_cells=tuple(cells),
         request={"mode": a.mode, "service_tier": a.service_tier, "W": None},
         templates=(a.start, a.start + a.n))
+    # R10 (PREREG §17.10): its block funds its two cells only, never this control
+    why = why or registered.provenance_block_refusal(a.approved_block,
+                                                     registered.LUNA_SINGLE_TURN_CELL)
     if why:
         return refuse(why)
     if a.split == "main":

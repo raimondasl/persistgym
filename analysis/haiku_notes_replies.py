@@ -86,12 +86,13 @@ def episodes(root: Path) -> dict[str, dict]:
     return out
 
 
-def steps(raw_root: Path, wanted: set[str]) -> dict[str, list[dict]]:
+def steps(raw_root: Path, wanted: set[str], path: Path | None = None) -> dict[str, list[dict]]:
     """Each wanted episode's step requests in order: step, keep_start and reply text (the first
-    request at a step only)."""
+    request at a step only), from R9's run's transcript, or from `path` (R10's analysis reads
+    its own runs' transcripts with this function, analysis.haiku_provenance)."""
     out: dict[str, list[dict]] = {e: [] for e in wanted}
     seen = set()
-    path = raw_root / EXPERIMENT / RUN / "transcript.jsonl.gz"
+    path = path or raw_root / EXPERIMENT / RUN / "transcript.jsonl.gz"
     with gzip.open(path, "rt", encoding="utf-8") as f:
         for line in f:
             d = json.loads(line)

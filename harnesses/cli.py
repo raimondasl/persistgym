@@ -543,6 +543,15 @@ def cmd_run(a) -> int:
     except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
+    # R10 (PREREG §17.10): its pilot count and its pilot check read one folder per run, so a
+    # run of its cells never reuses a run id (run_batch would append to that folder)
+    if cell.cell_id in registered.HAIKU_PROVENANCE_CELLS:
+        used = [str(d) for d in (RESULTS / a.experiment / run_id, RAW / a.experiment / run_id)
+                if d.exists()]
+        if used:
+            print(f"refused: --run-id {run_id} is already used ({', '.join(used)}): a run of "
+                  f"R10's cells needs a new run id ({registered.R10_REF})", file=sys.stderr)
+            return 2
 
     def paid(held: paidlock.HeldLock) -> int:
         transport = _guarded_transport(a, a.model, a.experiment, a.planned_usd, held)

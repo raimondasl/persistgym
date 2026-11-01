@@ -27,9 +27,9 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   guard admits a run only in its block's own experiments, so R9's block funds that run alone,
   and a block approved for R9 never funds a run of R8's. A block that lists R10's
   `persistgym_haiku_provenance` (`registered.HAIKU_PROVENANCE_EXPERIMENT`, PREREG §17.10)
-  funds runs in that experiment and pilots; `harnesses run` has already tied R10's two cells
-  and its block to each other (`registered.provenance_block_refusal`), so that block funds
-  only R10's cells, and R8's block funds none of them.
+  funds runs in that experiment and pilots. `harnesses run` and `single-turn` have already
+  tied R10's two cells and its block to each other (`registered.provenance_block_refusal`),
+  so that block funds only R10's cells, and R8's block funds none of them.
 * **The request-side check.** Before each call the body must pass
   `harnesses.wire.MessagesWire.check_payload` with the model's registered effort and D13's
   32,000 cap: adaptive thinking, exactly the fields the wire sends, no thinking block in the

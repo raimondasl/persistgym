@@ -1,7 +1,8 @@
 """R10's descriptive analysis: claude-haiku-5-5's two notes-instruction variants (PREREG §17.10; $0, no test).
 
-R10 registers two exploratory cells, run on Haiku in their own experiment
-`persistgym_haiku_provenance` on the 4 far task cells, main templates 0-199 at repeat 0:
+R10 registers two exploratory cells, whose main runs play Haiku in R10's own experiment
+`persistgym_haiku_provenance` on the 4 far task cells, main templates 0-199 at repeat 0 (their
+pilots run in `persistgym_pilot` and are not read here):
 W-np-0, W-n-0 with a sentence asking for each carried fact's source (`PROVENANCE_SENTENCE`),
 and W-npd-0, which also says that older messages may be dropped (`DISCLOSURE_SENTENCE`). Its
 analysis is descriptive. This script reads the runs' counted records as `analysis.haiku_notes`
@@ -19,13 +20,15 @@ its cited output counted it (`R9_OUTPUT`), on the same far episodes. It reports:
 3. **Choices with the fact evicted:** in the 2 not-recoverable far cells, the episodes that
    chose one of the 10 options at the need step, and how many were correct.
 4. **Contrasts,** in percentage points with a 90% interval over the same template resamples,
-   per far task cell: each arm minus R9's W-n-0, and W-npd-0 minus W-np-0. R9 ran about a week
+   per far task cell: each arm minus R9's W-n-0, and W-npd-0 minus W-np-0. R9 ran at least 8 days
    earlier (2026-10-24), so arm minus W-n-0 mixes the instruction with any change in serving.
 5. **Replies** in the 2 not-recoverable far cells, by whether the notes carried the fact, with
    `analysis.haiku_notes_replies`'s text patterns unchanged (`DISOWN`, `episode_reading`,
    `tally`): failed episodes that declined, whose need-step reply disowns an earlier figure,
-   and that retracted it before the need step. The patterns undercount (R9's hand checks), so
-   these are pointers, set beside R9's pattern counts from the same code (`R9_REPLIES`).
+   and that retracted it before the need step. On W-n-0's replies the patterns undercount
+   (R9's hand checks). The new sentences ask for words the patterns look for, so on R10's
+   replies they may overcount too, and the counts are not comparable with R9's. They are
+   pointers, set beside R9's pattern counts from the same code (`R9_REPLIES`).
 6. **Cost per episode** (billed estimate) and output tokens per episode, per arm and far task
    cell, beside R9's W-n-0 on the same cells.
 7. **Model strings:** those the arms' runs report, against R9's run.
@@ -249,7 +252,8 @@ def readings(root: Path, experiment: str, cells: tuple[str, ...], links: dict[st
     for c in cells:
         a = arm(resolved, prim, c, T, idx)
         a["replies_nr_far"], missing = replies(resolved, c, T, raw, experiment)
-        if missing and not check["missing_transcripts"]:
+        missing = [m for m in missing if m not in check["missing_transcripts"]]
+        if missing:
             incomplete.append(f"no raw transcript for run(s) {', '.join(missing)} under {raw}, "
                               f"which hold counted not-recoverable far records of {c}: the "
                               "replies reading cannot be made")
@@ -278,7 +282,22 @@ def readings(root: Path, experiment: str, cells: tuple[str, ...], links: dict[st
                    **arm(r9_resolved, r9_prim, R9_CELL, T, idx),
                    "replies_nr_far": r9_replies, "replies_source": R9_REPLIES},
             "contrasts": contrasts(resolved, r9_resolved, cells, T, idx),
-            "model_strings": models, "warnings": [*warn, *warn2, *check["warnings"]]}
+            "model_strings": models,
+            "warnings": [*warn, *warn2, *check["warnings"], *missing_values(arms)]}
+
+
+def missing_values(arms: list[dict]) -> list[str]:
+    """A warning per arm and far task cell whose reading 6 has records with no cost or no
+    output-token count (their mean is then not given)."""
+    out = []
+    for a in arms:
+        for tc, c in a["costs"].items():
+            for key, what in (("cost_missing", "billed cost"),
+                              ("output_tokens_missing", "output-token count")):
+                if c.get(key):
+                    out.append(f"{a['cell']}, {tc}: {c[key]} of {c['n']} counted records have no "
+                               f"{what}, so reading 6 gives no mean")
+    return out
 
 
 def _pct(x: float | None) -> str:
@@ -340,7 +359,8 @@ def summary(r: dict) -> str:
         for tc, v in by_tc.items():
             lines.append(f"- {name}, {tc}: {_pp(v)}")
     lines += ["", ("**Replies** (not-recoverable far cells; R9's text patterns, which "
-                   "undercount; pointers, not a coding):"), "",
+                   "undercount on W-n-0's replies and may overcount on R10's, so the arms' "
+                   "counts are not comparable with R9's; pointers, not a coding):"), "",
               ("| Arm | Cell, notes carried the fact | Episodes | Correct | Failed | "
                "Failed: declined | Failed: need reply disowns its figure | "
                "Failed: retracted before the need step |"),
@@ -361,11 +381,12 @@ def summary(r: dict) -> str:
     for b in blocks:
         for tc, c in b["costs"].items():
             cost, out = c["cost_usd_billed_mean"], c["output_tokens_mean"]
-            gone = {k: c.get(k) for k in ("cost_missing", "output_tokens_missing") if c.get(k)}
             lines.append(f"| {b['cell']} | {tc} | {c['n']} | "
                          f"{'n/a' if cost is None else f'{cost:.5f}'} | "
-                         f"{'n/a' if out is None else f'{out:.0f}'} |"
-                         + (f" missing: {gone}" if gone else ""))
+                         f"{'n/a' if out is None else f'{out:.0f}'} |")
+    gone = missing_values(blocks[-1:])  # the arms' are in the warnings below
+    if gone:
+        lines += [""] + [f"- missing: {g}" for g in gone]
     ms = r["model_strings"]
     lines += ["", f"Model strings: the arms {ms['arms']}, R9's run {ms['r9']}."]
     lines += ["", "**Exclusions** (per arm and task cell, repeat 0; §13):", ""]

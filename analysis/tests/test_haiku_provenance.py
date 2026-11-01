@@ -179,3 +179,30 @@ def test_r9s_costs_have_no_missing_value(r9):
     for c in r9["arms"][0]["costs"].values():
         assert c["cost_missing"] == 0 and c["output_tokens_missing"] == 0
         assert c["cost_usd_billed_mean"] > 0
+
+
+def test_the_replay_takes_each_cells_notes_text_off_the_system_prompt():
+    """§2.8's replay counts the system prompt without the cell's notes text, as the session
+    leaves it out of W: R10's longer text comes off whole, and the wrong cell's text is a
+    problem, never a silent miscount."""
+    from harnesses.cells import get_cell
+    from persistgym import tokens
+    system = "You run the yard console. Answer with one option."
+    settings = {"notes_separator": "\n", "count_system": True, "tokenizer": "o200k_base"}
+    want = tokens.count(system, "o200k_base")
+    for cell in ("W-n-0", "W-np-0", "W-npd-0"):
+        text = get_cell(cell).notes_instruction
+        assert hp.hh._system_tokens(system + "\n" + text, True, settings, text) == (want, None)
+    wrong = hp.hh._system_tokens(system + "\n" + get_cell("W-np-0").notes_instruction, True,
+                                 settings, get_cell("W-npd-0").notes_instruction)
+    assert wrong[0] == 0 and "do not end with the notes sentence" in wrong[1]
+    # R9's default is unchanged: the notes instruction alone
+    base = system + "\n" + get_cell("W-n-0").notes_instruction
+    assert hp.hh._system_tokens(base, True, settings) == (want, None)
+
+
+def test_missing_values_are_warned_about():
+    arms = [{"cell": "W-np-0", "costs": {"observed-nonrec-far": {
+        "n": 200, "cost_missing": 2, "output_tokens_missing": 0}}}]
+    (w,) = hp.missing_values(arms)
+    assert "2 of 200" in w and "billed cost" in w and "no mean" in w

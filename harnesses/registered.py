@@ -56,8 +56,9 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   lists its experiment (`common/approval.py`): block `3-persistgym`'s lists
   `persistgym_pilot` for it explicitly, so the researcher approves the pilot by name.
   R8 (below), the new dated amendment R6 change 1 asks for, adds claude-haiku-5-5's runs in
-  its three experiments, which pass on to `haiku_refusal`. Every other run refuses, fail
-  closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
+  its three experiments, and R9 and R10 add Haiku's runs in theirs (`persistgym_haiku_notes`,
+  `persistgym_haiku_provenance`). All of these pass on to `haiku_refusal`. Every other run
+  refuses, fail closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
   every model but Haiku, `persistgym_sol_h1`, the probes (`toggle_pilot`, `replay_probe`),
   every sol run, any other experiment, and any model that is not a registered one. The
   rules below for those runs stay, as the record of what was registered, and apply again
@@ -90,7 +91,9 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   stays as a kill switch: set False, every Haiku paid run refuses (`R8_STOP`), its pilots
   and validity run included, and so does every other `claude-*` string. The Anthropic
   transport also refuses any model but Haiku, and an approved block that does not list
-  `persistgym_haiku` (harnesses/anthropic_transport.py), except for a run in R9's experiment.
+  `persistgym_haiku` (harnesses/anthropic_transport.py), except for a run in R9's experiment,
+  and a pilot or a run in R10's experiment under a block that lists
+  `persistgym_haiku_provenance`.
 
 * R9 (§17.9), one exploratory run of Haiku's W-n-0 cell, which R8's size record did not run:
   `R9_IN_EFFECT` is True, so `_haiku_notes_refusal` (inside `haiku_refusal`, after R8's kill
@@ -98,6 +101,18 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   settings, as the full matrix on all 8 task cells, main templates 0-199 at repeat 0, base
   episodes, after `HAIKU_G1_PASSED`. Anything else in that experiment refuses. R8's values
   (`HAIKU_CELLS`, `HAIKU_T`) are unchanged, and W-n-0 still refuses in `persistgym_haiku`.
+
+* R10 (§17.10), two exploratory variants of Haiku's notes instruction (`harnesses.cells`
+  `NOTES_VARIANT_CELLS`: W-np-0 adds a provenance sentence, W-npd-0 a provenance and a
+  disclosure sentence): `R10_IN_EFFECT` is True, so `_haiku_provenance_refusal` (inside
+  `haiku_refusal`, after R8's kill switch) lets the two cells run with R8's settings on
+  exactly claude-haiku-5-5, as the full matrix on the 4 far task cells, base episodes, repeat
+  0: each as a pilot on pilot templates 0-1 (at most 2 pilot runs per cell, none once the
+  cell's newest pilot has passed a pilot check), and in `HAIKU_PROVENANCE_EXPERIMENT`
+  (`persistgym_haiku_provenance`) on main templates 0-199, after `HAIKU_G1_PASSED` and once
+  the latest pilot check says GO and names each cell's newest pilot, which passed.
+  Anything else of theirs, and anything else in that experiment, refuses, whatever the model.
+  `provenance_block_refusal` ties them to block `HAIKU_PROVENANCE_BLOCK` both ways.
 
 `check_run_settings` is the guard `harnesses run` and `harnesses single-turn` apply before
 they take the paid-run lock: first R6's hard stop (`r6_refusal`); then, for the runs it lets
@@ -353,6 +368,40 @@ R9_STOP = (f"{HAIKU_NOTES_EXPERIMENT} runs only under {R9_REF}, which is switche
            "(harnesses/registered.py R9_IN_EFFECT is False): every run in it refuses until the "
            "researcher's pull request sets it True again")
 
+# --- R10 (PREREG §17.10): two exploratory variants of claude-haiku-5-5's notes instruction ---
+R10_REF = "PREREG.md §17.10 (amendment R10)"
+R10_IN_EFFECT = True
+"""Whether amendment R10 (PREREG §17.10) is in effect. True since the pull request that adds
+R10, merged by the researcher: `haiku_refusal` lets claude-haiku-5-5 run R10's two cells,
+their pilots and their main runs in `HAIKU_PROVENANCE_EXPERIMENT`, with R8's settings
+(`_haiku_provenance_refusal`). A kill switch: set False, every run of the two cells and every
+run in that experiment refuses (`R10_STOP`), and R8's and R9's runs are unaffected. With
+`R8_IN_EFFECT` False they refuse too (R8's `R8_STOP` comes first). Tests monkeypatch it."""
+HAIKU_PROVENANCE_EXPERIMENT = "persistgym_haiku_provenance"
+"""R10: the experiment of the two cells' main runs, kept apart from R8's and R9's (their pilots
+run in `persistgym_pilot`, blinded as every pilot is)."""
+HAIKU_PROVENANCE_CELLS = ("W-np-0", "W-npd-0")
+"""R10: its two harness cells (`harnesses.cells.NOTES_VARIANT_CELLS`), W-n-0 with the
+provenance sentence, and with the provenance and disclosure sentences."""
+HAIKU_PROVENANCE_TASK_CELLS = tuple(c.id for c in ALL_CELLS if c.distance == "far")
+"""R10: the 4 far task cells, where the window has evicted the evidence by the need step."""
+HAIKU_PROVENANCE_BLOCK = "6-haiku-provenance"
+"""R10: the one approval block that funds its runs, pilots included, and funds nothing else
+(`provenance_block_refusal`)."""
+HAIKU_PROVENANCE_PILOT_TEMPLATES = (0, 2)
+"""R10: each cell's pilot plays pilot templates 0-1 on the 4 far task cells (8 episodes)."""
+HAIKU_PROVENANCE_PILOT_MAX_RUNS = 2
+"""R10: at most 2 pilot runs per cell, so one re-run after a failure the researcher has been
+told about (`_provenance_pilots`); any more needs a pull request."""
+PROVENANCE_PILOT_CHECK = "haiku_provenance_pilot"
+"""R10: the folder under results/ where `analysis.haiku_provenance_pilot` writes its checks.
+The main runs need the latest one to say GO and to name, for each cell, that cell's newest
+pilot, which passed (`_provenance_pilot_go`)."""
+R10_STOP = (f"claude-haiku-5-5's {', '.join(HAIKU_PROVENANCE_CELLS)} cells and "
+            f"{HAIKU_PROVENANCE_EXPERIMENT} run only under {R10_REF}, which is switched off "
+            "(harnesses/registered.py R10_IN_EFFECT is False): every such run refuses until the "
+            "researcher's pull request sets it True again")
+
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
 DERIVED_FAR_EPISODES = 8  # 2 derived-far task cells x 2 pilot templates x 2 arms
@@ -434,8 +483,9 @@ def _not_haiku(model: str) -> str:
     snapshot of it), which R8 alone would register."""
     if model_family(model) == HAIKU_MODEL:
         return ""
-    return (f"; got model {model}, which is not {HAIKU_MODEL} (a claude-* model goes to the "
-            "Messages API, which only R8 can open)")
+    note = (" (a claude-* model goes to the Messages API, which only R8 can open)"
+            if _on_messages_wire(model) else "")
+    return f"; got model {model}, which is not {HAIKU_MODEL}{note}"
 
 
 def _ref(generator_hash: str) -> str:
@@ -722,7 +772,8 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
     * claude-haiku-5-5 (R8, PREREG §17.8): while `R8_IN_EFFECT` is True, its runs in R8's
       three experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new
       dated amendment R6 change 1 asks for, and so do its runs in R9's
-      `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9), and every other Haiku run refuses (another
+      `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9) and R10's `HAIKU_PROVENANCE_EXPERIMENT`
+      (PREREG §17.10), and every other Haiku run refuses (another
       `claude-*` model as one that is not registered); with the kill switch off
       (`R8_IN_EFFECT` False) every Haiku run refuses (`R8_STOP`), and so does every other
       model on the Messages wire (any `claude-*` string, `_on_messages_wire`);
@@ -738,7 +789,9 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
         return (f"{R6_STOP}; got model {model}, which is not a registered model (the "
                 f"registered ones: {', '.join(REGISTERED_EFFORT)}, or a dated snapshot "
                 "-YYYY-MM-DD of one)")
-    if (family == HAIKU_MODEL and experiment in (*HAIKU_EXPERIMENTS, HAIKU_NOTES_EXPERIMENT)
+    if (family == HAIKU_MODEL
+            and experiment in (*HAIKU_EXPERIMENTS, HAIKU_NOTES_EXPERIMENT,
+                               HAIKU_PROVENANCE_EXPERIMENT)
             and cell is not None):
         return None
     if family == LUNA_MODEL and experiment == LUNA_EXPERIMENT:
@@ -891,9 +944,15 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
     `task_cells`, `request`, `templates` and, for a main harness-cell run, `matrix` left as
     None refuse. The engagement checks, R3's and R6's rules for the OpenAI models, and luna's
     and sol's G1 are never read for Haiku. A run in R9's `HAIKU_NOTES_EXPERIMENT` (PREREG
-    §17.9) is held to `_haiku_notes_refusal` instead."""
+    §17.9) is held to `_haiku_notes_refusal` instead, and a run of R10's cells or in R10's
+    `HAIKU_PROVENANCE_EXPERIMENT` (PREREG §17.10) to `_haiku_provenance_refusal`."""
     if not R8_IN_EFFECT:
         return f"{R8_STOP}; got --experiment {experiment}, cell {cell}{_not_haiku(model)}"
+    if experiment == HAIKU_PROVENANCE_EXPERIMENT or cell in HAIKU_PROVENANCE_CELLS:
+        return _haiku_provenance_refusal(experiment, model, effort, cell, generator_hash,
+                                         split=split, variant=variant, task_cells=task_cells,
+                                         request=request, templates=templates, matrix=matrix,
+                                         repeat_index=repeat_index, results_root=results_root)
     if experiment == HAIKU_NOTES_EXPERIMENT:
         return _haiku_notes_refusal(model, effort, cell, generator_hash, split=split,
                                     variant=variant, task_cells=task_cells, request=request,
@@ -1025,6 +1084,261 @@ def _haiku_notes_refusal(model: str, effort: str, cell: str, generator_hash: str
     return None
 
 
+_CHECK_FOLDER = re.compile(r"\d{8}T\d{6}Z")
+"""The folder name `analysis.haiku_provenance_pilot` gives a check (its UTC time); any other
+folder under results/haiku_provenance_pilot/ is not a check."""
+PLAIN_RUN_ID = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def _read_json_file(path: Path) -> tuple[object, str | None]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except (OSError, ValueError) as e:
+        return None, f"cannot read {path}: {e}"
+
+
+def _provenance_pilots(results_root: Path, cell: str) -> tuple[list[dict], str | None]:
+    """R10: the pilots of `cell` so far, oldest first by start time, each as {"run_id",
+    "started", "finished"}, and why they cannot be read, or None. A pilot is a run folder
+    under results/persistgym_pilot/ whose meta.json names the cell and a Haiku model. A paid
+    run that wrote no meta.json (its costs row could not be appended, its process was killed,
+    or it is running) still counts, unfinished, when its results/raw/persistgym_pilot/
+    run_plan.json, written before its first call, names them: no check can vouch for it, so
+    as a cell's newest pilot it holds the main runs back (`named_pilot_refusal`). Folders
+    with neither file are reports or logs, not runs. `harnesses run` refuses a pilot under a
+    run id that has a folder, so each run is its own folder."""
+    base, raw = results_root / PILOT_EXPERIMENT, results_root / "raw" / PILOT_EXPERIMENT
+    names = sorted({d.name for root in (base, raw) if root.is_dir()
+                    for d in root.iterdir() if d.is_dir()})
+    runs = []
+    for name in names:
+        if (base / name / "meta.json").is_file():
+            meta, why = _read_json_file(base / name / "meta.json")
+            if why or not isinstance(meta, dict):
+                return [], why or f"{base / name / 'meta.json'} is not a run's meta.json"
+            if (meta.get("cell_or_config") == cell
+                    and model_family(str(meta.get("model_requested"))) == HAIKU_MODEL):
+                runs.append({"run_id": name, "started": str(meta.get("started_utc") or ""),
+                             "finished": True})
+        elif (raw / name / "run_plan.json").is_file():
+            plan, why = _read_json_file(raw / name / "run_plan.json")
+            if why or not isinstance(plan, dict):
+                return [], why or f"{raw / name / 'run_plan.json'} is not a run plan"
+            model = (plan.get("harness_config") or {}).get("model")
+            if (plan.get("harness_cell") == cell
+                    and model_family(str(model)) == HAIKU_MODEL):
+                runs.append({"run_id": name, "started": str(plan.get("started_utc") or ""),
+                             "finished": False})
+    return sorted(runs, key=lambda r: (r["started"], r["run_id"])), None
+
+
+def _provenance_checks(results_root: Path) -> list[tuple[str, dict | None, str | None]]:
+    """R10: every check `analysis.haiku_provenance_pilot` wrote (the folders under
+    results/`PROVENANCE_PILOT_CHECK`/ with a UTC name), oldest first, each as (folder name,
+    check, why it cannot be read)."""
+    out = []
+    for path in sorted(p for p in (results_root / PROVENANCE_PILOT_CHECK).glob("*/check.json")
+                       if _CHECK_FOLDER.fullmatch(p.parent.name)):
+        name = path.parent.name
+        check, why = _read_json_file(path)
+        if why:
+            out.append((name, None, f"cannot read R10's pilot check {name}: {why}"))
+        elif (not isinstance(check, dict) or not isinstance(check.get("runs"), list)
+                or not all(isinstance(r, dict) for r in check["runs"])):
+            out.append((name, None, (f"R10's pilot check {name} is not a check "
+                                     "analysis.haiku_provenance_pilot writes")))
+        else:
+            out.append((name, check, None))
+    return out
+
+
+def _latest_provenance_check(results_root: Path) -> tuple[str | None, dict | None, str | None]:
+    """R10: the latest check `analysis.haiku_provenance_pilot` wrote (the folder under
+    results/`PROVENANCE_PILOT_CHECK`/ with the latest UTC name), as (folder name, check, why it
+    cannot be read). (None, None, None) when there is none."""
+    checks = _provenance_checks(results_root)
+    return checks[-1] if checks else (None, None, None)
+
+
+def named_pilot_refusal(results_root: Path, name: str, run: dict) -> str | None:
+    """Why a run the pilot check `name` names is not a pilot it can vouch for, or None: a plain
+    run id, a pilot of an R10 cell of a Haiku model in persistgym_pilot (its meta.json), and
+    that cell's newest pilot, so a later pilot is never covered by an earlier check."""
+    run_id, cell = run.get("run_id"), run.get("cell")
+    if not isinstance(run_id, str) or not PLAIN_RUN_ID.fullmatch(run_id) or set(run_id) == {"."}:
+        return f"R10's pilot check {name} names a run id {run_id!r} that is not a run's name"
+    if cell not in HAIKU_PROVENANCE_CELLS:
+        return f"R10's pilot check {name} names run {run_id} as cell {cell!r}, not an R10 cell"
+    meta_path = results_root / PILOT_EXPERIMENT / run_id / "meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return f"R10's pilot check {name} names pilot run {run_id}, which has no readable {meta_path}"
+    if not isinstance(meta, dict) or meta.get("cell_or_config") != cell:
+        return (f"R10's pilot check {name} names run {run_id} as {cell}, but its meta.json says "
+                f"{meta.get('cell_or_config') if isinstance(meta, dict) else meta!r}")
+    if (meta.get("experiment") != PILOT_EXPERIMENT
+            or model_family(str(meta.get("model_requested"))) != HAIKU_MODEL):
+        return (f"R10's pilot check {name} names run {run_id}, which is not a {HAIKU_MODEL} "
+                f"pilot in {PILOT_EXPERIMENT}")
+    pilots, why = _provenance_pilots(results_root, cell)
+    if why:
+        return why
+    if not pilots or pilots[-1]["run_id"] != run_id:
+        newest = pilots[-1] if pilots else None
+        if newest is not None and not newest["finished"]:
+            return (f"R10's pilot check {name} names {run_id} for {cell}, but {cell}'s newest "
+                    f"pilot is {newest['run_id']}, which is unfinished: it wrote no meta.json. "
+                    "No check can name it, and account-run cannot rebuild a Messages API run. "
+                    "Add its costs row by hand and tell the researcher: only a newer pilot of "
+                    "the cell, within the 2 allowed, or the researcher's pull request lifts this")
+        return (f"R10's pilot check {name} names {run_id} for {cell}, but {cell}'s newest pilot "
+                f"is {newest['run_id'] if newest else None}: run analysis.haiku_provenance_pilot "
+                "again")
+    return None
+
+
+def _provenance_pilot_go(results_root: Path) -> str | None:
+    """Why R10's main runs may not start yet, or None (PREREG §17.10, "From pilot to main"):
+    the latest check `analysis.haiku_provenance_pilot` wrote must say GO and name, for each of
+    R10's two cells, exactly one run that passed and is that cell's newest pilot under
+    results/persistgym_pilot/ (`named_pilot_refusal`)."""
+    name, check, why = _latest_provenance_check(results_root)
+    if why:
+        return f"{why} ({R10_REF})"
+    if check is None:
+        return (f"{HAIKU_PROVENANCE_EXPERIMENT}'s main runs start only after both R10 pilots "
+                f"pass analysis.haiku_provenance_pilot ({R10_REF}): no check under "
+                f"results/{PROVENANCE_PILOT_CHECK}/")
+    if check.get("go") is not True:
+        return (f"R10's latest pilot check, {name}, says STOP: the main runs do not start, and "
+                f"the researcher is told ({R10_REF})")
+    cells = [r.get("cell") for r in check["runs"]]
+    if sorted(map(str, cells)) != sorted(HAIKU_PROVENANCE_CELLS):
+        return (f"R10's pilot check {name} covers {', '.join(map(str, cells)) or 'no run'}, "
+                f"not one pilot of each of {', '.join(HAIKU_PROVENANCE_CELLS)} ({R10_REF})")
+    for run in check["runs"]:
+        why = named_pilot_refusal(results_root, name, run)
+        if why:
+            return f"{why} ({R10_REF})"
+        if run.get("passed") is not True:
+            return (f"R10's pilot check {name} says GO, but its run {run.get('run_id')} did not "
+                    f"pass ({R10_REF})")
+    return None
+
+
+def _passed_pilot(results_root: Path, cell: str) -> str | None:
+    """R10: why another pilot of `cell` may not run, or None: some check (any of them, so a
+    later check that leaves the cell out does not hide it) holds a passing run of `cell` that
+    is still that cell's newest pilot, so a further pilot would be no re-run after a failure
+    (PREREG §17.10). A check that cannot be read refuses."""
+    for name, check, why in _provenance_checks(results_root):
+        if why:
+            return f"{why} ({R10_REF})"
+        for run in check["runs"]:
+            if (run.get("cell") == cell and run.get("passed") is True
+                    and named_pilot_refusal(results_root, name, run) is None):
+                return (f"{cell}'s pilot {run.get('run_id')} passed R10's pilot check {name}: a "
+                        f"further pilot of it needs the researcher's pull request ({R10_REF})")
+    return None
+
+
+def _haiku_provenance_refusal(experiment: str, model: str, effort: str, cell: str,
+                              generator_hash: str, *, split: str, variant: str,
+                              task_cells: tuple[str, ...] | None, request: dict | None,
+                              templates: tuple[int, int] | None, matrix: str | None,
+                              repeat_index: int = 0,
+                              results_root: Path | None = None) -> str | None:
+    """Why a run of R10's cells, or a run in its `HAIKU_PROVENANCE_EXPERIMENT`, must refuse,
+    or None (PREREG §17.10; fail closed). With `R10_IN_EFFECT` False every such run refuses
+    (`R10_STOP`), whatever the model. While it is True, the run is exactly claude-haiku-5-5
+    (the ID R9 ran, no dated snapshot) in a cell of `HAIKU_PROVENANCE_CELLS` with R8's
+    settings (--effort medium on the default generator config with `HAIKU_REQUEST`), base
+    episodes, repeat 0, the full matrix on the 4 far task cells, and either
+    * a pilot (`persistgym_pilot`, --split pilot) on pilot templates 0-1
+      (`HAIKU_PROVENANCE_PILOT_TEMPLATES`), at most `HAIKU_PROVENANCE_PILOT_MAX_RUNS` per cell
+      over the pilots `_provenance_pilots` finds (a meta.json under results/persistgym_pilot/,
+      or the raw run_plan.json of a paid pilot that wrote none), and none once the cell's
+      newest pilot has passed a pilot check (`_passed_pilot`); it needs no G1, as R8's pilots
+      do; or
+    * a main run in `HAIKU_PROVENANCE_EXPERIMENT` on main templates within 0 to `HAIKU_T` - 1,
+      only once `HAIKU_G1_PASSED` records Haiku's G1 on that config and R10's latest pilot
+      check says GO for each cell's newest pilot (`_provenance_pilot_go`).
+    `task_cells`, `request`, `templates`, `matrix` and `results_root` left as None refuse."""
+    if not R10_IN_EFFECT:
+        return f"{R10_STOP}; got --experiment {experiment}, cell {cell}{_not_haiku(model)}"
+    pilot = experiment == PILOT_EXPERIMENT
+    wrong = [what for what, bad in (
+        (f"--experiment {experiment}",
+         experiment not in (PILOT_EXPERIMENT, HAIKU_PROVENANCE_EXPERIMENT)),
+        (f"model {model}", model != HAIKU_MODEL),
+        (f"--effort {effort}", effort != HAIKU_EFFORT),
+        (f"generator config {generator_hash[:12]}", generator_hash != HAIKU_GENERATOR_HASH),
+        (f"cell {cell}", cell not in HAIKU_PROVENANCE_CELLS),
+        (f"--split {split}", split != ("pilot" if pilot else "main")),
+        (f"--variant {variant}", variant != "base"),
+        (f"--repeat-index {repeat_index}", repeat_index != 0)) if bad]
+    wrong += _request_wrong(request, HAIKU_REQUEST)
+    if task_cells is None:
+        wrong.append("task cells (not given)")
+    elif sorted(task_cells) != sorted(HAIKU_PROVENANCE_TASK_CELLS):
+        wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
+    if matrix != HAIKU_MATRIX:
+        wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
+                      None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+    if pilot:
+        if templates != HAIKU_PROVENANCE_PILOT_TEMPLATES:
+            wrong.append("pilot templates (not given)" if templates is None else
+                         f"pilot templates {templates[0]}-{templates[1] - 1}")
+    else:
+        wrong += _haiku_templates_wrong(templates, HAIKU_T, "main")
+    if results_root is None:
+        wrong.append("results folder (not given)")
+    if wrong:
+        return (f"{HAIKU_MODEL}'s R10 cells run only as {R10_REF} registers them: exactly "
+                f"{HAIKU_MODEL} (no dated snapshot), a cell of "
+                f"{', '.join(HAIKU_PROVENANCE_CELLS)} at --effort {HAIKU_EFFORT} on the "
+                "default generator config, with --mode standard, --service-tier standard and "
+                "no --W, --variant base, repeat 0, as the full matrix on the 4 far task cells "
+                f"({', '.join(HAIKU_PROVENANCE_TASK_CELLS)}), either as a pilot (--experiment "
+                f"{PILOT_EXPERIMENT}, --split pilot, pilot templates 0-1) or in --experiment "
+                f"{HAIKU_PROVENANCE_EXPERIMENT} (--split main, main templates "
+                f"0-{HAIKU_T - 1}); got " + "; ".join(wrong))
+    if pilot:
+        earlier, why = _provenance_pilots(results_root, cell)
+        if why:
+            return f"{R10_REF}: {why}"
+        if len(earlier) >= HAIKU_PROVENANCE_PILOT_MAX_RUNS:
+            return (f"{cell} has had {len(earlier)} pilot runs "
+                    f"({', '.join(r['run_id'] for r in earlier)}), the most {R10_REF} allows: "
+                    "another needs the researcher's pull request")
+        return _passed_pilot(results_root, cell)
+    if HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
+        return (f"{HAIKU_PROVENANCE_EXPERIMENT} runs {HAIKU_MODEL} only after the researcher "
+                "has recorded the Haiku replication's G1 gate as passed on generator config "
+                f"{generator_hash[:12]} (harnesses/registered.py HAIKU_G1_PASSED; {R10_REF})")
+    return _provenance_pilot_go(results_root)
+
+
+def provenance_block_refusal(approved_block: str | None, cell: str) -> str | None:
+    """Why a paid run must refuse under R10's block rule, or None (PREREG §17.10): a run of
+    R10's cells (`HAIKU_PROVENANCE_CELLS`), pilots included, runs under block
+    `HAIKU_PROVENANCE_BLOCK` only, and that block funds no other cell. The general guard
+    admits a run only in its block's experiments, but R10's pilots share `persistgym_pilot`
+    with R8's, so the cell decides. `harnesses run` and `single-turn` check it before the
+    paid-run lock, and refuse a block name that is not exactly a name (padding) before it. The
+    name is compared as the paid guard reads it, stripped (common/approval.py)."""
+    mine = cell in HAIKU_PROVENANCE_CELLS
+    approved_block = None if approved_block is None else str(approved_block).strip()
+    if mine and approved_block != HAIKU_PROVENANCE_BLOCK:
+        return (f"cell {cell} runs under block {HAIKU_PROVENANCE_BLOCK} only ({R10_REF}), got "
+                f"--approved-block {approved_block}")
+    if not mine and approved_block == HAIKU_PROVENANCE_BLOCK:
+        return (f"block {HAIKU_PROVENANCE_BLOCK} funds {', '.join(HAIKU_PROVENANCE_CELLS)} only "
+                f"({R10_REF}), got cell {cell}")
+    return None
+
+
 def check_run_settings(experiment: str, model: str, effort: str, cell: str,
                        generator_hash: str, results_root: Path, *, split: str,
                        variant: str, task_cells: tuple[str, ...] | None = None,
@@ -1068,14 +1382,22 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        dated snapshot of it refuses, and with the kill switch `R8_IN_EFFECT` False every such
        run refuses (with R6's hard stop off as well). A Haiku run in R9's
        `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9) is held to `_haiku_notes_refusal`, which also
-       reads `repeat_index` (R9 registers repeat 0 only). No other rule reads it."""
+       reads `repeat_index` (R9 registers repeat 0 only), and a Haiku run of R10's cells or in
+       R10's `HAIKU_PROVENANCE_EXPERIMENT` (PREREG §17.10) to `_haiku_provenance_refusal`,
+       which reads it too. No other rule reads it. Any run of R10's cells, or in R8's
+       `persistgym_haiku`, R9's or R10's experiment, goes to `haiku_refusal` whatever its
+       model, so with R6's hard stop off no other model runs there either."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)
     if why:
         return why
     family = model_family(model)
-    if family == HAIKU_MODEL or _on_messages_wire(model):
+    # R8's, R9's and R10's experiments and R10's cells are Haiku's only: any model in them is
+    # judged by `haiku_refusal`, which refuses every other model, with R6's hard stop off too
+    if (family == HAIKU_MODEL or _on_messages_wire(model) or cell in HAIKU_PROVENANCE_CELLS
+            or experiment in (HAIKU_EXPERIMENT, HAIKU_NOTES_EXPERIMENT,
+                              HAIKU_PROVENANCE_EXPERIMENT)):
         return haiku_refusal(experiment, model, effort, cell, generator_hash, results_root,
                              split=split, variant=variant, task_cells=task_cells,
                              request=request, templates=templates, matrix=matrix,

@@ -572,7 +572,8 @@ def test_echo_count(tmp_path, capsys):
     assert set(out["experiments"]) == {"toggle_pilot", "replay_probe", PILOT,
                                        "persistgym_validity", "persistgym",
                                        "persistgym_sol_h1", "persistgym_haiku",
-                                       "persistgym_haiku_notes", "statecarry_persistgym"}
+                                       "persistgym_haiku_notes", "persistgym_haiku_provenance",
+                                       "statecarry_persistgym"}
     assert cli.main(["echo-count", "--raw-root", str(raw), "--experiment", PILOT]) == 0
     printed = json.loads(capsys.readouterr().out)
     assert printed["experiments"] == [PILOT] and list(printed["runs"]) == [f"{PILOT}/ok"]

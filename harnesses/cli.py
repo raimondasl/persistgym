@@ -213,7 +213,9 @@ Anthropic's free token-counting endpoint is called):
     uv run --env-file .env python -m harnesses count-tokens --model claude-haiku-5-5 --n 10
 The paid runs (with --approved-block and amounts from R8's approval line, which must list
 persistgym_haiku: the Anthropic transport refuses any other block, its pilots too, except for
-R9's W-n-0 run, whose block lists persistgym_haiku_notes), under the
+R9's W-n-0 run, whose block lists persistgym_haiku_notes, and R10's two cells, W-np-0 and
+W-npd-0, which run under block 6-haiku-provenance only, their pilots included; see the R10
+paragraph below), under the
 rules `haiku_refusal` holds them to: a pilot of F-0, W-0, W-n-0 or the single-turn control on
 pilot templates (here W-0: 8 episodes); the validity run, F-0 on validity templates 0-19,
 restated, then withheld; the main runs of `registered.HAIKU_CELLS` on all 8 task cells (F-0
@@ -234,6 +236,18 @@ only once `registered.HAIKU_G1_PASSED` records its G1 (set by the researcher's G
     PERSISTGYM_ALLOW_PAID=1 uv run --env-file .env python -m harnesses single-turn \
         --model claude-haiku-5-5 --split main --start 0 --n 200 --experiment persistgym_haiku \
         --approved-block "<block>" --planned-usd <usd> --parallel 16
+
+PREREG §17.10 (amendment R10): `run` and `single-turn` refuse an --approved-block that is not
+exactly a block name (`_block_name_refusal`), a run of W-np-0 or W-npd-0 under any block but
+6-haiku-provenance, and any other cell under that block (`registered.provenance_block_refusal`).
+They also refuse a run of those two cells, or any pilot, under a run id whose results or raw
+folder exists, and a run of those two cells under a run id that is not a plain name
+(`_run_id_refusal`). `haiku_refusal` admits the two cells on exactly
+claude-haiku-5-5 as pilots in persistgym_pilot (pilot templates 0-1 on the 4 far task cells, at
+most 2 per cell, none once a cell's newest pilot has passed a pilot check) and as main runs in
+persistgym_haiku_provenance (the 4 far task cells, main templates 0-199), the latter only once
+the latest pilot check (`analysis.haiku_provenance_pilot`) says GO for each cell's newest pilot.
+The commands are in results/decisions.md (2026-11-01).
 """
 
 from __future__ import annotations
@@ -250,7 +264,7 @@ from pathlib import Path
 
 import openai
 
-from common import costs, paidlock, runmeta
+from common import approval, costs, paidlock, runmeta
 from harnesses import (
     account,
     blinding,
@@ -262,7 +276,7 @@ from harnesses import (
     token_count,
 )
 from harnesses.anthropic_transport import AnthropicMessagesTransport
-from harnesses.cells import CELLS, get_cell
+from harnesses.cells import CELLS, NOTES_VARIANT_CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.matrix import RunMatrix
@@ -376,7 +390,7 @@ def _run_what(a, cell, n_episodes: int) -> str:
 
 def cmd_cells(a) -> int:
     print(f"{'cell':<8}{'ascii':<12}{'history':<9}{'notes':<7}{'reasoning.context':<19}role")
-    for c in CELLS.values():
+    for c in (*CELLS.values(), *NOTES_VARIANT_CELLS.values()):
         print(f"{c.cell_id:<8}{c.ascii_id:<12}{c.history:<9}{c.notes!s:<7}"
               f"{c.reasoning_context:<19}{c.role}{' (optional)' if c.optional else ''}")
     return 0
@@ -459,8 +473,43 @@ def _check_accounted(transport: PaidTransport, run_id: str) -> None:
               f"{transport.paid_lock.path}", file=sys.stderr)
 
 
+def _block_name_refusal(approved_block: str | None) -> str | None:
+    """Why --approved-block is not exactly a block name, or None (not given: the paid guard
+    refuses that). The guard strips the name before it looks up the approval, but R10's block
+    rule (`registered.provenance_block_refusal`) must see the same name, so padding refuses,
+    as the ARC launcher refuses it (arc/run_path.py)."""
+    if approved_block is None or approval.NAME_RE.fullmatch(approved_block):
+        return None
+    return (f"--approved-block {approved_block!r} is not a block name ([A-Za-z0-9._-]+, no "
+            "spaces)")
+
+
+def _run_id_refusal(run_id: str, experiment: str, cell_id: str) -> str | None:
+    """R10 (PREREG §17.10): why a run may not take `run_id`, or None. A run of R10's cells, or
+    any run in `persistgym_pilot`, refuses a run id whose results or raw folder exists, so each
+    R10 pilot is its own folder and counts (`registered._provenance_pilots`). A run of R10's
+    cells also needs a run id the pilot gate reads as a name (`registered.PLAIN_RUN_ID`, not
+    ending in "." which Windows drops from a folder name)."""
+    mine = cell_id in registered.HAIKU_PROVENANCE_CELLS
+    if not (mine or experiment == PILOT_EXPERIMENT):
+        return None
+    if mine and (not registered.PLAIN_RUN_ID.fullmatch(run_id) or run_id.endswith(".")):
+        return (f"--run-id {run_id!r}: a run of R10's cells needs a run id of letters, digits, "
+                f"'.', '_' and '-', not ending in '.' ({registered.R10_REF})")
+    used = [str(d) for d in (RESULTS / experiment / run_id, RAW / experiment / run_id)
+            if d.exists()]
+    if used:
+        return (f"--run-id {run_id} is already used ({', '.join(used)}): a pilot, or a run of "
+                f"R10's cells, needs a new run id ({registered.R10_REF})")
+    return None
+
+
 def cmd_run(a) -> int:
     cell = get_cell(a.cell)
+    why = _block_name_refusal(a.approved_block)
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
+        return 2
     if not 1 <= a.parallel <= MAX_PARALLEL:
         print(f"refused: --parallel is 1 to {MAX_PARALLEL} episodes at once (PREREG §4.6), "
               f"got {a.parallel}", file=sys.stderr)
@@ -506,6 +555,8 @@ def cmd_run(a) -> int:
         request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
         templates=(a.start, a.start + matrix.n_templates), matrix=matrix.name,
         repeat_index=matrix.repeat_index)
+    # R10 (PREREG §17.10): its cells run under its block only, and its block funds them only
+    why = why or registered.provenance_block_refusal(a.approved_block, cell.cell_id)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2
@@ -524,6 +575,13 @@ def cmd_run(a) -> int:
         require_plain_name("--run-id", run_id)
     except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
+        return 2
+    # R10 (PREREG §17.10): its pilot count and its pilot check read one folder per run, so no
+    # run of its cells, and no pilot of any cell, reuses a run id (run_batch would append to
+    # that folder, or replace an R10 pilot's meta.json)
+    why = _run_id_refusal(run_id, a.experiment, cell.cell_id)
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
         return 2
 
     def paid(held: paidlock.HeldLock) -> int:
@@ -952,6 +1010,10 @@ def cmd_single_turn(a) -> int:
         print(f"refused: {why}", file=sys.stderr)
         return 2
 
+    why = _block_name_refusal(a.approved_block)
+    if why:
+        return refuse(why)
+
     if not 1 <= a.parallel <= MAX_PARALLEL:
         return refuse(f"--parallel is 1 to {MAX_PARALLEL} prompts at once (PREREG §4.6), got "
                       f"{a.parallel}")
@@ -982,6 +1044,9 @@ def cmd_single_turn(a) -> int:
         task_cells=tuple(cells),
         request={"mode": a.mode, "service_tier": a.service_tier, "W": None},
         templates=(a.start, a.start + a.n))
+    # R10 (PREREG §17.10): its block funds its two cells only, never this control
+    why = why or registered.provenance_block_refusal(a.approved_block,
+                                                     registered.LUNA_SINGLE_TURN_CELL)
     if why:
         return refuse(why)
     if a.split == "main":
@@ -997,6 +1062,10 @@ def cmd_single_turn(a) -> int:
         require_plain_name("--run-id", run_id)
     except ValueError as e:
         return refuse(str(e))
+    # R10 (PREREG §17.10): a pilot never reuses a run id, so it cannot overwrite an R10 pilot
+    why = _run_id_refusal(run_id, a.experiment, registered.LUNA_SINGLE_TURN_CELL)
+    if why:
+        return refuse(why)
     # the costs row's notes, as `run` writes them (`_run_notes`): the repeat at 1 only
     notes = (f"{a.split} {a.start}-{a.start + a.n - 1} control={single_turn.CONTROL}"
              + (f" repeat_index={a.repeat_index}" if a.repeat_index else "")

@@ -66,6 +66,10 @@ EXPERIMENT_PHASE = {
     # PREREG §17.9 (amendment R9): claude-haiku-5-5's W-n-0 cell, one exploratory run with R8's
     # settings (harnesses/registered.py _haiku_notes_refusal; kill switch R9_IN_EFFECT)
     "persistgym_haiku_notes": "1a",
+    # PREREG §17.10 (amendment R10): claude-haiku-5-5's two notes-instruction variants, W-np-0
+    # and W-npd-0, exploratory, with R8's settings (harnesses/registered.py
+    # _haiku_provenance_refusal; kill switch R10_IN_EFFECT)
+    "persistgym_haiku_provenance": "1a",
     "arc_path": "1b",
     "statecarry_persistgym": "2",
     "statecarry_arc_dev": "2",

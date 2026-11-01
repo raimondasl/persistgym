@@ -25,7 +25,11 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   it; the refusal releases the spend reservation. A run in R9's `persistgym_haiku_notes`
   (`registered.HAIKU_NOTES_EXPERIMENT`, PREREG §17.9) passes this check too. The general
   guard admits a run only in its block's own experiments, so R9's block funds that run alone,
-  and a block approved for R9 never funds a run of R8's.
+  and a block approved for R9 never funds a run of R8's. A block that lists R10's
+  `persistgym_haiku_provenance` (`registered.HAIKU_PROVENANCE_EXPERIMENT`, PREREG §17.10)
+  funds runs in that experiment and pilots. `harnesses run` and `single-turn` have already
+  tied R10's two cells and its block to each other (`registered.provenance_block_refusal`),
+  so that block funds only R10's cells, and R8's block funds none of them.
 * **The request-side check.** Before each call the body must pass
   `harnesses.wire.MessagesWire.check_payload` with the model's registered effort and D13's
   32,000 cap: adaptive thinking, exactly the fields the wire sends, no thinking block in the
@@ -211,12 +215,20 @@ class AnthropicMessagesTransport(PaidTransport):
         # lists the run's experiment)
         if self.approval.experiment == registered.HAIKU_NOTES_EXPERIMENT:
             return None
+        # R10 (PREREG §17.10): a block that lists its experiment funds its main runs and its
+        # pilots (`harnesses run` has checked that the cell is one of R10's and the block is
+        # R10's, registered.provenance_block_refusal)
+        if (registered.HAIKU_PROVENANCE_EXPERIMENT in self.approval.experiments
+                and self.approval.experiment in (registered.PILOT_EXPERIMENT,
+                                                 registered.HAIKU_PROVENANCE_EXPERIMENT)):
+            return None
         return (f"block {self.approval.approved_block!r} lists "
                 f"{', '.join(self.approval.experiments)}, not {registered.HAIKU_EXPERIMENT}: "
                 f"a {registered.HAIKU_MODEL} run, its pilots and validity run included, needs "
                 f"an approval line written for the Haiku replication ({registered.R8_REF}), "
                 f"which lists it, or for R9's notes run ({registered.R9_REF}), which lists "
-                f"{registered.HAIKU_NOTES_EXPERIMENT}")
+                f"{registered.HAIKU_NOTES_EXPERIMENT}, or for R10's runs ({registered.R10_REF}), "
+                f"which lists {registered.HAIKU_PROVENANCE_EXPERIMENT}")
 
     def _default_client(self, timeout_s: float) -> Any:
         # max_retries=0: retries are handled by the transport so that every attempt is visible.

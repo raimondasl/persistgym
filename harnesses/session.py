@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from harnesses.cells import NOTES_INSTRUCTION, CellSpec
+from harnesses.cells import CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.wire import wire_for
 from persistgym import tokens
@@ -104,7 +104,7 @@ class HarnessSession:
         self.W = W_tokens
         self.count_system = count_system
         self.system_prompt = system_prompt
-        self.instructions = (system_prompt + cfg.notes_separator + NOTES_INSTRUCTION
+        self.instructions = (system_prompt + cfg.notes_separator + cell.notes_instruction
                              if cell.notes else system_prompt)
         # W counts the episode's system prompt only, never the notes sentence: the two cells
         # of a notes pair (W-n-0/W-0, Σ-n-r/Σ-0-r) then evict and compact at the same steps,

@@ -1506,7 +1506,11 @@ The S1→S2 step (σ_notes = −0.427, entry of 2026-10-12) points to the last, 
        PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-np-0 --model claude-haiku-5-5 --split pilot --start 0 --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot --approved-block 6-haiku-provenance --planned-usd 2
        PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-npd-0 --model claude-haiku-5-5 --split pilot --start 0 --n 2 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_pilot --approved-block 6-haiku-provenance --planned-usd 2
 
-2. **The check before the main runs** (§17.10): both pilots ended `COMPLETED`, with no API error and no request-side check stop, every request's system prompt ends in its cell's notes text (read from the raw transcripts), and the cost per episode is at most $0.0568 (1.25 × $0.045408). The pilots' outcomes stay blinded. If any condition fails, Claude stops and tells the researcher before any main run.
+2. **The check before the main runs** (§17.10): both pilots ended `COMPLETED`, with no API error and no request-side check stop, every request's system prompt ends in its cell's notes text (read from the raw transcripts), and the cost per episode is at most $0.0568 (1.25 × $0.045408). `analysis/haiku_provenance_pilot.py` checks these and reports nothing else, so the pilots' outcomes stay blinded:
+
+       uv run python -m analysis.haiku_provenance_pilot --run <W-np-0 pilot run> --run <W-npd-0 pilot run>
+
+   If any condition fails, Claude stops and tells the researcher before any main run.
 3. The two main runs, with `--parallel 8` as R9 used under the organization's input-token rate limit:
 
        PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-np-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --task-cell observed-nonrec-far observed-rec-far derived-nonrec-far derived-rec-far --experiment persistgym_haiku_provenance --approved-block 6-haiku-provenance --planned-usd 48 --parallel 8

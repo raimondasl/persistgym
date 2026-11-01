@@ -381,3 +381,47 @@ def test_r10s_block_funds_no_r9_run(prov_paid_env, capsys):
     err = capsys.readouterr().err
     assert "refused:" in err, err
     assert costs.read_rows(costs_csv) == [] and all(not f.calls for f in fakes)
+
+
+# --- the check between the pilots and the main runs (analysis.haiku_provenance_pilot) -----------
+
+def _pilot(cell: str, run_id: str) -> list[str]:
+    return ["run", "--cell", cell, "--model", HAIKU, "--split", "pilot", "--n", "2",
+            "--task-cell", *FAR, "--experiment", PILOT, "--approved-block", BLOCK,
+            "--planned-usd", "1", "--run-id", run_id]
+
+
+def test_the_pilot_check_passes_both_pilots_and_reports_no_outcome(prov_paid_env, capsys):
+    from analysis import haiku_provenance_pilot as hpp
+    tmp, costs_csv, _ = prov_paid_env
+    assert cli.main(_pilot("W-np-0", "p1")) == 0 and cli.main(_pilot("W-npd-0", "p2")) == 0
+    capsys.readouterr()
+    c = hpp.check(tmp / "results", tmp / "raw", costs_csv, ["p1", "p2"])
+    assert c["go"] and c["both_cells_piloted"], hpp.summary(c)
+    for r in c["runs"]:
+        assert r["episodes"] == 8 and r["requests"] > 0
+        assert r["requests_without_the_notes_text"] == 0 and r["problems"] == []
+        assert r["cost_per_episode_usd"] <= hpp.COST_LIMIT
+    text = json.dumps(c)
+    assert "need_correct" not in text and "success" not in text  # blinded (PREREG §11)
+    # one pilot alone is not enough
+    assert not hpp.check(tmp / "results", tmp / "raw", costs_csv, ["p1"])["go"]
+
+
+def test_the_pilot_check_stops_on_a_wrong_system_prompt_or_cost(prov_paid_env, capsys,
+                                                                  monkeypatch):
+    from analysis import haiku_provenance_pilot as hpp
+    tmp, costs_csv, _ = prov_paid_env
+    assert cli.main(_pilot("W-np-0", "p1")) == 0 and cli.main(_pilot("W-npd-0", "p2")) == 0
+    capsys.readouterr()
+    monkeypatch.setattr(hpp, "COST_LIMIT", 0.0)
+    c = hpp.check(tmp / "results", tmp / "raw", costs_csv, ["p1", "p2"])
+    assert not c["go"]
+    assert all(not r["conditions"]["cost_per_episode_within_limit"] for r in c["runs"])
+    monkeypatch.setattr(hpp, "COST_LIMIT", 1.0)
+    # the W-np-0 run read as if it were W-npd-0: its system prompts lack the disclosure sentence
+    meta_path = tmp / "results" / PILOT / "p1" / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta_path.write_text(json.dumps({**meta, "cell_or_config": "W-npd-0"}), encoding="utf-8")
+    r = hpp.check_run(tmp / "results", tmp / "raw", costs_csv, "p1")
+    assert not r["passed"] and r["requests_without_the_notes_text"] == r["requests"] > 0

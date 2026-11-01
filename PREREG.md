@@ -2042,7 +2042,7 @@ Several of R9's failed replies already named a source and then said it could not
 2. **The runs.** Each cell runs a pilot and then one main run, with R8's settings: `output_config.effort` medium, the default generator config, the standard tier, the episode's own W, and the Messages API as R8 describes it.
    - **Pilots** (CLAUDE.md: every new harness cell is piloted): pilot templates 0-1 on the 4 far task cells, 8 episodes per cell, in `persistgym_pilot`, blinded under §11 as every pilot is.
    - **Main runs:** experiment `persistgym_haiku_provenance` (phase 1a), the full matrix on the 4 far task cells (observed and derived facts, recoverable and not), main templates 0-199 at repeat 0, base episodes: 800 episodes per cell, 1,600 in all.
-   - **From pilot to main:** the main runs start only after both pilots end `COMPLETED` with no API error and no request-side check stop, with every request's system prompt ending in its cell's notes text, and at a cost per episode of at most 1.25 times the forecast's $0.0454. Otherwise Claude stops and tells the researcher before any main run.
+   - **From pilot to main:** the main runs start only after both pilots end `COMPLETED` with no API error and no request-side check stop, with every request's system prompt ending in its cell's notes text, and at a cost per episode of at most 1.25 times the forecast's $0.0454. `analysis/haiku_provenance_pilot.py` checks the four conditions. Otherwise Claude stops and tells the researcher before any main run.
    - **Not run:** the near task cells (the window keeps the evidence there), repeat 1 (§2.9), disclosure without provenance, and any other model.
 3. **R6 (§17.6), R8 and R9.** R10 is the new dated amendment that R9 requires before any later paid run. For these runs only, it supersedes the parts of R6 that R9 superseded for R9's run:
    - change 1's hard stop and its scope;
@@ -2086,5 +2086,6 @@ No hypothesis is tested, and no confirmatory or replication label is given. Read
 - `common/costs.py` and `common/paidlock.py` place `persistgym_haiku_provenance` in phase 1a and in the PersistGym stream.
 - `analysis/persistgym_h1h3.py`: its §2.8 replay takes each cell's notes text off the system prompt (`_system_tokens`, `window_recheck`), its cell lists and `s_planned` know R10's cells, and its completeness, accounting, cell and exclusion tables take an optional list of task cells. Their defaults, and so luna's, R8's and R9's readings, are unchanged.
 - `analysis/haiku_notes_replies.py`: `steps` takes a transcript path, defaulting to R9's run, so R10's analysis reads its own runs with R9's patterns.
+- `analysis/haiku_provenance_pilot.py` checks the four conditions between the pilots and the main runs, and reports nothing a pilot withholds under §11.
 - `harnesses/DESIGN.md` §13.11 describes the cells and the guard.
 - Tests: `harnesses/tests/test_notes_variant_cells.py` (the payload snapshots: every request of both cells, whole, with the sentences asserted literally), `harnesses/tests/test_haiku_provenance_guard.py`, `analysis/tests/test_haiku_provenance.py`, and the echo-count test's list of PersistGym experiments.

@@ -181,7 +181,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if c["go"] else 1
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     out = results / "haiku_provenance_pilot" / run_id
-    out.mkdir(parents=True, exist_ok=True)
+    try:
+        # every check is its own record: the guard reads all of them (a pass in any blocks a
+        # re-pilot of that cell), so a second check in the same second never replaces one
+        out.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        print(f"refused: a check was already written at {run_id}; run it again", file=sys.stderr)
+        return 2
     (out / "check.json").write_text(json.dumps(c, indent=2), encoding="utf-8", newline="\n")
     runmeta.write_meta(
         out, git=runmeta.git_state(), experiment="haiku_provenance_pilot", run_id=run_id,

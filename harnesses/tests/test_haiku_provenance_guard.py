@@ -190,7 +190,8 @@ def test_a_main_run_needs_a_go_pilot_check(tmp_path):
                {"run_id": "pilot-W-npd-0", "cell": "W-npd-0", "passed": True}]},
      "not a run's name"),
 ])
-def test_a_main_run_refuses_a_check_that_is_not_a_go_for_both(tmp_path, kw, wrong):
+def test_a_main_run_refuses_a_check_that_does_not_vouch_for_each_cells_newest_pilot(
+        tmp_path, kw, wrong):
     write_pilot_go(tmp_path, **kw)
     why = main_guard("W-npd-0", tmp_path)
     assert why is not None and wrong in why and registered.R10_REF in why, why
@@ -245,7 +246,7 @@ def test_a_later_pilot_makes_the_check_stale(tmp_path):
 
 def test_no_further_pilot_of_a_cell_that_passed(tmp_path):
     """The second pilot run is a re-run after a failure only: once a cell's newest pilot has
-    passed the latest check, another pilot of it refuses, and a cell that failed may re-run."""
+    passed any pilot check, another pilot of it refuses, and a cell that failed may re-run."""
     write_pilot_go(tmp_path, go=False, runs=[
         {"run_id": "pilot-W-np-0", "cell": "W-np-0", "passed": True},
         {"run_id": "pilot-W-npd-0", "cell": "W-npd-0", "passed": False}])
@@ -768,6 +769,7 @@ def test_an_unfinished_pilot_counts_and_holds_the_main_runs(tmp_path):
     write_unfinished_pilot(tmp_path, "crashed-np", "W-np-0")
     why = main_guard("W-np-0", tmp_path)
     assert why is not None and "unfinished" in why and "crashed-np" in why
+    assert "account-run cannot rebuild" in why and "pull request" in why
     # it counts toward the 2 pilots of its cell, and another cell's count is its own
     pilots, _ = registered._provenance_pilots(tmp_path, "W-np-0")
     assert [r["run_id"] for r in pilots] == ["pilot-W-np-0", "crashed-np"]
@@ -836,3 +838,29 @@ def test_the_pilot_check_never_writes_a_go_the_gate_rejects(prov_paid_env, capsy
     (r1,) = [r for r in c["runs"] if r["run_id"] == "p1"]
     assert not r1["passed"] and any("newest pilot is p3" in x for x in r1["problems"])
     assert hpp.check(tmp / "results", tmp / "raw", costs_csv, ["p3", "p2"])["go"]
+
+
+def test_a_second_check_in_the_same_second_refuses(prov_paid_env, capsys, monkeypatch):
+    """Every check is its own record (a pass in any of them blocks a re-pilot), so a check
+    never replaces another written in the same second."""
+    from datetime import UTC, datetime
+
+    from analysis import haiku_provenance_pilot as hpp
+    tmp, costs_csv, _ = prov_paid_env
+    assert cli.main(_pilot("W-np-0", "p1")) == 0 and cli.main(_pilot("W-npd-0", "p2")) == 0
+    fixed = datetime(2026, 11, 1, 12, 0, 0, tzinfo=UTC)
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed
+    monkeypatch.setattr(hpp, "datetime", Frozen)
+    argv = ["--results-root", str(tmp), "--raw-root", str(tmp / "raw"), "--costs",
+            str(costs_csv), "--run", "p1", "--run", "p2"]
+    assert hpp.main(argv) == 0
+    before = (tmp / "results" / "haiku_provenance_pilot" / "20261101T120000Z" / "check.json"
+              ).read_text(encoding="utf-8")
+    assert hpp.main([*argv[:-2]]) == 2
+    assert "already written at 20261101T120000Z" in capsys.readouterr().err
+    assert (tmp / "results" / "haiku_provenance_pilot" / "20261101T120000Z" / "check.json"
+            ).read_text(encoding="utf-8") == before

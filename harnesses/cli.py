@@ -241,7 +241,8 @@ PREREG §17.10 (amendment R10): `run` and `single-turn` refuse an --approved-blo
 exactly a block name (`_block_name_refusal`), a run of W-np-0 or W-npd-0 under any block but
 6-haiku-provenance, and any other cell under that block (`registered.provenance_block_refusal`).
 They also refuse a run of those two cells, or any pilot, under a run id whose results or raw
-folder exists (`_run_id_refusal`). `haiku_refusal` admits the two cells on exactly
+folder exists, and a run of those two cells under a run id that is not a plain name
+(`_run_id_refusal`). `haiku_refusal` admits the two cells on exactly
 claude-haiku-5-5 as pilots in persistgym_pilot (pilot templates 0-1 on the 4 far task cells, at
 most 2 per cell, none once a cell's newest pilot has passed a pilot check) and as main runs in
 persistgym_haiku_provenance (the 4 far task cells, main templates 0-199), the latter only once

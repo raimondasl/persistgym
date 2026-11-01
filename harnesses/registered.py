@@ -57,8 +57,8 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   `persistgym_pilot` for it explicitly, so the researcher approves the pilot by name.
   R8 (below), the new dated amendment R6 change 1 asks for, adds claude-haiku-5-5's runs in
   its three experiments, and R9 and R10 add Haiku's runs in theirs (`persistgym_haiku_notes`,
-  `persistgym_haiku_provenance`). All of these pass on to `haiku_refusal`. Every other run refuses, fail
-  closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
+  `persistgym_haiku_provenance`). All of these pass on to `haiku_refusal`. Every other run
+  refuses, fail closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
   every model but Haiku, `persistgym_sol_h1`, the probes (`toggle_pilot`, `replay_probe`),
   every sol run, any other experiment, and any model that is not a registered one. The
   rules below for those runs stay, as the record of what was registered, and apply again
@@ -108,8 +108,9 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   `haiku_refusal`, after R8's kill switch) lets the two cells run with R8's settings on
   exactly claude-haiku-5-5, as the full matrix on the 4 far task cells, base episodes, repeat
   0: each as a pilot on pilot templates 0-1 (at most 2 pilot runs per cell, none once the
-  cell's newest pilot has passed a pilot check), and in `HAIKU_PROVENANCE_EXPERIMENT` (`persistgym_haiku_provenance`) on main
-  templates 0-199, after `HAIKU_G1_PASSED` and a GO pilot check for each cell's newest pilot.
+  cell's newest pilot has passed a pilot check), and in `HAIKU_PROVENANCE_EXPERIMENT`
+  (`persistgym_haiku_provenance`) on main templates 0-199, after `HAIKU_G1_PASSED` and once
+  the latest pilot check says GO and names each cell's newest pilot, which passed.
   Anything else of theirs, and anything else in that experiment, refuses, whatever the model.
   `provenance_block_refusal` ties them to block `HAIKU_PROVENANCE_BLOCK` both ways.
 
@@ -1185,11 +1186,15 @@ def named_pilot_refusal(results_root: Path, name: str, run: dict) -> str | None:
         return why
     if not pilots or pilots[-1]["run_id"] != run_id:
         newest = pilots[-1] if pilots else None
+        if newest is not None and not newest["finished"]:
+            return (f"R10's pilot check {name} names {run_id} for {cell}, but {cell}'s newest "
+                    f"pilot is {newest['run_id']}, which is unfinished: it wrote no meta.json. "
+                    "No check can name it, and account-run cannot rebuild a Messages API run. "
+                    "Add its costs row by hand and tell the researcher: only a newer pilot of "
+                    "the cell, within the 2 allowed, or the researcher's pull request lifts this")
         return (f"R10's pilot check {name} names {run_id} for {cell}, but {cell}'s newest pilot "
-                f"is {newest['run_id'] if newest else None}"
-                + ("" if newest is None or newest["finished"]
-                   else " (unfinished: no meta.json; account for it first)")
-                + ": run analysis.haiku_provenance_pilot again")
+                f"is {newest['run_id'] if newest else None}: run analysis.haiku_provenance_pilot "
+                "again")
     return None
 
 
@@ -1252,8 +1257,10 @@ def _haiku_provenance_refusal(experiment: str, model: str, effort: str, cell: st
     episodes, repeat 0, the full matrix on the 4 far task cells, and either
     * a pilot (`persistgym_pilot`, --split pilot) on pilot templates 0-1
       (`HAIKU_PROVENANCE_PILOT_TEMPLATES`), at most `HAIKU_PROVENANCE_PILOT_MAX_RUNS` per cell
-      over the pilots under results/persistgym_pilot/, and none once the cell's newest pilot
-      has passed a pilot check (`_passed_pilot`); it needs no G1, as R8's pilots do; or
+      over the pilots `_provenance_pilots` finds (a meta.json under results/persistgym_pilot/,
+      or the raw run_plan.json of a paid pilot that wrote none), and none once the cell's
+      newest pilot has passed a pilot check (`_passed_pilot`); it needs no G1, as R8's pilots
+      do; or
     * a main run in `HAIKU_PROVENANCE_EXPERIMENT` on main templates within 0 to `HAIKU_T` - 1,
       only once `HAIKU_G1_PASSED` records Haiku's G1 on that config and R10's latest pilot
       check says GO for each cell's newest pilot (`_provenance_pilot_go`).
@@ -1288,7 +1295,8 @@ def _haiku_provenance_refusal(experiment: str, model: str, effort: str, cell: st
     if results_root is None:
         wrong.append("results folder (not given)")
     if wrong:
-        return (f"{HAIKU_MODEL}'s R10 cells run only as {R10_REF} registers them: a cell of "
+        return (f"{HAIKU_MODEL}'s R10 cells run only as {R10_REF} registers them: exactly "
+                f"{HAIKU_MODEL} (no dated snapshot), a cell of "
                 f"{', '.join(HAIKU_PROVENANCE_CELLS)} at --effort {HAIKU_EFFORT} on the "
                 "default generator config, with --mode standard, --service-tier standard and "
                 "no --W, --variant base, repeat 0, as the full matrix on the 4 far task cells "

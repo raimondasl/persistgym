@@ -109,6 +109,7 @@ EXPERIMENT_STREAM = {
     "persistgym_haiku": PERSISTGYM,
     "persistgym_haiku_notes": PERSISTGYM,
     "persistgym_haiku_provenance": PERSISTGYM,
+    "persistgym_haiku_control": PERSISTGYM,
     "arc_path": ARC,
     "statecarry_persistgym": PERSISTGYM,
     "statecarry_arc_dev": ARC,

@@ -809,3 +809,20 @@ Anything else refuses, naming §17.10: the two cells in `persistgym_haiku`, `per
 **The block rule** (`registered.provenance_block_refusal`). R10's pilots run in `persistgym_pilot`, which R8's block `4-haiku` also lists, so the general guard, which checks the experiment only, would let that block fund them. `harnesses run` and `single-turn` therefore refuse, before the paid-run lock, a run of R10's cells under any block but `6-haiku-provenance`, and any other cell under that block. The paid guard strips the block name before it looks it up, so the rule compares the stripped name, and both commands first refuse a `--approved-block` that is not exactly a name (`cli._block_name_refusal`, as the ARC launcher does). The transport admits a pilot or a run in `persistgym_haiku_provenance` under a block that lists that experiment, and judges R8's and R9's runs as before.
 
 The runs' descriptive readings are `analysis/haiku_provenance.py`. Its §2.8 replay takes each cell's notes text off the system prompt (`persistgym_h1h3._system_tokens`). Tests: `tests/test_haiku_provenance_guard.py`, `tests/test_notes_variant_cells.py`, and `analysis/tests/test_haiku_provenance.py`.
+
+### 13.12 R11: a later W-n-0 control (`registered._haiku_control_refusal`, `R11_IN_EFFECT`, `org_check.py`)
+PREREG §17.11 (amendment R11) adds one run of Haiku's W-n-0, in its own experiment `persistgym_haiku_control` (phase 1a, stream PersistGym), so R9's and R10's runs and their analyses' inputs stay as they are. `registered.R11_IN_EFFECT` is True. `haiku_refusal` hands a run in that experiment to `_haiku_control_refusal`, after R8's kill switch, so switching R8 off stops it too. The run is:
+- exactly claude-haiku-5-5 (no dated snapshot), in W-n-0, as the full matrix on the 2 not-recoverable far task cells (`HAIKU_CONTROL_TASK_CELLS`);
+- main templates within 0-199, repeat 0 only, base episodes;
+- R8's effort, config and request settings;
+- only after `HAIKU_G1_PASSED`.
+
+Anything else in the experiment refuses, naming §17.11, whatever the model. Set False, `R11_IN_EFFECT` refuses every run in it (`R11_STOP`), and R8's, R9's and R10's runs are unaffected.
+
+The transport admits the run under a block that lists the experiment (block `7-haiku-control`, at most $17.38). The general guard admits a run only in its block's experiments, so that block funds nothing else, and no earlier block funds this run.
+
+**The stop.** The run's `--planned-usd` is the block's whole $17.38, with no margin above the forecast, by the researcher's condition. §7.6's reservations therefore end it `SPEND_RESERVATION` a little before its matrix ends, or earlier if its episodes cost more. `analysis/haiku_control.py` takes that ending as closing the sweep, and reads every arm on the leading templates finished in both task cells.
+
+**The organization** (`org_check.py`, CLI `org-check`, $0). The Messages API returns the key's organization in the `anthropic-organization-id` response header. The command sends one short request to the free token-counting endpoint, compares the header's SHA-256 with those of the organizations in R10's and R8's rate-limit errors, and prints and writes the digest and the two comparisons, never the ID. It exits 3 for any organization but R10's. R11's procedure runs it before and after the run. The transport does not read this header on paid calls, so what a run's own calls were served under is bracketed by the two checks, not recorded call by call.
+
+The run's descriptive readings are `analysis/haiku_control.py`. Tests: `tests/test_haiku_control_guard.py`, and `analysis/tests/test_haiku_control.py`.

@@ -70,6 +70,10 @@ EXPERIMENT_PHASE = {
     # and W-npd-0, exploratory, with R8's settings (harnesses/registered.py
     # _haiku_provenance_refusal; kill switch R10_IN_EFFECT)
     "persistgym_haiku_provenance": "1a",
+    # PREREG §17.11 (amendment R11): claude-haiku-5-5's W-n-0 cell again, a later control for
+    # R10's two cells, exploratory, with R8's settings (harnesses/registered.py
+    # _haiku_control_refusal; kill switch R11_IN_EFFECT)
+    "persistgym_haiku_control": "1a",
     "arc_path": "1b",
     "statecarry_persistgym": "2",
     "statecarry_arc_dev": "2",

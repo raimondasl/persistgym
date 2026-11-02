@@ -248,6 +248,14 @@ most 2 per cell, none once a cell's newest pilot has passed a pilot check) and a
 persistgym_haiku_provenance (the 4 far task cells, main templates 0-199), the latter only once
 the latest pilot check (`analysis.haiku_provenance_pilot`) says GO for each cell's newest pilot.
 The commands are in results/decisions.md (2026-11-01).
+
+PREREG §17.11 (amendment R11): `haiku_refusal` admits W-n-0 on exactly claude-haiku-5-5 in
+persistgym_haiku_control (the 2 not-recoverable far task cells, main templates within 0-199, repeat
+0, base episodes, with R8's settings), under a block that lists that experiment. `org-check` asks
+Anthropic's free token-counting endpoint which organization the key belongs to, and writes
+whether it is R10's ($0; `harnesses.org_check`):
+    uv run --env-file .env python -m harnesses org-check
+The commands are in results/decisions.md (2026-11-02).
 """
 
 from __future__ import annotations
@@ -269,6 +277,7 @@ from harnesses import (
     account,
     blinding,
     diagnostics,
+    org_check,
     probes,
     reasoning_check,
     registered,
@@ -309,6 +318,9 @@ COSTS_PATH: Path | None = None
 # The client `count-tokens` sends to the token-counting endpoint. None: an Anthropic SDK client
 # (`harnesses.token_count`). Tests replace it with a stub.
 TOKEN_COUNT_CLIENT: Callable[[], object] | None = None
+# The client `org-check` sends to the token-counting endpoint. None: an Anthropic SDK client
+# (`harnesses.org_check`). Tests replace it with a stub.
+ORG_CHECK_CLIENT: Callable[[], object] | None = None
 RUN_ARGS = ("cell", "split", "start", "variant", "W", "gen_preset", "gen_set", "model",
             "effort", "mode", "service_tier", "milestone", "approved_block", "planned_usd", "n",
             "task_cell", "matrix", "n_observed", "cell_templates", "experiment", "parallel",
@@ -973,6 +985,29 @@ def cmd_count_tokens(a) -> int:
     return 0
 
 
+def cmd_org_check(a) -> int:
+    """$0: which organization the API key belongs to, against R10's and R8's
+    (`harnesses.org_check`; PREREG §17.11). Writes
+    results/haiku_control_org/<time>/org_check.json (or --out) and prints it. Exits 3 when the
+    organization is not R10's."""
+    try:
+        report = org_check.org_check(client_factory=ORG_CHECK_CLIENT)
+    except (TypeError, ValueError) as e:  # org_check.Refused included
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    out = (Path(a.out) if a.out else RESULTS / registered.HAIKU_CONTROL_ORG_CHECK
+           / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") / "org_check.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    print(f"written: {_rel(out)}", file=sys.stderr)
+    if not report["same_org_as_r10"]:
+        print("this key's organization is not the one of R10's runs "
+              f"({registered.R11_REF}): stop and tell the researcher", file=sys.stderr)
+        return 3
+    return 0
+
+
 def cmd_summary_timing(a) -> int:
     print(json.dumps(diagnostics.summary_timing(
         a.n, split=a.split, summary_tokens=a.summary_tokens,
@@ -1191,6 +1226,13 @@ def build_parser() -> argparse.ArgumentParser:
     tc.add_argument("--out", default=None,
                     help="default: results/token_count/<time>/token_count.json")
     tc.set_defaults(fn=cmd_count_tokens)
+
+    oc = sub.add_parser("org-check",
+                        help="whether the API key's organization is that of R10's runs (free "
+                             "endpoint; $0; PREREG §17.11)")
+    oc.add_argument("--out", default=None,
+                    help="default: results/haiku_control_org/<time>/org_check.json")
+    oc.set_defaults(fn=cmd_org_check)
 
     st = sub.add_parser("summary-timing", help="where Σ cells compact at the default volume ($0)")
     st.add_argument("--n", type=int, default=20)

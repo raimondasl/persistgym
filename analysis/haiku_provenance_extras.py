@@ -24,8 +24,9 @@ transcript under ``--raw-root`` (default ``results/raw``). It reports, per arm:
    values likewise, outside the model's replies. Also the later requests at the need step.
 6. **Identical user messages:** the last user message of each step's first request against R9's
    at the same episode and step.
-7. **Input rates:** uncached input tokens per minute of each run (meta.json's input tokens less
-   cached ones, over its duration).
+7. **Runs:** uncached input tokens per minute (meta.json's input tokens less cached ones, over
+   its duration), and the most its spend plus reservations reached. Also the recoverable far
+   successes that used a lookup.
 
 Run: ``uv run python -m analysis.haiku_provenance_extras [--rerun RUN=ORIGINAL ...]``. It writes
 ``results/haiku_provenance_extras/<UTC>/extras.json``, ``summary.md`` and ``meta.json``. With
@@ -99,7 +100,10 @@ def record_readings(records: list[dict]) -> dict:
                 split[cell][("carried" if hnr.carried(rec) else "not carried")
                             + (", refused at the need step" if at_need
                                else ", no refusal at the need step")] += 1
+    rec_far = [rec for rec in records if rec["task_cell"] not in NR_FAR and rec["need_correct"]]
     return {"responses": responses, "refused_responses": len(refused),
+            "recoverable_success_with_lookup": [sum(bool(rec.get("n_lookups")) for rec in rec_far),
+                                                len(rec_far)],
             "refused_share": len(refused) / responses if responses else None,
             "refused_by_turn": {name: by_turn[name] for _, _, name in TURN_BINS},
             "refusal_categories": dict(Counter(i["reason"] for i in refused)),
@@ -245,7 +249,18 @@ def arm_transcript_summary(t: dict, records: dict[str, dict]) -> dict:
             "later_need_requests": dict(sorted(t["later_need_requests"].items()))}
 
 
-def input_rate(root: Path, experiment: str, run_id: str) -> dict:
+def peak_reservation(path: Path) -> float | None:
+    """The most the run's spend plus its reservations reached once an episode had finished: the
+    figure a smaller `--planned-usd` would have had to clear (DESIGN §7.6). Before that, the
+    estimate is all of the planned spend by rule, so those rows say nothing."""
+    if not path.is_file():
+        return None
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return max((r["spent_usd"] + r["reserved_usd"] + r["estimate_usd"] for r in rows
+                if r["estimate_usd"] < r["planned_usd"]), default=None)
+
+
+def input_rate(root: Path, experiment: str, run_id: str, raw: Path) -> dict:
     meta = json.loads((root / "results" / experiment / run_id / "meta.json")
                       .read_text(encoding="utf-8"))
     tokens = meta["tokens"]
@@ -254,7 +269,9 @@ def input_rate(root: Path, experiment: str, run_id: str) -> dict:
     uncached = int(tokens["input_tokens"]) - int(tokens["cached_input_tokens"])
     return {"run_id": run_id, "minutes": minutes, "uncached_input_tokens": uncached,
             "uncached_per_minute": uncached / minutes,
-            "max_in_flight": (meta.get("parallel") or {}).get("max_episodes_in_flight")}
+            "max_in_flight": (meta.get("parallel") or {}).get("max_episodes_in_flight"),
+            "peak_spend_plus_reservation": peak_reservation(
+                raw / experiment / run_id / "spend_reservations.jsonl")}
 
 
 def readings(root: Path, links: dict[str, str], raw_root: Path | None = None) -> dict:
@@ -289,8 +306,8 @@ def readings(root: Path, links: dict[str, str], raw_root: Path | None = None) ->
         out["arms"][name] = {**from_records, **arm_transcript_summary(t, records),
                              "episodes": len(records),
                              "runs": sorted(by_run),
-                             "input_rates": [input_rate(root, experiment, x.run_id) for x in runs
-                                             if x.cell == cell]}
+                             "input_rates": [input_rate(root, experiment, x.run_id, raw)
+                                             for x in runs if x.cell == cell]}
     ref = hashes[R9_ARM]
     out["user_messages_against_r9"] = {
         name: {"common": len(ref.keys() & h),
@@ -369,9 +386,15 @@ def summary(r: dict) -> str:
         lines.append(f"- {n}: {v['identical']} of {v['common']} common messages identical.")
     for n in names:
         for x in r["arms"][n]["input_rates"]:
+            peak = x["peak_spend_plus_reservation"]
             lines.append(f"- {x['run_id']}: {x['uncached_per_minute'] / 1e6:.2f} million uncached "
                          f"input tokens a minute over {x['minutes']:.1f} min, "
-                         f"at most {x['max_in_flight']} in flight.")
+                         f"at most {x['max_in_flight']} in flight"
+                         + (f", spend plus reservations at most ${peak:.2f}" if peak else "") + ".")
+    lines += ["", "Recoverable far successes that used a lookup: "
+              + "; ".join(f"{n} {r['arms'][n]['recoverable_success_with_lookup'][0]} of "
+                          f"{r['arms'][n]['recoverable_success_with_lookup'][1]}" for n in names)
+              + "."]
     return "\n".join(lines) + "\n"
 
 

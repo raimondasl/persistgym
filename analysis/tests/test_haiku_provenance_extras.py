@@ -54,6 +54,24 @@ def test_refusals_are_counted_per_response_and_by_turn():
     assert r["refusal_categories"] == {"refusal:bio": 3}
 
 
+def test_recoverable_successes_are_counted_by_whether_they_used_a_lookup():
+    used = _record(cell="observed-rec-far", correct=True)
+    used["n_lookups"] = 2
+    r = hpe.record_readings([used, _record(cell="derived-rec-far", correct=True),
+                             _record(cell="derived-rec-far", correct=False), _record(correct=True)])
+    assert r["recoverable_success_with_lookup"] == [1, 2]
+
+
+def test_the_peak_reservation_skips_rows_before_an_episode_finished(tmp_path):
+    path = tmp_path / "spend_reservations.jsonl"
+    rows = [{"spent_usd": 0.0, "reserved_usd": 0, "estimate_usd": 54.0, "planned_usd": 54.0},
+            {"spent_usd": 40.0, "reserved_usd": 1.0, "estimate_usd": 0.5, "planned_usd": 54.0},
+            {"spent_usd": 40.5, "reserved_usd": 0.25, "estimate_usd": 0.5, "planned_usd": 54.0}]
+    path.write_text("".join(json.dumps(r) + chr(10) for r in rows), encoding="utf-8")
+    assert hpe.peak_reservation(path) == pytest.approx(41.5)
+    assert hpe.peak_reservation(tmp_path / "missing.jsonl") is None
+
+
 def test_recoverable_episodes_enter_neither_split():
     r = hpe.record_readings([_record(cell="derived-rec-far", incomplete=[_refusal(4)])])
     assert r["failures"]["both"] == {}

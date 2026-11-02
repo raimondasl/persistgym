@@ -1,0 +1,49 @@
+{
+  "experiment": "haiku_provenance_extras",
+  "run_id": "20261102T063559Z",
+  "cell_or_config": "W-np-0,W-npd-0",
+  "config": {
+    "rerun_links": {
+      "20261101T190445Z-W-np-0-claude-haiku-5-5": "20261101T184553Z-W-np-0-claude-haiku-5-5"
+    },
+    "r9_output": "results/haiku_notes/20261024T073307Z",
+    "registered": false
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": null,
+  "started_utc": "2026-11-02T06:35:59+00:00",
+  "finished_utc": "2026-11-02T06:36:58+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "extras.json",
+    "summary.md",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261024T060051Z-W-n-0-claude-haiku-5-5",
+    "20261101T184553Z-W-np-0-claude-haiku-5-5",
+    "20261101T190445Z-W-np-0-claude-haiku-5-5",
+    "20261102T002751Z-W-npd-0-claude-haiku-5-5"
+  ],
+  "config_hash": "55304cad12a091f9ef200629fa1d158c021c1f2dc6f8642579ecb0c1efbea67a",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "3df8cff42eb68129f183d6f114d97abdac7e3fe1",
+  "git_dirty": false
+}

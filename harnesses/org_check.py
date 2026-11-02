@@ -38,7 +38,11 @@ import anthropic
 
 from common import runmeta
 from harnesses import registered
-from harnesses.anthropic_transport import client_header_refusal, credential_refusal
+from harnesses.anthropic_transport import (
+    SDK_LOG_ENV,
+    client_header_refusal,
+    credential_refusal,
+)
 
 ORG_HEADER = "anthropic-organization-id"
 R10_ORG_SHA256 = "74e53caccde4d5b5841efd69e7dd73d71b05ac4f4dd35f14616353674999b82d"
@@ -48,7 +52,6 @@ R8_ORG_SHA256 = "78aa98ff2dfb8653aa303606d3b0bb65ea698c9b7c7fad600f006db5a94b4f2
 """The digest of the organization that R8's rate-limit errors name
 (results/persistgym_haiku/20261018T144829Z-W-0-claude-haiku-5-5/episodes.jsonl)."""
 ENDPOINT = "POST /v1/messages/count_tokens"
-LOG_ENV = "ANTHROPIC_LOG"
 
 
 class Refused(ValueError):
@@ -69,9 +72,9 @@ def org_check(client_factory: Callable[[], Any] | None = None) -> dict:
     why = credential_refusal()
     if why:
         raise Refused(why)
-    if os.environ.get(LOG_ENV, "").strip().lower() == "debug":
-        raise Refused(f"{LOG_ENV}=debug logs the response's headers, the organization's ID among "
-                      "them: unset it for this command")
+    if os.environ.get(SDK_LOG_ENV, "").strip().lower() == "debug":
+        raise Refused(f"{SDK_LOG_ENV}=debug logs the response's headers, the organization's ID "
+                      "among them: unset it for this command")
     client = (client_factory or _default_client)()
     why = client_header_refusal(client)
     if why:

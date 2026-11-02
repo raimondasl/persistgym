@@ -409,7 +409,7 @@ def test_an_api_error_refuses_and_its_text_is_not_printed(org_env, monkeypatch, 
 
 
 def test_the_sdks_debug_log_refuses_before_any_call(org_env, monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv(org_check.LOG_ENV, "debug")
+    monkeypatch.setenv(anthropic_transport.SDK_LOG_ENV, "debug")
     code, out, stub = _run_check(monkeypatch, tmp_path, ORG)
     assert code == 2 and "ANTHROPIC_LOG=debug" in capsys.readouterr().err
     assert stub.calls == [] and not out.exists()

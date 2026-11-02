@@ -1610,3 +1610,51 @@ approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_ha
 - This is one model, on synthetic tasks, in an exploratory run. It is not a model comparison, and not a test of note-taking instructions in general.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the runs, the continuation, the deviation and the readings. It adds no spending approval. The pull request is $0.
+
+## 2026-11-02: Correction to R10's results entry: two organizations, not one limit that changed
+**Correction** to the entry "2026-11-02: R10's runs on claude-haiku-5-5: results (exploratory)". The researcher asked what the organization ID in the rate-limit errors is, and checking it showed this.
+- **What the entry says:** "The records cannot say why the limit changed", and "The organization's rate limit also changed between the runs. Nothing links that to what is served."
+- **What the records show:** the two limits are in error texts that name two different organizations. R8's errors of 2026-10-18 (10,000,000 input tokens per minute; `results/persistgym_haiku/20261018T144829Z-W-0-claude-haiku-5-5/` and `20261018T165717Z-single-turn-claude-haiku-5-5/`) name one. R10's of 2026-11-01 (2,000,000; `results/persistgym_haiku_provenance/20261101T184553Z-W-np-0-claude-haiku-5-5/`) name another. So no limit is shown to have changed.
+- **R9's organization is not in its records.** Its run hit no such error, and transcripts keep no response headers. It sustained about 5.8 million uncached input tokens a minute, above the 2,000,000 that R10's organization has now. That fits R8's organization, but does not establish it.
+- **R10's later runs** hit no such error either. A free call on 2026-11-02, after them, found the current key in the organization that R10's error names.
+- **What this changes in that entry:** no number. Its list of what differs from R9 missed a candidate: R10's arms may have run under another organization than R9's. An arm minus R9's W-n-0 therefore mixes the added sentences with the date and possibly with the organization. Nothing shows that an organization changes what is served.
+- **The pull request's text** (`raimondasl/persistgym#86`) said R10's error holds the organization's ID "as R8's committed files already do", which suggests one ID. R8's files hold the other one. R8's ID has been public since October, and R10's since that pull request.
+
+## 2026-11-02: Amendment R11: a later W-n-0 control for R10's two cells; block 7-haiku-control
+**Request.** Claude proposed a later W-n-0 run on 2026-11-02, and the researcher first put it on hold. After the merge of R10's results, the researcher asked for it on the condition that it uses no more than $17.38.
+
+**Amendment R11** (`PREREG.md` §17.11) and **PLAN amendment A13** (`PLAN.md` §28):
+- **One run:** Haiku in W-n-0 on the 2 not-recoverable far task cells, main templates 0-199 at repeat 0, with R8's settings, at `--parallel 2`: at most 400 episodes, in its own experiment, `persistgym_haiku_control`.
+- **Under R10's organization.** A free check before and after the run records whether the key's organization is the one R10's error names. If the check before the run says otherwise, Claude stops and tells the researcher before any paid call.
+- **Exploratory:** decided after R9's and R10's readings were read. Nothing of R8, R9 or R10 changes.
+- **The analysis is descriptive:** four arms on the same episodes (this run, R9's W-n-0, R10's W-np-0 and W-npd-0), with success, the carried-fact accounting, choices with the fact evicted, 6 contrasts, the replies patterns, refusals and thinking blocks, cost, and run conditions.
+- **The script,** `analysis/haiku_control.py`, is in this pull request, before the run exists. Read with R9's run as the control, it gives zero against R9 and reproduces R10's committed contrasts.
+- **What each outcome would point to** is written in §17.11 before the run. Near R9's points to the sentences. Near R10's arms points away from them, to something like the date or the organization, without saying which.
+- **Not concurrent.** R10's last arm finished on 2026-11-02 at 04:55 UTC, and this run comes after it.
+
+**Cost** (from the committed ledger and R9's committed records):
+- **Forecast:** $17.38, that is R9's own spend on these 400 episodes, $0.04345 each. There is no margin above it, by the researcher's condition.
+- **Limit:** $17.38 billed, which is also the run's `--planned-usd`, at which it stops. A parallel run cannot use the last part of its planned spend (`harnesses/DESIGN.md` §7.6), so at R9's cost it stops a few episodes short, at about template 197. It stops earlier if an episode costs more, at about template 157 at $0.0552 per episode. Every arm is then read on the templates finished. Playing further needs the researcher's new approval.
+- **Phase 1a:** $381.30 spent of its $500 cap. At most $398.68 after this block.
+- **Project total so far:** $909.82 billed (93 ledger rows). At most $927.20 after this block.
+
+**The run** (after this merge, in this order):
+1. The check, whose output is committed:
+
+       env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses org-check
+
+   If it exits other than 0, Claude stops and tells the researcher.
+2. The run, about 90 minutes at R9's pace:
+
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-n-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --task-cell observed-nonrec-far derived-nonrec-far --experiment persistgym_haiku_control --approved-block 7-haiku-control --planned-usd 17.38 --parallel 2
+
+3. The check again, as in step 1. A different result goes to the researcher with the readings.
+4. The analysis, on a clean commit:
+
+       uv run python -m analysis.haiku_control
+
+A run that stops early for any reason but its planned spend is continued only after the researcher is told the cause, within what is left of the block (`harnesses/DESIGN.md` §7.9).
+
+approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_usd: 17.38
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R11 (`PREREG.md` §17.11), PLAN amendment A13 and the code that enforces them, and records the correction above. It also approves block `7-haiku-control` up to $17.38 billed.

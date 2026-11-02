@@ -1522,3 +1522,91 @@ A run that stops early is continued only after the researcher is told the cause 
 approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_haiku_provenance | max_usd: 100
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R10 (`PREREG.md` §17.10), PLAN amendment A12 and the code that enforces them. It also approves block `6-haiku-provenance` up to $100 billed.
+
+## 2026-11-02: R10's runs on claude-haiku-5-5: results (exploratory)
+**The runs,** started after the researcher merged PR #85:
+- **Pilots** in `persistgym_pilot`, 8 episodes each: `20261101T182928Z-W-np-0-claude-haiku-5-5` ($0.40) and `20261101T183732Z-W-npd-0-claude-haiku-5-5` ($0.39). The blinded pilot check, `results/haiku_provenance_pilot/20261101T184500Z/`, said GO for both cells. Every condition held, at $0.0501 and $0.0487 per episode against the $0.0568 limit.
+- **W-np-0's main run,** `20261101T184553Z-W-np-0-claude-haiku-5-5`, stopped `ABORTED_API_ERRORS` after 29 of its 800 episodes ($1.26): 20 `DONE`, 2 `API_ERROR`, 7 `RUN_STOPPED`.
+  - **The cause** was HTTP 429 from the organization's rate limit for claude-haiku-5-5, which the error text gives as 2,000,000 input tokens per minute. The 2026-10-18 entry records 10,000,000, and R9 sustained about 5.8 million uncached input tokens a minute at `--parallel 8` on 2026-10-24. This run averaged about 2.0 million a minute at `--parallel 8`. The records cannot say why the limit changed.
+  - **The researcher was told** the cause before anything was continued (DESIGN §7.9), and chose `--parallel 3` (2026-11-01).
+- **The continuation,** `20261101T190445Z-W-np-0-claude-haiku-5-5`, played templates 4-199 at `--parallel 3`: 784 episodes, all `DONE`, $43.26. Template 4 was the first the stop left unfinished. The two `API_ERROR` episodes (templates 4 and 5, derived-nonrec-far) fall inside the continuation, so its records are their §13 re-runs.
+- **W-npd-0's main run,** `20261102T002751Z-W-npd-0-claude-haiku-5-5`, at `--parallel 3`: 800 episodes, all `DONE`, $43.45.
+- **The link,** for `analysis.haiku_provenance --rerun` (DESIGN §7.8): `20261101T190445Z-W-np-0-claude-haiku-5-5=20261101T184553Z-W-np-0-claude-haiku-5-5`.
+- **Changes from the 2026-11-01 entry's plan.** None changes a request's content.
+  - The continuation and W-npd-0 ran at `--parallel 3`, not 8, because of the rate limit.
+  - Their stops were $47 and $54, not $48. The $47 is the $48 less the stopped run's spend, to the nearest dollar. The continuation then cost $0.0552 per episode, which left $48 about 9% above that rate, so the researcher chose $54 for W-npd-0 (2026-11-02). That kept the block inside its $100 ($45.30 + $54). Neither stop fired.
+  - **Deviation (PREREG §13):** the $54. §17.10's budget registers $48 for each main run, so W-npd-0's stop departs from the registered text, not only from this plan. It changed no reading: once an episode had finished, the run's spend plus its reservations never passed $43.73, and the first episode's reservation is the whole stop by rule (DESIGN §7.6), so a $48 stop would not have fired. §17.10 is not amended. DESIGN §7.9 gives a continuation a new `--planned-usd`, and §17.10 does not register `--parallel`.
+- **Serving:** model string `claude-haiku-5-5` on every response, standard tier, global geo, as in R9.
+- **Spend:** block `6-haiku-provenance` $88.75 of $100, against a forecast of $73.38 (about $77 with longer notes). Phase 1a $381.30 of $500. Project total $909.82 over 93 ledger rows.
+- **No further paid run** is made without a new amendment (R10, A12).
+
+**The analysis** (`analysis/haiku_provenance.py`, in PR #85 before any run existed; output `results/haiku_provenance/20261102T045643Z/`, from a clean commit):
+- **Status:** FINAL. The sweep is complete with no exclusion. §2.8's accounting check replayed 1,605 need steps and found 0 bugs.
+- **Duplicates:** §7.8's rule dropped 4 records, the continuation's replays of templates 4 and 5 in W-np-0's observed far cells. One differs in outcome. In observed-rec-far, template 4's counted record failed and its dropped replay succeeded, so that cell reads 199/200 and not 200/200.
+- **Independent check** (2026-11-02): six AI assistant instances, separate from the analysis's author and each with its own code that imports nothing from `analysis/`, then a critic over their reports. No mismatch in any registered reading:
+  - every number the records determine;
+  - §2.8's table, from the raw transcripts of all 2,400 far episodes of the three arms;
+  - all 24 interval bounds and the 12 contrasts, exactly;
+  - the replies table, all 12 rows (by the critic).
+- **Attempts to find an artifact** (not registered, made after the results were read; the counts are from `results/haiku_provenance_extras/20261102T070459Z/`), none of which succeeded:
+  - In the first request at the need step of all 2,400 far episodes, the fact's value appears only in the model's own retained replies and in its option line of the need step's question, and the clue values only in the replies. The source observation had left the window before every need step. The other 559 requests at the need step, all in the recoverable far cells, follow a lookup, whose result returns the fact's record (285, observed) or its clues and rule (274, derived).
+  - R10's 800 far episodes are R9's, and all 19,228 user messages at a common episode and step are byte-identical.
+  - Between R9's commit and R10's, the only change to what these requests contain is the added text.
+
+**Readings** (descriptive, not tested; 200 episodes per arm and task cell; 90% template-cluster intervals):
+
+| Task cell | W-n-0 (R9, 2026-10-24) | W-np-0 | W-npd-0 |
+|---|---|---|---|
+| observed, not recoverable, far | 4/200 = 2.0% (0.5 to 3.5) | 176/200 = 88.0% (84.0 to 91.5) | 173/200 = 86.5% (82.5 to 90.5) |
+| derived, not recoverable, far | 9/200 = 4.5% (2.5 to 7.0) | 173/200 = 86.5% (82.5 to 90.5) | 177/200 = 88.5% (84.5 to 92.0) |
+| observed, recoverable, far | 198/200 = 99.0% (97.5 to 100.0) | 199/200 = 99.5% (98.5 to 100.0) | 197/200 = 98.5% (97.0 to 99.5) |
+| derived, recoverable, far | 199/200 = 99.5% (98.5 to 100.0) | 197/200 = 98.5% (97.0 to 100.0) | 195/200 = 97.5% (95.5 to 99.0) |
+
+**§2.8's accounting in the not-recoverable far cells** (P(carried) is a string match):
+
+| Task cell | Arm | P(carried) | Success given carried | Success when not carried |
+|---|---|---|---|---|
+| observed | W-n-0 (R9) | 8/200 = 4.0% | 4/8 | 0/192 |
+| observed | W-np-0 | 187/200 = 93.5% | 176/187 | 0/13 |
+| observed | W-npd-0 | 178/200 = 89.0% | 173/178 | 0/22 |
+| derived | W-n-0 (R9) | 72/200 = 36.0% | 9/72 | 0/128 |
+| derived | W-np-0 | 182/200 = 91.0% | 173/182 | 0/18 |
+| derived | W-npd-0 | 192/200 = 96.0% | 177/192 | 0/8 |
+
+- **Contrasts** (percentage points, 90% intervals over the same template resamples, no correction for the 12):
+  - W-np-0 minus R9's W-n-0, not recoverable: +86.0 [+82.0, +90.0] observed, +82.0 [+77.5, +86.5] derived.
+  - W-npd-0 minus R9's W-n-0, not recoverable: +84.5 [+80.5, +88.5] observed, +84.0 [+79.0, +88.5] derived.
+  - Each arm minus R9's W-n-0, recoverable: from −2.0 to +0.5, every interval reaching 0.
+  - W-npd-0 minus W-np-0: −1.5 [−6.5, +3.5] and +2.0 [−3.0, +7.0] not recoverable (observed, derived), −1.0 [−2.5, +0.5] and −1.0 [−3.5, +1.5] recoverable. Every interval includes 0.
+- **Choices with the fact evicted:** every option chosen in the not-recoverable far cells was correct, in all three arms.
+- **Failures in the not-recoverable far cells:** 51 in W-np-0 and 50 in W-npd-0. None chose a wrong option.
+  - In 31 and 30, the notes did not carry the fact.
+  - In 20 and 20, they carried it and the episode still failed.
+- **Output tokens per episode** rose from 1,905-2,866 to 11,798-14,091, and **cost per episode** from $0.043-$0.048 to $0.053-$0.056.
+
+**Other numbers: not registered, read after the results, nothing tested** (`analysis/haiku_provenance_extras.py`, output `results/haiku_provenance_extras/20261102T070459Z/`). The same output is the source of the token rates and the $43.73 under the runs, and of the lookup counts and per-turn thinking shares below, which are not registered either.
+- **The carried failures.** In 26 of the 40 above, the response at the need step was a refusal, so no option was chosen (11 in W-np-0, 15 in W-npd-0). The other 14 chose no option although the notes held the fact. The replies table's "declined" column means no option was chosen, so it includes those refusals. They are not the model's own declines.
+- **Refusals,** all category "bio", on the 4 far cells: 65 of R9's 19,624 responses (0.33%), 258 of W-np-0's 19,322 (1.34%), 247 of W-npd-0's 19,300 (1.28%). The counts are the registered per-cell counts, summed. By turn, R9 has 9, 18, 7 and 31 in turns 0-4, 5-9, 10-14 and 15 on. W-np-0 has 9, 33, 44 and 172. W-npd-0 has 16, 25, 31 and 175.
+  - A refusal at the need step scores 0, so it can only lower success.
+  - An earlier refusal does not enter the success score, and counts only against routine accuracy (§13). It removes that turn's reply from the history, which can lose notes or keep older turns in the window longer, so its direction on success is not fixed. In the not-recoverable far cells, episodes with a refusal only before the need step succeeded in 53/59, 44/50 and 2/21 (W-np-0, W-npd-0, R9), against 296/329, 306/334 and 11/377 with no refusal up to the need step.
+- **Responses with a thinking block,** on the same cells: 48.3% in R9, 94.4% and 94.0% in R10's arms. Only the block's presence is read, because its text is empty in every response. At the first step they are close (97.9%, 99.6%, 98.4%), and R9's share then falls.
+- **The notes.** R10's replies keep a running log of facts with their sources and restate the fact in most replies. This description rests on text patterns and on script-printed excerpts from sampled episodes, read by the AI assistant instances of the independent check. Nothing was hand-coded.
+  - In the not-recoverable far cells (observed, derived), from the last evidence step to the step before the need step, the replies holding the fact's value by string match are 83.3% and 80.7% in W-np-0, 85.3% and 88.5% in W-npd-0, and 5.5% and 11.1% in R9.
+  - At the need step, the retained replies run to about 8 to 11 times R9's length (median characters 14,222 and 13,975 in W-np-0, 12,314 and 12,845 in W-npd-0, 1,288 and 1,670 in R9).
+  - Replies count toward W, since D5 leaves out only the notes instruction, so R10's arms kept fewer turns in the window before the need step (a median of 11-12 against 14).
+
+**What this does and does not show.**
+- In both arms (the provenance sentence, and that sentence followed by the disclosure sentence), Haiku's notes carried the fact in 89% to 96% of the not-recoverable far episodes, against 4% and 36% in R9's W-n-0, and success was 86.5% to 88.5%, against 2.0% and 4.5%.
+- **It does not show whether the instruction caused that, or how much of it,** because no W-n-0 ran alongside R10. R9's ran 8 days earlier.
+  - The provider's [model-ID page](https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions) says weights do not change under a model ID, but that the infrastructure around them can, safety classifiers and sampling logic included, and that this occasionally produces minor differences in behavior. Its [release notes](https://platform.claude.com/docs/en/release-notes/overview), read on 2026-11-02 with their latest entry dated 2026-10-30, report no change to this model or to classifiers after 2026-10-15. An unannounced change cannot be ruled out from public sources.
+  - The fields the records hold per request match R9's: model string, tier, geo and request settings. That cannot show that serving behind them is unchanged (§17.10). The runs' conditions also differ: R9 ran at `--parallel 8` in 90 minutes, with the near cells in the same run, and R10 almost entirely at `--parallel 3` across about 10 hours.
+  - Success in the recoverable far cells is also close (differences from −2.0 to +0.5). Those cells sit near the ceiling and can show a loss but hardly a gain, and the arms reach them by different routes: 393 of R9's 397 successes used the lookup, against 94 of 396 and 71 of 392 in R10's arms. So this says little about serving.
+  - Two differences have no attribution: the refusal rate and the thinking-block share above. Both are close to R9's at the first step. The refusal rate stays close through turn 4 and diverges later, as R10's notes grow. The thinking-block gap opens sooner, because R9's share falls while R10's stays high: 65.4% against 95.0% and 95.0% at turn 3, and 80.0% against 97.6% and 97.4% over turns 0-4. That gap widens to about 69 points at turn 15 and is about 60 at turn 19, as R9's share recovers to about 36%. It stays near 60 on the steps other than the need step (about 62 at turn 22). At the need step itself, nearly every first request has a thinking block in all three arms (800/800, 800/800, 799/800). This is consistent with the instruction acting through longer notes, and also with a change in serving that shows only as a history builds up. It establishes neither.
+  - The organization's rate limit also changed between the runs. Nothing links that to what is served.
+  - Only a W-n-0 run alongside R10's arms would cleanly separate the instruction from a change in serving. Those arms finished on 2026-11-02 at 04:55 UTC, so a W-n-0 run now would come after them. A reading near R9's would point to the instruction. A reading near R10's could not say whether serving changed before or after R10's arms, and those arms might then need re-running beside it. Claude proposed such a run on 2026-11-02 (400 episodes in the 2 not-recoverable far cells, about $17.38 by R9's records, as a new amendment and block). That cost does not include re-running any arm. The researcher has put it on hold.
+- **It does not show that the disclosure sentence does nothing,** only that W-npd-0 and W-np-0 differ by no more than these intervals can see, with no correction for the 4 contrasts. If the added text is what raised these readings, which sentence does so when both are present is not identified, and disclosure was not run without provenance.
+- **The wording is in-sample.** Claude wrote both sentences after reading R9's replies, tried no other wording, and they were read on the same episodes.
+- **P(carried) is a string match.** It misses paraphrase, and it counts notes that hold the value while doubting it. The added sentences can also change what it detects.
+- This is one model, on synthetic tasks, in an exploratory run. It is not a model comparison, and not a test of note-taking instructions in general.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the runs, the continuation, the deviation and the readings. It adds no spending approval. The pull request is $0.

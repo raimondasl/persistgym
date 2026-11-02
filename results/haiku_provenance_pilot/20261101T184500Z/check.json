@@ -1,0 +1,69 @@
+{
+  "prereg": "PREREG.md \u00a717.10 (amendment R10)",
+  "runs": [
+    {
+      "run_id": "20261101T182928Z-W-np-0-claude-haiku-5-5",
+      "cell": "W-np-0",
+      "exit_reason": "COMPLETED",
+      "episodes": 8,
+      "episode_endings": {
+        "DONE": 8
+      },
+      "requests": 180,
+      "requests_without_the_notes_text": 0,
+      "cost_per_episode_usd": 0.050122625,
+      "cost_limit_usd": 0.05676,
+      "model_returned": [
+        "claude-haiku-5-5"
+      ],
+      "service_tier_served": "standard",
+      "inference_geos": {
+        "global": 180
+      },
+      "conditions": {
+        "completed": true,
+        "no_api_error": true,
+        "registered_episodes": true,
+        "system_prompts_end_with_notes_text": true,
+        "cost_per_episode_within_limit": true,
+        "model_string": true,
+        "standard_tier_global_geo": true
+      },
+      "problems": [],
+      "passed": true
+    },
+    {
+      "run_id": "20261101T183732Z-W-npd-0-claude-haiku-5-5",
+      "cell": "W-npd-0",
+      "exit_reason": "COMPLETED",
+      "episodes": 8,
+      "episode_endings": {
+        "DONE": 8
+      },
+      "requests": 181,
+      "requests_without_the_notes_text": 0,
+      "cost_per_episode_usd": 0.0487425,
+      "cost_limit_usd": 0.05676,
+      "model_returned": [
+        "claude-haiku-5-5"
+      ],
+      "service_tier_served": "standard",
+      "inference_geos": {
+        "global": 181
+      },
+      "conditions": {
+        "completed": true,
+        "no_api_error": true,
+        "registered_episodes": true,
+        "system_prompts_end_with_notes_text": true,
+        "cost_per_episode_within_limit": true,
+        "model_string": true,
+        "standard_tier_global_geo": true
+      },
+      "problems": [],
+      "passed": true
+    }
+  ],
+  "both_cells_piloted": true,
+  "go": true
+}

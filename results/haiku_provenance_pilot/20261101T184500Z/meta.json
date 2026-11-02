@@ -1,0 +1,47 @@
+{
+  "experiment": "haiku_provenance_pilot",
+  "run_id": "20261101T184500Z",
+  "cell_or_config": "W-np-0,W-npd-0",
+  "config": {
+    "runs": [
+      "20261101T182928Z-W-np-0-claude-haiku-5-5",
+      "20261101T183732Z-W-npd-0-claude-haiku-5-5"
+    ],
+    "cost_limit_usd": 0.05676,
+    "go": true
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {},
+  "started_utc": "2026-11-01T18:45:00+00:00",
+  "finished_utc": "2026-11-01T18:45:00+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "check.json",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261101T182928Z-W-np-0-claude-haiku-5-5",
+    "20261101T183732Z-W-npd-0-claude-haiku-5-5"
+  ],
+  "config_hash": "688ea58705e8866d5d04e2c0c9849b36d94443ae2f1e4e0c3a8ac8bde66b57ee",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "8fd3e52c1fc24bb0701a759a087862dc0f8dc03d",
+  "git_dirty": true
+}

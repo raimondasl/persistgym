@@ -16,7 +16,7 @@ def _record(cell="observed-nonrec-far", correct=False, carried=True, incomplete=
 
 
 def _refusal(turn, at_need=0, reason="refusal:bio"):
-    return {"turn": turn, "at_need": at_need, "reason": reason}
+    return {"turn": turn, "pending_step": turn, "at_need": at_need, "reason": reason}
 
 
 def test_turn_bins():
@@ -61,17 +61,26 @@ def test_recoverable_episodes_enter_neither_split():
 
 
 def test_success_is_split_by_where_a_refusal_fell():
+    # the need step of `_record` is 3 (last evidence step 1, gap 2)
     r = hpe.record_readings([
-        _record(correct=True, incomplete=[_refusal(4)]),
-        _record(correct=False, incomplete=[_refusal(4)]),
+        _record(correct=True, incomplete=[_refusal(2)]),
+        _record(correct=False, incomplete=[_refusal(2)]),
         _record(correct=True),
-        _record(correct=False, incomplete=[_refusal(4), _refusal(9, at_need=1)]),
+        _record(correct=False, incomplete=[_refusal(2), _refusal(3, at_need=1)]),
     ])
     assert r["success_by_refusal"]["both"] == {
-        "no refused step: episodes": 1, "no refused step: success": 1,
+        "no refusal up to the need step: episodes": 1,
+        "no refusal up to the need step: success": 1,
         "refused at the need step: episodes": 1, "refused at the need step: success": 0,
         "refused before the need step only: episodes": 2,
         "refused before the need step only: success": 1}
+
+
+def test_a_refusal_after_the_need_step_does_not_count_as_before_it():
+    r = hpe.record_readings([_record(correct=True, incomplete=[_refusal(4)])])
+    assert r["success_by_refusal"]["both"] == {
+        "no refusal up to the need step: episodes": 1,
+        "no refusal up to the need step: success": 1}
 
 
 FACT = {"target": 568, "label": "I", "clues": [79, 558]}

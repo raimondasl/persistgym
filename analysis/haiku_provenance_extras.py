@@ -10,8 +10,8 @@ transcript under ``--raw-root`` (default ``results/raw``). It reports, per arm:
 
 1. **Refusals:** responses, refused responses and their share, and refused responses by turn.
 2. **Failures in the 2 not-recoverable far cells,** by whether the notes carried the fact and
-   whether the response at the need step was a refusal, and success by whether a step before
-   the need step was refused.
+   whether the response at the need step was a refusal, and success by where a refusal fell (at
+   the need step, only before it, or neither; a refusal after the need step counts as neither).
 3. **Thinking blocks:** the share of responses holding one (only the block's presence: its text
    is empty in every response), over all responses and by turn on each step's first request.
 4. **What the model kept at the need step,** on its first request there: the retained replies,
@@ -86,9 +86,11 @@ def record_readings(records: list[dict]) -> dict:
             continue
         refusals = _refusals(rec)
         at_need = any(i.get("at_need") for i in refusals)
+        # the episode plays on after the need step: a later refusal has no bearing on its outcome
+        earlier = any(int(i["pending_step"]) < hnr.need_step(rec) for i in refusals)
         group = ("refused at the need step" if at_need
-                 else "refused before the need step only" if refusals
-                 else "no refused step")
+                 else "refused before the need step only" if earlier
+                 else "no refusal up to the need step")
         for cell in (rec["task_cell"], "both"):
             before[cell][f"{group}: episodes"] += 1
             before[cell][f"{group}: success"] += bool(rec["need_correct"])

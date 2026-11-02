@@ -1,0 +1,1278 @@
+{
+  "arms": {
+    "W-n-0 (R9)": {
+      "responses": 19624,
+      "refused_responses": 65,
+      "recoverable_success_with_lookup": [
+        393,
+        397
+      ],
+      "refused_share": 0.003312270688952303,
+      "refused_by_turn": {
+        "0-4": 9,
+        "5-9": 18,
+        "10-14": 7,
+        "15 on": 31
+      },
+      "refusal_categories": {
+        "refusal:bio": 65
+      },
+      "failures": {
+        "observed-nonrec-far": {
+          "carried, no refusal at the need step": 4,
+          "failed": 196,
+          "not carried, no refusal at the need step": 191,
+          "not carried, refused at the need step": 1
+        },
+        "derived-nonrec-far": {
+          "carried, no refusal at the need step": 63,
+          "failed": 191,
+          "not carried, no refusal at the need step": 127,
+          "not carried, refused at the need step": 1
+        },
+        "both": {
+          "carried, no refusal at the need step": 67,
+          "failed": 387,
+          "not carried, no refusal at the need step": 318,
+          "not carried, refused at the need step": 2
+        }
+      },
+      "success_by_refusal": {
+        "observed-nonrec-far": {
+          "no refusal up to the need step: episodes": 195,
+          "no refusal up to the need step: success": 4,
+          "refused at the need step: episodes": 1,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 4,
+          "refused before the need step only: success": 0
+        },
+        "derived-nonrec-far": {
+          "no refusal up to the need step: episodes": 182,
+          "no refusal up to the need step: success": 7,
+          "refused at the need step: episodes": 1,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 17,
+          "refused before the need step only: success": 2
+        },
+        "both": {
+          "no refusal up to the need step: episodes": 377,
+          "no refusal up to the need step: success": 11,
+          "refused at the need step: episodes": 2,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 21,
+          "refused before the need step only: success": 2
+        }
+      },
+      "responses_in_transcript": 19624,
+      "with_thinking": 9474,
+      "thinking_share": 0.482776192417448,
+      "first_requests_by_turn": {
+        "0": [
+          783,
+          800
+        ],
+        "1": [
+          732,
+          800
+        ],
+        "2": [
+          607,
+          800
+        ],
+        "3": [
+          523,
+          800
+        ],
+        "4": [
+          555,
+          800
+        ],
+        "5": [
+          479,
+          800
+        ],
+        "6": [
+          455,
+          800
+        ],
+        "7": [
+          407,
+          800
+        ],
+        "8": [
+          368,
+          800
+        ],
+        "9": [
+          276,
+          800
+        ],
+        "10": [
+          245,
+          800
+        ],
+        "11": [
+          228,
+          800
+        ],
+        "12": [
+          218,
+          800
+        ],
+        "13": [
+          216,
+          800
+        ],
+        "14": [
+          189,
+          800
+        ],
+        "15": [
+          196,
+          800
+        ],
+        "16": [
+          218,
+          800
+        ],
+        "17": [
+          224,
+          800
+        ],
+        "18": [
+          250,
+          800
+        ],
+        "19": [
+          285,
+          800
+        ],
+        "20": [
+          397,
+          800
+        ],
+        "21": [
+          365,
+          724
+        ],
+        "22": [
+          332,
+          628
+        ],
+        "23": [
+          240,
+          480
+        ],
+        "24": [
+          239,
+          324
+        ],
+        "25": [
+          84,
+          188
+        ],
+        "26": [
+          22,
+          84
+        ]
+      },
+      "first_requests_by_turn_bin": {
+        "0-4": [
+          3200,
+          4000
+        ],
+        "5-9": [
+          1985,
+          4000
+        ],
+        "10-14": [
+          1096,
+          4000
+        ],
+        "15 on": [
+          2852,
+          7228
+        ]
+      },
+      "first_requests_by_turn_without_need_steps": {
+        "0": [
+          783,
+          800
+        ],
+        "1": [
+          732,
+          800
+        ],
+        "2": [
+          607,
+          800
+        ],
+        "3": [
+          523,
+          800
+        ],
+        "4": [
+          555,
+          800
+        ],
+        "5": [
+          479,
+          800
+        ],
+        "6": [
+          455,
+          800
+        ],
+        "7": [
+          407,
+          800
+        ],
+        "8": [
+          368,
+          800
+        ],
+        "9": [
+          276,
+          800
+        ],
+        "10": [
+          245,
+          800
+        ],
+        "11": [
+          228,
+          800
+        ],
+        "12": [
+          218,
+          800
+        ],
+        "13": [
+          216,
+          800
+        ],
+        "14": [
+          189,
+          800
+        ],
+        "15": [
+          196,
+          800
+        ],
+        "16": [
+          218,
+          800
+        ],
+        "17": [
+          224,
+          800
+        ],
+        "18": [
+          250,
+          800
+        ],
+        "19": [
+          285,
+          800
+        ],
+        "20": [
+          225,
+          628
+        ],
+        "21": [
+          213,
+          572
+        ],
+        "22": [
+          164,
+          460
+        ],
+        "23": [
+          128,
+          368
+        ],
+        "24": [
+          43,
+          128
+        ],
+        "25": [
+          84,
+          188
+        ],
+        "26": [
+          22,
+          84
+        ]
+      },
+      "need_first_request_thinking": [
+        800,
+        800
+      ],
+      "fact_value_in_replies": {
+        "observed-nonrec-far": {
+          "replies_holding_value": 174,
+          "replies": 3189,
+          "per_episode_median": 0.0625
+        },
+        "observed-rec-far": {
+          "replies_holding_value": 157,
+          "replies": 3196,
+          "per_episode_median": 0.0625
+        },
+        "derived-nonrec-far": {
+          "replies_holding_value": 350,
+          "replies": 3165,
+          "per_episode_median": 0.0625
+        },
+        "derived-rec-far": {
+          "replies_holding_value": 311,
+          "replies": 3193,
+          "per_episode_median": 0.0625
+        }
+      },
+      "at_need": {
+        "observed-nonrec-far": {
+          "episodes": 200,
+          "retained_replies_median": 14.0,
+          "reply_chars_quartiles": [
+            948.75,
+            1288.0,
+            1821.75
+          ]
+        },
+        "observed-rec-far": {
+          "episodes": 200,
+          "retained_replies_median": 14.0,
+          "reply_chars_quartiles": [
+            810.5,
+            1335.0,
+            1868.5
+          ]
+        },
+        "derived-nonrec-far": {
+          "episodes": 200,
+          "retained_replies_median": 14.0,
+          "reply_chars_quartiles": [
+            1204.25,
+            1670.0,
+            2032.75
+          ]
+        },
+        "derived-rec-far": {
+          "episodes": 200,
+          "retained_replies_median": 14.0,
+          "reply_chars_quartiles": [
+            1119.75,
+            1478.0,
+            1896.5
+          ]
+        }
+      },
+      "leak_check": {
+        "observed-nonrec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "observed-rec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "derived-nonrec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "derived-rec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        }
+      },
+      "later_need_requests": {
+        "derived-rec-far": 196,
+        "observed-rec-far": 197
+      },
+      "episodes": 800,
+      "runs": [
+        "20261024T060051Z-W-n-0-claude-haiku-5-5"
+      ],
+      "input_rates": [
+        {
+          "run_id": "20261024T060051Z-W-n-0-claude-haiku-5-5",
+          "minutes": 90.31666666666666,
+          "uncached_input_tokens": 524867090,
+          "uncached_per_minute": 5811409.005351542,
+          "max_in_flight": 8,
+          "peak_spend_plus_reservation": 71.53117841499986
+        }
+      ]
+    },
+    "W-np-0": {
+      "responses": 19322,
+      "refused_responses": 258,
+      "recoverable_success_with_lookup": [
+        94,
+        396
+      ],
+      "refused_share": 0.013352655004657902,
+      "refused_by_turn": {
+        "0-4": 9,
+        "5-9": 33,
+        "10-14": 44,
+        "15 on": 172
+      },
+      "refusal_categories": {
+        "refusal:bio": 258
+      },
+      "failures": {
+        "observed-nonrec-far": {
+          "carried, no refusal at the need step": 3,
+          "carried, refused at the need step": 8,
+          "failed": 24,
+          "not carried, no refusal at the need step": 13
+        },
+        "derived-nonrec-far": {
+          "carried, no refusal at the need step": 6,
+          "carried, refused at the need step": 3,
+          "failed": 27,
+          "not carried, no refusal at the need step": 17,
+          "not carried, refused at the need step": 1
+        },
+        "both": {
+          "carried, no refusal at the need step": 9,
+          "carried, refused at the need step": 11,
+          "failed": 51,
+          "not carried, no refusal at the need step": 30,
+          "not carried, refused at the need step": 1
+        }
+      },
+      "success_by_refusal": {
+        "observed-nonrec-far": {
+          "no refusal up to the need step: episodes": 170,
+          "no refusal up to the need step: success": 155,
+          "refused at the need step: episodes": 8,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 22,
+          "refused before the need step only: success": 21
+        },
+        "derived-nonrec-far": {
+          "no refusal up to the need step: episodes": 159,
+          "no refusal up to the need step: success": 141,
+          "refused at the need step: episodes": 4,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 37,
+          "refused before the need step only: success": 32
+        },
+        "both": {
+          "no refusal up to the need step: episodes": 329,
+          "no refusal up to the need step: success": 296,
+          "refused at the need step: episodes": 12,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 59,
+          "refused before the need step only: success": 53
+        }
+      },
+      "responses_in_transcript": 19322,
+      "with_thinking": 18236,
+      "thinking_share": 0.9437946382362075,
+      "first_requests_by_turn": {
+        "0": [
+          797,
+          800
+        ],
+        "1": [
+          800,
+          800
+        ],
+        "2": [
+          789,
+          800
+        ],
+        "3": [
+          760,
+          800
+        ],
+        "4": [
+          759,
+          800
+        ],
+        "5": [
+          756,
+          800
+        ],
+        "6": [
+          744,
+          800
+        ],
+        "7": [
+          744,
+          800
+        ],
+        "8": [
+          742,
+          800
+        ],
+        "9": [
+          725,
+          800
+        ],
+        "10": [
+          706,
+          800
+        ],
+        "11": [
+          710,
+          800
+        ],
+        "12": [
+          690,
+          800
+        ],
+        "13": [
+          709,
+          800
+        ],
+        "14": [
+          739,
+          800
+        ],
+        "15": [
+          750,
+          800
+        ],
+        "16": [
+          768,
+          800
+        ],
+        "17": [
+          759,
+          800
+        ],
+        "18": [
+          763,
+          800
+        ],
+        "19": [
+          768,
+          800
+        ],
+        "20": [
+          784,
+          800
+        ],
+        "21": [
+          710,
+          724
+        ],
+        "22": [
+          616,
+          628
+        ],
+        "23": [
+          466,
+          480
+        ],
+        "24": [
+          320,
+          324
+        ],
+        "25": [
+          184,
+          188
+        ],
+        "26": [
+          84,
+          84
+        ]
+      },
+      "first_requests_by_turn_bin": {
+        "0-4": [
+          3905,
+          4000
+        ],
+        "5-9": [
+          3711,
+          4000
+        ],
+        "10-14": [
+          3554,
+          4000
+        ],
+        "15 on": [
+          6972,
+          7228
+        ]
+      },
+      "first_requests_by_turn_without_need_steps": {
+        "0": [
+          797,
+          800
+        ],
+        "1": [
+          800,
+          800
+        ],
+        "2": [
+          789,
+          800
+        ],
+        "3": [
+          760,
+          800
+        ],
+        "4": [
+          759,
+          800
+        ],
+        "5": [
+          756,
+          800
+        ],
+        "6": [
+          744,
+          800
+        ],
+        "7": [
+          744,
+          800
+        ],
+        "8": [
+          742,
+          800
+        ],
+        "9": [
+          725,
+          800
+        ],
+        "10": [
+          706,
+          800
+        ],
+        "11": [
+          710,
+          800
+        ],
+        "12": [
+          690,
+          800
+        ],
+        "13": [
+          709,
+          800
+        ],
+        "14": [
+          739,
+          800
+        ],
+        "15": [
+          750,
+          800
+        ],
+        "16": [
+          768,
+          800
+        ],
+        "17": [
+          759,
+          800
+        ],
+        "18": [
+          763,
+          800
+        ],
+        "19": [
+          768,
+          800
+        ],
+        "20": [
+          612,
+          628
+        ],
+        "21": [
+          558,
+          572
+        ],
+        "22": [
+          448,
+          460
+        ],
+        "23": [
+          354,
+          368
+        ],
+        "24": [
+          124,
+          128
+        ],
+        "25": [
+          184,
+          188
+        ],
+        "26": [
+          84,
+          84
+        ]
+      },
+      "need_first_request_thinking": [
+        800,
+        800
+      ],
+      "fact_value_in_replies": {
+        "observed-nonrec-far": {
+          "replies_holding_value": 2612,
+          "replies": 3134,
+          "per_episode_median": 1.0
+        },
+        "observed-rec-far": {
+          "replies_holding_value": 2489,
+          "replies": 3185,
+          "per_episode_median": 1.0
+        },
+        "derived-nonrec-far": {
+          "replies_holding_value": 2499,
+          "replies": 3097,
+          "per_episode_median": 1.0
+        },
+        "derived-rec-far": {
+          "replies_holding_value": 2559,
+          "replies": 3172,
+          "per_episode_median": 1.0
+        }
+      },
+      "at_need": {
+        "observed-nonrec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            9736.75,
+            14221.5,
+            17960.25
+          ]
+        },
+        "observed-rec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            9537.0,
+            13416.0,
+            17310.0
+          ]
+        },
+        "derived-nonrec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            8947.25,
+            13975.0,
+            17392.75
+          ]
+        },
+        "derived-rec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            10492.5,
+            14447.0,
+            17407.5
+          ]
+        }
+      },
+      "leak_check": {
+        "observed-nonrec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "observed-rec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "derived-nonrec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "derived-rec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        }
+      },
+      "later_need_requests": {
+        "derived-rec-far": 44,
+        "observed-rec-far": 50
+      },
+      "episodes": 800,
+      "runs": [
+        "20261101T184553Z-W-np-0-claude-haiku-5-5",
+        "20261101T190445Z-W-np-0-claude-haiku-5-5"
+      ],
+      "input_rates": [
+        {
+          "run_id": "20261101T184553Z-W-np-0-claude-haiku-5-5",
+          "minutes": 4.116666666666666,
+          "uncached_input_tokens": 8335371,
+          "uncached_per_minute": 2024786.4777327937,
+          "max_in_flight": 8,
+          "peak_spend_plus_reservation": 2.1906260100000003
+        },
+        {
+          "run_id": "20261101T190445Z-W-np-0-claude-haiku-5-5",
+          "minutes": 258.18333333333334,
+          "uncached_input_tokens": 291193894,
+          "uncached_per_minute": 1127857.055064231,
+          "max_in_flight": 3,
+          "peak_spend_plus_reservation": 43.55038186499979
+        }
+      ]
+    },
+    "W-npd-0": {
+      "responses": 19300,
+      "refused_responses": 247,
+      "recoverable_success_with_lookup": [
+        71,
+        392
+      ],
+      "refused_share": 0.012797927461139896,
+      "refused_by_turn": {
+        "0-4": 16,
+        "5-9": 25,
+        "10-14": 31,
+        "15 on": 175
+      },
+      "refusal_categories": {
+        "refusal:bio": 247
+      },
+      "failures": {
+        "observed-nonrec-far": {
+          "carried, no refusal at the need step": 1,
+          "carried, refused at the need step": 4,
+          "failed": 27,
+          "not carried, no refusal at the need step": 21,
+          "not carried, refused at the need step": 1
+        },
+        "derived-nonrec-far": {
+          "carried, no refusal at the need step": 4,
+          "carried, refused at the need step": 11,
+          "failed": 23,
+          "not carried, no refusal at the need step": 8
+        },
+        "both": {
+          "carried, no refusal at the need step": 5,
+          "carried, refused at the need step": 15,
+          "failed": 50,
+          "not carried, no refusal at the need step": 29,
+          "not carried, refused at the need step": 1
+        }
+      },
+      "success_by_refusal": {
+        "observed-nonrec-far": {
+          "no refusal up to the need step: episodes": 171,
+          "no refusal up to the need step: success": 152,
+          "refused at the need step: episodes": 5,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 24,
+          "refused before the need step only: success": 21
+        },
+        "derived-nonrec-far": {
+          "no refusal up to the need step: episodes": 163,
+          "no refusal up to the need step: success": 154,
+          "refused at the need step: episodes": 11,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 26,
+          "refused before the need step only: success": 23
+        },
+        "both": {
+          "no refusal up to the need step: episodes": 334,
+          "no refusal up to the need step: success": 306,
+          "refused at the need step: episodes": 16,
+          "refused at the need step: success": 0,
+          "refused before the need step only: episodes": 50,
+          "refused before the need step only: success": 44
+        }
+      },
+      "responses_in_transcript": 19300,
+      "with_thinking": 18137,
+      "thinking_share": 0.939740932642487,
+      "first_requests_by_turn": {
+        "0": [
+          787,
+          800
+        ],
+        "1": [
+          794,
+          800
+        ],
+        "2": [
+          790,
+          800
+        ],
+        "3": [
+          760,
+          800
+        ],
+        "4": [
+          764,
+          800
+        ],
+        "5": [
+          751,
+          800
+        ],
+        "6": [
+          749,
+          800
+        ],
+        "7": [
+          747,
+          800
+        ],
+        "8": [
+          746,
+          800
+        ],
+        "9": [
+          721,
+          800
+        ],
+        "10": [
+          712,
+          800
+        ],
+        "11": [
+          681,
+          800
+        ],
+        "12": [
+          676,
+          800
+        ],
+        "13": [
+          691,
+          800
+        ],
+        "14": [
+          730,
+          800
+        ],
+        "15": [
+          745,
+          800
+        ],
+        "16": [
+          767,
+          800
+        ],
+        "17": [
+          754,
+          800
+        ],
+        "18": [
+          765,
+          800
+        ],
+        "19": [
+          765,
+          800
+        ],
+        "20": [
+          781,
+          800
+        ],
+        "21": [
+          710,
+          724
+        ],
+        "22": [
+          620,
+          628
+        ],
+        "23": [
+          471,
+          480
+        ],
+        "24": [
+          322,
+          324
+        ],
+        "25": [
+          185,
+          188
+        ],
+        "26": [
+          82,
+          84
+        ]
+      },
+      "first_requests_by_turn_bin": {
+        "0-4": [
+          3895,
+          4000
+        ],
+        "5-9": [
+          3714,
+          4000
+        ],
+        "10-14": [
+          3490,
+          4000
+        ],
+        "15 on": [
+          6967,
+          7228
+        ]
+      },
+      "first_requests_by_turn_without_need_steps": {
+        "0": [
+          787,
+          800
+        ],
+        "1": [
+          794,
+          800
+        ],
+        "2": [
+          790,
+          800
+        ],
+        "3": [
+          760,
+          800
+        ],
+        "4": [
+          764,
+          800
+        ],
+        "5": [
+          751,
+          800
+        ],
+        "6": [
+          749,
+          800
+        ],
+        "7": [
+          747,
+          800
+        ],
+        "8": [
+          746,
+          800
+        ],
+        "9": [
+          721,
+          800
+        ],
+        "10": [
+          712,
+          800
+        ],
+        "11": [
+          681,
+          800
+        ],
+        "12": [
+          676,
+          800
+        ],
+        "13": [
+          691,
+          800
+        ],
+        "14": [
+          730,
+          800
+        ],
+        "15": [
+          745,
+          800
+        ],
+        "16": [
+          767,
+          800
+        ],
+        "17": [
+          754,
+          800
+        ],
+        "18": [
+          765,
+          800
+        ],
+        "19": [
+          765,
+          800
+        ],
+        "20": [
+          609,
+          628
+        ],
+        "21": [
+          558,
+          572
+        ],
+        "22": [
+          452,
+          460
+        ],
+        "23": [
+          360,
+          368
+        ],
+        "24": [
+          126,
+          128
+        ],
+        "25": [
+          185,
+          188
+        ],
+        "26": [
+          82,
+          84
+        ]
+      },
+      "need_first_request_thinking": [
+        799,
+        800
+      ],
+      "fact_value_in_replies": {
+        "observed-nonrec-far": {
+          "replies_holding_value": 2694,
+          "replies": 3160,
+          "per_episode_median": 1.0
+        },
+        "observed-rec-far": {
+          "replies_holding_value": 2761,
+          "replies": 3178,
+          "per_episode_median": 1.0
+        },
+        "derived-nonrec-far": {
+          "replies_holding_value": 2756,
+          "replies": 3114,
+          "per_episode_median": 1.0
+        },
+        "derived-rec-far": {
+          "replies_holding_value": 2842,
+          "replies": 3157,
+          "per_episode_median": 1.0
+        }
+      },
+      "at_need": {
+        "observed-nonrec-far": {
+          "episodes": 200,
+          "retained_replies_median": 12.0,
+          "reply_chars_quartiles": [
+            9110.5,
+            12314.0,
+            16217.0
+          ]
+        },
+        "observed-rec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            10286.25,
+            13747.0,
+            16287.25
+          ]
+        },
+        "derived-nonrec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            10659.5,
+            12845.0,
+            16398.5
+          ]
+        },
+        "derived-rec-far": {
+          "episodes": 200,
+          "retained_replies_median": 11.0,
+          "reply_chars_quartiles": [
+            11232.25,
+            14359.5,
+            16728.5
+          ]
+        }
+      },
+      "leak_check": {
+        "observed-nonrec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "observed-rec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "derived-nonrec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        },
+        "derived-rec-far": {
+          "target_in_system": 0,
+          "target_in_earlier_user": 0,
+          "target_in_need_option_line": 200,
+          "target_in_need_elsewhere": 0,
+          "clue_outside_replies": 0
+        }
+      },
+      "later_need_requests": {
+        "derived-rec-far": 34,
+        "observed-rec-far": 38
+      },
+      "episodes": 800,
+      "runs": [
+        "20261102T002751Z-W-npd-0-claude-haiku-5-5"
+      ],
+      "input_rates": [
+        {
+          "run_id": "20261102T002751Z-W-npd-0-claude-haiku-5-5",
+          "minutes": 267.7,
+          "uncached_input_tokens": 293529852,
+          "uncached_per_minute": 1096488.0537915577,
+          "max_in_flight": 3,
+          "peak_spend_plus_reservation": 43.73417224999991
+        }
+      ]
+    }
+  },
+  "user_messages_against_r9": {
+    "W-np-0": {
+      "common": 19228,
+      "identical": 19228
+    },
+    "W-npd-0": {
+      "common": 19228,
+      "identical": 19228
+    }
+  }
+}

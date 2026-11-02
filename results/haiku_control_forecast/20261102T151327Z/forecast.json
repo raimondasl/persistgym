@@ -1,0 +1,26 @@
+{
+  "prereg": "PREREG.md \u00a717.11 (amendment R11)",
+  "max_usd": 17.38,
+  "planned_usd": 17.24,
+  "parallel": 2,
+  "source": "20261024T060051Z-W-n-0-claude-haiku-5-5",
+  "episodes": 400,
+  "r9_spend_usd": 17.37998324,
+  "r9_cost_per_episode": 0.043449958100000005,
+  "r9_max_prompt_tokens": 33765,
+  "most_one_send_usd": 0.133456125,
+  "cases": {
+    "at R9's cost per episode": {
+      "cost_per_episode": 0.043449958100000005,
+      "episodes_started": 395,
+      "whole_templates": 197,
+      "spent_usd": 17.13436976500002
+    },
+    "at R10's W-np-0 continuation's cost per episode": {
+      "cost_per_episode": 0.0552,
+      "episodes_started": 309,
+      "whole_templates": 154,
+      "spent_usd": 17.103171420365545
+    }
+  }
+}

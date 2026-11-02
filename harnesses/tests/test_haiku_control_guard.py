@@ -23,7 +23,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -408,11 +411,33 @@ def test_an_api_error_refuses_and_its_text_is_not_printed(org_env, monkeypatch, 
     assert ORG not in printed.err and ORG not in printed.out
 
 
-def test_the_sdks_debug_log_refuses_before_any_call(org_env, monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv(anthropic_transport.SDK_LOG_ENV, "debug")
-    code, out, stub = _run_check(monkeypatch, tmp_path, ORG)
-    assert code == 2 and "ANTHROPIC_LOG=debug" in capsys.readouterr().err
-    assert stub.calls == [] and not out.exists()
+def test_the_sdks_debug_log_does_not_print_the_id():
+    """In a child process with the SDK's debug log on, with the real SDK client on an in-process
+    mock transport: no network, and the ID is in neither stream. The first run shows that the log
+    would print it, so the check is a real one."""
+    script = f"""
+import logging, anthropic, httpx2
+from harnesses import org_check
+transport = httpx2.MockTransport(lambda request: httpx2.Response(
+    200, json={{"input_tokens": 1}}, headers={{org_check.ORG_HEADER: "{ORG}"}}))
+client = anthropic.Anthropic(http_client=httpx2.Client(transport=transport))
+if LOG_THE_HEADERS:
+    client.messages.with_raw_response.count_tokens(
+        model="claude-haiku-5-5", messages=[{{"role": "user", "content": "hi"}}])
+else:
+    print(org_check.org_check(client_factory=lambda: client)["org_sha256"])
+"""
+    env = {k: v for k, v in os.environ.items() if k not in anthropic_transport.REFUSED_ENV}
+    env.update({anthropic_transport.KEY_ENV: "dummy-not-a-key", "ANTHROPIC_LOG": "debug"})
+
+    def run(log_the_headers):
+        return subprocess.run(
+            [sys.executable, "-c", f"LOG_THE_HEADERS = {log_the_headers}\n{script}"], cwd=REPO,
+            env=env, capture_output=True, text=True, encoding="utf-8", check=True)
+    assert ORG in run(True).stderr
+    done = run(False)
+    assert org_check.org_digest(ORG) in done.stdout
+    assert ORG not in done.stdout and ORG not in done.stderr
 
 
 def test_a_client_with_a_custom_header_refuses_before_any_call(org_env, monkeypatch, tmp_path,

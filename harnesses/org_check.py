@@ -20,9 +20,9 @@ This says which organization the key belongs to at the moment of the check. It d
 which organization a run's own calls were served under, or anything about a workspace.
 
 It takes no paid-run lock and needs no approval. It refuses (`credential_refusal`) unless
-`ANTHROPIC_API_KEY` is set and no other credential, base URL or custom header is, a built client
-that holds a custom header (`client_header_refusal`), and `ANTHROPIC_LOG=debug`, with which the SDK
-logs the response's headers. The CLI writes
+`ANTHROPIC_API_KEY` is set and no other credential, base URL or custom header is, and a built
+client that holds a custom header (`client_header_refusal`). The SDK's debug log would print the
+response's headers, so the command raises that logger's level before its call. The CLI writes
 results/haiku_control_org/<time>/org_check.json (or --out), and exits 3 when the organization is
 not the one R10's error names, so that a shell can stop on it.
 """
@@ -30,7 +30,7 @@ not the one R10's error names, so that a shell can stop on it.
 from __future__ import annotations
 
 import hashlib
-import os
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -38,11 +38,7 @@ import anthropic
 
 from common import runmeta
 from harnesses import registered
-from harnesses.anthropic_transport import (
-    SDK_LOG_ENV,
-    client_header_refusal,
-    credential_refusal,
-)
+from harnesses.anthropic_transport import client_header_refusal, credential_refusal
 
 ORG_HEADER = "anthropic-organization-id"
 R10_ORG_SHA256 = "74e53caccde4d5b5841efd69e7dd73d71b05ac4f4dd35f14616353674999b82d"
@@ -72,13 +68,11 @@ def org_check(client_factory: Callable[[], Any] | None = None) -> dict:
     why = credential_refusal()
     if why:
         raise Refused(why)
-    if os.environ.get(SDK_LOG_ENV, "").strip().lower() == "debug":
-        raise Refused(f"{SDK_LOG_ENV}=debug logs the response's headers, the organization's ID "
-                      "among them: unset it for this command")
     client = (client_factory or _default_client)()
     why = client_header_refusal(client)
     if why:
         raise Refused(why)
+    logging.getLogger("anthropic").setLevel(logging.WARNING)  # its debug log prints the headers
     try:
         response = client.messages.with_raw_response.count_tokens(
             model=registered.HAIKU_MODEL, messages=[{"role": "user", "content": "hi"}])

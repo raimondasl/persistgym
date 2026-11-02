@@ -119,11 +119,6 @@ error type, read as the status it stands for."""
 SPEND_LIMIT_CODE = "enforced_spend_limit_reached"
 
 
-SDK_LOG_ENV = "ANTHROPIC_LOG"
-"""The SDK's log level. At debug it logs each response's headers, the organization's ID among
-them (`harnesses.org_check` refuses it)."""
-
-
 def credential_refusal(environ: Mapping[str, str] | None = None) -> str | None:
     """Why the environment's credentials refuse a Messages call, or None: an API key must be
     set (a non-empty `ANTHROPIC_API_KEY`) and none of `REFUSED_ENV` may be. The reason names

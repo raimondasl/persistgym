@@ -279,8 +279,14 @@ def test_intervals_and_contrasts_are_on_the_templates_read_with_the_registered_r
         assert v["ci90"] == pytest.approx([np.nanpercentile(d, 5), np.nanpercentile(d, 95)])
 
 
+def _partial_at_150(rec):
+    return rec["task_cell"] in NR_FAR and (
+        _template(rec) < 150 or (_template(rec) == 150 and rec["task_cell"] == NR_FAR[0]))
+
+
 def test_replies_and_responses_get_every_arm_on_the_templates_read(copied, monkeypatch):
-    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150))
+    """The stop leaves a partial template, which stays out of every arm's replies and responses."""
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_partial_at_150)
     seen = []
 
     def spy(resolved, *a, **k):
@@ -294,6 +300,137 @@ def test_replies_and_responses_get_every_arm_on_the_templates_read(copied, monke
     hc.readings(copied, {}, False, allow_incomplete=True)
     assert len(seen) == 6  # responses for 4 arms, replies for 2
     assert all(s == set(range(150)) for s in seen)
+
+
+def test_the_control_minus_r9_is_on_the_templates_read_and_has_its_sign(copied):
+    def win(rows):
+        for tc in NR_FAR:
+            for rec in [x for x in rows if x["task_cell"] == tc and not x["need_correct"]][:15]:
+                rec["need_correct"] = True
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150), change=win)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    for v in r["contrasts"]["W-n-0 (R11) - W-n-0 (R9)"].values():
+        assert v["pp"] == pytest.approx(10.0)
+
+
+def test_a_partial_template_stays_out_of_intervals_and_contrasts(copied):
+    def win(rows):
+        next(x for x in rows if _template(x) == 150)["need_correct"] = True
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_partial_at_150, change=win)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    idx = hp.hh.resample_indices(200, r["bootstrap"]["seed"], 10_000)
+    tc = NR_FAR[0]
+    ctl = _r9_success(tc, 150)
+    rows = [json.loads(x) for x in (ROOT / "results" / registered.HAIKU_PROVENANCE_EXPERIMENT
+                                    / "20261102T002751Z-W-npd-0-claude-haiku-5-5"
+                                    / "episodes.jsonl").read_text(encoding="utf-8").splitlines()]
+    npd = np.full(200, np.nan)
+    for x in rows:
+        if x["task_cell"] == tc and _template(x) < 150:
+            npd[_template(x)] = float(bool(x["need_correct"]))
+    for i, s in ((0, ctl), (1, ctl), (3, npd)):
+        row = next(c for c in r["arms"][i]["cells"] if c["task_cell"] == tc)
+        means = np.nanmean(s[idx], axis=1)
+        assert row["interval_90"] == pytest.approx([np.nanpercentile(means, 5),
+                                                    np.nanpercentile(means, 95)])
+    v = r["contrasts"]["W-npd-0 - W-n-0 (R11)"][tc]
+    assert v["pp"] == pytest.approx(100 * (np.nanmean(npd) - np.nanmean(ctl)))
+
+
+def test_the_researchers_close_excludes_and_lists(copied):
+    def stop(rows):
+        rec = next(x for x in rows if _template(x) == 147 and x["task_cell"] == NR_FAR[1])
+        rec.update(exit_reason="RUN_STOPPED", need_correct=False)
+    _copy_control(copied, ending="ERROR:KeyboardInterrupt", keep=_below(150), change=stop)
+    r = hc.readings(copied, {}, True, allow_incomplete=True)
+    assert [x["status"] for x in r["left_out"] if x["template"] == 147] == ["excluded"]
+    assert any("no final record" in d for d in r["deviations"])
+    assert any("never played" in d for d in r["deviations"])
+
+
+def test_left_out_says_why(copied):
+    def exclude(rows):
+        rec = next(x for x in rows if _template(x) == 10 and x["task_cell"] == NR_FAR[1])
+        rec.update(excluded=True, exclusion_reason="made up")
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150), change=exclude)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert "made up" in r["left_out"][0]["reason"]
+
+
+def test_user_messages_are_compared_with_r9s(copied, monkeypatch):
+    _copy_control(copied)
+
+    def fake(resolved, experiment, cell, raw):
+        return None, ({"e#0": "a", "e#1": "b", "e#2": "c"}
+                      if experiment == registered.HAIKU_NOTES_EXPERIMENT
+                      else {"e#0": "a", "e#1": "b", "e#2": "x"}), []
+    monkeypatch.setattr(hc, "responses", fake)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert r["user_messages_against_r9"]["W-n-0 (R11)"] == {"common": 3, "identical": 2}
+
+
+def test_readings_1_2_and_8_reach_the_output(copied):
+    _copy_control(copied)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    for a in r["arms"]:
+        assert {x["task_cell"] for x in a["accounting"]} == set(NR_FAR)
+        assert all("stopped_responses" in c for c in a["cells"])
+    assert {c["run_id"] for c in r["arms"][3]["conditions"]} == {
+        "20261102T002751Z-W-npd-0-claude-haiku-5-5"}
+    assert r["arms"][0]["conditions"][0]["model_returned"] == ["claude-haiku-5-5"]
+    assert r["arms"][0]["conditions"][0]["inference_geos"]
+
+
+def test_a_missing_cost_and_a_replay_warning_reach_the_warnings(copied, monkeypatch):
+    def no_cost(rows):
+        rows[0]["cost_usd_billed_est"] = None
+    _copy_control(copied, change=no_cost)
+    real = hp.hh.accounting_check
+
+    def check(*a, **k):
+        return {**real(*a, **k), "warnings": ["made up replay warning"]}
+    monkeypatch.setattr(hp.hh, "accounting_check", check)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert any("have no billed cost" in w for w in r["warnings"])
+    assert "made up replay warning" in r["warnings"]
+
+
+def test_with_everything_present_the_status_is_final(copied, monkeypatch):
+    _copy_control(copied)
+    monkeypatch.setattr(hp.hh, "accounting_check", lambda *a, **k: {
+        "checked": 400, "bugs": [], "missing_transcripts": [], "warnings": []})
+    monkeypatch.setattr(hc, "responses", lambda *a, **k: (None, {}, []))
+    monkeypatch.setattr(hp, "replies", lambda *a, **k: (None, []))
+    r = hc.readings(copied, {}, False)
+    assert r["status"] == "FINAL" and r["incomplete"] == []
+    assert hc.summary(r).count("**FINAL.**") == 1
+
+
+def test_the_summary_prints_readings_5_and_6(copied, tmp_path):
+    path = tmp_path / CONTROL / "run" / "transcript.jsonl.gz"
+    path.parent.mkdir(parents=True)
+    lines = [_line("e1", 0, thinking=True), _line("e1", 1, thinking=True, text="saw 568"),
+             _line("e1", 2, stop="refusal"), _line("e1", 3)]
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        for x in lines:
+            f.write(json.dumps(x) + "\n")
+    reading, _, _ = hc.responses(_resolved(_record("e1")), CONTROL, "W-n-0", tmp_path, {"e1": FACT})
+    _copy_control(copied)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    replies = {"observed-nonrec-far carried=True": {
+        "episodes": 1, "correct": 0, "failed": 1, "failed_declined": 0,
+        "failed_need_reply_disowns": 1, "failed_retracted_before_need": 0}}
+    for a in r["arms"]:
+        a["responses"], a["replies_nr_far"] = reading, replies
+    text = hc.summary(r)
+    assert "(no transcripts)" not in text and "observed-nonrec-far carried=True" in text
+
+
+def test_main_writes_its_three_files(copied, tmp_path):
+    _copy_control(copied)
+    out = tmp_path / "out"
+    assert hc.main(["--results-root", str(copied), "--allow-incomplete", "--out-dir", str(out)]) == 0
+    assert {p.name for p in out.iterdir()} == set(hc.OUTPUTS)
 
 
 def test_a_bug_in_the_replay_stops_the_analysis_even_as_provisional(copied, monkeypatch):
@@ -381,6 +518,35 @@ def test_the_organization_checks_must_bracket_the_run(copied):
     r = hc.readings(copied, {}, False, allow_incomplete=True)
     assert not any("org-check" in w for w in r["warnings"])
     assert [o["same_org_as_r10_error"] for o in r["org_checks"]] == [True, True]
+
+
+def test_one_check_naming_another_organization_is_warned_about(copied):
+    _copy_control(copied)
+    _org_check(copied, "a", "2026-10-24T05:00:00+00:00")
+    _org_check(copied, "b", "2026-10-24T08:00:00+00:00", same=False)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert any("another organization" in w for w in r["warnings"])
+
+
+def test_the_checks_bracket_the_controls_run_not_r9s(copied):
+    _copy_control(copied, started_utc="2026-11-04T19:00:00+00:00",
+                  finished_utc="2026-11-04T22:00:00+00:00")
+    _org_check(copied, "a", "2026-11-04T18:00:00+00:00")
+    _org_check(copied, "b", "2026-11-04T23:00:00+00:00")
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert not any("org-check" in w for w in r["warnings"])
+
+
+def test_a_check_between_two_runs_is_not_before_the_first(copied):
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(100), name="first",
+                  started_utc="2026-11-04T19:00:00+00:00", finished_utc="2026-11-04T20:00:00+00:00")
+    _copy_control(copied, name="second", started_utc="2026-11-05T19:00:00+00:00",
+                  finished_utc="2026-11-05T20:00:00+00:00",
+                  keep=lambda rec: rec["task_cell"] in NR_FAR and 100 <= _template(rec) < 150)
+    _org_check(copied, "a", "2026-11-05T00:00:00+00:00")
+    r = hc.readings(copied, {}, True, allow_incomplete=True)
+    assert any("comes before" in w for w in r["warnings"])
+    assert any("comes after" in w for w in r["warnings"])
 
 
 def test_a_check_only_after_the_run_is_warned_about_and_another_organization_too(copied):

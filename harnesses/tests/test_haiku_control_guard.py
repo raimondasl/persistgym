@@ -30,6 +30,7 @@ from types import SimpleNamespace
 import anthropic
 import pytest
 
+from analysis import haiku_control as hc
 from analysis import haiku_control_forecast as hf
 from common import costs, paidlock
 from common.tests.gitrepo import FROZEN_PREREG, approval_line, decisions_text, guarded_repo
@@ -90,7 +91,8 @@ def test_the_planned_spend_leaves_room_for_one_send_and_the_command_uses_it():
     room = registered.HAIKU_CONTROL_MAX_USD - registered.HAIKU_CONTROL_PLANNED_USD
     assert room >= forecast["most_one_send_usd"]
     text = (REPO / "results" / "decisions.md").read_text(encoding="utf-8")
-    (line,) = [x for x in text.splitlines() if f"--experiment {CONTROL}" in x]
+    line = next(x for x in text.splitlines()
+                if f"--experiment {CONTROL}" in x and "--start 0 --n 200" in x)
     assert f"--planned-usd {registered.HAIKU_CONTROL_PLANNED_USD} " in line
     assert "--parallel 2" in line and all(c in line for c in TWO)
 
@@ -155,6 +157,13 @@ def test_every_other_claude_model_refuses(tmp_path, model):
 def test_openai_models_never_run_in_r11s_experiment(tmp_path, monkeypatch, model, r6_on):
     monkeypatch.setattr(registered, "R6_HARD_STOP", r6_on)
     assert control_guard(tmp_path, model=model) is not None
+
+
+@pytest.mark.parametrize("model", ["gpt-6-luna", "gpt-6.1-sol"])
+def test_with_r6_off_an_openai_model_is_refused_by_r11s_rule(tmp_path, monkeypatch, model):
+    monkeypatch.setattr(registered, "R6_HARD_STOP", False)
+    why = control_guard(tmp_path, model=model)
+    assert registered.R11_REF in why, why
 
 
 def test_without_g1_it_refuses(tmp_path, monkeypatch):
@@ -404,6 +413,35 @@ def test_the_sdks_debug_log_refuses_before_any_call(org_env, monkeypatch, tmp_pa
     code, out, stub = _run_check(monkeypatch, tmp_path, ORG)
     assert code == 2 and "ANTHROPIC_LOG=debug" in capsys.readouterr().err
     assert stub.calls == [] and not out.exists()
+
+
+def test_a_client_with_a_custom_header_refuses_before_any_call(org_env, monkeypatch, tmp_path,
+                                                               capsys):
+    stub = _Stub(ORG)
+    stub._custom_headers = {"x-made-up": "1"}
+    monkeypatch.setattr(cli, "ORG_CHECK_CLIENT", lambda: stub)
+    out = tmp_path / "o.json"
+    assert cli.main(["org-check", "--out", str(out)]) == 2
+    assert "custom headers" in capsys.readouterr().err and stub.calls == [] and not out.exists()
+
+
+def test_r8s_organization_is_named_as_such(org_env, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(org_check, "R8_ORG_SHA256", org_check.org_digest(ORG))
+    code, out, _ = _run_check(monkeypatch, tmp_path, ORG)
+    capsys.readouterr()
+    assert code == 3
+    assert json.loads(out.read_text(encoding="utf-8"))["same_org_as_r8_error"] is True
+
+
+def test_the_default_folder_is_the_one_the_analysis_reads(org_env, monkeypatch, tmp_path, capsys):
+    assert registered.HAIKU_CONTROL_ORG_CHECK == "haiku_control_org"
+    stub = _Stub(ORG)
+    monkeypatch.setattr(cli, "ORG_CHECK_CLIENT", lambda: stub)
+    monkeypatch.setattr(cli, "RESULTS", tmp_path / "results")
+    assert cli.main(["org-check"]) == 3
+    capsys.readouterr()
+    (found,) = (tmp_path / "results" / "haiku_control_org").glob("*/org_check.json")
+    assert hc.org_checks(tmp_path)[0]["same_org_as_r10_error"] is False and found.is_file()
 
 
 def test_no_header_refuses(org_env, monkeypatch, tmp_path, capsys):

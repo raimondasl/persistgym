@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from analysis import haiku_control_forecast as hf
+from harnesses.paid_transport import PaidTransport
 
 
 def test_room_to_spare_starts_every_episode():
@@ -36,6 +39,15 @@ def test_the_forecast_stops_short_of_200_templates_and_within_the_planned_spend(
     at_r9, at_r10 = r["cases"].values()
     assert (at_r9["whole_templates"], at_r10["whole_templates"]) == (197, 154)
     assert at_r9["spent_usd"] <= r["planned_usd"] and at_r10["spent_usd"] <= r["planned_usd"]
+
+
+def test_the_forecast_is_at_the_runs_parallel():
+    assert hf.forecast(hf.REPO_ROOT)["parallel"] == 2
+
+
+def test_the_margin_uses_the_transports_attempts():
+    fields = {f.name: f.default for f in dataclasses.fields(PaidTransport)}
+    assert hf.MAX_ATTEMPTS == fields["max_attempts"]
 
 
 def test_one_send_is_six_attempts_at_the_largest_prompt_and_the_output_cap():

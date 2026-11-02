@@ -45,13 +45,15 @@ Nothing here is a test. It ranks nothing, and differences are described, not tes
 - every record of the control's runs must be on the 2 task cells;
 - an API error awaiting its §13 re-run refuses, whether or not the sweep is closed;
 - the sweep must be complete, or closed: by R11's registered stop (`stop_gap`: one run, ended at
-  its planned spend of `PLANNED_USD`, with a record of every episode it started), or by the
-  researcher with ``--sweep-closed``. Otherwise the script refuses, unless ``--allow-incomplete``
-  is passed, and the output is then PROVISIONAL;
+  its planned spend of `PLANNED_USD`, with a record of every episode it started, and no episode
+  still pending before the last template read), or by the researcher with ``--sweep-closed``,
+  which a re-run or a continuation needs. Otherwise the script refuses, unless
+  ``--allow-incomplete`` is passed, and the output is then PROVISIONAL. That is the only reading
+  of a run whose API errors can never have their re-runs, as when the credits run out;
 - §2.8's accounting check (`persistgym_h1h3.accounting_check`) on the control's raw transcripts
   under ``--raw-root`` (default ``results/raw``). A bug stops the analysis (`AccountingBug`).
-  Missing transcripts of any arm refuse likewise, or make the output PROVISIONAL with
-  ``--allow-incomplete``.
+  Missing transcripts of any arm, or of a control's run with no counted record, refuse likewise,
+  or make the output PROVISIONAL with ``--allow-incomplete``.
 
 Run: ``uv run python -m analysis.haiku_control [--rerun RUN=ORIGINAL ...] [--sweep-closed]``. It
 writes ``results/haiku_control/<UTC>/control.json``, ``summary.md`` and ``meta.json``. With
@@ -244,6 +246,14 @@ def responses(resolved: dict, experiment: str, cell: str, raw: Path,
             t["user_hash"], [])
 
 
+def _input_rate(root: Path, experiment: str, run_id: str, raw: Path) -> dict:
+    """`input_rate`, with no rate for a run that recorded no tokens or lasted under a second."""
+    try:
+        return hpe.input_rate(root, experiment, run_id, raw)
+    except (KeyError, TypeError, ZeroDivisionError):
+        return {"run_id": run_id, "uncached_per_minute": None, "max_in_flight": None}
+
+
 def run_conditions(root: Path, experiment: str, cell: str, runs: list, raw: Path) -> list[dict]:
     """Reading 8 for one arm's runs."""
     out = []
@@ -256,7 +266,7 @@ def run_conditions(root: Path, experiment: str, cell: str, runs: list, raw: Path
                     "model_returned": [str(m) for m in run.model_returned],
                     "inference_geos": meta.get("inference_geos"),
                     "cost_usd": meta.get("cost_usd"),
-                    **hpe.input_rate(root, experiment, run.run_id, raw)})
+                    **_input_rate(root, experiment, run.run_id, raw)})
     return out
 
 
@@ -273,8 +283,8 @@ def org_checks(root: Path) -> list[dict]:
 
 
 def org_warnings(orgs: list[dict], conditions: list[dict]) -> list[str]:
-    """Why `org-check`'s results do not bracket the control's run under the organization that
-    R10's error names (empty when they do)."""
+    """Why `org-check`'s results do not place the key in the organization that R10's error names
+    both before and after the control's run (empty when they do)."""
     if not orgs:
         return ["no org-check result is committed for the control"]
     out = []
@@ -287,6 +297,20 @@ def org_warnings(orgs: list[dict], conditions: list[dict]) -> list[str]:
         out.append("no org-check result comes before the control's run")
     if not any(x >= end for x in times):
         out.append("no org-check result comes after the control's run")
+    return out
+
+
+def missing_values(arms: list[dict]) -> list[str]:
+    """A warning per arm and task cell whose reading 7 has records with no cost or no
+    output-token count (their mean is then not given)."""
+    out = []
+    for a in arms:
+        for tc, c in a["costs"].items():
+            for key, what in (("cost_missing", "billed cost"),
+                              ("output_tokens_missing", "output-token count")):
+                if c.get(key):
+                    out.append(f"{a['arm']}, {tc}: {c[key]} of {c['n']} counted records have no "
+                               f"{what}, so reading 7 gives no mean")
     return out
 
 
@@ -326,6 +350,9 @@ def readings(root: Path, links: dict[str, str], sweep_closed: bool, *,
         raise hh.AccountingBug(
             "PREREG §2.8's bug stop: window-accounting bug(s), so no result is reported until "
             "they are found:\n" + "\n".join(f"  - {b}" for b in check["bugs"]))
+    if check["missing_transcripts"]:
+        incomplete.append("no raw transcript for run(s) " + ", ".join(check["missing_transcripts"])
+                          + f" under {raw}: §2.8's replay cannot be made")
     r9_runs, r9_all = hp.r9_read(root)
     r10_runs, r10_all = r10_read(root)
     seed, _ = hh.read_seed(root / "results")
@@ -375,7 +402,7 @@ def readings(root: Path, links: dict[str, str], sweep_closed: bool, *,
                        "identical": sum(ref[x] == h[x] for x in ref.keys() & h)}
                 for name, h in hashes.items() if name != R9_ARM},
             "org_checks": orgs,
-            "warnings": [*warnings, *check["warnings"], *hp.missing_values(arms)]}
+            "warnings": [*warnings, *check["warnings"], *missing_values(arms)]}
 
 
 def _share(pair: list | None) -> str:
@@ -500,9 +527,10 @@ def summary(r: dict) -> str:
                "minute | Model strings | Geos |"), "|---|---|---|---|---|---|---|---|---|"]
     for a in r["arms"]:
         for c in a["conditions"]:
+            rate = c["uncached_per_minute"]
             lines.append(f"| {a['arm']} | {c['run_id']} | {c['exit_reason']} | {c['started_utc']} | "
                          f"{c['finished_utc']} | {c['max_in_flight']} | "
-                         f"{c['uncached_per_minute']:,.0f} | "
+                         f"{'n/a' if rate is None else f'{rate:,.0f}'} | "
                          f"{', '.join(c['model_returned'])} | {c['inference_geos']} |")
     lines += ["", "**Organization** (`harnesses org-check`):", ""]
     lines += [f"- {o['checked_utc']}: the one R10's error names: {o['same_org_as_r10_error']}; the "

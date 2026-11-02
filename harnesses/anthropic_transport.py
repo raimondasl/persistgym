@@ -55,11 +55,13 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   runner does not catch): a 429 with `error_code` `enforced_spend_limit_reached` (the
   organization's monthly spend cap; retries fail until the next month) and a 400 for a usage
   limit set in the Console. A stream that failed after `message_start` has already reported
-  its usage (its input, cache reads and writes, and the output so far): the error carries
-  the message so far (`paid_transport.PARTIAL_RESPONSE`) and the ledger records it as a
-  failed attempt, in the spend and the costs row's totals (not in `n_calls`). A call that
-  failed before `message_start` (a timeout, a connection error, an HTTP error) may still
-  have been billed and is not in the ledger.
+  its usage (its input, cache reads and writes, and `message_start`'s output count; the
+  output it streamed counts only once `message_delta` has come): the error carries the
+  message so far (`paid_transport.PARTIAL_RESPONSE`) and the ledger records it as a failed
+  attempt, in the spend and the costs row's totals (not in `n_calls`). So the output such an
+  attempt streamed may be billed and is not in the ledger. A call that failed before
+  `message_start` (a timeout, a connection error, an HTTP error) may still have been billed
+  and is not in the ledger either.
 * **What it logs** per response: the returned model, `stop_reason`, the tier served
   (`usage.service_tier`, with a warning if it is not `standard`, which is what the prices
   assume), the inference geo served (`usage.inference_geo`, with a warning if it is not

@@ -9,6 +9,7 @@ import gzip
 import json
 import shutil
 
+import numpy as np
 import pytest
 
 from analysis import haiku_control as hc
@@ -22,10 +23,11 @@ CONTROL = registered.HAIKU_CONTROL_EXPERIMENT
 
 
 def _copy_control(root, *, ending="COMPLETED", keep=lambda rec: rec["task_cell"] in NR_FAR,
-                  name="control", planned=hc.PLANNED_USD, change=None, started=None) -> None:
+                  name="control", planned=hc.PLANNED_USD, change=None, started=None,
+                  **meta_fields) -> None:
     """R9's run under R11's experiment, holding the records `keep` keeps (`change` edits them),
     with `planned` as its planned spend and a record of every episode it started, or `started`
-    episodes."""
+    episodes. `meta_fields` go into its meta.json."""
     src = ROOT / "results" / registered.HAIKU_NOTES_EXPERIMENT / R9_RUN
     dst = root / "results" / CONTROL / name
     dst.mkdir(parents=True)
@@ -35,7 +37,7 @@ def _copy_control(root, *, ending="COMPLETED", keep=lambda rec: rec["task_cell"]
     if change:
         change(rows)
     meta = json.loads((src / "meta.json").read_text(encoding="utf-8"))
-    meta.update(experiment=CONTROL, run_id=name, exit_reason=ending)
+    meta.update(experiment=CONTROL, run_id=name, exit_reason=ending, **meta_fields)
     meta["parallel"] = {**meta["parallel"], "episodes_started": started or len(rows),
                         "spend_reservation": {**meta["parallel"]["spend_reservation"],
                                               "planned_usd": planned}}
@@ -191,6 +193,46 @@ def test_only_the_registered_stop_closes_a_short_sweep(copied, kw, why):
     assert all("no raw transcript" in x for x in closed["incomplete"])
 
 
+def test_a_cost_cap_stop_closes_the_sweep_and_names_its_pending_keys(copied):
+    def stop(rows):
+        rec = next(x for x in rows if _template(x) == 150 and x["task_cell"] == NR_FAR[0])
+        rec.update(exit_reason="COST_CAP", need_correct=False)
+    _copy_control(copied, ending="COST_CAP", change=stop, keep=lambda rec: (
+        rec["task_cell"] in NR_FAR and (_template(rec) < 150 or (
+            _template(rec) == 150 and rec["task_cell"] == NR_FAR[0]))))
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert r["templates_read"] == 150
+    assert all("no raw transcript" in x for x in r["incomplete"])
+    assert [(x["template"], x["task_cell"], x["status"]) for x in r["left_out"]] == [
+        (150, NR_FAR[0], "pending"), (150, NR_FAR[1], "no record")]
+
+
+def test_a_pending_episode_before_the_last_template_read_refuses_at_the_stop(copied):
+    def stop(rows):
+        rec = next(x for x in rows if _template(x) == 147 and x["task_cell"] == NR_FAR[1])
+        rec.update(exit_reason="RUN_STOPPED", need_correct=False)
+    _copy_control(copied, ending="COST_CAP", keep=_below(150), change=stop)
+    with pytest.raises(hp.hh.Refusal, match="before the last template read are pending"):
+        hc.readings(copied, {}, False)
+
+
+def test_a_declared_re_run_needs_the_researchers_close(copied):
+    """An API error, then its §13 re-run: the key takes the re-run's record, and the stop no
+    longer closes the sweep alone."""
+    def fail(rows):
+        rec = next(x for x in rows if _template(x) == 30 and x["task_cell"] == NR_FAR[1])
+        rec.update(exit_reason="API_ERROR", need_correct=False, error="made up")
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150), change=fail, name="a")
+    _copy_control(copied, name="b", started_utc="2026-11-03T00:00:00+00:00",
+                  finished_utc="2026-11-03T00:01:00+00:00",
+                  keep=lambda rec: rec["task_cell"] in NR_FAR and _template(rec) == 30)
+    with pytest.raises(hp.hh.Refusal, match="2 runs hold it"):
+        hc.readings(copied, {"b": "a"}, False)
+    r = hc.readings(copied, {"b": "a"}, True, allow_incomplete=True)
+    assert r["templates_read"] == 150 and r["left_out"] == []
+    assert all("no raw transcript" in x for x in r["incomplete"])
+
+
 def test_a_second_run_needs_the_researchers_close(copied):
     """A later run ended elsewhere: the first run's stop does not close the sweep on its own."""
     _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(100), name="first")
@@ -198,6 +240,99 @@ def test_a_second_run_needs_the_researchers_close(copied):
         rec["task_cell"] in NR_FAR and 100 <= _template(rec) < 150))
     with pytest.raises(hp.hh.Refusal, match="2 runs hold it"):
         hc.readings(copied, {}, False)
+
+
+def _r9_success(task_cell, n):
+    rows = [json.loads(x) for x in (ROOT / "results" / registered.HAIKU_NOTES_EXPERIMENT / R9_RUN
+                                    / "episodes.jsonl").read_text(encoding="utf-8").splitlines()]
+    out = np.full(200, np.nan)
+    for x in rows:
+        if x["task_cell"] == task_cell and _template(x) < n:
+            out[_template(x)] = float(bool(x["need_correct"]))
+    return out
+
+
+def test_intervals_and_contrasts_are_on_the_templates_read_with_the_registered_resamples(copied):
+    """R9's run cut to 150 templates, against W-npd-0 (one run, so its records are simple), by a
+    calculation here over the same resamples, with the unread templates left out of each mean."""
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150))
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    meta = json.loads((ROOT / hp.R9_OUTPUT / "meta.json").read_text(encoding="utf-8"))
+    assert r["bootstrap"]["seed"] == meta["seeds"]["bootstrap"]
+    idx = hp.hh.resample_indices(200, r["bootstrap"]["seed"], 10_000)
+    rows = [json.loads(x) for x in (ROOT / "results" / registered.HAIKU_PROVENANCE_EXPERIMENT
+                                    / "20261102T002751Z-W-npd-0-claude-haiku-5-5"
+                                    / "episodes.jsonl").read_text(encoding="utf-8").splitlines()]
+    for tc in NR_FAR:
+        ctl = _r9_success(tc, 150)
+        arm = np.full(200, np.nan)
+        for x in rows:
+            if x["task_cell"] == tc and _template(x) < 150:
+                arm[_template(x)] = float(bool(x["need_correct"]))
+        means = np.nanmean(ctl[idx], axis=1)
+        row = next(c for c in r["arms"][1]["cells"] if c["task_cell"] == tc)
+        assert row["interval_90"] == pytest.approx([np.nanpercentile(means, 5),
+                                                    np.nanpercentile(means, 95)])
+        v = r["contrasts"]["W-npd-0 - W-n-0 (R11)"][tc]
+        d = 100 * (np.nanmean(arm[idx], axis=1) - np.nanmean(ctl[idx], axis=1))
+        assert v["pp"] == pytest.approx(100 * (np.nanmean(arm) - np.nanmean(ctl)))
+        assert v["ci90"] == pytest.approx([np.nanpercentile(d, 5), np.nanpercentile(d, 95)])
+
+
+def test_replies_and_responses_get_every_arm_on_the_templates_read(copied, monkeypatch):
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150))
+    seen = []
+
+    def spy(resolved, *a, **k):
+        seen.append({hp.hh.template_index(r.record["template_id"]) for r in resolved.values()})
+        return None, {}, []
+    def spy_replies(resolved, *a, **k):
+        spy(resolved)
+        return None, []
+    monkeypatch.setattr(hc, "responses", spy)
+    monkeypatch.setattr(hp, "replies", spy_replies)
+    hc.readings(copied, {}, False, allow_incomplete=True)
+    assert len(seen) == 6  # responses for 4 arms, replies for 2
+    assert all(s == set(range(150)) for s in seen)
+
+
+def test_a_bug_in_the_replay_stops_the_analysis_even_as_provisional(copied, monkeypatch):
+    _copy_control(copied)
+    monkeypatch.setattr(hp.hh, "accounting_check", lambda *a, **k: {
+        "checked": 1, "bugs": ["made up"], "missing_transcripts": [], "warnings": []})
+    with pytest.raises(hp.hh.AccountingBug, match="made up"):
+        hc.readings(copied, {}, False, allow_incomplete=True)
+
+
+def test_a_replay_that_cannot_be_made_refuses_though_no_counted_record_needs_it(copied, monkeypatch):
+    _copy_control(copied)
+    monkeypatch.setattr(hp.hh, "accounting_check", lambda *a, **k: {
+        "checked": 1, "bugs": [], "missing_transcripts": ["b"], "warnings": []})
+    monkeypatch.setattr(hc, "responses", lambda *a, **k: (None, {}, []))
+    monkeypatch.setattr(hp, "replies", lambda *a, **k: (None, []))
+    with pytest.raises(hp.hh.Refusal, match="§2.8's replay cannot be made"):
+        hc.readings(copied, {}, False)
+    r = hc.readings(copied, {}, False, allow_incomplete=True)
+    assert r["status"] == "PROVISIONAL" and "§2.8's replay cannot be made" in hc.summary(r)
+
+
+def test_a_run_with_no_tokens_or_no_time_has_no_rate(copied):
+    """A failed launch followed by a second run: the analysis still reads, and prints n/a."""
+    _copy_control(copied, ending="SPEND_RESERVATION", keep=_below(150), name="a")
+    _copy_control(copied, ending="ERROR:RuntimeError", name="b", tokens={},
+                  started_utc="2026-11-03T00:00:00+00:00",
+                  finished_utc="2026-11-03T00:00:00+00:00", keep=lambda rec: False)
+    r = hc.readings(copied, {}, True, allow_incomplete=True)
+    rates = {c["run_id"]: c["uncached_per_minute"] for c in r["arms"][0]["conditions"]}
+    assert rates["b"] is None and rates["a"] > 0
+    assert "| b | ERROR:RuntimeError |" in hc.summary(r).replace("W-n-0 (R11) ", "")
+
+
+def test_a_missing_cost_names_the_arm_and_reading_7():
+    arms = [{"arm": "W-n-0 (R9)", "costs": {NR_FAR[0]: {
+        "n": 200, "cost_missing": 2, "output_tokens_missing": 0}}}]
+    (w,) = hc.missing_values(arms)
+    assert w.startswith("W-n-0 (R9), observed-nonrec-far: 2 of 200") and "reading 7" in w
 
 
 def test_a_record_off_the_two_cells_refuses(copied):

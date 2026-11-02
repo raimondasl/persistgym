@@ -12,7 +12,7 @@ def test_room_to_spare_starts_every_episode():
 
 
 def test_the_first_episode_plays_alone_with_the_whole_planned_spend_reserved():
-    # it fits exactly; nothing else starts until it has finished, and then 2 x 4 leaves 6 - 8 < 0
+    # it fits exactly. Nothing else starts until it has finished, and then 2 x 4 > what is left
     assert hf.episodes_started([4.0] * 5, planned=10.0, parallel=2) == (1, pytest.approx(4.0))
 
 

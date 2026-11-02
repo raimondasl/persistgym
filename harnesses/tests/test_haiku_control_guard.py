@@ -8,7 +8,7 @@
   request settings, after `HAIKU_G1_PASSED`. Every other cell, split, variant, matrix, task-cell
   set, template range, repeat, effort, config, request or model refuses, naming §17.11.
 * The kill switches: with `R11_IN_EFFECT` False every run in the experiment refuses and R9's
-  run still passes; with `R8_IN_EFFECT` False it refuses too.
+  run still passes. With `R8_IN_EFFECT` False it refuses too.
 * The block: the Anthropic transport admits the run under a block that lists its experiment.
   R9's and R10's blocks cannot fund it, and its block funds none of theirs. An end-to-end run
   goes through the real guarded transport with a fake-backed client, at the registered $17.24,
@@ -218,9 +218,9 @@ def test_a_block_that_lists_r11s_experiment_funds_no_other_haiku_run():
 @pytest.fixture
 def control_paid_env(tmp_path, monkeypatch):
     """A repo whose frozen PREREG and decisions hold block 7-haiku-control (R11's experiment only,
-    at the researcher's $17.38) beside R8's, R9's and R10's; the CLI's own guarded transport
-    builds the real Anthropic transport with a fake-backed client; a dummy key's variable; a lock
-    of its own."""
+    at the researcher's $17.38) beside R8's, R9's and R10's. The CLI's own guarded transport
+    builds the real Anthropic transport with a fake-backed client, with a dummy key's variable
+    and a lock of its own."""
     guarded_repo(tmp_path, prereg=FROZEN_PREREG, decisions=decisions_text(
         "4-haiku", experiments=(PILOT, VALIDITY, MAIN))
         + approval_line("5-haiku-notes", (NOTES,)) + "\n"
@@ -397,6 +397,13 @@ def test_an_api_error_refuses_and_its_text_is_not_printed(org_env, monkeypatch, 
     printed = capsys.readouterr()
     assert code == 2 and "APIConnectionError" in printed.err and not out.exists()
     assert ORG not in printed.err and ORG not in printed.out
+
+
+def test_the_sdks_debug_log_refuses_before_any_call(org_env, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv(org_check.LOG_ENV, "debug")
+    code, out, stub = _run_check(monkeypatch, tmp_path, ORG)
+    assert code == 2 and "ANTHROPIC_LOG=debug" in capsys.readouterr().err
+    assert stub.calls == [] and not out.exists()
 
 
 def test_no_header_refuses(org_env, monkeypatch, tmp_path, capsys):

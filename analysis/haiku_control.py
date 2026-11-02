@@ -2,16 +2,18 @@
 
 R11 registers one run of claude-haiku-5-5's W-n-0 in its own experiment
 `persistgym_haiku_control`, on the 2 not-recoverable far task cells, main templates 0-199 at
-repeat 0, stopped at the block's $17.38, under the organization of R10's runs. This script reads
-its counted records as `analysis.haiku_provenance` reads R10's, and sets beside them R9's W-n-0
-(as `analysis.haiku_provenance.R9_OUTPUT` counted it) and R10's W-np-0 and W-npd-0 (as
-`R10_OUTPUT` counted them), on the same episodes.
+repeat 0, with a planned spend of $17.24 inside a block of $17.38, with a key in the organization
+that R10's rate-limit error names. This script reads its counted records as
+`analysis.haiku_provenance` reads R10's, and sets beside them R9's W-n-0 (as
+`analysis.haiku_provenance.R9_OUTPUT` counted it) and R10's W-np-0 and W-npd-0 (as `R10_OUTPUT`
+counted them), on the same episodes.
 
 **The templates read.** The run is expected to stop a little short of template 199, because a
 parallel run cannot use the last part of its planned spend (`harnesses/DESIGN.md` §7.6). So every
-arm is read on the first k templates, where k is the number of leading templates the control
-finished in both task cells (`templates_read`). At k = 200 the resamples are those of R8's, R9's
-and R10's analyses.
+arm is read on the templates the control finished in both task cells (`templates_read`). A
+template with an unfinished task cell is left out of every arm, and the output names each such
+key and why (`left_out`). Unread templates are NaN in the arrays, and the resamples are those of
+R8's, R9's and R10's analyses, whatever the templates read: each mean is over the templates read.
 
 It reports, per arm and task cell on those templates:
 
@@ -34,16 +36,18 @@ It reports, per arm and task cell on those templates:
    and whether each user message matches R9's at the same episode and step.
 7. **Cost and output tokens per episode,** per arm and task cell.
 8. **Run conditions,** per arm's runs: the returned model strings, the geos served, uncached
-   input tokens per minute, `--parallel`, the dates, and for the control `org-check`'s results.
+   input tokens per minute, `--parallel`, the dates and hours, and for the control `org-check`'s
+   results, with a warning unless one comes before its run and one after.
 
 Nothing here is a test. It ranks nothing, and differences are described, not tested.
 
 **Before any reading:**
 - every record of the control's runs must be on the 2 task cells;
-- the control's sweep must be complete, or have stopped at its planned spend
-  (`SPEND_RESERVATION` or `COST_CAP`) with no API error awaiting its §13 re-run, or be closed
-  with ``--sweep-closed``. Otherwise the script refuses, unless ``--allow-incomplete`` is passed,
-  and the output is then PROVISIONAL;
+- an API error awaiting its §13 re-run refuses, whether or not the sweep is closed;
+- the sweep must be complete, or closed: by R11's registered stop (`stop_gap`: one run, ended at
+  its planned spend of `PLANNED_USD`, with a record of every episode it started), or by the
+  researcher with ``--sweep-closed``. Otherwise the script refuses, unless ``--allow-incomplete``
+  is passed, and the output is then PROVISIONAL;
 - §2.8's accounting check (`persistgym_h1h3.accounting_check`) on the control's raw transcripts
   under ``--raw-root`` (default ``results/raw``). A bug stops the analysis (`AccountingBug`).
   Missing transcripts of any arm refuse likewise, or make the output PROVISIONAL with
@@ -79,6 +83,7 @@ EXPERIMENT = registered.HAIKU_CONTROL_EXPERIMENT
 CELL = registered.HAIKU_CONTROL_CELL
 TASK_CELLS = registered.HAIKU_CONTROL_TASK_CELLS
 T = registered.HAIKU_T
+PLANNED_USD = registered.HAIKU_CONTROL_PLANNED_USD
 CONTROL_ARM = "W-n-0 (R11)"
 R9_ARM = "W-n-0 (R9)"
 SPEND_STOPS = ("SPEND_RESERVATION", "COST_CAP")
@@ -99,57 +104,125 @@ def r10_read(root: Path) -> tuple[list, dict]:
     return runs, resolved
 
 
-def templates_read(resolved: dict) -> int:
-    """How many leading main templates the control finished in both task cells: k, so that every
-    arm can be read on templates 0 to k - 1."""
-    for t in range(T):
+def _key(t: int, task_cell: str) -> tuple[str, str, int]:
+    return (CELL, hh.episode_id_of(CELL, hh.BASE, t, task_cell), 0)
+
+
+def templates_read(resolved: dict) -> list[int]:
+    """The main templates the control finished in both task cells: every arm is read on these."""
+    def counted(t: int, tc: str) -> bool:
+        r = resolved.get(_key(t, tc))
+        return r is not None and r.status == "counted" and r.record is not None
+    return [t for t in range(T) if all(counted(t, tc) for tc in TASK_CELLS)]
+
+
+def left_out(resolved: dict, read: list[int]) -> tuple[list[dict], int]:
+    """The keys that keep a template out of the reading, up to the last template with any key,
+    each with its status and reason; and how many templates after that were never played."""
+    played = [t for t in range(T) if any(_key(t, tc) in resolved for tc in TASK_CELLS)]
+    last = played[-1] if played else -1
+    rows = []
+    for t in sorted(set(range(last + 1)) - set(read)):
         for tc in TASK_CELLS:
-            r = resolved.get((CELL, hh.episode_id_of(CELL, hh.BASE, t, tc), 0))
-            if r is None or r.status != "counted" or r.record is None:
-                return t
-    return T
+            key = _key(t, tc)
+            r = resolved.get(key)
+            if r is None:
+                rows.append({"template": t, "task_cell": tc, "episode_id": key[1],
+                             "status": "no record", "reason": "the run has no record of it"})
+            elif r.status != "counted" or r.record is None:
+                rows.append({"template": t, "task_cell": tc, "episode_id": key[1],
+                             "status": r.status, "reason": r.reason})
+    return rows, T - last - 1
 
 
-def primary(resolved: dict, cell: str, k: int) -> tuple:
-    """The counted repeat-0 base episodes of `cell` on the task cells and templates read."""
-    table, warn = hh.episode_table(resolved, api=hh.MESSAGES_API)
-    sub = table[(table.repeat == 0) & (table.status == "counted") & (table.cell == cell)
-                & (table.variant == hh.BASE) & (table.template < k)
-                & table.task_cell.isin(TASK_CELLS)].reset_index(drop=True)
-    return sub, warn
+def stop_gap(runs: list) -> str | None:
+    """Why R11's registered stop did not close the sweep, or None: it closes it for one run that
+    ended at its planned spend of `PLANNED_USD`, with a record of every episode it started.
+    Anything else needs the researcher's close (--sweep-closed)."""
+    if len(runs) != 1:
+        return f"{len(runs)} runs hold it, so the registered stop alone does not close the sweep"
+    run = runs[0]
+    if run.exit_reason not in SPEND_STOPS:
+        return f"its run ended {run.exit_reason}, not at its planned spend"
+    planned = (run.parallel.get("spend_reservation") or {}).get("planned_usd")
+    if planned != PLANNED_USD:
+        return f"its run's planned spend is {planned}, not the registered {PLANNED_USD}"
+    started = run.parallel.get("episodes_started")
+    if started != len(run.records):
+        return f"its run started {started} episodes and holds {len(run.records)} records"
+    return None
 
 
-def arm(name: str, resolved: dict, cell: str, k: int, idx: np.ndarray) -> tuple[dict, list]:
-    """Readings 1-3 and 7 for one arm, and the warnings."""
-    sub, warn = primary(resolved, cell, k)
-    cells = hh.cell_table(sub, kinds=((cell, hh.BASE),), stopped=True, task_cells=TASK_CELLS)
-    for row in cells:
-        row["interval_90"] = hn.interval(hn.by_template(resolved, cell, row["task_cell"], k), idx)
-    costs = hp.costs_per_episode(resolved, cell, k)
-    return ({"arm": name, "cell": cell, "counted_repeat_0": len(sub), "cells": cells,
-             "accounting": hh.accounting(sub, cells=(cell,), task_cells=TASK_CELLS),
-             "choices_nr_far": hp.choices(resolved, cell, k),
-             "costs": {tc: costs[tc] for tc in TASK_CELLS}}, warn)
-
-
-def contrasts(control: dict, r9: dict, r10: dict, k: int, idx: np.ndarray) -> dict:
-    """Reading 4 (`haiku_notes.contrast`: the same template resamples for both sides)."""
-    ctl = {tc: hn.by_template(control, CELL, tc, k) for tc in TASK_CELLS}
-    out = {f"{CONTROL_ARM} - {R9_ARM}": {
-        tc: hn.contrast(ctl[tc], hn.by_template(r9, hp.R9_CELL, tc, k), idx)
-        for tc in TASK_CELLS}}
-    for c in registered.HAIKU_PROVENANCE_CELLS:
-        out[f"{c} - {CONTROL_ARM}"] = {
-            tc: hn.contrast(hn.by_template(r10, c, tc, k), ctl[tc], idx) for tc in TASK_CELLS}
+def sweep_gaps(runs: list, resolved: dict, read: list[int], left: list[dict], reasons: list[str],
+               sweep_closed: bool) -> list[str]:
+    """Why the control's sweep cannot be read as final (empty when it can). `reasons` are
+    `persistgym_h1h3.completeness`'s over all the templates."""
+    waiting = sorted(key[1] for key, r in resolved.items() if r.awaiting_rerun)
+    out = ([f"{len(waiting)} episode(s) await their §13 re-run: " + ", ".join(waiting[:5])]
+           if waiting else [])
+    if len(read) == T or sweep_closed:
+        return [*out, *reasons]
+    gap = stop_gap(runs)
+    if gap:
+        return [*out, f"the control finished {len(read)} of {T} templates, and {gap}", *reasons]
+    owed = [x for x in left if x["status"] == "pending" and x["template"] < read[-1]]
+    if owed:
+        out.append(f"{len(owed)} episode(s) before the last template read are pending (first: "
+                   f"{owed[0]['episode_id']}: {owed[0]['reason']})")
     return out
 
 
-def responses(resolved: dict, experiment: str, cell: str, k: int, raw: Path,
+def restrict(resolved: dict, read: list[int]) -> dict:
+    """The counted keys of one arm's resolution on the templates read."""
+    keep = set(read)
+    return {key: r for key, r in resolved.items()
+            if r.status == "counted" and r.record is not None
+            and hh.template_index(r.record["template_id"]) in keep}
+
+
+def primary(resolved: dict, cell: str) -> tuple:
+    """The counted repeat-0 base episodes of `cell` on the task cells, from a restricted
+    resolution."""
+    table, warn = hh.episode_table(resolved, api=hh.MESSAGES_API)
+    sub = table[(table.repeat == 0) & (table.status == "counted") & (table.cell == cell)
+                & (table.variant == hh.BASE) & table.task_cell.isin(TASK_CELLS)
+                ].reset_index(drop=True)
+    return sub, warn
+
+
+def arm(name: str, resolved: dict, cell: str, idx: np.ndarray) -> tuple[dict, list]:
+    """Readings 1-3 and 7 for one arm, from a restricted resolution, and the warnings."""
+    sub, warn = primary(resolved, cell)
+    cells = hh.cell_table(sub, kinds=((cell, hh.BASE),), stopped=True, task_cells=TASK_CELLS)
+    for row in cells:
+        row["interval_90"] = hn.interval(hn.by_template(resolved, cell, row["task_cell"], T), idx)
+    costs = hp.costs_per_episode(resolved, cell, T)
+    return ({"arm": name, "cell": cell, "counted_repeat_0": len(sub), "cells": cells,
+             "accounting": hh.accounting(sub, cells=(cell,), task_cells=TASK_CELLS),
+             "choices_nr_far": hp.choices(resolved, cell, T),
+             "costs": {tc: costs[tc] for tc in TASK_CELLS}}, warn)
+
+
+def contrasts(control: dict, r9: dict, r10: dict, idx: np.ndarray) -> dict:
+    """Reading 4, from restricted resolutions (`haiku_notes.contrast`: the same template
+    resamples for both sides)."""
+    ctl = {tc: hn.by_template(control, CELL, tc, T) for tc in TASK_CELLS}
+    out = {f"{CONTROL_ARM} - {R9_ARM}": {
+        tc: hn.contrast(ctl[tc], hn.by_template(r9, hp.R9_CELL, tc, T), idx)
+        for tc in TASK_CELLS}}
+    for c in registered.HAIKU_PROVENANCE_CELLS:
+        out[f"{c} - {CONTROL_ARM}"] = {
+            tc: hn.contrast(hn.by_template(r10, c, tc, T), ctl[tc], idx) for tc in TASK_CELLS}
+    return out
+
+
+def responses(resolved: dict, experiment: str, cell: str, raw: Path,
               facts: dict[str, dict] | None = None) -> tuple[dict | None, dict, list[str]]:
-    """Reading 6 for one arm, its user-message digests, and the runs with no transcript. The
-    reading is None when any is missing. `facts` defaults to the generator's."""
+    """Reading 6 for one arm, from a restricted resolution: the reading, its user-message
+    digests, and the runs with no transcript. The reading is None when any is missing. `facts`
+    defaults to the generator's."""
     by_run: dict[str, dict[str, dict]] = {}
-    for r in hp._counted(resolved, cell, k, TASK_CELLS):
+    for r in hp._counted(resolved, cell, T, TASK_CELLS):
         by_run.setdefault(r.run_id, {})[r.record["episode_id"]] = r.record
     missing = sorted(run_id for run_id in by_run
                      if not (raw / experiment / run_id / "transcript.jsonl.gz").is_file())
@@ -164,11 +237,11 @@ def responses(resolved: dict, experiment: str, cell: str, k: int, raw: Path,
     if t["responses"] != from_records["responses"]:
         raise hh.Refusal(f"{cell}'s transcripts in {experiment} hold {t['responses']} responses, "
                          f"its records {from_records['responses']}")
-    summary_ = hpe.arm_transcript_summary(t, records)
+    reading = hpe.arm_transcript_summary(t, records)
     for key in ("fact_value_in_replies", "at_need", "leak_check"):
-        summary_[key] = {tc: summary_[key][tc] for tc in TASK_CELLS}
-    return {**from_records, **summary_, "episodes": len(records), "runs": sorted(by_run)}, \
-        t["user_hash"], []
+        reading[key] = {tc: reading[key][tc] for tc in TASK_CELLS}
+    return ({**from_records, **reading, "episodes": len(records), "runs": sorted(by_run)},
+            t["user_hash"], [])
 
 
 def run_conditions(root: Path, experiment: str, cell: str, runs: list, raw: Path) -> list[dict]:
@@ -178,7 +251,7 @@ def run_conditions(root: Path, experiment: str, cell: str, runs: list, raw: Path
         if run.cell != cell:
             continue
         meta = json.loads((run.folder / "meta.json").read_text(encoding="utf-8"))
-        out.append({"run_id": run.run_id, "exit_reason": run.exit_reason,
+        out.append({"exit_reason": run.exit_reason,
                     "started_utc": meta.get("started_utc"), "finished_utc": meta.get("finished_utc"),
                     "model_returned": [str(m) for m in run.model_returned],
                     "inference_geos": meta.get("inference_geos"),
@@ -194,9 +267,38 @@ def org_checks(root: Path) -> list[dict]:
     for path in sorted(folder.glob("*/org_check.json")) if folder.is_dir() else []:
         d = json.loads(path.read_text(encoding="utf-8"))
         rows.append({"folder": path.parent.name, "checked_utc": d.get("checked_utc"),
-                     "same_org_as_r10": d.get("same_org_as_r10"),
-                     "same_org_as_r8": d.get("same_org_as_r8")})
+                     "same_org_as_r10_error": d.get("same_org_as_r10_error"),
+                     "same_org_as_r8_error": d.get("same_org_as_r8_error")})
     return rows
+
+
+def org_warnings(orgs: list[dict], conditions: list[dict]) -> list[str]:
+    """Why `org-check`'s results do not bracket the control's run under the organization that
+    R10's error names (empty when they do)."""
+    if not orgs:
+        return ["no org-check result is committed for the control"]
+    out = []
+    if not all(o["same_org_as_r10_error"] for o in orgs):
+        out.append("an org-check result names another organization than the one R10's error names")
+    times = [datetime.fromisoformat(o["checked_utc"]) for o in orgs]
+    start = min(datetime.fromisoformat(c["started_utc"]) for c in conditions)
+    end = max(datetime.fromisoformat(c["finished_utc"]) for c in conditions)
+    if not any(x <= start for x in times):
+        out.append("no org-check result comes before the control's run")
+    if not any(x >= end for x in times):
+        out.append("no org-check result comes after the control's run")
+    return out
+
+
+def _ranges(read: list[int]) -> str:
+    """Template indices as ranges: 0-39, 41-196."""
+    spans: list[list[int]] = []
+    for t in read:
+        if spans and t == spans[-1][1] + 1:
+            spans[-1][1] = t
+        else:
+            spans.append([t, t])
+    return ", ".join(f"{a}-{b}" if a != b else str(a) for a, b in spans)
 
 
 def readings(root: Path, links: dict[str, str], sweep_closed: bool, *,
@@ -206,45 +308,40 @@ def readings(root: Path, links: dict[str, str], sweep_closed: bool, *,
     if off:
         raise hh.Refusal(f"R11's run plays {', '.join(TASK_CELLS)} only, but records hold "
                          f"{', '.join(off)}")
-    k = templates_read(control)
-    if k == 0:
+    read = templates_read(control)
+    if not read:
         raise hh.Refusal("the control finished no template in both task cells")
     kinds = ((CELL, hh.BASE),)
-    incomplete, deviations = hh.completeness(control, k, sweep_closed, kinds, task_cells=TASK_CELLS)
-    ended = [r.exit_reason for r in runs]
-    waiting = sorted(key[1] for key, r in control.items() if r.awaiting_rerun)
-    if waiting and not sweep_closed:
-        incomplete.append(f"{len(waiting)} episode(s) await their §13 re-run: "
-                          + ", ".join(waiting[:5]))
-    if k < T and not sweep_closed and not any(e in SPEND_STOPS for e in ended):
-        incomplete.append(f"the control finished {k} of {T} templates, and no run stopped at its "
-                          f"planned spend (endings: {', '.join(map(str, ended))})")
+    reasons, deviations = hh.completeness(control, T, sweep_closed, kinds, task_cells=TASK_CELLS)
+    left, not_played = left_out(control, read)
+    incomplete = sweep_gaps(runs, control, read, left, reasons, sweep_closed)
     if incomplete and not allow_incomplete:
         raise hh.Refusal("the control's sweep is incomplete:\n" + "\n".join(
-            f"  - {x}" for x in incomplete) + "\nWait for the runs, pass --sweep-closed once the "
-            "researcher has closed the sweep, or pass --allow-incomplete to see what exists "
-            "(PROVISIONAL).")
+            f"  - {x}" for x in incomplete) + "\nWait for the runs (a transport failure needs its "
+            "§13 re-run), pass --sweep-closed once the researcher has closed the sweep, or pass "
+            "--allow-incomplete to see what exists (PROVISIONAL).")
     raw = raw_root or root / "results" / "raw"
     check = hh.accounting_check(runs, raw, EXPERIMENT, hh.MESSAGES_API)
     if check["bugs"]:
         raise hh.AccountingBug(
             "PREREG §2.8's bug stop: window-accounting bug(s), so no result is reported until "
             "they are found:\n" + "\n".join(f"  - {b}" for b in check["bugs"]))
-    r9_runs, r9 = hp.r9_read(root)
-    r10_runs, r10 = r10_read(root)
+    r9_runs, r9_all = hp.r9_read(root)
+    r10_runs, r10_all = r10_read(root)
     seed, _ = hh.read_seed(root / "results")
     boot_seed = seed + hh.BOOT_SEED_OFFSET  # §9.1's bootstrap seed, as for R8's to R10's
-    idx = hh.resample_indices(k, boot_seed, hp.BOOT)
+    idx = hh.resample_indices(T, boot_seed, hp.BOOT)
+    ctl, r9, r10 = (restrict(x, read) for x in (control, r9_all, r10_all))
     prov = registered.HAIKU_PROVENANCE_EXPERIMENT
-    plan = [(CONTROL_ARM, control, EXPERIMENT, CELL, runs),
+    plan = [(CONTROL_ARM, ctl, EXPERIMENT, CELL, runs),
             (R9_ARM, r9, registered.HAIKU_NOTES_EXPERIMENT, hp.R9_CELL, r9_runs),
             *((c, r10, prov, c, r10_runs) for c in registered.HAIKU_PROVENANCE_CELLS)]
     arms, hashes, warnings = [], {}, list(warn)
     for name, resolved, experiment, cell, arm_runs in plan:
-        a, w = arm(name, resolved, cell, k, idx)
+        a, w = arm(name, resolved, cell, idx)
         warnings += w
-        a["responses"], hashes[name], missing = responses(resolved, experiment, cell, k, raw)
-        a["replies_nr_far"], gone = (hp.replies(resolved, cell, k, raw, experiment)
+        a["responses"], hashes[name], missing = responses(resolved, experiment, cell, raw)
+        a["replies_nr_far"], gone = (hp.replies(resolved, cell, T, raw, experiment)
                                      if name in (CONTROL_ARM, R9_ARM) else (None, []))
         a["conditions"] = run_conditions(root, experiment, cell, arm_runs, raw)
         for run_id in sorted({*missing, *gone}):
@@ -256,25 +353,23 @@ def readings(root: Path, links: dict[str, str], sweep_closed: bool, *,
                          "(PROVISIONAL).")
     ref = hashes[R9_ARM]
     orgs = org_checks(root)
-    if not orgs:
-        warnings.append("no org-check result is committed for the control")
-    elif not all(o["same_org_as_r10"] for o in orgs):
-        warnings.append("an org-check result names another organization than R10's")
+    warnings += org_warnings(orgs, arms[0]["conditions"])
     return {"experiment": EXPERIMENT, "cell": CELL, "model": registered.HAIKU_MODEL,
-            "prereg": registered.R11_REF, "T": T, "templates_read": k,
+            "prereg": registered.R11_REF, "T": T, "templates_read": len(read),
+            "templates": _ranges(read), "left_out": left, "templates_never_played": not_played,
             "task_cells": list(TASK_CELLS),
             "status": hh.PROVISIONAL if incomplete else hh.FINAL,
             "incomplete": incomplete, "deviations": deviations,
             "accounting_check": {"checked": check["checked"], "bugs": check["bugs"],
                                  "missing_transcripts": check["missing_transcripts"]},
-            "exclusions": hh.exclusion_table(control, k, kinds=kinds, echo=False,
+            "exclusions": hh.exclusion_table(control, T, kinds=kinds, echo=False,
                                              task_cells=TASK_CELLS),
             "bootstrap": {"resamples": hp.BOOT, "seed": boot_seed,
                           "interval": "90% percentile, template-cluster"},
             "runs": [hh.run_row(r, control) for r in runs], "rerun_links": links,
             "sweep_closed": sweep_closed, "arms": arms,
             "sources": {"r9": hp.R9_OUTPUT, "r10": R10_OUTPUT},
-            "contrasts": contrasts(control, r9, r10, k, idx),
+            "contrasts": contrasts(ctl, r9, r10, idx),
             "user_messages_against_r9": {
                 name: {"common": len(ref.keys() & h),
                        "identical": sum(ref[x] == h[x] for x in ref.keys() & h)}
@@ -288,15 +383,21 @@ def _share(pair: list | None) -> str:
 
 
 def summary(r: dict) -> str:
-    k = r["templates_read"]
     lines = [f"# {r['model']}: R11's later W-n-0 control ({r['experiment']})", "",
              (f"**{r['status']}.** {r['prereg']}. Exploratory: no test, no label. Repeat 0, the 2 "
-              f"not-recoverable far task cells, main templates 0-{k - 1} in every arm. Not a model "
-              f"comparison. §2.8's accounting check: {r['accounting_check']['checked']} need steps "
-              f"replayed, {len(r['accounting_check']['bugs'])} bugs. R11's run came after R10's "
-              "arms, not alongside them."), "",
-             "| Arm | Task cell | Success | 90% interval | Refused episodes | Stopped responses |",
-             "|---|---|---|---|---|---|"]
+              f"not-recoverable far task cells, main templates {r['templates']} in every arm "
+              f"({r['templates_read']} of {r['T']}). Not a model comparison. §2.8's accounting "
+              f"check: {r['accounting_check']['checked']} need steps replayed, "
+              f"{len(r['accounting_check']['bugs'])} bugs. R11's run came after R10's arms, not "
+              "alongside them."), ""]
+    if r["templates_read"] < r["T"]:
+        lines += [(f"**Templates left out of every arm:** {r['T'] - r['templates_read']}, of which "
+                   f"{r['templates_never_played']} were never played."), ""]
+        lines += [f"- template {x['template']}, {x['task_cell']}: {x['status']}: {x['reason']}"
+                  for x in r["left_out"]]
+        lines += [""] if r["left_out"] else []
+    lines += ["| Arm | Task cell | Success | 90% interval | Refused episodes | Stopped responses |",
+              "|---|---|---|---|---|---|"]
     for a in r["arms"]:
         for c in a["cells"]:
             iv = c.get("interval_90")
@@ -395,17 +496,18 @@ def summary(r: dict) -> str:
                          f"{'n/a' if cost is None else f'{cost:.5f}'} | "
                          f"{'n/a' if out is None else f'{out:.0f}'} |")
     lines += ["", "**Run conditions:**", "",
-              ("| Arm | Run | Ending | Started | Parallel | Uncached input tokens a minute | "
-               "Model strings | Geos |"), "|---|---|---|---|---|---|---|---|"]
+              ("| Arm | Run | Ending | Started | Finished | Parallel | Uncached input tokens a "
+               "minute | Model strings | Geos |"), "|---|---|---|---|---|---|---|---|---|"]
     for a in r["arms"]:
         for c in a["conditions"]:
-            rate = c["uncached_per_minute"]
             lines.append(f"| {a['arm']} | {c['run_id']} | {c['exit_reason']} | {c['started_utc']} | "
-                         f"{c['max_in_flight']} | {rate:,.0f} | "
+                         f"{c['finished_utc']} | {c['max_in_flight']} | "
+                         f"{c['uncached_per_minute']:,.0f} | "
                          f"{', '.join(c['model_returned'])} | {c['inference_geos']} |")
     lines += ["", "**Organization** (`harnesses org-check`):", ""]
-    lines += [f"- {o['checked_utc']}: same as R10's {o['same_org_as_r10']}, same as R8's "
-              f"{o['same_org_as_r8']}." for o in r["org_checks"]] or ["- no result committed."]
+    lines += [f"- {o['checked_utc']}: the one R10's error names: {o['same_org_as_r10_error']}; the "
+              f"one R8's errors name: {o['same_org_as_r8_error']}."
+              for o in r["org_checks"]] or ["- no result committed."]
     lines += ["", "**Exclusions** (the control, per task cell, repeat 0; §13):", ""]
     for e in r["exclusions"]:
         rest = {x: v for x, v in e.items() if x not in ("kind", "cell", "variant", "task_cell")
@@ -449,7 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         cell_or_config=CELL, config={"experiment": EXPERIMENT, "rerun_links": r["rerun_links"],
                                      "sweep_closed": a.sweep_closed,
                                      "allow_incomplete": a.allow_incomplete,
-                                     "status": r["status"], "templates_read": r["templates_read"],
+                                     "status": r["status"], "templates": r["templates"],
                                      "r9_output": hp.R9_OUTPUT, "r10_output": R10_OUTPUT},
         model_requested=None, model_returned=None, reasoning_effort=None,
         reasoning_context_requested=None, reasoning_context_echoed=None, template_id=None,

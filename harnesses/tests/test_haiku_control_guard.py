@@ -11,10 +11,13 @@
   run still passes; with `R8_IN_EFFECT` False it refuses too.
 * The block: the Anthropic transport admits the run under a block that lists its experiment.
   R9's and R10's blocks cannot fund it, and its block funds none of theirs. An end-to-end run
-  goes through the real guarded transport with a fake-backed client, at the block's exact
-  $17.38, with the notes instruction and none of R10's sentences in every system prompt.
+  goes through the real guarded transport with a fake-backed client, at the registered $17.24,
+  with the notes instruction and none of R10's sentences in every system prompt.
+* The stop: the planned spend sits below the block's $17.38 by at least what one send can add,
+  and the decisions log's command uses it.
 * `org-check`: reads the organization's digest from the free endpoint's header, never prints or
-  writes the ID, and exits 3 for an organization other than R10's.
+  writes the ID, an API error's text included, and exits 3 for an organization other than the
+  one R10's error names.
 """
 
 from __future__ import annotations
@@ -24,8 +27,10 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
+import anthropic
 import pytest
 
+from analysis import haiku_control_forecast as hf
 from common import costs, paidlock
 from common.tests.gitrepo import FROZEN_PREREG, approval_line, decisions_text, guarded_repo
 from harnesses import anthropic_transport, cli, org_check, registered
@@ -76,6 +81,18 @@ def test_the_decisions_log_approves_exactly_the_researchers_amount():
     text = (REPO / "results" / "decisions.md").read_text(encoding="utf-8")
     (line,) = [x for x in text.splitlines() if x.startswith(f"approved_block: {BLOCK} ")]
     assert line == f"approved_block: {BLOCK} | experiments: {CONTROL} | max_usd: 17.38"
+    assert registered.HAIKU_CONTROL_MAX_USD == 17.38
+
+
+def test_the_planned_spend_leaves_room_for_one_send_and_the_command_uses_it():
+    forecast = hf.forecast(REPO)
+    assert forecast["most_one_send_usd"] == pytest.approx(0.1335, abs=0.001)
+    room = registered.HAIKU_CONTROL_MAX_USD - registered.HAIKU_CONTROL_PLANNED_USD
+    assert room >= forecast["most_one_send_usd"]
+    text = (REPO / "results" / "decisions.md").read_text(encoding="utf-8")
+    (line,) = [x for x in text.splitlines() if f"--experiment {CONTROL}" in x]
+    assert f"--planned-usd {registered.HAIKU_CONTROL_PLANNED_USD} " in line
+    assert "--parallel 2" in line and all(c in line for c in TWO)
 
 
 # --- the rules -----------------------------------------------------------------------------------
@@ -240,12 +257,13 @@ RUN = ["run", "--cell", "W-n-0", "--model", HAIKU, "--split", "main", "--task-ce
 
 
 def test_an_end_to_end_r11_run(control_paid_env, capsys):
-    """W-n-0 on main template 0 x the 2 task cells under block 7-haiku-control, at the block's
-    whole $17.38: through the settings guard, the paid guard and the Anthropic transport, with
-    the notes instruction and neither of R10's sentences in every request's system prompt."""
+    """W-n-0 on main template 0 x the 2 task cells under block 7-haiku-control, at the registered
+    $17.24: through the settings guard, the paid guard and the Anthropic transport, with the
+    notes instruction and neither of R10's sentences in every request's system prompt."""
     tmp, costs_csv, fakes = control_paid_env
-    assert cli.main([*RUN, "--n", "1", "--approved-block", BLOCK, "--planned-usd", "17.38",
-                     "--run-id", "hc", "--parallel", "2"]) == 0
+    assert cli.main([*RUN, "--n", "1", "--approved-block", BLOCK, "--planned-usd",
+                     str(registered.HAIKU_CONTROL_PLANNED_USD), "--run-id", "hc",
+                     "--parallel", "2"]) == 0
     capsys.readouterr()
     (row,) = costs.read_rows(costs_csv)
     (fake,) = fakes
@@ -260,7 +278,7 @@ def test_an_end_to_end_r11_run(control_paid_env, capsys):
     assert not (tmp / "lock" / paidlock.lock_name(cli.STREAM)).exists()
 
 
-def test_a_planned_spend_above_the_block_refuses(control_paid_env, capsys):
+def test_the_whole_block_can_be_planned_and_no_more(control_paid_env, capsys):
     _, costs_csv, fakes = control_paid_env
     assert cli.main([*RUN, "--n", "1", "--approved-block", BLOCK, "--planned-usd", "17.39",
                      "--run-id", "over"]) == 2
@@ -306,9 +324,12 @@ class _Stub:
         self.with_raw_response = self
         self.default_headers = {}
         self._custom_headers = {}
+        self.error = None
 
     def count_tokens(self, **kw):
         self.calls.append(kw)
+        if self.error:
+            raise self.error
         headers = {org_check.ORG_HEADER: self.org} if self.org else {}
         return SimpleNamespace(headers=headers)
 
@@ -328,8 +349,9 @@ def org_env(monkeypatch):
 ORG = "00000000-1111-2222-3333-444444444444"
 
 
-def _run_check(monkeypatch, tmp_path, org):
+def _run_check(monkeypatch, tmp_path, org, error=None):
     stub = _Stub(org)
+    stub.error = error
     monkeypatch.setattr(cli, "ORG_CHECK_CLIENT", lambda: stub)
     out = tmp_path / "o" / "org_check.json"
     return cli.main(["org-check", "--out", str(out)]), out, stub
@@ -350,10 +372,10 @@ def test_another_organization_exits_3_and_the_id_is_never_written(org_env, monke
                                                                   capsys):
     code, out, stub = _run_check(monkeypatch, tmp_path, ORG)
     printed = capsys.readouterr()
-    assert code == 3 and "not the one of R10's runs" in printed.err
+    assert code == 3 and "not the one R10's rate-limit error names" in printed.err
     text = out.read_text(encoding="utf-8")
     report = json.loads(text)
-    assert report["same_org_as_r10"] is False and report["same_org_as_r8"] is False
+    assert report["same_org_as_r10_error"] is False and report["same_org_as_r8_error"] is False
     assert report["org_sha256"] == org_check.org_digest(ORG)
     assert ORG not in text and ORG not in printed.out and ORG not in printed.err
     (call,) = stub.calls
@@ -364,7 +386,17 @@ def test_r10s_organization_exits_0(org_env, monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(org_check, "R10_ORG_SHA256", org_check.org_digest(ORG))
     code, out, _ = _run_check(monkeypatch, tmp_path, ORG)
     capsys.readouterr()
-    assert code == 0 and json.loads(out.read_text(encoding="utf-8"))["same_org_as_r10"] is True
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert code == 0 and report["same_org_as_r10_error"] is True
+
+
+def test_an_api_error_refuses_and_its_text_is_not_printed(org_env, monkeypatch, tmp_path, capsys):
+    error = anthropic.APIConnectionError(
+        message=f"rate limit (org: {ORG}, model: {HAIKU})", request=None)
+    code, out, _ = _run_check(monkeypatch, tmp_path, ORG, error=error)
+    printed = capsys.readouterr()
+    assert code == 2 and "APIConnectionError" in printed.err and not out.exists()
+    assert ORG not in printed.err and ORG not in printed.out
 
 
 def test_no_header_refuses(org_env, monkeypatch, tmp_path, capsys):

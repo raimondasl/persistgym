@@ -1615,9 +1615,10 @@ approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_ha
 **Correction** to the entry "2026-11-02: R10's runs on claude-haiku-5-5: results (exploratory)". The researcher asked what the organization ID in the rate-limit errors is, and checking it showed this.
 - **What the entry says:** "The records cannot say why the limit changed", and "The organization's rate limit also changed between the runs. Nothing links that to what is served."
 - **What the records show:** the two limits are in error texts that name two different organizations. R8's errors of 2026-10-18 (10,000,000 input tokens per minute; `results/persistgym_haiku/20261018T144829Z-W-0-claude-haiku-5-5/` and `20261018T165717Z-single-turn-claude-haiku-5-5/`) name one. R10's of 2026-11-01 (2,000,000; `results/persistgym_haiku_provenance/20261101T184553Z-W-np-0-claude-haiku-5-5/`) name another. So no limit is shown to have changed.
-- **R9's organization is not in its records.** Its run hit no such error, and transcripts keep no response headers. It sustained about 5.8 million uncached input tokens a minute, above the 2,000,000 that R10's organization has now. That fits R8's organization, but does not establish it.
-- **R10's later runs** hit no such error either. A free call on 2026-11-02, after them, found the current key in the organization that R10's error names.
+- **R9's organization is not in its records.** Its run hit no such error, and transcripts keep no response headers. It sustained about 5.8 million uncached input tokens a minute, above the 2,000,000 that the organization in R10's error has now. That fits R8's organization, but does not establish it.
+- **R10's later runs** hit no such error either. A free call on 2026-11-02, after them, found the current key in the organization that R10's error names, and `results/haiku_control_org/` holds a committed check of the same kind. So those runs are inferred to be under it, not recorded.
 - **What this changes in that entry:** no number. Its list of what differs from R9 missed a candidate: R10's arms may have run under another organization than R9's. An arm minus R9's W-n-0 therefore mixes the added sentences with the date and possibly with the organization. Nothing shows that an organization changes what is served.
+- **Two earlier entries read the same way:** the R9 amendment of 2026-10-24 ("under the organization's 10M input tokens per minute") and the R10 amendment of 2026-11-01 ("under the organization's input-token rate limit") suggest one organization, with R9 under it. The records do not establish that.
 - **The pull request's text** (`raimondasl/persistgym#86`) said R10's error holds the organization's ID "as R8's committed files already do", which suggests one ID. R8's files hold the other one. R8's ID has been public since October, and R10's since that pull request.
 
 ## 2026-11-02: Amendment R11: a later W-n-0 control for R10's two cells; block 7-haiku-control
@@ -1625,16 +1626,18 @@ approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_ha
 
 **Amendment R11** (`PREREG.md` §17.11) and **PLAN amendment A13** (`PLAN.md` §28):
 - **One run:** Haiku in W-n-0 on the 2 not-recoverable far task cells, main templates 0-199 at repeat 0, with R8's settings, at `--parallel 2`: at most 400 episodes, in its own experiment, `persistgym_haiku_control`.
-- **Under R10's organization.** A free check before and after the run records whether the key's organization is the one R10's error names. If the check before the run says otherwise, Claude stops and tells the researcher before any paid call.
+- **With a key in the organization R10's error names.** A free check before and after the run records this. If the check before the run says otherwise, Claude stops and tells the researcher before any paid call.
+- **Within R10's hours.** It is started between 19:04 and 01:30 UTC, so that at R10's pace it ends inside the hours R10's runs played.
 - **Exploratory:** decided after R9's and R10's readings were read. Nothing of R8, R9 or R10 changes.
 - **The analysis is descriptive:** four arms on the same episodes (this run, R9's W-n-0, R10's W-np-0 and W-npd-0), with success, the carried-fact accounting, choices with the fact evicted, 6 contrasts, the replies patterns, refusals and thinking blocks, cost, and run conditions.
 - **The script,** `analysis/haiku_control.py`, is in this pull request, before the run exists. Read with R9's run as the control, it gives zero against R9 and reproduces R10's committed contrasts.
-- **What each outcome would point to** is written in §17.11 before the run. Near R9's points to the sentences. Near R10's arms points away from them, to something like the date or the organization, without saying which.
+- **What each outcome would point to** is written in §17.11 before the run. Near R9's points to the sentences. Near R10's arms says that W-n-0 now reaches that level without them, for a reason this run cannot name, and leaves open whether they raised R10's arms if the change came after those arms. Between the two, the causes are not separated.
 - **Not concurrent.** R10's last arm finished on 2026-11-02 at 04:55 UTC, and this run comes after it.
 
-**Cost** (from the committed ledger and R9's committed records):
-- **Forecast:** $17.38, that is R9's own spend on these 400 episodes, $0.04345 each. There is no margin above it, by the researcher's condition.
-- **Limit:** $17.38 billed, which is also the run's `--planned-usd`, at which it stops. A parallel run cannot use the last part of its planned spend (`harnesses/DESIGN.md` §7.6). A simulation of that rule (`analysis/haiku_control_forecast.py`) gives about 199 whole templates at R9's cost, about 2 episodes short, and about 156 at $0.0552 per episode. Every arm is then read on the templates finished. Playing further needs the researcher's new approval.
+**Cost** (from the committed ledger, R9's committed records and `results/haiku_control_forecast/`):
+- **Limit:** $17.38 billed, the researcher's condition. The run's `--planned-usd` is $17.24, at which it stops. The $0.14 between them covers the most one last send can add to the ledger, about $0.13. A failed attempt that never reported its usage may be billed and is not in the ledger, so this ceiling is on the ledger's estimate, not on the provider's invoice.
+- **What it should read:** a parallel run cannot use the last part of its planned spend (`harnesses/DESIGN.md` §7.6). A simulation of that rule (`analysis/haiku_control_forecast.py`) gives about 197 whole templates and about $17.1 at R9's cost, and about 154 at $0.0552 per episode. Every arm is read on the templates finished. Playing further needs the researcher's new approval.
+- **R9's own spend** on these 400 episodes was $17.38, $0.04345 each. This run plays no near cells, whose caches R9's first requests read, so its episodes cost a little more even with serving unchanged.
 - **Phase 1a:** $381.30 spent of its $500 cap. At most $398.68 after this block.
 - **Project total so far:** $909.82 billed (93 ledger rows). At most $927.20 after this block.
 
@@ -1644,16 +1647,16 @@ approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_ha
        env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses org-check
 
    If it exits other than 0, Claude stops and tells the researcher.
-2. The run, about 90 minutes at R9's pace:
+2. The run, started between 19:04 and 01:30 UTC. It takes about 90 minutes at R9's pace and about 3.3 hours at R10's:
 
-       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-n-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --task-cell observed-nonrec-far derived-nonrec-far --experiment persistgym_haiku_control --approved-block 7-haiku-control --planned-usd 17.38 --parallel 2
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses run --cell W-n-0 --model claude-haiku-5-5 --split main --start 0 --n 200 --task-cell observed-nonrec-far derived-nonrec-far --experiment persistgym_haiku_control --approved-block 7-haiku-control --planned-usd 17.24 --parallel 2
 
 3. The check again, as in step 1. A different result goes to the researcher with the readings.
 4. The analysis, on a clean commit:
 
        uv run python -m analysis.haiku_control
 
-A run that stops early for any reason but its planned spend is continued only after the researcher is told the cause, within what is left of the block (`harnesses/DESIGN.md` §7.9).
+A run that stops early for any reason but its planned spend is continued only after the researcher is told the cause, within what is left of the block (`harnesses/DESIGN.md` §7.9). An API error's §13 re-run is played the same way, within what is left of the block.
 
 approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_usd: 17.38
 

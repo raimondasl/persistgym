@@ -31,9 +31,14 @@ def test_r9s_costs_are_the_400_episodes_of_17_38():
     assert len(costs) == 400 and sum(costs) == pytest.approx(17.38, abs=0.005)
 
 
-def test_the_forecast_stops_short_of_200_templates_and_within_the_block():
+def test_the_forecast_stops_short_of_200_templates_and_within_the_planned_spend():
     r = hf.forecast(hf.REPO_ROOT)
     at_r9, at_r10 = r["cases"].values()
-    assert 195 <= at_r9["whole_templates"] < 200
-    assert 150 <= at_r10["whole_templates"] < 160
-    assert at_r9["spent_usd"] <= hf.PLANNED_USD and at_r10["spent_usd"] <= hf.PLANNED_USD
+    assert (at_r9["whole_templates"], at_r10["whole_templates"]) == (197, 154)
+    assert at_r9["spent_usd"] <= r["planned_usd"] and at_r10["spent_usd"] <= r["planned_usd"]
+
+
+def test_one_send_is_six_attempts_at_the_largest_prompt_and_the_output_cap():
+    # cache write $0.125, output $0.50 per million; 6 attempts; the US geo's 1.1
+    assert hf.most_one_send(33_765) == pytest.approx(
+        (33_765 * 0.125 + 32_000 * 0.50) / 1e6 * 6 * 1.1)

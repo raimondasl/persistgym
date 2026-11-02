@@ -56,8 +56,9 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   lists its experiment (`common/approval.py`): block `3-persistgym`'s lists
   `persistgym_pilot` for it explicitly, so the researcher approves the pilot by name.
   R8 (below), the new dated amendment R6 change 1 asks for, adds claude-haiku-5-5's runs in
-  its three experiments, and R9 and R10 add Haiku's runs in theirs (`persistgym_haiku_notes`,
-  `persistgym_haiku_provenance`). All of these pass on to `haiku_refusal`. Every other run
+  its three experiments, and R9, R10 and R11 add Haiku's runs in theirs
+  (`persistgym_haiku_notes`, `persistgym_haiku_provenance`, `persistgym_haiku_control`). All of
+  these pass on to `haiku_refusal`. Every other run
   refuses, fail closed: any other pilot (a harness cell's, or any of sol's), `persistgym_validity` for
   every model but Haiku, `persistgym_sol_h1`, the probes (`toggle_pilot`, `replay_probe`),
   every sol run, any other experiment, and any model that is not a registered one. The
@@ -91,8 +92,8 @@ as amended by R2, §17.2, and R3, §17.3), and what luna's main sweep may run (�
   stays as a kill switch: set False, every Haiku paid run refuses (`R8_STOP`), its pilots
   and validity run included, and so does every other `claude-*` string. The Anthropic
   transport also refuses any model but Haiku, and an approved block that does not list
-  `persistgym_haiku` (harnesses/anthropic_transport.py), except for a run in R9's experiment,
-  and a pilot or a run in R10's experiment under a block that lists
+  `persistgym_haiku` (harnesses/anthropic_transport.py), except for a run in R9's or R11's
+  experiment, and a pilot or a run in R10's experiment under a block that lists
   `persistgym_haiku_provenance`.
 
 * R9 (§17.9), one exploratory run of Haiku's W-n-0 cell, which R8's size record did not run:
@@ -426,6 +427,14 @@ HAIKU_CONTROL_CELL = HAIKU_NOTES_CELL
 HAIKU_CONTROL_TASK_CELLS = tuple(c.id for c in ALL_CELLS if c.distance == "far"
                                  and not c.recoverable)
 """R11: the 2 not-recoverable far task cells, where R10's arms and R9's W-n-0 differ most."""
+HAIKU_CONTROL_MAX_USD = 17.38
+"""R11: the most the run's block allows, the researcher's condition of 2026-11-02."""
+HAIKU_CONTROL_PLANNED_USD = 17.24
+"""R11: the run's --planned-usd, below the block's limit by at least what one send can add after
+the stop has passed it (`analysis.haiku_control_forecast.most_one_send`). A run that ended at
+this stop, with a record of every episode it started, closes the sweep
+(`analysis.haiku_control.stop_gap`). The guard does not read it, since a continuation has a
+planned spend of its own (DESIGN §7.9)."""
 HAIKU_CONTROL_ORG_CHECK = "haiku_control_org"
 """R11: the folder under results/ where `harnesses org-check` writes its results (before and
 after the run), which `analysis.haiku_control` reports."""

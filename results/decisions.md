@@ -1634,7 +1634,7 @@ approved_block: 6-haiku-provenance | experiments: persistgym_pilot,persistgym_ha
 
 **Cost** (from the committed ledger and R9's committed records):
 - **Forecast:** $17.38, that is R9's own spend on these 400 episodes, $0.04345 each. There is no margin above it, by the researcher's condition.
-- **Limit:** $17.38 billed, which is also the run's `--planned-usd`, at which it stops. A parallel run cannot use the last part of its planned spend (`harnesses/DESIGN.md` §7.6), so at R9's cost it stops a few episodes short, at about template 197. It stops earlier if an episode costs more, at about template 157 at $0.0552 per episode. Every arm is then read on the templates finished. Playing further needs the researcher's new approval.
+- **Limit:** $17.38 billed, which is also the run's `--planned-usd`, at which it stops. A parallel run cannot use the last part of its planned spend (`harnesses/DESIGN.md` §7.6). A simulation of that rule (`analysis/haiku_control_forecast.py`) gives about 199 whole templates at R9's cost, about 2 episodes short, and about 156 at $0.0552 per episode. Every arm is then read on the templates finished. Playing further needs the researcher's new approval.
 - **Phase 1a:** $381.30 spent of its $500 cap. At most $398.68 after this block.
 - **Project total so far:** $909.82 billed (93 ledger rows). At most $927.20 after this block.
 

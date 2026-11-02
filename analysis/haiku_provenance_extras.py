@@ -13,7 +13,9 @@ transcript under ``--raw-root`` (default ``results/raw``). It reports, per arm:
    whether the response at the need step was a refusal, and success by where a refusal fell (at
    the need step, only before it, or neither; a refusal after the need step counts as neither).
 3. **Thinking blocks:** the share of responses holding one (only the block's presence: its text
-   is empty in every response), over all responses and by turn on each step's first request.
+   is empty in every response), over all responses and by turn on each step's first request,
+   both with and without the need steps, which start entering the rows at turn 20 and nearly
+   always hold one, and on the need step's first request.
 4. **What the model kept at the need step,** on its first request there: the retained replies,
    how many and how long, and from the last evidence step to the step before the need step, how
    many replies hold the fact's value (whole-word match, `survival.whole_word_regex`; refused
@@ -158,7 +160,9 @@ def transcript_readings(path: Path, records: dict[str, dict],
     """Readings 3 to 6, from one run's transcript, for the episodes whose counted record it holds.
     Returns plain tallies, added up over an arm's runs by `merge`."""
     tally = {"responses": 0, "thinking": 0, "turn_first": Counter(), "turn_thinking": Counter(),
-             "later_need_requests": Counter(), "need": {}, "held": {}, "user_hash": {}}
+             "routine_first": Counter(), "routine_thinking": Counter(), "need_first": 0,
+             "need_thinking": 0, "later_need_requests": Counter(), "need": {}, "held": {},
+             "user_hash": {}}
     seen = set()
     with gzip.open(path, "rt", encoding="utf-8") as f:
         for line in f:
@@ -179,6 +183,12 @@ def transcript_readings(path: Path, records: dict[str, dict],
                 continue
             tally["turn_first"][step] += 1
             tally["turn_thinking"][step] += _has_thinking(response)
+            if step == ns:
+                tally["need_first"] += 1
+                tally["need_thinking"] += _has_thinking(response)
+            else:
+                tally["routine_first"][step] += 1
+                tally["routine_thinking"][step] += _has_thinking(response)
             pairs = flatten_payload(d["payload"]["messages"])
             user = next((t for role, t in reversed(pairs) if role == "user"), "")
             tally["user_hash"][f"{eid}#{step}"] = hashlib.sha256(
@@ -196,11 +206,14 @@ def transcript_readings(path: Path, records: dict[str, dict],
 
 def merge(tallies: list[dict]) -> dict:
     out = {"responses": 0, "thinking": 0, "turn_first": Counter(), "turn_thinking": Counter(),
-           "later_need_requests": Counter(), "need": {}, "held": {}, "user_hash": {}}
+           "routine_first": Counter(), "routine_thinking": Counter(), "need_first": 0,
+           "need_thinking": 0, "later_need_requests": Counter(), "need": {}, "held": {},
+           "user_hash": {}}
     for t in tallies:
-        for k in ("responses", "thinking"):
+        for k in ("responses", "thinking", "need_first", "need_thinking"):
             out[k] += t[k]
-        for k in ("turn_first", "turn_thinking", "later_need_requests"):
+        for k in ("turn_first", "turn_thinking", "routine_first", "routine_thinking",
+                  "later_need_requests"):
             out[k].update(t[k])
         for k in ("need", "held", "user_hash"):
             out[k].update(t[k])
@@ -245,6 +258,10 @@ def arm_transcript_summary(t: dict, records: dict[str, dict]) -> dict:
             "first_requests_by_turn": {str(s): [t["turn_thinking"][s], t["turn_first"][s]]
                                        for s in pooled},
             "first_requests_by_turn_bin": bins,
+            "first_requests_by_turn_without_need_steps": {
+                str(s): [t["routine_thinking"][s], t["routine_first"][s]]
+                for s in sorted(t["routine_first"])},
+            "need_first_request_thinking": [t["need_thinking"], t["need_first"]],
             "fact_value_in_replies": held, "at_need": kept, "leak_check": need,
             "later_need_requests": dict(sorted(t["later_need_requests"].items()))}
 
@@ -350,11 +367,16 @@ def summary(r: dict) -> str:
         lines.append(f"| {n} | {_pct(a['with_thinking'], a['responses_in_transcript'])} | "
                      f"{_pct(*t0)} | "
                      + " | ".join(_pct(*bins[name]) for _, _, name in TURN_BINS) + " |")
-    lines += ["", "First requests by turn, share with a thinking block:", ""]
-    for n in names:
-        by = r["arms"][n]["first_requests_by_turn"]
-        lines.append(f"- {n}: " + ", ".join(f"{s}: {100 * v[0] / v[1]:.1f}" for s, v in by.items()
-                                            if int(s) <= 24))
+    for title, key in (("First requests by turn", "first_requests_by_turn"),
+                       ("Without the need steps", "first_requests_by_turn_without_need_steps")):
+        lines += ["", f"{title}, share with a thinking block:", ""]
+        for n in names:
+            by = r["arms"][n][key]
+            lines.append(f"- {n}: " + ", ".join(f"{s}: {100 * v[0] / v[1]:.1f}"
+                                                for s, v in by.items() if int(s) <= 24))
+    lines += ["", "The need step's first request: "
+              + "; ".join(f"{n} {_pct(*r['arms'][n]['need_first_request_thinking'])}" for n in names)
+              + "."]
     lines += ["", "## At the need step's first request", "",
               ("| Arm | Task cell | Retained replies (median) | Their characters (quartiles) | "
                "Replies holding the value, last evidence step to before the need step | "

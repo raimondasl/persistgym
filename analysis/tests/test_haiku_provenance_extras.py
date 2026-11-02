@@ -175,6 +175,17 @@ def test_the_transcript_tallies(transcript):
     assert set(t["user_hash"]) == {"e1#0", "e1#1", "e1#2", "e1#3"}
 
 
+def test_need_steps_are_split_from_the_other_steps(transcript):
+    records = {"e1": _record()}
+    t = hpe.transcript_readings(transcript, records, {"e1": FACT})
+    s = hpe.arm_transcript_summary(t, records)
+    # the need step (3) has its first request without a thinking block; steps 0 and 1 have one
+    assert s["need_first_request_thinking"] == [0, 1]
+    assert s["first_requests_by_turn_without_need_steps"] == {
+        "0": [1, 1], "1": [1, 1], "2": [0, 1]}
+    assert hpe.merge([t, t])["need_first"] == 2
+
+
 def test_merge_adds_up_an_arms_runs(transcript):
     t = hpe.transcript_readings(transcript, {"e1": _record()}, {"e1": FACT})
     m = hpe.merge([t, t])

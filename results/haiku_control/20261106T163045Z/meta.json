@@ -1,0 +1,51 @@
+{
+  "experiment": "haiku_control",
+  "run_id": "20261106T163045Z",
+  "cell_or_config": "W-n-0",
+  "config": {
+    "experiment": "persistgym_haiku_control",
+    "rerun_links": {},
+    "sweep_closed": false,
+    "allow_incomplete": false,
+    "status": "FINAL",
+    "templates": "0-195",
+    "r9_output": "results/haiku_notes/20261024T073307Z",
+    "r10_output": "results/haiku_provenance/20261102T045643Z"
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {
+    "bootstrap": 4086943125952605544
+  },
+  "started_utc": "2026-11-06T16:30:45+00:00",
+  "finished_utc": "2026-11-06T16:32:09+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "control.json",
+    "summary.md",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261106T050520Z-W-n-0-claude-haiku-5-5"
+  ],
+  "config_hash": "22288a50b13236f9348521840f58634e3442d8cc5dcda66fb36ca2f3275ddb5d",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "40a2d6499427ea6799da8efe950cbb7c451eb530",
+  "git_dirty": false
+}

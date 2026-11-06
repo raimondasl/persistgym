@@ -1,0 +1,2504 @@
+{
+  "experiment": "persistgym_haiku_control",
+  "cell": "W-n-0",
+  "model": "claude-haiku-5-5",
+  "prereg": "PREREG.md \u00a717.11 (amendment R11)",
+  "T": 200,
+  "templates_read": 196,
+  "templates": "0-195",
+  "left_out": [
+    {
+      "template": 196,
+      "task_cell": "derived-nonrec-far",
+      "episode_id": "main-000196/derived-nonrec-far/base",
+      "status": "no record",
+      "reason": "the run has no record of it"
+    }
+  ],
+  "templates_never_played": 3,
+  "task_cells": [
+    "observed-nonrec-far",
+    "derived-nonrec-far"
+  ],
+  "status": "FINAL",
+  "incomplete": [],
+  "deviations": [],
+  "accounting_check": {
+    "checked": 393,
+    "bugs": [],
+    "missing_transcripts": []
+  },
+  "exclusions": [
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "observed-nonrec-far",
+      "keys": 197,
+      "never_played": 3,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    },
+    {
+      "kind": "W-n-0",
+      "cell": "W-n-0",
+      "variant": "base",
+      "task_cell": "derived-nonrec-far",
+      "keys": 196,
+      "never_played": 4,
+      "excluded_by_runner": 0,
+      "excluded_request_check": 0,
+      "excluded_transport": 0,
+      "excluded_no_final": 0,
+      "pending": 0,
+      "dropped_duplicates": 0
+    }
+  ],
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 4086943125952605544,
+    "interval": "90% percentile, template-cluster"
+  },
+  "runs": [
+    {
+      "run_id": "20261106T050520Z-W-n-0-claude-haiku-5-5",
+      "cell": "W-n-0",
+      "variants": [
+        "base"
+      ],
+      "repeat_index": 0,
+      "started_utc": "2026-11-06T05:05:21+00:00",
+      "exit_reason": "SPEND_RESERVATION",
+      "records": 393,
+      "records_counted": 393,
+      "model_returned": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ],
+  "rerun_links": {},
+  "sweep_closed": false,
+  "arms": [
+    {
+      "arm": "W-n-0 (R11)",
+      "cell": "W-n-0",
+      "counted_repeat_0": 392,
+      "cells": [
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "successes": 10,
+          "rate": 0.05102040816326531,
+          "content_failures": {
+            "incomplete": 1,
+            "unparsed": 158
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 17
+          },
+          "episodes_with_a_refusal": 7,
+          "interval_90": [
+            0.025510204081632654,
+            0.07731958762886598
+          ]
+        },
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "successes": 6,
+          "rate": 0.030612244897959183,
+          "content_failures": {
+            "incomplete": 1,
+            "unparsed": 169
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 49
+          },
+          "episodes_with_a_refusal": 20,
+          "interval_90": [
+            0.010256410256410256,
+            0.05128205128205128
+          ]
+        }
+      ],
+      "accounting": [
+        {
+          "cell": "W-n-0",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 18,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 10,
+            "rate": 0.05102040816326531
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 178,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 18,
+            "rate": 0.09183673469387756
+          },
+          "used_given_carried": {
+            "n": 18,
+            "successes": 10,
+            "rate": 0.5555555555555556
+          },
+          "exploratory": false
+        },
+        {
+          "cell": "W-n-0",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 73,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 6,
+            "rate": 0.030612244897959183
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 123,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 73,
+            "rate": 0.37244897959183676
+          },
+          "used_given_carried": {
+            "n": 73,
+            "successes": 6,
+            "rate": 0.0821917808219178
+          },
+          "exploratory": false
+        }
+      ],
+      "choices_nr_far": {
+        "observed-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 10,
+          "correct": 10
+        },
+        "derived-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 6,
+          "correct": 6
+        }
+      },
+      "costs": {
+        "observed-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.043503967448979594,
+          "cost_missing": 0,
+          "output_tokens_mean": 2258.137755102041,
+          "output_tokens_missing": 0
+        },
+        "derived-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.043713542806122455,
+          "cost_missing": 0,
+          "output_tokens_mean": 2971.5204081632655,
+          "output_tokens_missing": 0
+        }
+      },
+      "responses": {
+        "responses": 9416,
+        "refused_responses": 66,
+        "recoverable_success_with_lookup": [
+          0,
+          0
+        ],
+        "refused_share": 0.007009345794392523,
+        "refused_by_turn": {
+          "0-4": 6,
+          "5-9": 20,
+          "10-14": 8,
+          "15 on": 32
+        },
+        "refusal_categories": {
+          "refusal:bio": 66
+        },
+        "failures": {
+          "observed-nonrec-far": {
+            "carried, no refusal at the need step": 8,
+            "failed": 186,
+            "not carried, no refusal at the need step": 177,
+            "not carried, refused at the need step": 1
+          },
+          "derived-nonrec-far": {
+            "carried, no refusal at the need step": 67,
+            "failed": 190,
+            "not carried, no refusal at the need step": 122,
+            "not carried, refused at the need step": 1
+          },
+          "both": {
+            "carried, no refusal at the need step": 75,
+            "failed": 376,
+            "not carried, no refusal at the need step": 299,
+            "not carried, refused at the need step": 2
+          }
+        },
+        "success_by_refusal": {
+          "observed-nonrec-far": {
+            "no refusal up to the need step: episodes": 189,
+            "no refusal up to the need step: success": 8,
+            "refused at the need step: episodes": 1,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 6,
+            "refused before the need step only: success": 2
+          },
+          "derived-nonrec-far": {
+            "no refusal up to the need step: episodes": 177,
+            "no refusal up to the need step: success": 4,
+            "refused at the need step: episodes": 1,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 18,
+            "refused before the need step only: success": 2
+          },
+          "both": {
+            "no refusal up to the need step: episodes": 366,
+            "no refusal up to the need step: success": 12,
+            "refused at the need step: episodes": 2,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 24,
+            "refused before the need step only: success": 4
+          }
+        },
+        "responses_in_transcript": 9416,
+        "with_thinking": 5144,
+        "thinking_share": 0.546304163126593,
+        "first_requests_by_turn": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            386,
+            392
+          ],
+          "2": [
+            342,
+            392
+          ],
+          "3": [
+            289,
+            392
+          ],
+          "4": [
+            291,
+            392
+          ],
+          "5": [
+            264,
+            392
+          ],
+          "6": [
+            264,
+            392
+          ],
+          "7": [
+            240,
+            392
+          ],
+          "8": [
+            226,
+            392
+          ],
+          "9": [
+            184,
+            392
+          ],
+          "10": [
+            151,
+            392
+          ],
+          "11": [
+            139,
+            392
+          ],
+          "12": [
+            131,
+            392
+          ],
+          "13": [
+            123,
+            392
+          ],
+          "14": [
+            110,
+            392
+          ],
+          "15": [
+            105,
+            392
+          ],
+          "16": [
+            130,
+            392
+          ],
+          "17": [
+            133,
+            392
+          ],
+          "18": [
+            142,
+            392
+          ],
+          "19": [
+            164,
+            392
+          ],
+          "20": [
+            220,
+            392
+          ],
+          "21": [
+            198,
+            354
+          ],
+          "22": [
+            188,
+            306
+          ],
+          "23": [
+            136,
+            234
+          ],
+          "24": [
+            128,
+            158
+          ],
+          "25": [
+            50,
+            92
+          ],
+          "26": [
+            18,
+            40
+          ]
+        },
+        "first_requests_by_turn_bin": {
+          "0-4": [
+            1700,
+            1960
+          ],
+          "5-9": [
+            1178,
+            1960
+          ],
+          "10-14": [
+            654,
+            1960
+          ],
+          "15 on": [
+            1612,
+            3536
+          ]
+        },
+        "first_requests_by_turn_without_need_steps": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            386,
+            392
+          ],
+          "2": [
+            342,
+            392
+          ],
+          "3": [
+            289,
+            392
+          ],
+          "4": [
+            291,
+            392
+          ],
+          "5": [
+            264,
+            392
+          ],
+          "6": [
+            264,
+            392
+          ],
+          "7": [
+            240,
+            392
+          ],
+          "8": [
+            226,
+            392
+          ],
+          "9": [
+            184,
+            392
+          ],
+          "10": [
+            151,
+            392
+          ],
+          "11": [
+            139,
+            392
+          ],
+          "12": [
+            131,
+            392
+          ],
+          "13": [
+            123,
+            392
+          ],
+          "14": [
+            110,
+            392
+          ],
+          "15": [
+            105,
+            392
+          ],
+          "16": [
+            130,
+            392
+          ],
+          "17": [
+            133,
+            392
+          ],
+          "18": [
+            142,
+            392
+          ],
+          "19": [
+            164,
+            392
+          ],
+          "20": [
+            134,
+            306
+          ],
+          "21": [
+            124,
+            280
+          ],
+          "22": [
+            108,
+            226
+          ],
+          "23": [
+            80,
+            178
+          ],
+          "24": [
+            32,
+            62
+          ],
+          "25": [
+            50,
+            92
+          ],
+          "26": [
+            18,
+            40
+          ]
+        },
+        "need_first_request_thinking": [
+          392,
+          392
+        ],
+        "fact_value_in_replies": {
+          "observed-nonrec-far": {
+            "replies_holding_value": 236,
+            "replies": 3120,
+            "per_episode_median": 0.0625
+          },
+          "derived-nonrec-far": {
+            "replies_holding_value": 284,
+            "replies": 3096,
+            "per_episode_median": 0.0625
+          }
+        },
+        "at_need": {
+          "observed-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 14.0,
+            "reply_chars_quartiles": [
+              983.25,
+              1400.0,
+              1831.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 14.0,
+            "reply_chars_quartiles": [
+              1381.75,
+              1723.0,
+              2068.0
+            ]
+          }
+        },
+        "leak_check": {
+          "observed-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          },
+          "derived-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          }
+        },
+        "later_need_requests": {},
+        "episodes": 392,
+        "runs": [
+          "20261106T050520Z-W-n-0-claude-haiku-5-5"
+        ]
+      },
+      "replies_nr_far": {
+        "observed-nonrec-far carried=True": {
+          "episodes": 18,
+          "correct": 10,
+          "failed": 8,
+          "failed_declined": 8,
+          "failed_need_reply_disowns": 3,
+          "failed_retracted_before_need": 0,
+          "retraction_lag_steps": {},
+          "correct_need_reply_disowns": 0
+        },
+        "observed-nonrec-far carried=False": {
+          "episodes": 178,
+          "correct": 0,
+          "failed": 178,
+          "failed_declined": 178,
+          "failed_need_reply_disowns": 2,
+          "failed_retracted_before_need": 0,
+          "retraction_lag_steps": {},
+          "correct_need_reply_disowns": 0
+        },
+        "derived-nonrec-far carried=True": {
+          "episodes": 73,
+          "correct": 6,
+          "failed": 67,
+          "failed_declined": 67,
+          "failed_need_reply_disowns": 45,
+          "failed_retracted_before_need": 52,
+          "retraction_lag_steps": {
+            "0": 32,
+            "1": 20
+          },
+          "correct_need_reply_disowns": 0
+        },
+        "derived-nonrec-far carried=False": {
+          "episodes": 123,
+          "correct": 0,
+          "failed": 123,
+          "failed_declined": 123,
+          "failed_need_reply_disowns": 4,
+          "failed_retracted_before_need": 4,
+          "retraction_lag_steps": {
+            "0": 3,
+            "1": 1
+          },
+          "correct_need_reply_disowns": 0
+        }
+      },
+      "conditions": [
+        {
+          "exit_reason": "SPEND_RESERVATION",
+          "started_utc": "2026-11-06T05:05:21+00:00",
+          "finished_utc": "2026-11-06T06:35:14+00:00",
+          "model_returned": [
+            "claude-haiku-5-5"
+          ],
+          "inference_geos": {
+            "global": 9440
+          },
+          "cost_usd": {
+            "list": 17.13734785,
+            "billed_est": 17.13734785,
+            "costs_csv_row_appended": true
+          },
+          "run_id": "20261106T050520Z-W-n-0-claude-haiku-5-5",
+          "minutes": 89.88333333333334,
+          "uncached_input_tokens": 125867422,
+          "uncached_per_minute": 1400342.169478954,
+          "max_in_flight": 2,
+          "peak_spend_plus_reservation": 17.21197599000002
+        }
+      ]
+    },
+    {
+      "arm": "W-n-0 (R9)",
+      "cell": "W-n-0",
+      "counted_repeat_0": 392,
+      "cells": [
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "successes": 4,
+          "rate": 0.02040816326530612,
+          "content_failures": {
+            "incomplete": 1,
+            "unparsed": 156
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 12
+          },
+          "episodes_with_a_refusal": 5,
+          "interval_90": [
+            0.005076142131979695,
+            0.03626943005181347
+          ]
+        },
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "successes": 9,
+          "rate": 0.04591836734693878,
+          "content_failures": {
+            "incomplete": 1,
+            "unparsed": 156
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 39
+          },
+          "episodes_with_a_refusal": 18,
+          "interval_90": [
+            0.025,
+            0.07179487179487179
+          ]
+        }
+      ],
+      "accounting": [
+        {
+          "cell": "W-n-0",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 8,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 4,
+            "rate": 0.02040816326530612
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 188,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 8,
+            "rate": 0.04081632653061224
+          },
+          "used_given_carried": {
+            "n": 8,
+            "successes": 4,
+            "rate": 0.5
+          },
+          "exploratory": false
+        },
+        {
+          "cell": "W-n-0",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 70,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 9,
+            "rate": 0.04591836734693878
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 126,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 70,
+            "rate": 0.35714285714285715
+          },
+          "used_given_carried": {
+            "n": 70,
+            "successes": 9,
+            "rate": 0.12857142857142856
+          },
+          "exploratory": false
+        }
+      ],
+      "choices_nr_far": {
+        "observed-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 4,
+          "correct": 4
+        },
+        "derived-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 9,
+          "correct": 9
+        }
+      },
+      "costs": {
+        "observed-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.04316807313775511,
+          "cost_missing": 0,
+          "output_tokens_mean": 2140.2295918367345,
+          "output_tokens_missing": 0
+        },
+        "derived-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.043612317397959184,
+          "cost_missing": 0,
+          "output_tokens_mean": 2858.045918367347,
+          "output_tokens_missing": 0
+        }
+      },
+      "responses": {
+        "responses": 9416,
+        "refused_responses": 51,
+        "recoverable_success_with_lookup": [
+          0,
+          0
+        ],
+        "refused_share": 0.005416312659303314,
+        "refused_by_turn": {
+          "0-4": 6,
+          "5-9": 15,
+          "10-14": 6,
+          "15 on": 24
+        },
+        "refusal_categories": {
+          "refusal:bio": 51
+        },
+        "failures": {
+          "observed-nonrec-far": {
+            "carried, no refusal at the need step": 4,
+            "failed": 192,
+            "not carried, no refusal at the need step": 187,
+            "not carried, refused at the need step": 1
+          },
+          "derived-nonrec-far": {
+            "carried, no refusal at the need step": 61,
+            "failed": 187,
+            "not carried, no refusal at the need step": 125,
+            "not carried, refused at the need step": 1
+          },
+          "both": {
+            "carried, no refusal at the need step": 65,
+            "failed": 379,
+            "not carried, no refusal at the need step": 312,
+            "not carried, refused at the need step": 2
+          }
+        },
+        "success_by_refusal": {
+          "observed-nonrec-far": {
+            "no refusal up to the need step: episodes": 191,
+            "no refusal up to the need step: success": 4,
+            "refused at the need step: episodes": 1,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 4,
+            "refused before the need step only: success": 0
+          },
+          "derived-nonrec-far": {
+            "no refusal up to the need step: episodes": 178,
+            "no refusal up to the need step: success": 7,
+            "refused at the need step: episodes": 1,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 17,
+            "refused before the need step only: success": 2
+          },
+          "both": {
+            "no refusal up to the need step: episodes": 369,
+            "no refusal up to the need step: success": 11,
+            "refused at the need step: episodes": 2,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 21,
+            "refused before the need step only: success": 2
+          }
+        },
+        "responses_in_transcript": 9416,
+        "with_thinking": 4866,
+        "thinking_share": 0.5167799490229397,
+        "first_requests_by_turn": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            382,
+            392
+          ],
+          "2": [
+            325,
+            392
+          ],
+          "3": [
+            275,
+            392
+          ],
+          "4": [
+            293,
+            392
+          ],
+          "5": [
+            254,
+            392
+          ],
+          "6": [
+            239,
+            392
+          ],
+          "7": [
+            235,
+            392
+          ],
+          "8": [
+            193,
+            392
+          ],
+          "9": [
+            157,
+            392
+          ],
+          "10": [
+            136,
+            392
+          ],
+          "11": [
+            124,
+            392
+          ],
+          "12": [
+            127,
+            392
+          ],
+          "13": [
+            121,
+            392
+          ],
+          "14": [
+            102,
+            392
+          ],
+          "15": [
+            106,
+            392
+          ],
+          "16": [
+            123,
+            392
+          ],
+          "17": [
+            128,
+            392
+          ],
+          "18": [
+            141,
+            392
+          ],
+          "19": [
+            153,
+            392
+          ],
+          "20": [
+            203,
+            392
+          ],
+          "21": [
+            185,
+            354
+          ],
+          "22": [
+            171,
+            306
+          ],
+          "23": [
+            124,
+            234
+          ],
+          "24": [
+            116,
+            158
+          ],
+          "25": [
+            47,
+            92
+          ],
+          "26": [
+            14,
+            40
+          ]
+        },
+        "first_requests_by_turn_bin": {
+          "0-4": [
+            1667,
+            1960
+          ],
+          "5-9": [
+            1078,
+            1960
+          ],
+          "10-14": [
+            610,
+            1960
+          ],
+          "15 on": [
+            1511,
+            3536
+          ]
+        },
+        "first_requests_by_turn_without_need_steps": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            382,
+            392
+          ],
+          "2": [
+            325,
+            392
+          ],
+          "3": [
+            275,
+            392
+          ],
+          "4": [
+            293,
+            392
+          ],
+          "5": [
+            254,
+            392
+          ],
+          "6": [
+            239,
+            392
+          ],
+          "7": [
+            235,
+            392
+          ],
+          "8": [
+            193,
+            392
+          ],
+          "9": [
+            157,
+            392
+          ],
+          "10": [
+            136,
+            392
+          ],
+          "11": [
+            124,
+            392
+          ],
+          "12": [
+            127,
+            392
+          ],
+          "13": [
+            121,
+            392
+          ],
+          "14": [
+            102,
+            392
+          ],
+          "15": [
+            106,
+            392
+          ],
+          "16": [
+            123,
+            392
+          ],
+          "17": [
+            128,
+            392
+          ],
+          "18": [
+            141,
+            392
+          ],
+          "19": [
+            153,
+            392
+          ],
+          "20": [
+            117,
+            306
+          ],
+          "21": [
+            111,
+            280
+          ],
+          "22": [
+            91,
+            226
+          ],
+          "23": [
+            68,
+            178
+          ],
+          "24": [
+            20,
+            62
+          ],
+          "25": [
+            47,
+            92
+          ],
+          "26": [
+            14,
+            40
+          ]
+        },
+        "need_first_request_thinking": [
+          392,
+          392
+        ],
+        "fact_value_in_replies": {
+          "observed-nonrec-far": {
+            "replies_holding_value": 170,
+            "replies": 3125,
+            "per_episode_median": 0.0625
+          },
+          "derived-nonrec-far": {
+            "replies_holding_value": 344,
+            "replies": 3101,
+            "per_episode_median": 0.0625
+          }
+        },
+        "at_need": {
+          "observed-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 14.0,
+            "reply_chars_quartiles": [
+              955.25,
+              1299.5,
+              1821.75
+            ]
+          },
+          "derived-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 14.0,
+            "reply_chars_quartiles": [
+              1204.25,
+              1670.0,
+              2032.75
+            ]
+          }
+        },
+        "leak_check": {
+          "observed-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          },
+          "derived-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          }
+        },
+        "later_need_requests": {},
+        "episodes": 392,
+        "runs": [
+          "20261024T060051Z-W-n-0-claude-haiku-5-5"
+        ]
+      },
+      "replies_nr_far": {
+        "observed-nonrec-far carried=True": {
+          "episodes": 8,
+          "correct": 4,
+          "failed": 4,
+          "failed_declined": 4,
+          "failed_need_reply_disowns": 2,
+          "failed_retracted_before_need": 0,
+          "retraction_lag_steps": {},
+          "correct_need_reply_disowns": 0
+        },
+        "observed-nonrec-far carried=False": {
+          "episodes": 188,
+          "correct": 0,
+          "failed": 188,
+          "failed_declined": 188,
+          "failed_need_reply_disowns": 1,
+          "failed_retracted_before_need": 0,
+          "retraction_lag_steps": {},
+          "correct_need_reply_disowns": 0
+        },
+        "derived-nonrec-far carried=True": {
+          "episodes": 70,
+          "correct": 9,
+          "failed": 61,
+          "failed_declined": 61,
+          "failed_need_reply_disowns": 39,
+          "failed_retracted_before_need": 43,
+          "retraction_lag_steps": {
+            "0": 26,
+            "1": 17
+          },
+          "correct_need_reply_disowns": 1
+        },
+        "derived-nonrec-far carried=False": {
+          "episodes": 126,
+          "correct": 0,
+          "failed": 126,
+          "failed_declined": 126,
+          "failed_need_reply_disowns": 0,
+          "failed_retracted_before_need": 0,
+          "retraction_lag_steps": {},
+          "correct_need_reply_disowns": 0
+        }
+      },
+      "conditions": [
+        {
+          "exit_reason": "COMPLETED",
+          "started_utc": "2026-10-24T06:00:52+00:00",
+          "finished_utc": "2026-10-24T07:31:11+00:00",
+          "model_returned": [
+            "claude-haiku-5-5"
+          ],
+          "inference_geos": {
+            "global": 38857
+          },
+          "cost_usd": {
+            "list": 70.95665291,
+            "billed_est": 70.95665291,
+            "costs_csv_row_appended": true
+          },
+          "run_id": "20261024T060051Z-W-n-0-claude-haiku-5-5",
+          "minutes": 90.31666666666666,
+          "uncached_input_tokens": 524867090,
+          "uncached_per_minute": 5811409.005351542,
+          "max_in_flight": 8,
+          "peak_spend_plus_reservation": 71.53117841499986
+        }
+      ]
+    },
+    {
+      "arm": "W-np-0",
+      "cell": "W-np-0",
+      "counted_repeat_0": 392,
+      "cells": [
+        {
+          "kind": "W-np-0",
+          "cell": "W-np-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "successes": 174,
+          "rate": 0.8877551020408163,
+          "content_failures": {
+            "incomplete": 7,
+            "unparsed": 11
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 82
+          },
+          "episodes_with_a_refusal": 30,
+          "interval_90": [
+            0.8497409326424871,
+            0.923469387755102
+          ]
+        },
+        {
+          "kind": "W-np-0",
+          "cell": "W-np-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "successes": 169,
+          "rate": 0.8622448979591837,
+          "content_failures": {
+            "incomplete": 4,
+            "unparsed": 17
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 119
+          },
+          "episodes_with_a_refusal": 42,
+          "interval_90": [
+            0.8214097744360902,
+            0.9025641025641026
+          ]
+        }
+      ],
+      "accounting": [
+        {
+          "cell": "W-np-0",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 183,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 174,
+            "rate": 0.8877551020408163
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 13,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 183,
+            "rate": 0.9336734693877551
+          },
+          "used_given_carried": {
+            "n": 183,
+            "successes": 174,
+            "rate": 0.9508196721311475
+          },
+          "exploratory": false
+        },
+        {
+          "cell": "W-np-0",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 178,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 169,
+            "rate": 0.8622448979591837
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 18,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 178,
+            "rate": 0.9081632653061225
+          },
+          "used_given_carried": {
+            "n": 178,
+            "successes": 169,
+            "rate": 0.949438202247191
+          },
+          "exploratory": false
+        }
+      ],
+      "choices_nr_far": {
+        "observed-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 174,
+          "correct": 174
+        },
+        "derived-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 169,
+          "correct": 169
+        }
+      },
+      "costs": {
+        "observed-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.05454733099489796,
+          "cost_missing": 0,
+          "output_tokens_mean": 13383.744897959185,
+          "output_tokens_missing": 0
+        },
+        "derived-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.054426939464285715,
+          "cost_missing": 0,
+          "output_tokens_mean": 13570.469387755102,
+          "output_tokens_missing": 0
+        }
+      },
+      "responses": {
+        "responses": 9416,
+        "refused_responses": 201,
+        "recoverable_success_with_lookup": [
+          0,
+          0
+        ],
+        "refused_share": 0.021346644010195412,
+        "refused_by_turn": {
+          "0-4": 8,
+          "5-9": 28,
+          "10-14": 32,
+          "15 on": 133
+        },
+        "refusal_categories": {
+          "refusal:bio": 201
+        },
+        "failures": {
+          "observed-nonrec-far": {
+            "carried, no refusal at the need step": 2,
+            "carried, refused at the need step": 7,
+            "failed": 22,
+            "not carried, no refusal at the need step": 13
+          },
+          "derived-nonrec-far": {
+            "carried, no refusal at the need step": 6,
+            "carried, refused at the need step": 3,
+            "failed": 27,
+            "not carried, no refusal at the need step": 17,
+            "not carried, refused at the need step": 1
+          },
+          "both": {
+            "carried, no refusal at the need step": 8,
+            "carried, refused at the need step": 10,
+            "failed": 49,
+            "not carried, no refusal at the need step": 30,
+            "not carried, refused at the need step": 1
+          }
+        },
+        "success_by_refusal": {
+          "observed-nonrec-far": {
+            "no refusal up to the need step: episodes": 167,
+            "no refusal up to the need step: success": 153,
+            "refused at the need step: episodes": 7,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 22,
+            "refused before the need step only: success": 21
+          },
+          "derived-nonrec-far": {
+            "no refusal up to the need step: episodes": 155,
+            "no refusal up to the need step: success": 137,
+            "refused at the need step: episodes": 4,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 37,
+            "refused before the need step only: success": 32
+          },
+          "both": {
+            "no refusal up to the need step: episodes": 322,
+            "no refusal up to the need step: success": 290,
+            "refused at the need step: episodes": 11,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 59,
+            "refused before the need step only: success": 53
+          }
+        },
+        "responses_in_transcript": 9416,
+        "with_thinking": 9028,
+        "thinking_share": 0.9587935429056924,
+        "first_requests_by_turn": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            392,
+            392
+          ],
+          "2": [
+            391,
+            392
+          ],
+          "3": [
+            381,
+            392
+          ],
+          "4": [
+            378,
+            392
+          ],
+          "5": [
+            372,
+            392
+          ],
+          "6": [
+            374,
+            392
+          ],
+          "7": [
+            377,
+            392
+          ],
+          "8": [
+            371,
+            392
+          ],
+          "9": [
+            364,
+            392
+          ],
+          "10": [
+            353,
+            392
+          ],
+          "11": [
+            362,
+            392
+          ],
+          "12": [
+            353,
+            392
+          ],
+          "13": [
+            360,
+            392
+          ],
+          "14": [
+            370,
+            392
+          ],
+          "15": [
+            376,
+            392
+          ],
+          "16": [
+            377,
+            392
+          ],
+          "17": [
+            380,
+            392
+          ],
+          "18": [
+            376,
+            392
+          ],
+          "19": [
+            377,
+            392
+          ],
+          "20": [
+            389,
+            392
+          ],
+          "21": [
+            352,
+            354
+          ],
+          "22": [
+            302,
+            306
+          ],
+          "23": [
+            226,
+            234
+          ],
+          "24": [
+            154,
+            158
+          ],
+          "25": [
+            89,
+            92
+          ],
+          "26": [
+            40,
+            40
+          ]
+        },
+        "first_requests_by_turn_bin": {
+          "0-4": [
+            1934,
+            1960
+          ],
+          "5-9": [
+            1858,
+            1960
+          ],
+          "10-14": [
+            1798,
+            1960
+          ],
+          "15 on": [
+            3438,
+            3536
+          ]
+        },
+        "first_requests_by_turn_without_need_steps": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            392,
+            392
+          ],
+          "2": [
+            391,
+            392
+          ],
+          "3": [
+            381,
+            392
+          ],
+          "4": [
+            378,
+            392
+          ],
+          "5": [
+            372,
+            392
+          ],
+          "6": [
+            374,
+            392
+          ],
+          "7": [
+            377,
+            392
+          ],
+          "8": [
+            371,
+            392
+          ],
+          "9": [
+            364,
+            392
+          ],
+          "10": [
+            353,
+            392
+          ],
+          "11": [
+            362,
+            392
+          ],
+          "12": [
+            353,
+            392
+          ],
+          "13": [
+            360,
+            392
+          ],
+          "14": [
+            370,
+            392
+          ],
+          "15": [
+            376,
+            392
+          ],
+          "16": [
+            377,
+            392
+          ],
+          "17": [
+            380,
+            392
+          ],
+          "18": [
+            376,
+            392
+          ],
+          "19": [
+            377,
+            392
+          ],
+          "20": [
+            303,
+            306
+          ],
+          "21": [
+            278,
+            280
+          ],
+          "22": [
+            222,
+            226
+          ],
+          "23": [
+            170,
+            178
+          ],
+          "24": [
+            58,
+            62
+          ],
+          "25": [
+            89,
+            92
+          ],
+          "26": [
+            40,
+            40
+          ]
+        },
+        "need_first_request_thinking": [
+          392,
+          392
+        ],
+        "fact_value_in_replies": {
+          "observed-nonrec-far": {
+            "replies_holding_value": 2550,
+            "replies": 3072,
+            "per_episode_median": 1.0
+          },
+          "derived-nonrec-far": {
+            "replies_holding_value": 2439,
+            "replies": 3033,
+            "per_episode_median": 1.0
+          }
+        },
+        "at_need": {
+          "observed-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 11.0,
+            "reply_chars_quartiles": [
+              9902.75,
+              14248.0,
+              17960.25
+            ]
+          },
+          "derived-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 11.0,
+            "reply_chars_quartiles": [
+              8836.5,
+              13876.0,
+              17412.75
+            ]
+          }
+        },
+        "leak_check": {
+          "observed-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          },
+          "derived-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          }
+        },
+        "later_need_requests": {},
+        "episodes": 392,
+        "runs": [
+          "20261101T184553Z-W-np-0-claude-haiku-5-5",
+          "20261101T190445Z-W-np-0-claude-haiku-5-5"
+        ]
+      },
+      "replies_nr_far": null,
+      "conditions": [
+        {
+          "exit_reason": "ABORTED_API_ERRORS",
+          "started_utc": "2026-11-01T18:45:55+00:00",
+          "finished_utc": "2026-11-01T18:50:02+00:00",
+          "model_returned": [
+            "claude-haiku-5-5"
+          ],
+          "inference_geos": {
+            "global": 618
+          },
+          "cost_usd": {
+            "list": 1.255443125,
+            "billed_est": 1.255443125,
+            "costs_csv_row_appended": true
+          },
+          "run_id": "20261101T184553Z-W-np-0-claude-haiku-5-5",
+          "minutes": 4.116666666666666,
+          "uncached_input_tokens": 8335371,
+          "uncached_per_minute": 2024786.4777327937,
+          "max_in_flight": 8,
+          "peak_spend_plus_reservation": 2.1906260100000003
+        },
+        {
+          "exit_reason": "COMPLETED",
+          "started_utc": "2026-11-01T19:04:46+00:00",
+          "finished_utc": "2026-11-01T23:22:57+00:00",
+          "model_returned": [
+            "claude-haiku-5-5"
+          ],
+          "inference_geos": {
+            "global": 18940
+          },
+          "cost_usd": {
+            "list": 43.25574142,
+            "billed_est": 43.25574142,
+            "costs_csv_row_appended": true
+          },
+          "run_id": "20261101T190445Z-W-np-0-claude-haiku-5-5",
+          "minutes": 258.18333333333334,
+          "uncached_input_tokens": 291193894,
+          "uncached_per_minute": 1127857.055064231,
+          "max_in_flight": 3,
+          "peak_spend_plus_reservation": 43.55038186499979
+        }
+      ]
+    },
+    {
+      "arm": "W-npd-0",
+      "cell": "W-npd-0",
+      "counted_repeat_0": 392,
+      "cells": [
+        {
+          "kind": "W-npd-0",
+          "cell": "W-npd-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "successes": 169,
+          "rate": 0.8622448979591837,
+          "content_failures": {
+            "incomplete": 5,
+            "unparsed": 13
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 57
+          },
+          "episodes_with_a_refusal": 30,
+          "interval_90": [
+            0.8214285714285714,
+            0.9020618556701031
+          ]
+        },
+        {
+          "kind": "W-npd-0",
+          "cell": "W-npd-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "successes": 174,
+          "rate": 0.8877551020408163,
+          "content_failures": {
+            "incomplete": 10,
+            "unparsed": 7
+          },
+          "exploratory": false,
+          "stopped_responses": {
+            "refusal:bio": 108
+          },
+          "episodes_with_a_refusal": 36,
+          "interval_90": [
+            0.8492318362646566,
+            0.9238578680203046
+          ]
+        }
+      ],
+      "accounting": [
+        {
+          "cell": "W-npd-0",
+          "task_cell": "observed-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 174,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 169,
+            "rate": 0.8622448979591837
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 22,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 174,
+            "rate": 0.8877551020408163
+          },
+          "used_given_carried": {
+            "n": 174,
+            "successes": 169,
+            "rate": 0.9712643678160919
+          },
+          "exploratory": false
+        },
+        {
+          "cell": "W-npd-0",
+          "task_cell": "derived-nonrec-far",
+          "n": 196,
+          "S_planned": 0,
+          "S_verbatim_1": 0,
+          "S_verbatim_0": 196,
+          "S_verbatim_unknown": 0,
+          "S_1": 188,
+          "planned_vs_verbatim_mismatch": 0,
+          "near_losses": null,
+          "residual_at_S1": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "success_given_S0": {
+            "n": 196,
+            "successes": 174,
+            "rate": 0.8877551020408163
+          },
+          "rescued_with_lookup": {
+            "n": 0,
+            "successes": 0,
+            "rate": null
+          },
+          "rescued_without_lookup": {
+            "n": 8,
+            "successes": 0,
+            "rate": 0.0
+          },
+          "P_carried": {
+            "n": 196,
+            "carried": 188,
+            "rate": 0.9591836734693877
+          },
+          "used_given_carried": {
+            "n": 188,
+            "successes": 174,
+            "rate": 0.925531914893617
+          },
+          "exploratory": false
+        }
+      ],
+      "choices_nr_far": {
+        "observed-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 169,
+          "correct": 169
+        },
+        "derived-nonrec-far": {
+          "episodes": 196,
+          "chose_an_option": 174,
+          "correct": 174
+        }
+      },
+      "costs": {
+        "observed-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.05292804772959184,
+          "cost_missing": 0,
+          "output_tokens_mean": 11743.744897959185,
+          "output_tokens_missing": 0
+        },
+        "derived-nonrec-far": {
+          "n": 196,
+          "cost_usd_billed_mean": 0.053863065688775504,
+          "cost_missing": 0,
+          "output_tokens_mean": 12933.377551020409,
+          "output_tokens_missing": 0
+        }
+      },
+      "responses": {
+        "responses": 9416,
+        "refused_responses": 165,
+        "recoverable_success_with_lookup": [
+          0,
+          0
+        ],
+        "refused_share": 0.017523364485981307,
+        "refused_by_turn": {
+          "0-4": 11,
+          "5-9": 17,
+          "10-14": 22,
+          "15 on": 115
+        },
+        "refusal_categories": {
+          "refusal:bio": 165
+        },
+        "failures": {
+          "observed-nonrec-far": {
+            "carried, no refusal at the need step": 1,
+            "carried, refused at the need step": 4,
+            "failed": 27,
+            "not carried, no refusal at the need step": 21,
+            "not carried, refused at the need step": 1
+          },
+          "derived-nonrec-far": {
+            "carried, no refusal at the need step": 4,
+            "carried, refused at the need step": 10,
+            "failed": 22,
+            "not carried, no refusal at the need step": 8
+          },
+          "both": {
+            "carried, no refusal at the need step": 5,
+            "carried, refused at the need step": 14,
+            "failed": 49,
+            "not carried, no refusal at the need step": 29,
+            "not carried, refused at the need step": 1
+          }
+        },
+        "success_by_refusal": {
+          "observed-nonrec-far": {
+            "no refusal up to the need step: episodes": 167,
+            "no refusal up to the need step: success": 148,
+            "refused at the need step: episodes": 5,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 24,
+            "refused before the need step only: success": 21
+          },
+          "derived-nonrec-far": {
+            "no refusal up to the need step: episodes": 160,
+            "no refusal up to the need step: success": 151,
+            "refused at the need step: episodes": 10,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 26,
+            "refused before the need step only: success": 23
+          },
+          "both": {
+            "no refusal up to the need step: episodes": 327,
+            "no refusal up to the need step: success": 299,
+            "refused at the need step: episodes": 15,
+            "refused at the need step: success": 0,
+            "refused before the need step only: episodes": 50,
+            "refused before the need step only: success": 44
+          }
+        },
+        "responses_in_transcript": 9416,
+        "with_thinking": 8950,
+        "thinking_share": 0.9505097706032285,
+        "first_requests_by_turn": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            392,
+            392
+          ],
+          "2": [
+            388,
+            392
+          ],
+          "3": [
+            375,
+            392
+          ],
+          "4": [
+            379,
+            392
+          ],
+          "5": [
+            374,
+            392
+          ],
+          "6": [
+            369,
+            392
+          ],
+          "7": [
+            374,
+            392
+          ],
+          "8": [
+            367,
+            392
+          ],
+          "9": [
+            364,
+            392
+          ],
+          "10": [
+            363,
+            392
+          ],
+          "11": [
+            343,
+            392
+          ],
+          "12": [
+            342,
+            392
+          ],
+          "13": [
+            344,
+            392
+          ],
+          "14": [
+            362,
+            392
+          ],
+          "15": [
+            369,
+            392
+          ],
+          "16": [
+            381,
+            392
+          ],
+          "17": [
+            366,
+            392
+          ],
+          "18": [
+            380,
+            392
+          ],
+          "19": [
+            376,
+            392
+          ],
+          "20": [
+            383,
+            392
+          ],
+          "21": [
+            349,
+            354
+          ],
+          "22": [
+            302,
+            306
+          ],
+          "23": [
+            230,
+            234
+          ],
+          "24": [
+            157,
+            158
+          ],
+          "25": [
+            90,
+            92
+          ],
+          "26": [
+            39,
+            40
+          ]
+        },
+        "first_requests_by_turn_bin": {
+          "0-4": [
+            1926,
+            1960
+          ],
+          "5-9": [
+            1848,
+            1960
+          ],
+          "10-14": [
+            1754,
+            1960
+          ],
+          "15 on": [
+            3422,
+            3536
+          ]
+        },
+        "first_requests_by_turn_without_need_steps": {
+          "0": [
+            392,
+            392
+          ],
+          "1": [
+            392,
+            392
+          ],
+          "2": [
+            388,
+            392
+          ],
+          "3": [
+            375,
+            392
+          ],
+          "4": [
+            379,
+            392
+          ],
+          "5": [
+            374,
+            392
+          ],
+          "6": [
+            369,
+            392
+          ],
+          "7": [
+            374,
+            392
+          ],
+          "8": [
+            367,
+            392
+          ],
+          "9": [
+            364,
+            392
+          ],
+          "10": [
+            363,
+            392
+          ],
+          "11": [
+            343,
+            392
+          ],
+          "12": [
+            342,
+            392
+          ],
+          "13": [
+            344,
+            392
+          ],
+          "14": [
+            362,
+            392
+          ],
+          "15": [
+            369,
+            392
+          ],
+          "16": [
+            381,
+            392
+          ],
+          "17": [
+            366,
+            392
+          ],
+          "18": [
+            380,
+            392
+          ],
+          "19": [
+            376,
+            392
+          ],
+          "20": [
+            297,
+            306
+          ],
+          "21": [
+            275,
+            280
+          ],
+          "22": [
+            222,
+            226
+          ],
+          "23": [
+            174,
+            178
+          ],
+          "24": [
+            61,
+            62
+          ],
+          "25": [
+            90,
+            92
+          ],
+          "26": [
+            39,
+            40
+          ]
+        },
+        "need_first_request_thinking": [
+          392,
+          392
+        ],
+        "fact_value_in_replies": {
+          "observed-nonrec-far": {
+            "replies_holding_value": 2631,
+            "replies": 3096,
+            "per_episode_median": 1.0
+          },
+          "derived-nonrec-far": {
+            "replies_holding_value": 2692,
+            "replies": 3050,
+            "per_episode_median": 1.0
+          }
+        },
+        "at_need": {
+          "observed-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 12.0,
+            "reply_chars_quartiles": [
+              9081.25,
+              12204.5,
+              16159.25
+            ]
+          },
+          "derived-nonrec-far": {
+            "episodes": 196,
+            "retained_replies_median": 11.0,
+            "reply_chars_quartiles": [
+              10553.0,
+              12803.5,
+              16374.0
+            ]
+          }
+        },
+        "leak_check": {
+          "observed-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          },
+          "derived-nonrec-far": {
+            "target_in_system": 0,
+            "target_in_earlier_user": 0,
+            "target_in_need_option_line": 196,
+            "target_in_need_elsewhere": 0,
+            "clue_outside_replies": 0
+          }
+        },
+        "later_need_requests": {},
+        "episodes": 392,
+        "runs": [
+          "20261102T002751Z-W-npd-0-claude-haiku-5-5"
+        ]
+      },
+      "replies_nr_far": null,
+      "conditions": [
+        {
+          "exit_reason": "COMPLETED",
+          "started_utc": "2026-11-02T00:27:52+00:00",
+          "finished_utc": "2026-11-02T04:55:34+00:00",
+          "model_returned": [
+            "claude-haiku-5-5"
+          ],
+          "inference_geos": {
+            "global": 19300
+          },
+          "cost_usd": {
+            "list": 43.45109831,
+            "billed_est": 43.45109831,
+            "costs_csv_row_appended": true
+          },
+          "run_id": "20261102T002751Z-W-npd-0-claude-haiku-5-5",
+          "minutes": 267.7,
+          "uncached_input_tokens": 293529852,
+          "uncached_per_minute": 1096488.0537915577,
+          "max_in_flight": 3,
+          "peak_spend_plus_reservation": 43.73417224999991
+        }
+      ]
+    }
+  ],
+  "sources": {
+    "r9": "results/haiku_notes/20261024T073307Z",
+    "r10": "results/haiku_provenance/20261102T045643Z"
+  },
+  "contrasts": {
+    "W-n-0 (R11) - W-n-0 (R9)": {
+      "observed-nonrec-far": {
+        "pp": 3.0612244897959187,
+        "ci90": [
+          0.0,
+          6.153846153846154
+        ]
+      },
+      "derived-nonrec-far": {
+        "pp": -1.5306122448979596,
+        "ci90": [
+          -4.1450777202072535,
+          1.036269430051813
+        ]
+      }
+    },
+    "W-np-0 - W-n-0 (R11)": {
+      "observed-nonrec-far": {
+        "pp": 83.6734693877551,
+        "ci90": [
+          78.53403141361255,
+          88.38383838383838
+        ]
+      },
+      "derived-nonrec-far": {
+        "pp": 83.16326530612244,
+        "ci90": [
+          78.28282828282829,
+          87.81725888324873
+        ]
+      }
+    },
+    "W-npd-0 - W-n-0 (R11)": {
+      "observed-nonrec-far": {
+        "pp": 81.12244897959184,
+        "ci90": [
+          76.26262626262626,
+          85.85858585858585
+        ]
+      },
+      "derived-nonrec-far": {
+        "pp": 85.71428571428571,
+        "ci90": [
+          81.02564102564102,
+          89.9015278412263
+        ]
+      }
+    }
+  },
+  "user_messages_against_r9": {
+    "W-n-0 (R11)": {
+      "common": 9416,
+      "identical": 9416
+    },
+    "W-np-0": {
+      "common": 9416,
+      "identical": 9416
+    },
+    "W-npd-0": {
+      "common": 9416,
+      "identical": 9416
+    }
+  },
+  "org_checks": [
+    {
+      "folder": "20261106T050435Z",
+      "checked_utc": "2026-11-06T05:04:35+00:00",
+      "same_org_as_r10_error": true,
+      "same_org_as_r8_error": false
+    },
+    {
+      "folder": "20261106T163011Z",
+      "checked_utc": "2026-11-06T16:30:11+00:00",
+      "same_org_as_r10_error": true,
+      "same_org_as_r8_error": false
+    }
+  ],
+  "warnings": []
+}

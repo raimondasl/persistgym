@@ -29,7 +29,9 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   `persistgym_haiku_provenance` (`registered.HAIKU_PROVENANCE_EXPERIMENT`, PREREG §17.10)
   funds runs in that experiment and pilots. `harnesses run` and `single-turn` have already
   tied R10's two cells and its block to each other (`registered.provenance_block_refusal`),
-  so that block funds only R10's cells, and R8's block funds none of them.
+  so that block funds only R10's cells, and R8's block funds none of them. A run in R11's
+  `persistgym_haiku_control` (`registered.HAIKU_CONTROL_EXPERIMENT`, PREREG §17.11) passes
+  this check as R9's does, under a block the general guard has seen list it.
 * **The request-side check.** Before each call the body must pass
   `harnesses.wire.MessagesWire.check_payload` with the model's registered effort and D13's
   32,000 cap: adaptive thinking, exactly the fields the wire sends, no thinking block in the
@@ -53,11 +55,13 @@ planned spend, costs row, `finalize` and kept lock. It differs in:
   runner does not catch): a 429 with `error_code` `enforced_spend_limit_reached` (the
   organization's monthly spend cap; retries fail until the next month) and a 400 for a usage
   limit set in the Console. A stream that failed after `message_start` has already reported
-  its usage (its input, cache reads and writes, and the output so far): the error carries
-  the message so far (`paid_transport.PARTIAL_RESPONSE`) and the ledger records it as a
-  failed attempt, in the spend and the costs row's totals (not in `n_calls`). A call that
-  failed before `message_start` (a timeout, a connection error, an HTTP error) may still
-  have been billed and is not in the ledger.
+  its usage (its input, cache reads and writes, and `message_start`'s output count; the
+  output it streamed counts only once `message_delta` has come): the error carries the
+  message so far (`paid_transport.PARTIAL_RESPONSE`) and the ledger records it as a failed
+  attempt, in the spend and the costs row's totals (not in `n_calls`). So the output such an
+  attempt streamed may be billed and is not in the ledger. A call that failed before
+  `message_start` (a timeout, a connection error, an HTTP error) may still have been billed
+  and is not in the ledger either.
 * **What it logs** per response: the returned model, `stop_reason`, the tier served
   (`usage.service_tier`, with a warning if it is not `standard`, which is what the prices
   assume), the inference geo served (`usage.inference_geo`, with a warning if it is not
@@ -222,13 +226,18 @@ class AnthropicMessagesTransport(PaidTransport):
                 and self.approval.experiment in (registered.PILOT_EXPERIMENT,
                                                  registered.HAIKU_PROVENANCE_EXPERIMENT)):
             return None
+        # R11 (PREREG §17.11): its own run only (the general guard has checked that the block
+        # lists the run's experiment)
+        if self.approval.experiment == registered.HAIKU_CONTROL_EXPERIMENT:
+            return None
         return (f"block {self.approval.approved_block!r} lists "
                 f"{', '.join(self.approval.experiments)}, not {registered.HAIKU_EXPERIMENT}: "
                 f"a {registered.HAIKU_MODEL} run, its pilots and validity run included, needs "
                 f"an approval line written for the Haiku replication ({registered.R8_REF}), "
                 f"which lists it, or for R9's notes run ({registered.R9_REF}), which lists "
                 f"{registered.HAIKU_NOTES_EXPERIMENT}, or for R10's runs ({registered.R10_REF}), "
-                f"which lists {registered.HAIKU_PROVENANCE_EXPERIMENT}")
+                f"which lists {registered.HAIKU_PROVENANCE_EXPERIMENT}, or for R11's run "
+                f"({registered.R11_REF}), which lists {registered.HAIKU_CONTROL_EXPERIMENT}")
 
     def _default_client(self, timeout_s: float) -> Any:
         # max_retries=0: retries are handled by the transport so that every attempt is visible.

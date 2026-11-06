@@ -1661,3 +1661,47 @@ A run that stops early for any reason but its planned spend is continued only af
 approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_usd: 17.38
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R11 (`PREREG.md` §17.11), PLAN amendment A13 and the code that enforces them, and records the correction above. It also approves block `7-haiku-control` up to $17.38 billed.
+
+## 2026-11-06: R11's later W-n-0 control on claude-haiku-5-5: results (exploratory)
+**The run,** started after the researcher merged PR #87:
+- **The organization:** `harnesses org-check` before the run (05:04:35 UTC) and after it (16:30:11 UTC) found the key in the organization that R10's rate-limit error names (`results/haiku_control_org/`).
+- **The run,** `20261106T050520Z-W-n-0-claude-haiku-5-5`, played from 05:05:21 to 06:35:14 UTC at `--parallel 2`. It ended `SPEND_RESERVATION` at its planned $17.24, as §17.11 expected: 393 episodes, all `DONE`, and 7 not started. There was no API error, no rate-limit stop and no request-side check stop. Its billed estimate is $17.14.
+- **The templates read:** 0-195 in every arm, 196 of the 200. Template 196's observed cell finished and its derived cell was not started, so template 196 is left out of every arm, and templates 197-199 were never played. The forecast gave about 197 at R9's cost.
+- **Spend:** block `7-haiku-control` $17.14 of $17.38. Phase 1a $398.43 of $500. Project total $926.96 over 94 ledger rows.
+
+**Deviation (PREREG §13): the start hour.** §17.11 item 2 has the run started between 19:04 and 01:30 UTC, inside the span of R10's runs. The researcher merged PR #87 and asked for the run to start at once rather than wait about 14 hours for the window, because the credit might change again. It started at 05:05 UTC. The readings are computed as registered, and reading 8 reports the hours as played. Whether a run started inside the window would have read the same is not known. Its hours are close to R9's (06:00 to 07:31 UTC), not R10's (18:45 to 04:55 UTC). Inside the window the hour would still have differed from at least one of R10's arms (§17.11 item 2), and now it differs from both.
+
+**The analysis,** `uv run python -m analysis.haiku_control` on clean commit 40a2d64, wrote `results/haiku_control/20261106T163045Z/`. It is FINAL: §2.8's replay of 393 need steps found no bug, and there is no exclusion and no warning.
+
+**Readings** (registered in §17.11; descriptive, not tested; 196 episodes per arm and task cell, templates 0-195; 90% template-cluster intervals):
+
+| Task cell | W-n-0 (R11, 2026-11-06) | W-n-0 (R9, 2026-10-24) | W-np-0 (R10) | W-npd-0 (R10) |
+|---|---|---|---|---|
+| observed, not recoverable, far | 5.1% (2.6 to 7.7) | 2.0% (0.5 to 3.6) | 88.8% (85.0 to 92.3) | 86.2% (82.1 to 90.2) |
+| derived, not recoverable, far | 3.1% (1.0 to 5.1) | 4.6% (2.5 to 7.2) | 86.2% (82.1 to 90.3) | 88.8% (84.9 to 92.4) |
+| P(carried) (observed, derived) | 9.2%, 37.2% | 4.1%, 35.7% | 93.4%, 90.8% | 88.8%, 95.9% |
+
+- **Choices with the fact evicted:** every option chosen was correct, in all four arms. This run chose one in 10 and 6 of 196.
+- **Contrasts** (percentage points, 90% intervals over the same template resamples, no correction for the 6):
+  - this run minus R9's W-n-0: +3.1 (+0.0 to +6.2) observed, −1.5 (−4.1 to +1.0) derived;
+  - W-np-0 minus this run: +83.7 (+78.5 to +88.4) observed, +83.2 (+78.3 to +87.8) derived;
+  - W-npd-0 minus this run: +81.1 (+76.3 to +85.9) observed, +85.7 (+81.0 to +89.9) derived.
+- **Replies** (R9's text patterns, which R9's hand checks found to undercount on R9's replies. This run's replies were not hand-checked, so these are pointers only): in the derived cell's 67 failed carried episodes, the need-step reply disowns an earlier figure in 45, and 52 retracted it before the need step. R9's are 39 and 43 of 61 on these templates.
+- **Responses:** 66 of 9,416 refused (0.7%), against R9's 51 (0.5%) and R10's 201 (2.1%) and 165 (1.8%), all category "bio". 54.6% hold a thinking block, against R9's 51.7% and R10's 95.9% and 95.1%. By turn the thinking share follows R9's: 86.7%, 60.1%, 33.4% and 45.6% of first requests in turns 0-4, 5-9, 10-14 and 15 on, against R9's 85.1%, 55.0%, 31.1% and 42.7%.
+- **The notes:** from the last evidence step to the step before the need step, 7.6% and 9.2% of replies hold the fact's value, against R9's 5.4% and 11.1% and R10's 80.4% to 88.3%. At the need step the retained replies total a median 1,400 and 1,723 characters per episode, over a median 14 replies, against R9's 1,299.5 and 1,670 and R10's 12,204.5 to 14,248.
+- **The leak check:** in the need step's first request of every episode, the fact's value appears only in its option line and the model's own replies, and the clue values only in the replies. All 9,416 user messages at a common episode and step equal R9's, in each arm.
+- **Cost and output:** $0.0435 and $0.0437 per episode and 2,258 and 2,972 output tokens, against R9's $0.0432 and $0.0436 and 2,140 and 2,858.
+- **Run conditions:** the model string is claude-haiku-5-5, every call was served in the global geo, and the run sent about 1.40 million uncached input tokens a minute.
+
+**What it points to,** by the table that §17.11 wrote before the run: the first row, "near R9's, far below R10's arms". So it points to the added sentences as what raised success over W-n-0, as served around these dates to a key in this organization. It does not settle the differences listed below. Read the same way, R10's higher refusal rate and thinking-block share go with the sentences too, since this run's stay near R9's.
+
+**What it does not show:**
+- **The differences left between this run and R10's arms,** which §17.11 lists. This run came about 4 days after them, on a Friday, at `--parallel 2` against 3 (8 for the 10 episodes from W-np-0's stopped first run), with 2 task cells per template against 4, using about 70% of the 2,000,000 in R10's error of 2026-11-01 against about 55% in R10's later runs. R10's later runs are inferred to be under this organization. Because of the deviation, the hour of the day differs from both of R10's arms, not only from one: this run and R9's ran in the early morning UTC, and R10's arms in the evening and overnight. A change in serving with the hour of the day would fit these readings as well, since no W-n-0 ran in R10's hours. Nothing here measures such a change, and nothing shows one.
+- **Not concurrent.** This run came after R10's arms, so a change in serving between them cannot be ruled out, and the records cannot show that serving is unchanged between any two of these runs.
+- **The organization.** The checks say which organization the key belonged to at 05:04:35 and 16:30:11 UTC, not what the run's calls were served under, and record no workspace. This run cannot separate the organization from the date, since R9's organization is not in its records.
+- **The wording is in-sample.** The sentences were written after reading R9's replies, and are read on the same episodes. Which sentence does the work is not identified, and disclosure was not run without provenance.
+- **One run per arm, no repeat.** Within-template noise is not estimated, and the differences between this run and R9's W-n-0 (+3.1 and −1.5 points, 0.7% and 0.5% refused) are not tested.
+- **2 of the 4 far cells,** and 196 of the 200 templates.
+- Everything R8, R9 and R10 say they do not show also holds here, the thinking text not inspected among it. This is one model, on synthetic tasks, in an exploratory run. It is not a model comparison, and not a test of note-taking instructions in general.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the run, the deviation and the readings. It adds no spending approval. The pull request is $0.

@@ -1,0 +1,11 @@
+{
+  "checked_utc": "2026-11-06T16:30:11+00:00",
+  "endpoint": "POST /v1/messages/count_tokens",
+  "model": "claude-haiku-5-5",
+  "prereg": "PREREG.md §17.11 (amendment R11)",
+  "org_sha256": "74e53caccde4d5b5841efd69e7dd73d71b05ac4f4dd35f14616353674999b82d",
+  "same_org_as_r10_error": true,
+  "same_org_as_r8_error": false,
+  "git_commit": "c0c4b9e11b687fa3b7f542aa89e36d75a66ab0d1",
+  "git_dirty": true
+}

@@ -148,6 +148,22 @@ For this model, the gap grows with reasoning effort. GPT-6.1 Sol's gap instead n
 - Haiku 5.5 has ARC-AGI-3 scores only at max, near the floor under both harnesses.
 - The Sol page is the cached copy of 2026-10-14. The Argon and Haiku pages were fetched on 2026-10-27.
 
+**Added 2026-11-10** (the JSON embedded in the results page, cached under `results/raw/arc_public/fable52_20261109/`; gap from unrounded values; `results/decisions.md`, 2026-11-10):
+
+| Model | Effort | Standard | Provider Adapter | Gap |
+|---|---|---|---|---|
+| Claude Fable 5.2 ([results](https://arcprize.org/results/anthropic-claude-fable-5-2), 2026-11-09) | max | 65.66% | 94.90% | +29.2pp |
+| | xhigh | 81.17% | 97.27% | +16.1pp |
+| | high | 79.26% | 97.72% | +18.5pp |
+| | medium | 73.32% | 96.79% | +23.5pp |
+| | low | 52.00% | 92.31% | +40.3pp |
+
+- The page's text pairs the best Standard score (81.2%, xhigh) with the best Adapter score (97.7%, high), a mixed-effort difference of 16.6pp.
+- The gap is smallest at xhigh and high and larger at both ends. Gemini 3.8 Flash's grows with effort, and GPT-6.1 Sol's narrows from medium upward.
+- At max with the Standard harness, the page says 28 of the 55 semi-private games ran for the full 12-hour limit, which capped how far testing could progress.
+- On the four games of our ARC path (FT09, SB26, R11L, CD82), ARC's single public-set runs score 100 under both harnesses at max, xhigh, high and medium. At low, CD82 scores 72.57 under Standard and 100 under the Adapter. The gap that selected these games is Gemini 3.8 Flash's. A score of 100 under both harnesses is a ceiling, so it does not show that the Adapter makes no difference for this model.
+- The session records the page links name a pre-release model string, `claude-odango-eap`. The page does not say whether it is the released model, or how its five levels map to the provider's effort settings.
+
 **Other cheap models:**
 - **GPT-6 Luna** is at the floor under both harnesses: Standard 0.03-0.19%, Adapter 0.05-0.59%, about $4/game ([results](https://arcprize.org/results/openai-gpt-6-luna)). Luna on ARC would measure noise.
 - **GPT-6 Sol** reaches 4.62% vs 23.03% only at max, for $101-159/game ([results](https://arcprize.org/results/openai-gpt-6-sol)).

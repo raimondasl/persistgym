@@ -61,9 +61,7 @@ def test_experiment_1_rotates_its_arms_over_four_rounds():
 
 def test_the_block_fits_the_cap_and_the_approval_line_names_it():
     t = FORECAST["totals"]
-    spent = sum(costs.spend_usd(r["cost_usd_list"], r["cost_usd_billed_est"])
-                for r in costs.read_rows()
-                if costs.phase_of(r["experiment"]) == "1a")
+    spent = costs.spend_by_phase(costs.read_rows())["1a"]
     assert spent + t["block_max_usd"] <= costs.PHASE_CAPS["1a"]
     assert t["block_max_usd"] >= t["high"] + t["pilots"]
     text = (REPO / "results" / "decisions.md").read_text(encoding="utf-8")

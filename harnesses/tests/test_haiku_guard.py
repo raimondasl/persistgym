@@ -269,7 +269,9 @@ def test_with_r8_a_dated_haiku_snapshot_is_haiku(tmp_path, g1):
 def test_with_r8_other_models_never_run_in_its_experiment(tmp_path, g1):
     assert "R6's hard stop" in guard(MAIN, "F-0", tmp_path, model=LUNA)
     assert "R6's hard stop" in guard(MAIN, "F-0", tmp_path, model=SOL, effort="medium")
-    for model in ("claude-haiku-4-5", "claude-sonnet-5-5", "claude-haiku-5-5-x"):
+    # claude-sonnet-5-5 is registered since R12, for its own experiment only
+    # (test_r12_guard.py); claude-opus-5-5 is not
+    for model in ("claude-haiku-4-5", "claude-opus-5-5", "claude-haiku-5-5-x"):
         assert "not a registered model" in guard(MAIN, "F-0", tmp_path, model=model)
 
 

@@ -300,14 +300,15 @@ def is_left_out(e: dict) -> bool:
     The same holds for a prompt of a pilot of H3's single-turn control (`control`
     `single_turn`): it is one call, not an episode of a harness cell, and it would join luna's
     reported pool, showing that arm's reasoning tokens as the difference. And for every pilot
-    episode of claude-haiku-5-5 (PREREG §17.8, amendment R8), whose pool, new and
-    filled one cell at a time, would show each arm's tokens as the difference between
-    reports."""
+    episode of claude-haiku-5-5 (PREREG §17.8, amendment R8) and of claude-sonnet-5-5
+    (PREREG §17.12, amendment R12), whose pool, new and filled one cell at a time, would show
+    each arm's tokens as the difference between reports."""
     if e.get("control") == SINGLE_TURN_CONTROL:
         return True
     # PREREG §17.8 (R8): claude-haiku-5-5's pilots are never pooled either; a new
     # model's pool would show one arm's tokens after its first pilot run
-    if registered.model_family(str(e.get("model"))) == registered.HAIKU_MODEL:
+    if registered.model_family(str(e.get("model"))) in (registered.HAIKU_MODEL,
+                                                         registered.SONNET_MODEL):
         return True
     return (registered.model_family(str(e.get("model"))) == registered.H1_REPLICATION_MODEL
             and _effort(e) == registered.H1_REPLICATION_EFFORT

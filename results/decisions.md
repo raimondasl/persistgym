@@ -1801,3 +1801,29 @@ approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_us
 - **Data availability:** v1 names the tag `preprint-v1`, which predates R9's records. v2 names a tag that holds R9 to R11.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records these notes. It adds no spending approval. The pull request is $0.
+
+## 2026-11-11: Amendment R12: Haiku's notes sentences on new templates, claude-sonnet-5-5, and a block-truncation window; block 8-r12; PLAN A14 raises phase 1a's cap to $620
+**The request.** On 2026-11-11 the researcher asked for three of the experiments Claude had proposed: "Prepare to run 1 + 2 + 3, raise the cap." `PREREG.md` §17.12 (amendment R12) registers them, and PLAN §29 (A14) raises phase 1a's cap from $500 to $620. The researcher's merge of the pull request that adds this entry approves both and the block below.
+
+**The runs** (§17.12, What it changes):
+- **Pilots** in `persistgym_pilot`: Haiku's W-nd-0, W-nx-0 and W-b-0, and claude-sonnet-5-5's W-n-0, W-np-0 and F-0, at most 8 episodes each.
+- **Experiment 1** (`persistgym_haiku_r12_notes`): Haiku's W-n-0, W-np-0, W-nd-0 and W-nx-0 on main templates 200-299, the 2 not-recoverable far cells, in 4 rounds of 25 templates with the arms' order rotated.
+- **Experiment 2** (`persistgym_sonnet_r12`): Sonnet's W-n-0, W-np-0 and F-0 on main templates 200-224, the same 2 cells.
+- **Experiment 3** (`persistgym_haiku_r12_block`): Haiku's W-b-0 on main templates 0-199, all 8 task cells, in 4 runs of 50 templates.
+
+**The forecast** (`uv run python -m analysis.r12_forecast` on clean commit 7b19214, output `results/r12_forecast/20261111T060105Z/`): main runs $164.04 to $179.20, pilots at most $15.13 by their stops. The block's limit is the high forecast times 1.10 plus the pilots' stops, $213. The guard admits a run only while the block's spend plus that run's stop fits in $213, and one send can pass a run's stop (at most $3.43, `most_one_send`), so the block can end at most $3.43 above $213. Phase 1a has $398.43 spent, so at most $614.86 after this block, under the new $620 cap. The project total is $926.96 over 94 ledger rows before it, at most $1,143.39 after.
+
+approved_block: 8-r12 | experiments: persistgym_pilot,persistgym_haiku_r12_notes,persistgym_sonnet_r12,persistgym_haiku_r12_block | max_usd: 213
+
+**The commands,** after the merge, one after another in this order, with the app kept open (a part runs for hours). Each arms paid calls for its own command only:
+
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r12_rounds --part pilots
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r12_rounds --part notes
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r12_rounds --part sonnet
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r12_rounds --part block
+
+`--dry-run` prints a part's `harnesses run` commands without running them. Without the switch the driver refuses before running anything. It stops at the first run that does not end COMPLETED. After a stop, the researcher is told. A run that ended early is continued under DESIGN §7.9 (a new run id, `--start` at the first template it left unfinished, the link listed for §7.8), and the part resumes at its next run with `--from N`, never by running the part again.
+
+**Between the pilots and the main runs.** Claude checks each pilot's errors, payloads and cost per episode. If a pilot ends other than COMPLETED, or costs more than 1.10 times its high forecast per episode, Claude stops and tells the researcher before any main run. At that rate every main run's stop still fits in the block. Otherwise the main runs follow, in the order above.
+
+**Approval.** The researcher's merge of the pull request that adds this entry approves block `8-r12` at the amount above and A14's cap. Each run's stop is its high forecast times 1.25. The paid guard admits a run only if its stop fits in what is left of the block and of the cap, so a run that no longer fits refuses, and Claude stops and asks.

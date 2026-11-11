@@ -1,0 +1,515 @@
+{
+  "prereg": "PREREG.md \u00a717.12 (amendment R12)",
+  "profiles": {
+    "F-0": {
+      "input_tokens": 639282.45,
+      "cached_input_tokens": 592035.9125,
+      "cache_write_tokens": 47150.3975,
+      "output_tokens": 1082.42,
+      "reasoning_tokens": 401.79,
+      "episodes": 400,
+      "billed_usd_per_episode": 0.012364982812500001,
+      "requests": 24.035
+    },
+    "W-n-0": {
+      "input_tokens": 547109.8778625954,
+      "cached_input_tokens": 226836.53944020357,
+      "cache_write_tokens": 320177.2569974555,
+      "output_tokens": 2612.704834605598,
+      "reasoning_tokens": 1175.7913486005089,
+      "episodes": 393,
+      "billed_usd_per_episode": 0.04360648307888041,
+      "requests": 24.020356234096692
+    },
+    "W-np-0": {
+      "input_tokens": 567904.295,
+      "cached_input_tokens": 201518.125,
+      "cache_write_tokens": 366290.03,
+      "output_tokens": 13503.71,
+      "reasoning_tokens": 2503.6925,
+      "episodes": 400,
+      "billed_usd_per_episode": 0.054562903999999995,
+      "requests": 24.035
+    }
+  },
+  "per_episode_usd": {
+    "claude-haiku-5-5 W-n-0": [
+      0.043606483078880404,
+      0.043606483078880404
+    ],
+    "claude-haiku-5-5 W-np-0": [
+      0.05456290400000001,
+      0.05456290400000001
+    ],
+    "claude-haiku-5-5 W-nd-0": [
+      0.043606483078880404,
+      0.05456290400000001
+    ],
+    "claude-haiku-5-5 W-nx-0": [
+      0.043606483078880404,
+      0.05456290400000001
+    ],
+    "claude-sonnet-5-5 W-n-0": [
+      0.8494460076335877,
+      0.8755730559796436
+    ],
+    "claude-sonnet-5-5 W-np-0": [
+      1.0711062675,
+      1.2061433675000002
+    ],
+    "claude-sonnet-5-5 F-0": [
+      0.18809606499999995,
+      0.19892026499999993
+    ],
+    "claude-haiku-5-5 W-b-0": [
+      0.013455873322972111,
+      0.014816947901989832
+    ]
+  },
+  "block_window": {
+    "observed-nonrec-near": {
+      "reply_tokens": 26.74079467443312,
+      "scale": 1.5031267525815983,
+      "w0_input_measured": 540153.32,
+      "w0_input_replayed": 553542.6170503215,
+      "w0_usd_measured": 0.0423654869,
+      "w0_usd_replayed": 0.041797399801894564,
+      "block_usd": 0.01323975229134296
+    },
+    "observed-nonrec-far": {
+      "reply_tokens": 30.343041397961308,
+      "scale": 1.50063055397064,
+      "w0_input_measured": 540114.38,
+      "w0_input_replayed": 553797.1460193924,
+      "w0_usd_measured": 0.04224767455,
+      "w0_usd_replayed": 0.04200912867343317,
+      "block_usd": 0.013436036644964792
+    },
+    "observed-rec-near": {
+      "reply_tokens": 28.825951341235186,
+      "scale": 1.5065926924927018,
+      "w0_input_measured": 542994.48,
+      "w0_input_replayed": 557269.1297027117,
+      "w0_usd_measured": 0.0426273049,
+      "w0_usd_replayed": 0.04213478959060247,
+      "block_usd": 0.013414980163574815
+    },
+    "observed-rec-far": {
+      "reply_tokens": 30.678849610545235,
+      "scale": 1.502547855937,
+      "w0_input_measured": 574494.195,
+      "w0_input_replayed": 556377.5296284008,
+      "w0_usd_measured": 0.046382664025,
+      "w0_usd_replayed": 0.042121984610512135,
+      "block_usd": 0.013446901297846864
+    },
+    "derived-nonrec-near": {
+      "reply_tokens": 28.994591221135842,
+      "scale": 1.5015007787568477,
+      "w0_input_measured": 540436.6,
+      "w0_input_replayed": 553678.6532141558,
+      "w0_usd_measured": 0.041780378699999995,
+      "w0_usd_replayed": 0.04192367403528162,
+      "block_usd": 0.01335756020423102
+    },
+    "derived-nonrec-far": {
+      "reply_tokens": 33.26607031412524,
+      "scale": 1.4986027956664913,
+      "w0_input_measured": 540697.46,
+      "w0_input_replayed": 553999.9890201753,
+      "w0_usd_measured": 0.041798759025,
+      "w0_usd_replayed": 0.042191842991659956,
+      "block_usd": 0.013606414783789083
+    },
+    "derived-rec-near": {
+      "reply_tokens": 31.102100228737783,
+      "scale": 1.5033882769068796,
+      "w0_input_measured": 543300.78,
+      "w0_input_replayed": 556826.8969542392,
+      "w0_usd_measured": 0.042168220650000005,
+      "w0_usd_replayed": 0.04220662200330197,
+      "block_usd": 0.0135080993472335
+    },
+    "derived-rec-far": {
+      "reply_tokens": 33.59816257239864,
+      "scale": 1.5048426688821677,
+      "w0_input_measured": 575050.44,
+      "w0_input_replayed": 558181.1937057121,
+      "w0_usd_measured": 0.046072871024999996,
+      "w0_usd_replayed": 0.04240721333508295,
+      "block_usd": 0.013637241850793852
+    }
+  },
+  "runs": [
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-n-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.1803241539440203,
+      "planned_usd": 2.73,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-np-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 2.7281452000000006,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nd-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nx-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-np-0",
+      "templates": [
+        225,
+        250
+      ],
+      "episodes": 50,
+      "low_usd": 2.7281452000000006,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nd-0",
+      "templates": [
+        225,
+        250
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nx-0",
+      "templates": [
+        225,
+        250
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-n-0",
+      "templates": [
+        225,
+        250
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.1803241539440203,
+      "planned_usd": 2.73,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nd-0",
+      "templates": [
+        250,
+        275
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nx-0",
+      "templates": [
+        250,
+        275
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-n-0",
+      "templates": [
+        250,
+        275
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.1803241539440203,
+      "planned_usd": 2.73,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-np-0",
+      "templates": [
+        250,
+        275
+      ],
+      "episodes": 50,
+      "low_usd": 2.7281452000000006,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nx-0",
+      "templates": [
+        275,
+        300
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-n-0",
+      "templates": [
+        275,
+        300
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.1803241539440203,
+      "planned_usd": 2.73,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-np-0",
+      "templates": [
+        275,
+        300
+      ],
+      "episodes": 50,
+      "low_usd": 2.7281452000000006,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cell": "W-nd-0",
+      "templates": [
+        275,
+        300
+      ],
+      "episodes": 50,
+      "low_usd": 2.1803241539440203,
+      "high_usd": 2.7281452000000006,
+      "planned_usd": 3.42,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_sonnet_r12",
+      "model": "claude-sonnet-5-5",
+      "cell": "W-n-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 42.47230038167938,
+      "high_usd": 43.77865279898218,
+      "planned_usd": 54.73,
+      "most_one_send_usd": 2.7720000000000002
+    },
+    {
+      "experiment": "persistgym_sonnet_r12",
+      "model": "claude-sonnet-5-5",
+      "cell": "W-np-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 53.555313375000004,
+      "high_usd": 60.30716837500001,
+      "planned_usd": 75.39,
+      "most_one_send_usd": 2.7720000000000002
+    },
+    {
+      "experiment": "persistgym_sonnet_r12",
+      "model": "claude-sonnet-5-5",
+      "cell": "F-0",
+      "templates": [
+        200,
+        225
+      ],
+      "episodes": 50,
+      "low_usd": 9.404803249999997,
+      "high_usd": 9.946013249999996,
+      "planned_usd": 12.44,
+      "most_one_send_usd": 3.4320000000000004
+    },
+    {
+      "experiment": "persistgym_haiku_r12_block",
+      "model": "claude-haiku-5-5",
+      "cell": "W-b-0",
+      "templates": [
+        0,
+        50
+      ],
+      "episodes": 400,
+      "low_usd": 5.382349329188845,
+      "high_usd": 5.926779160795933,
+      "planned_usd": 7.41,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_block",
+      "model": "claude-haiku-5-5",
+      "cell": "W-b-0",
+      "templates": [
+        50,
+        100
+      ],
+      "episodes": 400,
+      "low_usd": 5.382349329188845,
+      "high_usd": 5.926779160795933,
+      "planned_usd": 7.41,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_block",
+      "model": "claude-haiku-5-5",
+      "cell": "W-b-0",
+      "templates": [
+        100,
+        150
+      ],
+      "episodes": 400,
+      "low_usd": 5.382349329188845,
+      "high_usd": 5.926779160795933,
+      "planned_usd": 7.41,
+      "most_one_send_usd": 0.1386
+    },
+    {
+      "experiment": "persistgym_haiku_r12_block",
+      "model": "claude-haiku-5-5",
+      "cell": "W-b-0",
+      "templates": [
+        150,
+        200
+      ],
+      "episodes": 400,
+      "low_usd": 5.382349329188845,
+      "high_usd": 5.926779160795933,
+      "planned_usd": 7.41,
+      "most_one_send_usd": 0.1386
+    }
+  ],
+  "pilots": [
+    {
+      "model": "claude-haiku-5-5",
+      "cell": "W-nd-0",
+      "episodes": 4,
+      "planned_usd": 0.78
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "cell": "W-nx-0",
+      "episodes": 4,
+      "planned_usd": 0.78
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "cell": "W-b-0",
+      "episodes": 8,
+      "planned_usd": 0.65
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "cell": "W-n-0",
+      "episodes": 4,
+      "planned_usd": 4.88
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "cell": "W-np-0",
+      "episodes": 4,
+      "planned_usd": 6.54
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "cell": "F-0",
+      "episodes": 4,
+      "planned_usd": 1.5
+    }
+  ],
+  "totals": {
+    "low": 164.03828497076304,
+    "high": 179.19799008294206,
+    "stops": 224.15999999999997,
+    "one_send": 3.4320000000000004,
+    "pilots": 15.13,
+    "block_max_usd": 213
+  },
+  "phase_1a_spent_usd": 398.433735,
+  "phase_1a_after_block_usd": 611.4337350000001
+}

@@ -52,26 +52,30 @@ def test_headroom_falls_back_to_list_and_refuses_rows_without_cost():
             costs.headroom(10, "0", [_row(), _row(**bad)])
 
 
-def test_phase_caps_are_the_a2_caps():
+def test_phase_caps_are_the_a14_caps():
     # PLAN.md amendment A2 (§17.3), approved by the researcher on 2026-10-01: 1a 450 -> 500,
-    # phase 2 950 -> 1250; 0 and 1b unchanged.
-    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 500.0, "1b": 900.0, "2": 1250.0}
-    assert costs.headroom(0, "1a", []) == pytest.approx(500)
+    # phase 2 950 -> 1250; amendment A14 (§29.1), approved on 2026-11-11: 1a 500 -> 620;
+    # 0 and 1b unchanged.
+    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 620.0, "1b": 900.0, "2": 1250.0}
+    assert costs.headroom(0, "1a", []) == pytest.approx(620)
     assert costs.headroom(0, "2", []) == pytest.approx(1250)
 
 
-def _plan_cap_table() -> dict[str, float]:
-    """'Cap from A2' column of the PLAN.md §17.3 table, by phase."""
+def _plan_cap_table(heading_text: str) -> dict[str, float]:
+    """The third column ('Cap from ...') of a PLAN.md phase-cap table, by phase."""
     plan = (costs.REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
-    heading = re.search(r"^### 17\.3 Phase caps$", plan, flags=re.MULTILINE)
-    assert heading, "PLAN.md has no '### 17.3 Phase caps' heading"
+    heading = re.search(rf"^### {re.escape(heading_text)}$", plan, flags=re.MULTILINE)
+    assert heading, f"PLAN.md has no '### {heading_text}' heading"
     section = plan[heading.end():].split("\n#", 1)[0]
     row = re.compile(r"^\| (0|1a|1b|2) \| \$([\d,]+) \| \$([\d,]+) \|", flags=re.MULTILINE)
     return {m[1]: float(m[3].replace(",", "")) for m in row.finditer(section)}
 
 
-def test_phase_caps_match_plan_section_17_3():
-    assert _plan_cap_table() == costs.PHASE_CAPS
+def test_phase_caps_match_plans_latest_table():
+    # A14's table (§29.1) is the latest; A2's (§17.3) stays as it was written
+    assert _plan_cap_table("29.1 Phase caps") == costs.PHASE_CAPS
+    assert _plan_cap_table("17.3 Phase caps") == {"0": 100.0, "1a": 500.0, "1b": 900.0,
+                                                  "2": 1250.0}
 
 
 def test_append_rejects_bad_rows(tmp_path):

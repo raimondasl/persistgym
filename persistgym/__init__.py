@@ -17,6 +17,8 @@ from persistgym.episode import ALL_CELLS, VARIANTS, Episode, Step, TaskCell, rea
 from persistgym.oracle import KeyOracle, TextOracle, run_episode
 from persistgym.render import generate, render_template
 from persistgym.survival import (
+    block_keep_start,
+    block_keep_starts,
     carried_in_text,
     designed_survival,
     survival_from_payload,
@@ -37,6 +39,8 @@ __all__ = [
     "Step",
     "TaskCell",
     "TextOracle",
+    "block_keep_start",
+    "block_keep_starts",
     "carried_in_text",
     "designed_survival",
     "generate",

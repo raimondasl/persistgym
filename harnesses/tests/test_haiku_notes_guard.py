@@ -186,7 +186,7 @@ def test_with_r6_off_r9s_run_is_still_held_to_r9(tmp_path, monkeypatch):
 def _approval_refusal(experiment: str, *experiments: str) -> str | None:
     """The transport's block check for a run in `experiment` under a block that lists
     `experiments` (the general guard has already required `experiment` among them)."""
-    fake_self = SimpleNamespace(approval=SimpleNamespace(
+    fake_self = SimpleNamespace(model="claude-haiku-5-5", approval=SimpleNamespace(
         approved_block="b", experiment=experiment, experiments=experiments))
     return AnthropicMessagesTransport._approval_refusal(fake_self)
 

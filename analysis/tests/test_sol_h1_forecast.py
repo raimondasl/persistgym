@@ -105,7 +105,7 @@ def test_the_phase_1a_picture(built):
     spent = sum(float(r["cost_usd_billed_est"] or r["cost_usd_list"]) for r in ROWS.values()
                 if costs.phase_of(r["experiment"]) == "1a")
     assert line["spent"] == pytest.approx(spent)
-    assert line["cap_1a"] == costs.PHASE_CAPS["1a"] == 500
+    assert line["cap_1a"] == costs.PHASE_CAPS["1a"]  # the live cap: $620 since A14 (§29.1)
     # R3's engagement check (2026-10-03) is in the ledger: its two rows are phase 1a
     r3 = ("20261003T055240Z-F-r-gpt-6.1-sol", "20261003T060120Z-F-0-gpt-6.1-sol")
     assert all(costs.phase_of(ROWS[r]["experiment"]) == "1a" for r in r3)
@@ -147,7 +147,7 @@ def test_the_committed_forecast_is_the_one_prereg_cites():
             abs=1e-3)
         assert line[f"total_central_T{T}"] == pytest.approx(total, abs=0.005)
     assert line["r4_central_T100"] == pytest.approx(279.49, abs=0.005)
-    assert line["total_central_T100"] < costs.PHASE_CAPS["1a"] == 500
+    assert line["total_central_T100"] < 500  # A2's cap when this forecast was made
     summary = (out / "summary.md").read_text(encoding="utf-8")
     for number in ("279.49", "318.87", "181.13", "186.44", "52%", "49%", "94%"):
         assert number in summary and number in section, number

@@ -437,7 +437,7 @@ def test_the_block_rule(block, cell, refused):
 def _approval_refusal(experiment: str, *experiments: str) -> str | None:
     """The transport's block check for a run in `experiment` under a block that lists
     `experiments` (the general guard has already required `experiment` among them)."""
-    fake_self = SimpleNamespace(approval=SimpleNamespace(
+    fake_self = SimpleNamespace(model="claude-haiku-5-5", approval=SimpleNamespace(
         approved_block="b", experiment=experiment, experiments=experiments))
     return AnthropicMessagesTransport._approval_refusal(fake_self)
 

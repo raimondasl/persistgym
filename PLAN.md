@@ -832,7 +832,7 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 ## 29. Amendment A14 (2026-11-11): R12's three exploratory experiments, and phase 1a's cap at $620
 - **The change:** `PREREG.md` §17.12 (amendment R12) adds three exploratory experiments: Haiku's notes sentences on templates 200-299 with two new control arms, run in rotating rounds; claude-sonnet-5-5's W-n-0, W-np-0 and F-0 on templates 200-224; and a block-truncation window (W-b-0) on Haiku's 8 task cells, templates 0-199. Each new cell and Sonnet is piloted first.
 - **Status:** exploratory, decided after R8's to R11's readings were read. The researcher asked for it on 2026-11-11: "Prepare to run 1 + 2 + 3, raise the cap."
-- **Budget:** block `8-r12`, $213, in phase 1a, whose cap this amendment raises from $500 to $620 at the researcher's request ($398.43 spent before R12). With it the project total is at most $1,139.96. After these runs no further paid run is made without a new amendment.
+- **Budget:** block `8-r12`, $213, plus at most one send past the last admitted run's stop ($3.43), in phase 1a, whose cap this amendment raises from $500 to $620 at the researcher's request ($398.43 spent before R12). With it the project total is at most $1,143.39. After these runs no further paid run is made without a new amendment.
 - **What it does not show:** a model comparison, or the sentences on other tasks or models. The block window runs once, at one block size, against comparators run on 2026-10-18.
 
 ### 29.1 Phase caps

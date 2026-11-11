@@ -834,6 +834,6 @@ The run's descriptive readings are `analysis/haiku_control.py`. Tests: `tests/te
 
 **The guard.** `haiku_refusal` sends every run in R12's three experiments, and every pilot of R12's new cells or of Sonnet, to `_r12_refusal`, before R10's cell rule. Each experiment's spec (`R12_SPECS`) fixes the model exactly, the cells, the task cells and the template range. `r12_block_refusal` binds those runs to block `8-r12` both ways. With `R12_IN_EFFECT` False every such run refuses, and with `R8_IN_EFFECT` False too.
 
-**The runs.** `harnesses/r12_rounds.py` builds each part's commands from the latest committed forecast (`analysis/r12_forecast.py`) and runs them one after another, stopping at the first that does not end COMPLETED.
+**The runs.** `harnesses/r12_rounds.py` builds each part's commands from the latest committed forecast (`analysis/r12_forecast.py`) and runs them one after another, stopping at the first that does not end COMPLETED. It never arms paid calls itself: without `PERSISTGYM_ALLOW_PAID=1` on its own command it refuses before running anything, and it passes the switch through to each child only as the operator set it. After a stop, `--from N` resumes the part at its N-th run, once an early-ended run has been continued under §7.9.
 
 Tests: `tests/test_r12_cells.py`, `tests/test_r12_guard.py` and `tests/test_r12_rounds.py`.

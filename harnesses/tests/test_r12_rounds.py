@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -73,12 +74,27 @@ def test_the_block_fits_the_cap_and_the_approval_line_names_it():
 
 
 def _out(reason):
-    return json.dumps({"run_id": "x", "exit_reason": reason}, indent=2)
+    """What `harnesses run` prints (harnesses/cli.py cmd_run): an indented JSON object whose
+    `cost_usd` is a nested object and `model_returned` a list, after other output."""
+    return "episode 3/50 done\n" + json.dumps(
+        {"run_id": "x", "exit_reason": reason, "reasoning_context_echoed": None,
+         "model_returned": ["claude-haiku-5-5"],
+         "cost_usd": {"list": 1.2, "billed_est": 1.2, "costs_csv_row_appended": True}},
+        indent=2) + "\n"
+
+
+def test_exit_reason_reads_the_top_level_object():
+    assert r12_rounds.exit_reason(_out("COMPLETED")) == "COMPLETED"
+    assert r12_rounds.exit_reason(_out("SPEND_RESERVATION")) == "SPEND_RESERVATION"
+    assert r12_rounds.exit_reason(_out("COMPLETED").split("\n", 1)[1]) == "COMPLETED"
+    assert r12_rounds.exit_reason("no json here") is None
+    assert r12_rounds.exit_reason("") is None
 
 
 def test_the_driver_stops_at_the_first_run_that_does_not_complete(capsys):
     seen = []
-    replies = iter([(0, _out("COMPLETED")), (0, _out("SPEND_RESERVATION")), (0, _out("COMPLETED"))])
+    replies = iter([(0, _out("COMPLETED")), (0, _out("SPEND_RESERVATION")),
+                    (0, _out("COMPLETED"))])
 
     def fake(args):
         seen.append(args)
@@ -86,12 +102,37 @@ def test_the_driver_stops_at_the_first_run_that_does_not_complete(capsys):
 
     done, code = r12_rounds.drive([["a"], ["b"], ["c"]], fake)
     assert (done, code) == (1, 2) and seen == [["a"], ["b"]]
-    assert "tell the researcher" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "tell the researcher" in err and "--from 3" in err
     replies2 = iter([(2, "refused: x"), (0, _out("COMPLETED"))])
     assert r12_rounds.drive([["a"], ["b"]], lambda args: next(replies2)) == (0, 2)
     assert r12_rounds.drive([["a"], ["b"]], lambda args: (0, _out("COMPLETED"))) == (2, 0)
 
 
-def test_exit_reason_reads_the_last_json():
-    assert r12_rounds.exit_reason("noise\n" + _out("COMPLETED")) == "COMPLETED"
-    assert r12_rounds.exit_reason("no json here") is None
+def test_the_driver_resumes_from_a_run():
+    seen = []
+    done, code = r12_rounds.drive([["a"], ["b"], ["c"]],
+                                  lambda args: (seen.append(args), (0, _out("COMPLETED")))[1],
+                                  first=2)
+    assert (done, code) == (2, 0) and seen == [["b"], ["c"]]
+
+
+def test_the_driver_never_arms_paid_calls(monkeypatch, capsys):
+    """Without PERSISTGYM_ALLOW_PAID the driver refuses before running anything, and it never
+    adds the switch to a child's environment."""
+    monkeypatch.delenv("PERSISTGYM_ALLOW_PAID", raising=False)
+    calls = []
+    monkeypatch.setattr(r12_rounds, "drive", lambda *a, **k: calls.append(a) or (0, 0))
+    assert r12_rounds.main(["--part", "pilots"]) == 2
+    assert calls == [] and "PERSISTGYM_ALLOW_PAID=1" in capsys.readouterr().err
+    assert r12_rounds.main(["--part", "pilots", "--from", "7"]) == 2
+    envs = []
+
+    def fake_run(argv, **kw):
+        envs.append(kw["env"])
+        return SimpleNamespace(returncode=0, stdout=_out("COMPLETED"))
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://example.invalid")
+    monkeypatch.setattr(r12_rounds.subprocess, "run", fake_run)
+    r12_rounds._paid_subprocess(["run"])
+    assert "PERSISTGYM_ALLOW_PAID" not in envs[0] and "ANTHROPIC_BASE_URL" not in envs[0]

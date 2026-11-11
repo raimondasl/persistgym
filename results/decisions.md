@@ -1705,3 +1705,48 @@ approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_us
 - Everything R8, R9 and R10 say they do not show also holds here, the thinking text not inspected among it. This is one model, on synthetic tasks, in an exploratory run. It is not a model comparison, and not a test of note-taking instructions in general.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the run, the deviation and the readings. It adds no spending approval. The pull request is $0.
+
+## 2026-11-10: Claude Fable 5.2's ARC-AGI-3 results, a related paper the 2026-10-26 check missed, the AGENT deadline extension, and the list for preprint v2
+**Origin** ($0, read-only). On 2026-11-09 the researcher passed on two notes from another session. One said ARC had published Claude Fable 5.2 results with a much smaller harness gap (16-18 points), so a claim about the gap's size needs a per-model qualifier. The other said arXiv 2610.31778 was missing from these records. For each note, one AI assistant instance checked it against the primary sources and a second tried to refute the first. Claude re-derived the Fable 5.2 numbers a third time with `arc/public/discover.py` on the cached page. No fresh scoop search was run: the researcher put it on hold on 2026-11-10.
+
+**Claude Fable 5.2 on ARC-AGI-3** ([results page](https://arcprize.org/results/anthropic-claude-fable-5-2), dated 2026-11-09; cached under `results/raw/arc_public/fable52_20261109/` with the results index, the blog index and two linked session records). Standard and Provider Adapter at five reasoning levels, the 55-game semi-private headline score per configuration, gap = Adapter − Standard from unrounded values:
+
+| Effort | Standard | Provider Adapter | Gap (pp) |
+|---|---|---|---|
+| max | 65.66% | 94.90% | 29.2 |
+| xhigh | 81.17% | 97.27% | 16.1 |
+| high | 79.26% | 97.72% | 18.5 |
+| medium | 73.32% | 96.79% | 23.5 |
+| low | 52.00% | 92.31% | 40.3 |
+
+- **The note is partly right.** 16-18 points holds at xhigh and high, and for the page's own pairing of the best Standard score with the best Adapter score (16.6, mixed effort). At the other levels the gap is 23.5 to 40.3. Against Gemini 3.8 Flash's published gaps (24.6 at high, 9.1 at low) it is smaller at high and larger at low. It is smaller than GPT-6 Astra's and GPT-6.1 Sol's at every matched level, and larger than Claude Haiku 5.5's (2.4 at max).
+- **Our four ARC games.** On FT09, SB26, R11L and CD82, ARC's single public-set runs score 100 under both harnesses at max, xhigh, high and medium. At low, CD82 scores 72.57 under Standard and 100 under the Adapter. The rule that picked these games used Gemini 3.8 Flash's published gap. A score of 100 under both harnesses is a ceiling, so it does not show that the Adapter makes no difference for this model.
+- **The clock.** At max with the Standard harness, the page says 28 of the 55 semi-private games ran for the full 12-hour limit.
+- **The model.** The two session records checked name a pre-release model string, `claude-odango-eap`, and opened on 2026-10-07. The page does not say whether that is the released model, or how its levels map to the provider's effort settings.
+- **D31 does not fire.** The page reports per-configuration scores only, with no blog, paper or data link. The ARC Prize blog's newest post is still the one of 2026-09-03.
+- **What follows.** A statement about the size of ARC-AGI-3's harness gap names the model, the effort and the game set. `docs/background.md` §3 already asked this for gap and effort. The AGENT draft (v0.11) now says "for one model on four games" wherever it speaks of the gap. Its threats section says the games were selected for Gemini 3.8 Flash's gap, and that another model's published runs score 100 on all four at four of its five levels. Added to `docs/background.md` §3 in this pull request.
+
+**A related paper the 2026-10-26 check missed:** *Benchmarks Are Surprisingly Compaction-Friendly* (Salle, Bhatnagar, Bethge, Abdelnabi and Andriushchenko; [arXiv 2610.31778](https://arxiv.org/abs/2610.31778), v1 submitted 2026-10-22, cs.LG; verified on the abstract page, the arXiv API record and the HTML version).
+- **What it does.** It holds one coding-agent scaffold (OpenCode) fixed and runs five compaction strategies with four frontier models on PaperBench, ProgramBench and PostTrainBench (its abstract says three models, its body four). It also reads 269 user constraints from 44 real coding sessions.
+  - No compaction strategy beat the model's own summary. Strategies that discarded more cost some models up to 20 points while leaving others the same.
+  - The first ProgramBench summary dropped about a third of the task's anti-cheating rules on average.
+  - In the real sessions, an LLM judge found that summaries dropped instructions about how to work, and what not to do, about six times as often as feature requirements. A second judge gave a different overall rate.
+  - The authors call such benchmarks compaction-friendly because the objective is fixed and progress stays on disk.
+- **Not a scoop. D31 does not fire.** It has no truncation arm, does not make a specific needed fact unrecoverable, and does not cross that with derived against shown facts. Its filesystem-offloading arm makes the whole earlier history readable as one file, a coarse change that did not raise scores. It does not cover ARC-AGI-3, prompt caching or note-taking instructions. It came three days after preprint v1 (2026-10-19) and does not cite it.
+- **How it bears on ours.** It supports the AGENT draft's guidance to test context policies on state that cannot be re-observed, with evidence from real sessions. It also qualifies "free in success" outside our probe: even with progress on disk, lossier compaction cost some models up to 20 points.
+- **Why it was missed.** Its date falls inside the 2026-10-26 check's window (2026-09-29 to 2026-10-26), but that entry does not list it. The records do not show whether it was seen and set aside.
+- **Cited in the AGENT draft (v0.11),** in §II and §VI. The §II sentence "None of these separates state the agent can observe again from state it cannot" no longer held once this paper is cited. It now says that none makes a specific fact the agent needs unrecoverable by design, or crosses that with whether the fact was shown or derived.
+
+**Scoop-search coverage.** No check is recorded for work posted after 2026-10-26. The researcher put a fresh search on hold on 2026-11-10.
+
+**AGENT 2027** (verified on the [workshop page](https://conf.researchr.org/home/icse-2027/agent-2027), 2026-11-10): the paper deadline is extended from 13 Nov to Fri 20 Nov 2026 AoE. Notification (11 Dec 2026) and camera-ready (29 Jan 2027) are unchanged. `PLAN.md` §11 and §13 are updated in this pull request.
+
+**For preprint v2** (a list to track; the draft's exact sentences are kept with the draft):
+- **New results,** as the AGENT draft v0.11 reports them and labelled exploratory: R9's notes run and the reading of its replies, R10's two instruction variants, and R11's later control.
+- **Per-model qualifiers** wherever v1 speaks of the ARC gap's size: the abstract's "trails its Provider Adapter harness by a wide margin", §1's "give the same model very different scores", §2's "The gap itself is documented" and "for one model" (ARC now reports several models across efforts), and the two selection limits ("chosen for a large published gap"), which should name Gemini 3.8 Flash.
+- **The Claude Fable 5.2 data point,** with our four games at the ceiling for it.
+- **Related work:** cite 2610.31778, and the survey of multi-turn interaction (arXiv 2504.04717) that the AGENT draft cites for H3.
+- **Already listed for v2:** the related work, ARC data points and upstream harness changes of the 2026-10-27 entry, the question CTXAgent raises (same entry), and the two trigger-wording corrections of the 2026-10-31 entry.
+- **Data availability:** v1 names the tag `preprint-v1`, which predates R9's records. v2 names a tag that holds R9 to R11.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records these notes. It adds no spending approval. The pull request is $0.

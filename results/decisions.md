@@ -1706,8 +1706,8 @@ approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_us
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the run, the deviation and the readings. It adds no spending approval. The pull request is $0.
 
-## 2026-11-10: Claude Fable 5.2's ARC-AGI-3 results, a related paper the 2026-10-26 check missed, the AGENT deadline extension, and the list for preprint v2
-**Origin** ($0, read-only). On 2026-11-09 the researcher passed on two notes from another session. One said ARC had published Claude Fable 5.2 results with a much smaller harness gap (16-18 points), so a claim about the gap's size needs a per-model qualifier. The other said arXiv 2610.31778 was missing from these records. For each note, one AI assistant instance checked it against the primary sources and a second tried to refute the first. Claude re-derived the Fable 5.2 numbers a third time with `arc/public/discover.py` on the cached page. No fresh scoop search was run: the researcher put it on hold on 2026-11-10.
+## 2026-11-10: Claude Fable 5.2's ARC-AGI-3 results, a related paper the 2026-10-26 check missed, the scoop check of 2026-11-10, the AGENT deadline extension, and the list for preprint v2
+**Origin** ($0, read-only). On 2026-11-09 the researcher passed on two notes from another session. One said ARC had published Claude Fable 5.2 results with a much smaller harness gap (16-18 points), so a claim about the gap's size needs a per-model qualifier. The other said arXiv 2610.31778 was missing from these records. For each note, one AI assistant instance checked it against the primary sources and a second tried to refute the first. Claude re-derived the Fable 5.2 numbers a third time with `arc/public/discover.py` on the cached page. The researcher then asked for a fresh scoop check the same day (below).
 
 **Claude Fable 5.2 on ARC-AGI-3** ([results page](https://arcprize.org/results/anthropic-claude-fable-5-2), dated 2026-11-09; cached under `results/raw/arc_public/fable52_20261109/` with the results index, the blog index and two linked session records). Standard and Provider Adapter at five reasoning levels, the 55-game semi-private headline score per configuration, gap = Adapter − Standard from unrounded values:
 
@@ -1727,17 +1727,68 @@ approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_us
 - **What follows.** A statement about the size of ARC-AGI-3's harness gap names the model, the effort and the game set. `docs/background.md` §3 already asked this for gap and effort. The AGENT draft (v0.11) now says "for one model on four games" wherever it speaks of the gap. Its threats section says the games were selected for Gemini 3.8 Flash's gap, and that another model's published runs score 100 on all four at four of its five levels. Added to `docs/background.md` §3 in this pull request.
 
 **A related paper the 2026-10-26 check missed:** *Benchmarks Are Surprisingly Compaction-Friendly* (Salle, Bhatnagar, Bethge, Abdelnabi and Andriushchenko; [arXiv 2610.31778](https://arxiv.org/abs/2610.31778), v1 submitted 2026-10-22, cs.LG; verified on the abstract page, the arXiv API record and the HTML version).
-- **What it does.** It holds one coding-agent scaffold (OpenCode) fixed and runs five compaction strategies with four frontier models on PaperBench, ProgramBench and PostTrainBench (its abstract says three models, its body four). It also reads 269 user constraints from 44 real coding sessions.
+- **What it does.** It holds one coding-agent scaffold (OpenCode) fixed and runs five compaction strategies with four frontier models on PaperBench, ProgramBench and PostTrainBench (its arXiv abstract says three models, its body four). It also reads 269 user constraints from 44 real coding sessions.
   - No compaction strategy beat the model's own summary. Strategies that discarded more cost some models up to 20 points while leaving others the same.
   - The first ProgramBench summary dropped about a third of the task's anti-cheating rules on average.
   - In the real sessions, an LLM judge found that summaries dropped instructions about how to work, and what not to do, about six times as often as feature requirements. A second judge gave a different overall rate.
   - The authors call such benchmarks compaction-friendly because the objective is fixed and progress stays on disk.
-- **Not a scoop. D31 does not fire.** It has no truncation arm, does not make a specific needed fact unrecoverable, and does not cross that with derived against shown facts. Its filesystem-offloading arm makes the whole earlier history readable as one file, a coarse change that did not raise scores. It does not cover ARC-AGI-3, prompt caching or note-taking instructions. It came three days after preprint v1 (2026-10-19) and does not cite it.
+- **Not a scoop. D31 does not fire.** It has no truncation arm, does not make a specific needed fact unrecoverable, and does not cross that with derived against shown facts. Its filesystem-offloading arm makes the whole earlier history readable as one file, a coarse change that did not raise scores. It does not cover ARC-AGI-3, prompt caching or note-taking instructions. Its arXiv v1 came three days after preprint v1 (2026-10-19). An anonymous version, *Does Compaction Really Matter?*, was public on OpenReview as an ICLR 2027 submission from 2026-10-03, 16 days before preprint v1. Its abstract differs only in small wording and counts. The scoop check below found it.
 - **How it bears on ours.** It supports the AGENT draft's guidance to test context policies on state that cannot be re-observed, with evidence from real sessions. It also qualifies "free in success" outside our probe: even with progress on disk, lossier compaction cost some models up to 20 points.
-- **Why it was missed.** Its date falls inside the 2026-10-26 check's window (2026-09-29 to 2026-10-26), but that entry does not list it. The records do not show whether it was seen and set aside.
+- **Why it was missed.** Its date falls inside the 2026-10-26 check's window (2026-09-29 to 2026-10-26), but that entry does not list it. The records do not show whether it was seen and set aside. No earlier check searched OpenReview.
 - **Cited in the AGENT draft (v0.11),** in §II and §VI. The §II sentence "None of these separates state the agent can observe again from state it cannot" no longer held once this paper is cited. It now says that none makes a specific fact the agent needs unrecoverable by design, or crosses that with whether the fact was shown or derived.
 
-**Scoop-search coverage.** No check is recorded for work posted after 2026-10-26. The researcher put a fresh search on hold on 2026-11-10.
+**Scoop check of 2026-11-10 (D31)** ($0, read-only), which the researcher asked for on 2026-11-10.
+- **How.** Five AI assistant instances searched separately:
+  - arXiv, once for each leg;
+  - citations of preprint v1 and of the closest related work, together with the groups `docs/premise-check.md` names;
+  - the ARC ecosystem: results and blog pages, the harness repository's pull requests, branches and forks, and Kaggle write-ups;
+  - industry and research blogs.
+
+  The window was work posted from 2026-10-26 to 2026-11-10, plus a re-sweep of 2026-10-15 to 2026-10-26, since the last check missed 2610.31778. A separate instance opened each candidate rated medium or higher at its source and tried to refute any scoop claim (46 verified). A completeness critic then searched OpenReview, which no earlier check had covered. The numbers below are as the verifying instances read them at the source. Re-open the source before quoting one.
+- **Result: D31 does not fire, and nothing meets the probe leg's definition.**
+  - No public document reports ARC-AGI-3 scores for two configurations of ARC's harness, or a fork of it, that differ in exactly one of loss policy, notes instruction or reasoning replay.
+  - No work makes specific needed state unrecoverable by design and crosses that with whether the state was derived.
+  - The ARC results pages dated from 2026-10-15 report per-configuration scores only, or no ARC-AGI-3 score: Muse Spark Open, Nemotron 3.5 Super VL, Beam 1.0, DeepSeek V4.1 Flash 1017, Inkling 2 Small, and Claude Fable 5.2 above. New fetches are cached under `results/raw/arc_public/scoop_20261110/`.
+  - The ARC Prize blog's newest post is still the one of 2026-09-03.
+  - The harness repository's pull requests since the last check (#57 and #60 to #64) report no ablation. #60 adds an Inception provider adapter with encrypted reasoning replay.
+- **Near miss on the Kaggle paper track.** *Measurement Discipline on ARC AGI 3: Probe Design and Host Effects* (write-up dated 2026-11-05) reports ARC-AGI-3 scores for one change: compaction switched on in an otherwise frozen agent. It scored 29.35 and 23.98 in two replicates, against 42.80 without compaction. It fails D31 only on the harness clause. It runs on a competition harness (the "Duck" lineage of Tufa Labs), not ARC's harness or a fork.
+  - Two other write-ups on the same harness family report loss-policy changes in the same direction: adding a rolling summary lowered a small local model's score under a time budget. *Spend the Budget Where It Pays* gives 33.70 in one run, against 51.91 and 53.17 without. *Unblock, Don't Instruct* reports 12 levels lost on 25 public games.
+  - In our S0 to S1 step the summary raised Gemini 3.8 Flash's mean score. So the loss policy's effect may depend on the regime: the model, the time budget and the harness. Nothing here tests that.
+- **Standing signal, unchanged.** ARC's branch `feature/continuous-conversation-carry-forward-ablation` is still at fecf46b (2026-08-29), with no pull request and no scores (entries of 2026-10-01 and 2026-10-06).
+- **A name clash.** *TaskAnchor*, an ICLR 2027 submission public on OpenReview from 2026-10-03, proposes a training-free compaction method it calls StateCarry. This study has used that name for its Phase 2 component since `PREREG.md` v1.0 (2026-10-02). A7 removed the component, and the AGENT draft does not use the name. Any later use needs another name, or a sentence that tells the two apart.
+- **The closest new related work:**
+  - *The Hidden Costs of Forgetting* ([arXiv 2610.35496](https://arxiv.org/abs/2610.35496), 26 Oct) deletes parts of software agents' trajectories over 9,400 runs.
+    - With delayed deletion, 37 of 42 settings lose no significant success.
+    - Deleting tool output raises re-fetching (file reads) up to 7.5 times.
+    - Under caching-aware pricing no setting costs less, because deletion breaks the cached prefix.
+    - It matches our recoverable arm and our caching result. Its scope confounds what is deleted, rather than crossing re-observability with derivedness: reasoning cannot be re-fetched, and tool output can. It is the closest new work to the probe leg.
+  - *You don't need long context* ([arXiv 2611.05306](https://arxiv.org/abs/2611.05306), 3 Nov) reports that compaction changes accuracy by −3.7 to +5.6 points across long-horizon benchmarks, with estimated savings of 2.2 to 8.8 times. No experiment holds a needed fact only in the conversation, where our probe finds the loss. It is a likely reviewer comparison.
+  - **Cost side,** each consistent with "truncation breaks prompt caching":
+    - *The Physical Cost of Context* ([arXiv 2610.34763](https://arxiv.org/abs/2610.34763), 26 Oct);
+    - *When Does Context Compaction Pay in Long-Horizon Agents?* (Research Square, 27 Oct);
+    - a production study of 13.5 million coding-agent sessions, *Characterizing and Optimizing Context Compaction in Production Coding Agents* (OpenReview, public 3 Oct; a Preprints.org version on 9 Nov);
+    - *Beyond Token Savings* ([arXiv 2609.32961](https://arxiv.org/abs/2609.32961), 26 Sep).
+  - **Compaction and memory:**
+    - Compact-Bench ([arXiv 2610.31710](https://arxiv.org/abs/2610.31710), 22 Oct): LLM summaries keep at most 16% of recurring details.
+    - *Do Agents Still Follow the Rules?* ([arXiv 2611.03223](https://arxiv.org/abs/2611.03223)).
+    - *Evaluating Context Compaction on the Questions That Come Later* ([arXiv 2610.27301](https://arxiv.org/abs/2610.27301)).
+    - *Prune the Summary, Not the History* ([arXiv 2610.20927](https://arxiv.org/abs/2610.20927)).
+    - *Continuous Context Management* ([arXiv 2609.35540](https://arxiv.org/abs/2609.35540)).
+    - *Think or Remember* ([arXiv 2611.10982](https://arxiv.org/abs/2611.10982)): a measured success cost of dropping earlier reasoning, whose sign depends on the task.
+    - *Agent Memory as Rate-Limited Filtering* ([arXiv 2611.02361](https://arxiv.org/abs/2611.02361)).
+    - *MemDerive* ([arXiv 2610.25373](https://arxiv.org/abs/2610.25373)): derived state in memory systems, in a different sense from ours.
+  - **Framing:**
+    - *Remember What Cannot Be Recovered* (OpenReview, public 3 Oct) argues that what an agent should keep depends on how information can be recovered. It does so for graph memory allocation, not a harness.
+    - *What Does Your Agent Remember?* (OpenReview, public 3 Oct) reports a 15 to 21 point loss after compaction while the full source history survived in durable records. If the agent could reach those records, it qualifies "costs only effort" beyond our short exact-lookup fact. Read its full text before citing it.
+    - Anthropic's research post *The components of agent memory* (2026-11-06) says facts readable from the screen every turn are redundant to store, while worked-out rules exist only if written down.
+- **What it did not cover.**
+  - OpenReview was searched only by its relevance-ranked top 100 per term.
+  - Of 672 Kaggle paper-track write-ups, a keyword filter selected 98 and about 15 were read.
+  - arXiv submissions of 2026-11-10 were not yet announced.
+  - Semantic Scholar was rate-limited. Its citations of preprint v1 came back empty.
+  - Not searched: X, Reddit, the ARC Prize Discord, Google Scholar, the ACL Anthology and several vendor blogs.
+  - The ARC results and blog indexes are the cached copies of 2026-11-10, 02:33 UTC.
+  - ARC Prize 2026 results are to be announced on 2026-12-04, and more paper-track write-ups may become public.
 
 **AGENT 2027** (verified on the [workshop page](https://conf.researchr.org/home/icse-2027/agent-2027), 2026-11-10): the paper deadline is extended from 13 Nov to Fri 20 Nov 2026 AoE. Notification (11 Dec 2026) and camera-ready (29 Jan 2027) are unchanged. `PLAN.md` §11 and §13 are updated in this pull request.
 
@@ -1745,7 +1796,7 @@ approved_block: 7-haiku-control | experiments: persistgym_haiku_control | max_us
 - **New results,** as the AGENT draft v0.11 reports them and labelled exploratory: R9's notes run and the reading of its replies, R10's two instruction variants, and R11's later control.
 - **Per-model qualifiers** wherever v1 speaks of the ARC gap's size: the abstract's "trails its Provider Adapter harness by a wide margin", §1's "give the same model very different scores", §2's "The gap itself is documented" and "for one model" (ARC now reports several models across efforts), and the two selection limits ("chosen for a large published gap"), which should name Gemini 3.8 Flash.
 - **The Claude Fable 5.2 data point,** with our four games at the ceiling for it.
-- **Related work:** cite 2610.31778, and the survey of multi-turn interaction (arXiv 2504.04717) that the AGENT draft cites for H3.
+- **Related work:** cite 2610.31778, and the survey of multi-turn interaction (arXiv 2504.04717) that the AGENT draft cites for H3. From the scoop check of 2026-11-10: 2610.35496 and 2611.05306 first, then the cost-side papers, and the regime point from the Kaggle write-ups.
 - **Already listed for v2:** the related work, ARC data points and upstream harness changes of the 2026-10-27 entry, the question CTXAgent raises (same entry), and the two trigger-wording corrections of the 2026-10-31 entry.
 - **Data availability:** v1 names the tag `preprint-v1`, which predates R9's records. v2 names a tag that holds R9 to R11.
 

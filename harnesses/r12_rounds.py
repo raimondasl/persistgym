@@ -76,11 +76,10 @@ def commands(part: str, forecast: dict) -> list[list[str]]:
 
 
 def _paid_subprocess(args: list[str]) -> tuple[int, str]:
-    """One `harnesses run` in a child process: the parent's environment without
-    ANTHROPIC_BASE_URL (the paid switch passes through only if the operator set it), stdout
-    captured for the result, stderr shown live."""
-    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_BASE_URL"}
-    env["PYTHONIOENCODING"] = "utf-8"
+    """One `harnesses run` in a child process: the parent's environment as it is (the paid
+    switch passes through only if the operator set it, and the transport refuses a custom base
+    URL at $0), stdout captured for the result, stderr shown live."""
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     p = subprocess.run([sys.executable, "-m", "harnesses", *args], cwd=REPO, env=env,
                        stdout=subprocess.PIPE, stderr=None, text=True, encoding="utf-8",
                        errors="replace", check=False)

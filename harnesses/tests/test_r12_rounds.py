@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -132,7 +133,8 @@ def test_the_driver_never_arms_paid_calls(monkeypatch, capsys):
         envs.append(kw["env"])
         return SimpleNamespace(returncode=0, stdout=_out("COMPLETED"))
 
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://example.invalid")
     monkeypatch.setattr(r12_rounds.subprocess, "run", fake_run)
     r12_rounds._paid_subprocess(["run"])
-    assert "PERSISTGYM_ALLOW_PAID" not in envs[0] and "ANTHROPIC_BASE_URL" not in envs[0]
+    assert "PERSISTGYM_ALLOW_PAID" not in envs[0]
+    assert {k: v for k, v in envs[0].items() if k != "PYTHONIOENCODING"} == {
+        k: v for k, v in os.environ.items() if k != "PYTHONIOENCODING"}

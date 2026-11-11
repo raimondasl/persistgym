@@ -206,13 +206,33 @@ class AnthropicMessagesTransport(PaidTransport):
 
     def _preflight(self) -> None:
         why = credential_refusal()
-        if why is None and registered.model_family(self.model) != registered.HAIKU_MODEL:
+        # R12 (PREREG §17.12): claude-sonnet-5-5, exactly, in its own experiment and pilots
+        sonnet = (self.model == registered.SONNET_MODEL
+                  and self.experiment in (registered.PILOT_EXPERIMENT,
+                                          registered.R12_SONNET_EXPERIMENT))
+        if (why is None and registered.model_family(self.model) != registered.HAIKU_MODEL
+                and not sonnet):
             why = (f"the Messages transport sends {registered.HAIKU_MODEL} only (R8, "
-                   f"{registered.R8_REF}), got model {self.model}")
+                   f"{registered.R8_REF}), and {registered.SONNET_MODEL} in "
+                   f"{registered.R12_SONNET_EXPERIMENT} and its pilots ({registered.R12_REF}), "
+                   f"got model {self.model}")
         if why:
             raise PaidCallsNotAllowed(f"{why}; no paid call was made")
 
     def _approval_refusal(self) -> str | None:
+        sonnet = registered.model_family(self.model) == registered.SONNET_MODEL
+        # R12 (PREREG §17.12): a block that lists one of its experiments funds R12's runs and
+        # pilots (`harnesses run` has checked the cell, the model and the block,
+        # registered.r12_block_refusal); a Sonnet run needs such a block
+        if (any(e in self.approval.experiments for e in registered.R12_EXPERIMENTS)
+                and self.approval.experiment in (registered.PILOT_EXPERIMENT,
+                                                 *registered.R12_EXPERIMENTS)):
+            return None
+        if sonnet:
+            return (f"block {self.approval.approved_block!r} lists "
+                    f"{', '.join(self.approval.experiments)}: a {registered.SONNET_MODEL} run "
+                    f"needs an approval line written for R12 ({registered.R12_REF}), which "
+                    f"lists {registered.R12_SONNET_EXPERIMENT}")
         if registered.HAIKU_EXPERIMENT in self.approval.experiments:
             return None
         # R9 (PREREG §17.9): its own run only (the general guard has checked that the block

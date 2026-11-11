@@ -745,7 +745,7 @@ def test_haiku_price_record():
     assert price_for("gpt-6-luna").source_date == pricing.PRICE_SOURCE_DATE == "2026-09-30"
     assert price_for("gpt-6-luna").geo_multiplier("us") == 1.0  # no geo pricing on OpenAI
     assert price_for("gpt-6-luna").worst_card() == (0.10, 0.01, 0.50)
-    for unpriced in ("claude-haiku-4-5", "claude-sonnet-5-5", "claude-haiku"):
+    for unpriced in ("claude-haiku-4-5", "claude-opus-5-5", "claude-haiku"):
         with pytest.raises(KeyError):
             price_for(unpriced)
 

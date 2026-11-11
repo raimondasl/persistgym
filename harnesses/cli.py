@@ -285,7 +285,7 @@ from harnesses import (
     token_count,
 )
 from harnesses.anthropic_transport import AnthropicMessagesTransport
-from harnesses.cells import CELLS, NOTES_VARIANT_CELLS, get_cell
+from harnesses.cells import CELLS, NOTES_VARIANT_CELLS, R12_CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.matrix import RunMatrix
@@ -402,8 +402,9 @@ def _run_what(a, cell, n_episodes: int) -> str:
 
 def cmd_cells(a) -> int:
     print(f"{'cell':<8}{'ascii':<12}{'history':<9}{'notes':<7}{'reasoning.context':<19}role")
-    for c in (*CELLS.values(), *NOTES_VARIANT_CELLS.values()):
-        print(f"{c.cell_id:<8}{c.ascii_id:<12}{c.history:<9}{c.notes!s:<7}"
+    for c in (*CELLS.values(), *NOTES_VARIANT_CELLS.values(), *R12_CELLS.values()):
+        history = c.history + ("/block" if c.truncation == "block" else "")
+        print(f"{c.cell_id:<8}{c.ascii_id:<12}{history:<9}{c.notes!s:<7}"
               f"{c.reasoning_context:<19}{c.role}{' (optional)' if c.optional else ''}")
     return 0
 
@@ -501,9 +502,11 @@ def _run_id_refusal(run_id: str, experiment: str, cell_id: str) -> str | None:
     any run in `persistgym_pilot`, refuses a run id whose results or raw folder exists, so each
     R10 pilot is its own folder and counts (`registered._provenance_pilots`). A run of R10's
     cells also needs a run id the pilot gate reads as a name (`registered.PLAIN_RUN_ID`, not
-    ending in "." which Windows drops from a folder name)."""
+    ending in "." which Windows drops from a folder name). R12 (PREREG §17.12): a run in R12's
+    experiments, played in rounds of its own run ids, refuses a used run id too, so a round
+    never appends to an earlier one."""
     mine = cell_id in registered.HAIKU_PROVENANCE_CELLS
-    if not (mine or experiment == PILOT_EXPERIMENT):
+    if not (mine or experiment == PILOT_EXPERIMENT or experiment in registered.R12_EXPERIMENTS):
         return None
     if mine and (not registered.PLAIN_RUN_ID.fullmatch(run_id) or run_id.endswith(".")):
         return (f"--run-id {run_id!r}: a run of R10's cells needs a run id of letters, digits, "
@@ -511,8 +514,9 @@ def _run_id_refusal(run_id: str, experiment: str, cell_id: str) -> str | None:
     used = [str(d) for d in (RESULTS / experiment / run_id, RAW / experiment / run_id)
             if d.exists()]
     if used:
-        return (f"--run-id {run_id} is already used ({', '.join(used)}): a pilot, or a run of "
-                f"R10's cells, needs a new run id ({registered.R10_REF})")
+        return (f"--run-id {run_id} is already used ({', '.join(used)}): a pilot, a run of "
+                f"R10's cells or a run in R12's experiments needs a new run id "
+                f"({registered.R10_REF}; {registered.R12_REF})")
     return None
 
 
@@ -567,8 +571,12 @@ def cmd_run(a) -> int:
         request={"mode": a.mode, "service_tier": a.service_tier, "W": a.W},
         templates=(a.start, a.start + matrix.n_templates), matrix=matrix.name,
         repeat_index=matrix.repeat_index)
-    # R10 (PREREG §17.10): its cells run under its block only, and its block funds them only
-    why = why or registered.provenance_block_refusal(a.approved_block, cell.cell_id)
+    # R10 (PREREG §17.10): its cells run under its block only, and its block funds them only;
+    # R12 (PREREG §17.12) likewise for its experiments and pilots
+    why = why or registered.provenance_block_refusal(a.approved_block, cell.cell_id,
+                                                     experiment=a.experiment, model=a.model)
+    why = why or registered.r12_block_refusal(a.approved_block, cell.cell_id, a.experiment,
+                                              a.model)
     if why:
         print(f"refused: {why}", file=sys.stderr)
         return 2
@@ -1082,6 +1090,9 @@ def cmd_single_turn(a) -> int:
     # R10 (PREREG §17.10): its block funds its two cells only, never this control
     why = why or registered.provenance_block_refusal(a.approved_block,
                                                      registered.LUNA_SINGLE_TURN_CELL)
+    why = why or registered.r12_block_refusal(a.approved_block,
+                                              registered.LUNA_SINGLE_TURN_CELL, a.experiment,
+                                              a.model)
     if why:
         return refuse(why)
     if a.split == "main":

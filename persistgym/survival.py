@@ -57,6 +57,43 @@ def window_keep_start(obs_tokens: Sequence[int], reply_tokens: Sequence[int], W:
     return s
 
 
+def block_keep_start(obs_tokens: Sequence[int], reply_tokens: Sequence[int], W: int,
+                     system_tokens: int = 0, *, start: int = 0) -> int:
+    """First kept turn index when sending observation m = len(obs_tokens) - 1 under block
+    truncation (amendment R12): `start` is the first kept turn of the previous request.
+
+    The start stays where it was while system_tokens + turns start..m-1 + observation m fit in
+    W. When they pass W, the oldest turns are dropped down to W // 2: the start becomes
+    `window_keep_start` at W // 2 (never earlier than `start`). Between drops the kept turns
+    only grow at the end, so the prompt prefix stays the same. Turns count as in
+    `window_keep_start`.
+    """
+    m = len(obs_tokens) - 1
+    if m < 0:
+        raise ValueError("no observations")
+    if len(reply_tokens) < m:
+        raise ValueError("need one reply length per earlier observation")
+    if not 0 <= start <= m:
+        raise ValueError(f"start {start} outside 0..{m}")
+    total = system_tokens + obs_tokens[m] + sum(obs_tokens[start:m]) + sum(reply_tokens[start:m])
+    if total <= W:
+        return start
+    return max(start, window_keep_start(obs_tokens, reply_tokens, W // 2, system_tokens))
+
+
+def block_keep_starts(obs_tokens: Sequence[int], reply_tokens: Sequence[int], W: int,
+                      system_tokens: int = 0) -> list[int]:
+    """`block_keep_start` for every observation 0..len(obs_tokens) - 1, replayed from turn 0
+    (a block start depends on where the last drop fell)."""
+    starts: list[int] = []
+    start = 0
+    for m in range(len(obs_tokens)):
+        start = block_keep_start(obs_tokens[: m + 1], reply_tokens[:m], W, system_tokens,
+                                 start=start)
+        starts.append(start)
+    return starts
+
+
 def designed_survival(obs_tokens: Sequence[int], need_step: int,
                       component_steps: dict[str, int | None], W: int, reply_tokens: int,
                       system_tokens: int = 0) -> dict[str, Any]:

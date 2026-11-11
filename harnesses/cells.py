@@ -9,8 +9,10 @@ Encrypted reasoning items are sent in every cell, so the r and 0 arms of a pair 
 items and differ only in `reasoning.context` (PLAN §7). See harnesses/DESIGN.md.
 
 `NOTES_VARIANT_CELLS` are two cells outside PLAN §6's table, for amendment R10 (PREREG §17.10):
-W-n-0 with one or two sentences added after the notes instruction. `get_cell` finds them, and
-`CELLS`, `REPLAY_OFF_CELLS` and `REPLAY_PAIRS` leave them out.
+W-n-0 with one or two sentences added after the notes instruction. `R12_CELLS` are three more,
+for amendment R12 (PREREG §17.12): two such notes variants, and W-b-0, a window that drops old
+turns in blocks (`truncation="block"`). `get_cell` finds them all, and `CELLS`,
+`REPLAY_OFF_CELLS` and `REPLAY_PAIRS` leave them out.
 """
 
 from __future__ import annotations
@@ -37,7 +39,20 @@ DISCLOSURE_SENTENCE = (
     "become the only record of what they said."
 )
 
+# R12 (PREREG §17.12): a sentence of the provenance sentence's length (32 project tokens) that says
+# nothing about notes, sources or history, as a length-matched control for it.
+NEUTRAL_SENTENCE = (
+    "For each action you choose, also check how it is written: the verb that the EVENT asks "
+    "for, and its argument in the syntax that the EVENT shows."
+)
+
 HISTORY_POLICIES = ("full", "window", "summary")
+
+# How a window cell drops turns (R12): "slide" drops the oldest turns at every step so the kept
+# context stays within W (every window cell before R12); "block" keeps its start until the kept
+# context passes W, then drops the oldest turns down to W // 2, so the prompt prefix stays the
+# same between drops (persistgym.survival.block_keep_start).
+TRUNCATIONS = ("slide", "block")
 
 REPLAY_CONTEXT = {True: "all_turns", False: "current_turn"}
 
@@ -51,12 +66,17 @@ class CellSpec:
     role: str = ""
     optional: bool = False
     notes_extra: str = ""  # R10: sentences sent after the notes instruction
+    truncation: str = "slide"  # R12: how a window cell drops turns (TRUNCATIONS)
 
     def __post_init__(self) -> None:
         if self.history not in HISTORY_POLICIES:
             raise ValueError(f"bad history policy {self.history!r}")
         if self.notes_extra and not self.notes:
             raise ValueError(f"cell {self.cell_id}: notes_extra needs the notes instruction")
+        if self.truncation not in TRUNCATIONS:
+            raise ValueError(f"cell {self.cell_id}: bad truncation {self.truncation!r}")
+        if self.truncation != "slide" and self.history != "window":
+            raise ValueError(f"cell {self.cell_id}: block truncation needs a window cell")
 
     @property
     def notes_instruction(self) -> str | None:
@@ -103,6 +123,17 @@ NOTES_VARIANT_CELLS: dict[str, CellSpec] = {c.cell_id: c for c in (
              notes_extra=PROVENANCE_SENTENCE + " " + DISCLOSURE_SENTENCE),
 )}
 
+# R12 (PREREG §17.12): W-n-0 with the disclosure sentence alone (W-nd-0) and with the neutral
+# sentence (W-nx-0), and W-0 with block truncation (W-b-0). Not in PLAN §6's table.
+R12_CELLS: dict[str, CellSpec] = {c.cell_id: c for c in (
+    CellSpec("W-nd-0", "window", notes=True, replay=False, role="R12: disclosure",
+             notes_extra=DISCLOSURE_SENTENCE),
+    CellSpec("W-nx-0", "window", notes=True, replay=False, role="R12: length-matched neutral",
+             notes_extra=NEUTRAL_SENTENCE),
+    CellSpec("W-b-0", "window", notes=False, replay=False, role="R12: block truncation",
+             truncation="block"),
+)}
+
 # Replay-off cells: the only cells to run on a model that does not honour `all_turns`
 # (PLAN §7: luna runs F-0, W-n-0, Σ-n-0, W-0 if its echo check fails).
 REPLAY_OFF_CELLS = tuple(c for c in CELLS if not CELLS[c].replay)
@@ -113,8 +144,8 @@ REPLAY_PAIRS = (("F-r", "F-0"), ("W-n-r", "W-n-0"), ("Σ-n-r", "Σ-n-0"))
 
 def get_cell(cell_id: str) -> CellSpec:
     """Look up a cell by its PLAN id or its ASCII id ('sigma-n-r', also 'S-n-r'), or one of
-    R10's `NOTES_VARIANT_CELLS`."""
-    known = {**CELLS, **NOTES_VARIANT_CELLS}
+    R10's `NOTES_VARIANT_CELLS` or R12's `R12_CELLS`."""
+    known = {**CELLS, **NOTES_VARIANT_CELLS, **R12_CELLS}
     if cell_id in known:
         return known[cell_id]
     for c in known.values():

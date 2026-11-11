@@ -22,6 +22,11 @@ History (PLAN §6):
   prompt, if it counts; never the notes sentence) are at most W. This is
   `persistgym.survival.window_keep_start`, the model the generator used to design near and
   far. Dropped turns never come back.
+* window with block truncation (R12's W-b-0, `CellSpec.truncation == "block"`): the kept start
+  stays where it was until that same count passes W, then the oldest turns are dropped down
+  to W // 2 (`persistgym.survival.block_keep_start`), so the prompt prefix stays the same
+  between drops. The kept context never passes W, so a far fact never survives, but a near
+  fact can be dropped.
 * summary: when the same visible context would exceed W, first send a summary request (the
   history to compact, then ARC's summary request prompt), then replace the compacted turns
   with ONE user-role bridge message holding the summary (ARC's bridge template). With
@@ -46,7 +51,7 @@ from harnesses.cells import CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.wire import wire_for
 from persistgym import tokens
-from persistgym.survival import window_keep_start
+from persistgym.survival import block_keep_start, window_keep_start
 
 
 class EmptySummaryError(RuntimeError):
@@ -168,6 +173,8 @@ class HarnessSession:
     def _window_start(self) -> int:
         obs = [t.obs_tokens for t in self.turns] + [self.pending_tokens]
         rep = [t.reply_tokens for t in self.turns]
+        if self.cell.truncation == "block":
+            return block_keep_start(obs, rep, self.W, self.system_tokens, start=self.start)
         return window_keep_start(obs, rep, self.W, self.system_tokens)
 
     def _compaction_plan(self) -> tuple[int, int, int] | None:
@@ -222,6 +229,9 @@ class HarnessSession:
             "bridge_index": bridge_index, "bridge_no": self.bridge_no if bridge_index == 0 else 0,
             "over_W": bool(self.W) and ctx > self.W,
         }
+        if self.cell.truncation == "block":  # R12; other cells' info stays as before
+            info["truncation"] = "block"
+            info["block_drop"] = start != self.start
         return Request("step", len(self.turns),
                        self._base_payload(self.instructions, items, self.cfg.max_output_tokens),
                        trace, info)

@@ -56,9 +56,12 @@ def guard(experiment: str, model: str, effort: str, root: Path, cell: str = "F-0
 
 def test_the_registered_settings():
     # claude-haiku-5-5 is registered for R8 (PREREG §17.8), whose guard holds every Haiku
-    # run to R8 and refuses them all with its kill switch off (tests/test_haiku_guard.py)
+    # run to R8 and refuses them all with its kill switch off (tests/test_haiku_guard.py);
+    # claude-sonnet-5-5 for R12 (PREREG §17.12), in its own experiment only
+    # (tests/test_r12_guard.py)
     assert registered.REGISTERED_EFFORT == {LUNA: "medium", SOL: "high",
-                                            "claude-haiku-5-5": "medium"}
+                                            "claude-haiku-5-5": "medium",
+                                            "claude-sonnet-5-5": "medium"}
     assert registered.registered_effort(LUNA) == "medium"
     assert registered.registered_effort(SOL) == "high"
     assert registered.registered_effort("gpt-unknown") == "medium"   # not in the table

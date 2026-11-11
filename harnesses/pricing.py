@@ -28,6 +28,11 @@ Prices (USD per million tokens):
     `stop_details.category` is one of `REFUSAL_BILLED_CATEGORIES`; any other such refusal
     has a billed estimate of 0 and its list cost as usual (`unbilled_refusal`). A refusal
     after some output bills the input and the output streamed.
+* checked 2026-11-11 (https://platform.claude.com/docs/en/about-claude/pricing, "Model
+  pricing", "Long context pricing", "Data residency pricing"; amendment R12): claude-sonnet-5-5
+  costs $2.00 input, $2.50 5-minute cache write, $0.10 cache read ("0.05x base input"), $10.00
+  output, one card across its whole context; "us" inference geo 1.1x, as for Haiku. Haiku
+  5.5's cards and the refusal billing rule were the same on that date.
 
 `cost_usd_list` is the standard-tier price of the usage; `cost_usd_billed_est` applies the
 Flex discount when an OpenAI response's echoed `service_tier` is `flex`. Both are estimates;
@@ -115,6 +120,7 @@ HAIKU_LONG_THRESHOLD = 100_000
 HAIKU_GEO_MULTIPLIERS = (("global", 1.0), ("us", 1.1))
 """US-only inference costs 1.1x every price on Claude 4.6 and later models, Haiku 5.5's
 > 100,000-token card included; global routing the listed prices (module docstring)."""
+SONNET_PRICE_SOURCE_DATE = "2026-11-11"
 REFUSAL_BILLED_CATEGORIES = ("bio", "frontier_llm", "reasoning_extraction")
 """The `stop_details.category` values whose refusals before any output are billed, as of
 2026-10-17 (module docstring; the docs say the list may change)."""
@@ -126,6 +132,10 @@ PRICES: dict[str, Price] = {
                               source_date=HAIKU_PRICE_SOURCE_DATE,
                               long_threshold=HAIKU_LONG_THRESHOLD, long=(0.50, 0.05, 2.50),
                               geo_multipliers=HAIKU_GEO_MULTIPLIERS),
+    # R12 (PREREG §17.12): one card, the same geo rule as Haiku (module docstring).
+    "claude-sonnet-5-5": Price(2.00, 0.10, 10.00, provider="anthropic", api="messages",
+                               source_date=SONNET_PRICE_SOURCE_DATE,
+                               geo_multipliers=HAIKU_GEO_MULTIPLIERS),
 }
 
 

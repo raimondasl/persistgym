@@ -828,3 +828,20 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 - **Budget:** block `7-haiku-control`, $17.38, phase 1a ($381.30 of $500 spent). The run stops at $17.24, which keeps the ledger within the block even if one last send retries, so it should read about 197 of the 200 templates, and fewer if an episode costs more. With it the project total is at most $927.20, against A7's target of about $560, which A10 had already passed. After this run no further paid run is made without a new amendment (A7, A10, A11 and A12 otherwise stand).
 - **Timing:** the run once the pull request is merged, started within the hours of A12's runs, before the credits expire on 2026-11-05. Its readings are for an arXiv v2.
 - **What it does not show:** a model comparison, or the sentences on new templates. It comes after A12's arms, so it is not concurrent with them. It cannot separate the organization from the date. If W-n-0 reads near A11's, other differences from A12's arms stay open, such as the hour, the parallelism and the cell mix. If it reads near A12's arms, it does not settle whether the sentences raised those arms, and re-running them is not funded here.
+
+## 29. Amendment A14 (2026-11-11): R12's three exploratory experiments, and phase 1a's cap at $620
+- **The change:** `PREREG.md` §17.12 (amendment R12) adds three exploratory experiments: Haiku's notes sentences on templates 200-299 with two new control arms, run in rotating rounds; claude-sonnet-5-5's W-n-0, W-np-0 and F-0 on templates 200-224; and a block-truncation window (W-b-0) on Haiku's 8 task cells, templates 0-199. Each new cell and Sonnet is piloted first.
+- **Status:** exploratory, decided after R8's to R11's readings were read. The researcher asked for it on 2026-11-11: "Prepare to run 1 + 2 + 3, raise the cap."
+- **Budget:** block `8-r12`, $213, in phase 1a, whose cap this amendment raises from $500 to $620 at the researcher's request ($398.43 spent before R12). With it the project total is at most $1,139.96. After these runs no further paid run is made without a new amendment.
+- **What it does not show:** a model comparison, or the sentences on other tasks or models. The block window runs once, at one block size, against comparators run on 2026-10-18.
+
+### 29.1 Phase caps
+| Phase | Cap before A14 | Cap from A14 | Basis |
+|---|---|---|---|
+| 0 | $100 | $100 | Unchanged |
+| 1a | $500 | $620 | The researcher's request of 2026-11-11, for R12 |
+| 1b | $900 | $900 | Unchanged |
+| 2 | $1,250 | $1,250 | Unchanged |
+
+- `PHASE_CAPS` in `common/costs.py` matches this table, and a test checks that it does. §17.3's table stays as A2 wrote it.
+- The stop-and-ask rule is unchanged: Claude stops and asks the researcher before any cap is exceeded.

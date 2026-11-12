@@ -445,12 +445,12 @@ from statsmodels.tools import sm_exceptions
 from analysis import power_sim as ps
 from common import runmeta
 from harnesses import registered
-from harnesses.cells import CELLS, NOTES_INSTRUCTION, NOTES_VARIANT_CELLS
+from harnesses.cells import CELLS, NOTES_INSTRUCTION, NOTES_VARIANT_CELLS, R12_CELLS
 from harnesses.items import item_text, output_text
 from harnesses.wire import MESSAGES, MESSAGES_API, RESPONSES_API
 from persistgym import tokens
 from persistgym.episode import TaskCell
-from persistgym.survival import window_keep_start
+from persistgym.survival import block_keep_starts, window_keep_start
 
 REPO_ROOT = runmeta.REPO_ROOT
 RESULTS = REPO_ROOT / "results"
@@ -467,12 +467,13 @@ BASE, RESTATED = "base", "restated"
 KINDS = (("F-0", BASE), ("W-0", BASE), ("W-n-0", BASE), ("Σ-n-0", BASE), ("F-0", RESTATED),
          (SINGLE_TURN, BASE))
 """The run kinds of R6 change 1: (harness cell, variant)."""
-SPECS = {**CELLS, **NOTES_VARIANT_CELLS}
-"""Every harness cell's spec: PLAN §6's table and R10's two variants of W-n-0 (PREREG §17.10),
-which `analysis.haiku_provenance` reads with this module's discovery and §2.8 check."""
-WINDOW_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS)
+SPECS = {**CELLS, **NOTES_VARIANT_CELLS, **R12_CELLS}
+"""Every harness cell's spec: PLAN §6's table, R10's two variants of W-n-0 (PREREG §17.10),
+which `analysis.haiku_provenance` reads with this module's discovery and §2.8 check, and R12's
+three cells (PREREG §17.12), which `analysis.r12` reads likewise."""
+WINDOW_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS, *R12_CELLS)
                      if SPECS[c].history == "window")
-CARRY_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS)
+CARRY_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS, *R12_CELLS)
                     if SPECS[c].notes or SPECS[c].history == "summary")
 SUMMARY_CELLS = tuple(c for c in HARNESS_CELLS if CELLS[c].history == "summary")
 OBS_NR_FAR, OBS_R_FAR = "observed-nonrec-far", "observed-rec-far"
@@ -1044,17 +1045,19 @@ def kind_label(cell: str, variant: str) -> str:
 
 def completeness(resolved: dict, templates: int, sweep_closed: bool = False,
                  kinds: tuple = KINDS,
-                 task_cells: tuple[str, ...] | None = None) -> tuple[list[str], list[str]]:
-    """Why the repeat-0 sweep is incomplete for templates 0..templates-1 (empty if complete),
-    and its deviations: for a closed sweep, the keys excluded with no final record and the
-    keys never played; in any sweep, the keys the request-side check stopped (R8); per run
-    kind of `kinds` (luna's by default; §13: listed in every write-up), over `task_cells`
-    (default all 8, the single-turn control's 4; R10 plays the 4 far ones)."""
+                 task_cells: tuple[str, ...] | None = None,
+                 first: int = 0) -> tuple[list[str], list[str]]:
+    """Why the repeat-0 sweep is incomplete for templates first..templates-1 (empty if
+    complete, with `first` 0 but for R12's templates 200-299, PREREG §17.12), and its deviations:
+    for a closed sweep, the keys excluded with no final record and the keys never played; in
+    any sweep, the keys the request-side check stopped (R8); per run kind of `kinds` (luna's by
+    default; §13: listed in every write-up), over `task_cells` (default all 8, the single-turn
+    control's 4; R10 plays the 4 far ones)."""
     reasons, deviations = [], []
     for cell, variant in kinds:
         cells = task_cells or (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS)
         missing, pending, closed, checked = [], [], Counter(), []
-        for t in range(templates):
+        for t in range(first, templates):
             for tc in cells:
                 eid = episode_id_of(cell, variant, t, tc)
                 r = resolved.get((cell, eid, 0))
@@ -1066,7 +1069,7 @@ def completeness(resolved: dict, templates: int, sweep_closed: bool = False,
                     closed[str(r.last_ending)] += 1
                 elif r.request_check:
                     checked.append(eid)
-        n = templates * len(cells)
+        n = (templates - first) * len(cells)
         label = kind_label(cell, variant)
         if missing and sweep_closed and len(missing) < n:
             deviations.append(f"{label}: {len(missing)} of {n} repeat-0 episodes were never "
@@ -1253,13 +1256,20 @@ def reply_counted(response: dict, api: str = RESPONSES_API) -> str:
 
 def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
                    settings: dict, api: str = RESPONSES_API,
-                   notes_text: str = NOTES_INSTRUCTION) -> dict[str, dict]:
+                   notes_text: str = NOTES_INSTRUCTION,
+                   truncation: str = "slide") -> dict[str, dict]:
     """§2.8 condition 2 for one window-cell run: for each episode in `wanted` ({episode_id:
-    {"need_step", "evidence_steps"}}), the drop-oldest rule replayed on the project-token counts
+    {"need_step", "evidence_steps"}}), the cell's rule replayed on the project-token counts
     of the turns its transcript shows were sent, read on the run's wire (`api`:
     `request_parts`, `reply_counted`), with the cell's notes text `notes_text` taken off the
-    system prompt as the session leaves it out of W. Returns {episode_id: {"S", "keep",
-    "user_messages_sent", "user_messages_expected"} or {"problem": why}}."""
+    system prompt as the session leaves it out of W. The rule is the cell's `truncation`
+    (`harnesses.cells.CellSpec.truncation`): "slide", the drop-oldest window of every cell
+    before R12, or "block", R12's W-b-0 (PREREG §17.12), replayed from turn 0 with
+    `persistgym.survival.block_keep_starts`, since a block start depends on where the last
+    drop fell. Returns {episode_id: {"S", "keep", "user_messages_sent",
+    "user_messages_expected"} or {"problem": why}}."""
+    if truncation not in ("slide", "block"):
+        raise ValueError(f"unknown truncation {truncation!r}")
     tok = settings["tokenizer"]
     W = settings["W"]
     turns: dict[str, list[tuple]] = defaultdict(list)
@@ -1325,9 +1335,13 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
             continue
         obs = [x[2] for x in seq]
         rep = [x[3] for x in seq]
-        keep = 0
-        for j in range(need_turn + 1):
-            keep = max(keep, window_keep_start(obs[: j + 1], rep[:j], W, sys_tokens))
+        if truncation == "block":
+            keep = block_keep_starts(obs[: need_turn + 1], rep[:need_turn], W,
+                                     sys_tokens)[need_turn]
+        else:
+            keep = 0
+            for j in range(need_turn + 1):
+                keep = max(keep, window_keep_start(obs[: j + 1], rep[:j], W, sys_tokens))
         out[eid] = {"S": all(t >= keep for t in evidence.values()), "keep": keep,
                     "need_turn": need_turn,
                     "user_messages_sent": users_at[eid][need_turn],
@@ -1338,7 +1352,8 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
 def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIMENT,
                      api: str = RESPONSES_API) -> dict:
     """§2.8's two conditions over every window-cell record that reached its need step, the
-    transcripts read from raw_root/<experiment>/ on the runs' wire (`api`). Returns
+    transcripts read from raw_root/<experiment>/ on the runs' wire (`api`), each run's rule
+    replayed as its cell truncates (`window_recheck`: R12's W-b-0 by the block rule). Returns
     {"bugs", "warnings", "missing_transcripts", "checked", "runs"}."""
     bugs = far_window_bugs(runs)
     warn, missing, checked, per_run = [], [], 0, []
@@ -1381,7 +1396,9 @@ def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIME
             continue
         spec = SPECS[run.cell]
         got = window_recheck(path, wanted, notes=spec.notes, settings=run.window, api=api,
-                             notes_text=spec.notes_instruction or NOTES_INSTRUCTION)
+                             notes_text=spec.notes_instruction or NOTES_INSTRUCTION,
+                             truncation=spec.truncation)
+        rule = "drop-oldest" if spec.truncation == "slide" else spec.truncation
         n_keep = n_users = n_stopped = 0
         for eid, (s_verbatim, keep_start, ending) in expect.items():
             g = got[eid]
@@ -1395,7 +1412,7 @@ def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIME
                 continue
             if g["S"] != s_verbatim:
                 bugs.append(f"{run.run_id}: {eid!r}: S_verbatim = {int(s_verbatim)}, but the "
-                            f"drop-oldest replay gives {int(g['S'])} (window start "
+                            f"{rule} replay gives {int(g['S'])} (window start "
                             f"{g['keep']}, need turn {g['need_turn']})")
             if keep_start is not None and int(keep_start) != g["keep"]:
                 n_keep += 1
@@ -2492,19 +2509,21 @@ def cell_table(prim: pd.DataFrame, kinds: tuple = KINDS, stopped: bool = False,
 
 
 def exclusion_table(resolved: dict, templates: int, kinds: tuple = KINDS,
-                    echo: bool = True, task_cells: tuple[str, ...] | None = None) -> list[dict]:
-    """Per run kind and task cell, over the repeat-0 keys of templates 0..T-1: keys with a
-    record (or excluded by the request-side check), keys never played, exclusions by reason
-    (echo, transport, no final record in a closed sweep), pending keys and dropped duplicates
-    (§13: counts per cell). With `echo` False (Haiku, R8: no echo) a record-holding exclusion
-    is the runner's own mark, ``excluded_by_runner``, with no echo share, and the keys the
-    request-side check stopped are counted as ``excluded_request_check``. Over `task_cells`
-    (default all 8, the single-turn control's 4)."""
+                    echo: bool = True, task_cells: tuple[str, ...] | None = None,
+                    first: int = 0) -> list[dict]:
+    """Per run kind and task cell, over the repeat-0 keys of templates first..T-1 (`first` is 0
+    but for R12's templates 200-299): keys with a record (or excluded by the request-side
+    check), keys never played, exclusions by reason (echo, transport, no final record in a
+    closed sweep), pending keys and dropped duplicates (§13: counts per cell). With `echo`
+    False (Haiku, R8: no echo) a record-holding exclusion is the runner's own mark,
+    ``excluded_by_runner``, with no echo share, and the keys the request-side check stopped
+    are counted as ``excluded_request_check``. Over `task_cells` (default all 8, the
+    single-turn control's 4)."""
     rows = []
     for cell, variant in kinds:
         for tc in task_cells or (NR_TASK_CELLS if cell == SINGLE_TURN else TASK_CELLS):
             c: Counter = Counter()
-            for t in range(templates):
+            for t in range(first, templates):
                 r = resolved.get((cell, episode_id_of(cell, variant, t, tc), 0))
                 if r is None:
                     c["never_played"] += 1

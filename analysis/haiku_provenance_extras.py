@@ -113,11 +113,15 @@ def record_readings(records: list[dict]) -> dict:
             "success_by_refusal": {cell: dict(sorted(c.items())) for cell, c in before.items()}}
 
 
-def episode_facts() -> dict[str, dict]:
-    """What the generator gives for each far episode of main templates 0-199."""
-    cells = [TaskCell.from_id(c) for c in FAR]
+def episode_facts(templates: range | None = None,
+                  task_cells: tuple[str, ...] = FAR) -> dict[str, dict]:
+    """What the generator gives for each far episode of main templates 0-199, or for each
+    episode of `task_cells` on main `templates` (R12 reads templates 200-299, and all 8 task
+    cells in its experiment 3: `analysis.r12`)."""
+    cells = [TaskCell.from_id(c) for c in task_cells]
     out = {}
-    for _, eps in generate("main", range(registered.HAIKU_T), PRESETS["default"], cells, ("base",)):
+    templates = range(registered.HAIKU_T) if templates is None else templates
+    for _, eps in generate("main", templates, PRESETS["default"], cells, ("base",)):
         for e in eps:
             out[e.episode_id] = {"target": e.target_value, "label": e.correct_label,
                                  "clues": sorted({c.value for c in e.components
@@ -229,15 +233,17 @@ def _quartiles(xs: list[int]) -> list[float]:
         float(x) for x in xs * 3]
 
 
-def arm_transcript_summary(t: dict, records: dict[str, dict]) -> dict:
-    """Readings 3 to 5 for one arm."""
+def arm_transcript_summary(t: dict, records: dict[str, dict],
+                           task_cells: tuple[str, ...] = FAR) -> dict:
+    """Readings 3 to 5 for one arm, per task cell of `task_cells` (R12's experiment 3 reads all
+    8: `analysis.r12`)."""
     pooled = sorted(t["turn_first"])
     bins = {name: [0, 0] for _, _, name in TURN_BINS}
     for step in pooled:
         bins[turn_bin(step)][0] += t["turn_thinking"][step]
         bins[turn_bin(step)][1] += t["turn_first"][step]
     held, kept, need = {}, {}, {}
-    for cell in (*FAR,):
+    for cell in (*task_cells,):
         ids = sorted(e for e, r in records.items() if r["task_cell"] == cell)
         pairs = [t["held"][e] for e in ids if e in t["held"] and t["held"][e][1]]
         held[cell] = {"replies_holding_value": sum(a for a, _ in pairs),

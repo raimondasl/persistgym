@@ -578,6 +578,50 @@ def test_main_writes_its_three_files(root, tmp_path):
                      "--no-write"]) == 2
 
 
+def test_a_reading_of_named_experiments_needs_only_those(root, monkeypatch):
+    """Experiments 1 and 2 read FINAL while experiment 3 has no run, with --experiment."""
+    root.notes()
+    root.sonnet()
+    _final(monkeypatch)
+    with pytest.raises(hh.Refusal, match="no run under results/persistgym_haiku_r12_block/"):
+        r12.readings(root.path, {}, frozenset())
+    r = r12.readings(root.path, {}, frozenset(), experiments=(SONNET, NOTES))
+    assert r["status"] == "FINAL" and r["incomplete"] == []
+    assert r["experiments_in_reading"] == [NOTES, SONNET]       # the registered order
+    assert set(r["experiments"]) == {NOTES, SONNET}
+    assert r["beside"] is not None                              # reading 7 needs both
+    text = r12.summary(r)
+    assert text.count("**FINAL.**") == 1 and text.count("Not part of this reading") == 1
+    alone = r12.readings(root.path, {}, frozenset(), experiments=(SONNET,))
+    assert alone["status"] == "FINAL" and set(alone["experiments"]) == {SONNET}
+    assert alone["beside"] is None
+
+
+def test_the_experiment_option_refuses_what_it_cannot_read(root):
+    root.notes()
+    with pytest.raises(hh.Refusal, match="--experiment names no R12 experiment: persistgym_haiku"):
+        _read(root, experiments=("persistgym_haiku",))
+    with pytest.raises(hh.Refusal, match="none named"):
+        _read(root, experiments=())
+    with pytest.raises(hh.Refusal, match="leaves out: persistgym_haiku_r12_block"):
+        _read(root, closed={BLOCK}, experiments=(NOTES,))
+
+
+def test_main_reads_the_experiments_it_names(root, tmp_path, monkeypatch):
+    root.notes()
+    root.sonnet()
+    _final(monkeypatch)
+    out = tmp_path / "out"
+    assert r12.main(["--results-root", str(root.path), "--experiment", "notes",
+                     "--experiment", "sonnet", "--out-dir", str(out)]) == 0
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["config"]["status"] == "FINAL"
+    assert meta["config"]["experiments"] == [NOTES, SONNET]
+    assert meta["cell_or_config"] == f"{NOTES},{SONNET}"
+    readings = json.loads((out / "readings.json").read_text(encoding="utf-8"))
+    assert readings["experiments_in_reading"] == [NOTES, SONNET]
+
+
 # --- readings 5 and 8 on made-up transcripts ---------------------------------------------------
 
 FACT = {"target": 568, "label": "I", "clues": [79, 558]}

@@ -37,6 +37,11 @@ replies score 0 at the need step, as the runner records them. Before any reading
   even as PROVISIONAL. Missing transcripts refuse, or make the output PROVISIONAL with
   ``--allow-incomplete``. R8's comparators passed R8's own check and are not replayed again.
 
+**A reading of some experiments.** ``--experiment`` (repeatable: notes, sonnet, block) limits a
+reading to the experiments it names, for instance experiments 1 and 2 while experiment 3 has
+not run. The others are neither read nor required, the status covers only the experiments
+named, and the output lists them (`experiments_in_reading`). Without it, all three are read.
+
 **The templates read.** Within each experiment, every arm is read on the templates that it and
 every other arm finished in every task cell (`templates_read`), and each key that leaves a
 template out is named, with its status and reason (`left_out`).
@@ -592,14 +597,25 @@ def _ranges(read: list[int]) -> str:
 
 def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozenset = frozenset(),
              *, raw_root: Path | None = None, allow_incomplete: bool = False,
-             facts: dict[str, dict] | None = None) -> dict:
-    """§17.12's readings. `sweep_closed` holds the experiments the researcher closed. `facts`
-    (for tests) replaces the generator's facts for reading 5."""
+             facts: dict[str, dict] | None = None,
+             experiments: tuple[str, ...] | None = None) -> dict:
+    """§17.12's readings. `sweep_closed` holds the experiments the researcher closed.
+    `experiments` limits the reading to those experiments (all three when None). `facts` (for
+    tests) replaces the generator's facts for reading 5."""
     unknown = set(sweep_closed) - set(EXPERIMENTS)
     if unknown:
         raise hh.Refusal(f"--sweep-closed names no R12 experiment: {', '.join(sorted(unknown))}")
+    named = set(EXPERIMENTS if experiments is None else experiments)
+    if not named or named - set(EXPERIMENTS):
+        raise hh.Refusal("--experiment names no R12 experiment: "
+                         + (", ".join(sorted(named - set(EXPERIMENTS))) or "none named"))
+    chosen = tuple(e for e in EXPERIMENTS if e in named)  # in the registered order
+    outside = set(sweep_closed) - named
+    if outside:
+        raise hh.Refusal("--sweep-closed names an experiment this reading leaves out: "
+                         + ", ".join(sorted(outside)))
     raw = raw_root or root / "results" / "raw"
-    runs = {e: discover(root, e) for e in EXPERIMENTS}
+    runs = {e: discover(root, e) for e in chosen}
     by_exp = split_links(links, runs)
     seed, _ = hh.read_seed(root / "results")
     boot_seed = seed + hh.BOOT_SEED_OFFSET  # §9.1's bootstrap seed, as for R8's to R11's
@@ -607,7 +623,7 @@ def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozens
     warnings: list[str] = []
     state: dict[str, dict] = {}
     r8 = None
-    for e in EXPERIMENTS:
+    for e in chosen:
         s, templates = spec(e), templates_of(e)
         task_cells = tuple(s["task_cells"])
         if not runs[e]:
@@ -657,7 +673,7 @@ def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozens
         warnings += [f"{LABEL[e]}: {w}" for w in check["warnings"]]
         checks[e] = check
     out: dict[str, dict | None] = {}
-    for e in EXPERIMENTS:
+    for e in chosen:
         st = state.get(e)
         if st is None or not st["read"]:
             out[e] = None if st is None else _unread(e, st, checks[e])
@@ -670,6 +686,7 @@ def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozens
                     if out.get(e) and "arms" in out[e] else None) for e in (NOTES, SONNET)}
     return {"prereg": registered.R12_REF, "block": registered.R12_BLOCK,
             "status": hh.PROVISIONAL if incomplete else hh.FINAL,
+            "experiments_in_reading": list(chosen),
             "incomplete": incomplete, "rerun_links": links,
             "sweep_closed": sorted(sweep_closed),
             "bootstrap": {"resamples": BOOT, "seed": boot_seed,
@@ -936,6 +953,10 @@ def summary(r: dict) -> str:
              "## What it does not show", "",
              *(f"- {x}" for x in r["does_not_show"]), ""]
     for e in EXPERIMENTS:
+        if e not in r["experiments"]:
+            lines += [f"## {LABEL[e]}: `{e}`", "",
+                      "Not part of this reading (`--experiment` leaves it out).", ""]
+            continue
         x = r["experiments"][e]
         if x is None:
             lines += [f"## {LABEL[e]}: `{e}`", "", "Not read: no run.", ""]
@@ -972,6 +993,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rerun", action="append", default=[], metavar="RUN=ORIGINAL")
     ap.add_argument("--sweep-closed", action="append", default=[], choices=sorted(SHORT),
                     help="an experiment whose sweep the researcher closed (repeatable)")
+    ap.add_argument("--experiment", action="append", default=[], choices=sorted(SHORT),
+                    help="read only this experiment (repeatable; default: all three)")
     ap.add_argument("--allow-incomplete", action="store_true")
     ap.add_argument("--raw-root", type=Path, default=None)
     ap.add_argument("--no-write", action="store_true")
@@ -982,7 +1005,8 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     try:
         r = readings(a.results_root, hn._links(a.rerun), closed, raw_root=a.raw_root,
-                     allow_incomplete=a.allow_incomplete)
+                     allow_incomplete=a.allow_incomplete,
+                     experiments=tuple(SHORT[x] for x in a.experiment) or None)
     except hh.AccountingBug as e:
         print(f"refused (§2.8's bug stop): {e}", file=sys.stderr)
         return 2
@@ -1003,8 +1027,8 @@ def main(argv: list[str] | None = None) -> int:
     runs = [x["run_id"] for e in r["experiments"].values() if e for x in e["runs"]]
     runmeta.write_meta(
         out, git=runmeta.git_state(), experiment=OUT_NAME, run_id=run_id,
-        cell_or_config=",".join(EXPERIMENTS),
-        config={"experiments": list(EXPERIMENTS), "rerun_links": r["rerun_links"],
+        cell_or_config=",".join(r["experiments_in_reading"]),
+        config={"experiments": r["experiments_in_reading"], "rerun_links": r["rerun_links"],
                 "sweep_closed": r["sweep_closed"], "allow_incomplete": a.allow_incomplete,
                 "status": r["status"], "r8_output": hn.R8_OUTPUT,
                 "templates": {e: (x or {}).get("templates") for e, x in r["experiments"].items()}},

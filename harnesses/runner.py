@@ -58,7 +58,9 @@ if its costs.csv row cannot be written, and no outcome.
 from __future__ import annotations
 
 import gzip
+import io
 import json
+import os
 import shutil
 import sys
 import time
@@ -136,31 +138,71 @@ def check_echo(payload: dict, response: dict) -> dict:
 
 
 class JsonlRecorder:
-    """Raw transcript writer (one JSON object per request/response pair)."""
+    """Raw transcript writer (one JSON object per request/response pair).
+
+    A .gz transcript is a series of gzip members, which gzip readers read as one stream:
+    `sync` ends the current member and the next line starts a new one, so that the file on
+    disk always reads to its end up to the last `sync`, even after the process is killed
+    (2026-11-12: a kill left R12's Sonnet F-0 transcript without its last request line and its
+    end-of-stream marker)."""
 
     def __init__(self, path: Path, *, flush_each: bool = False):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         self.flush_each = flush_each  # a parallel episode's file: on disk after every call
-        # kept open across requests and closed by close(), so no context manager here
-        if path.suffix == ".gz":
-            self._f = gzip.open(path, "at", encoding="utf-8", newline="\n")  # noqa: SIM115
-        else:
-            self._f = path.open("a", encoding="utf-8", newline="\n")
+        # kept open across requests and closed by close(), so no context managers here
+        self._raw = path.open("ab") if path.suffix == ".gz" else None
+        self._f: io.TextIOWrapper | None = None
+        self._text()
+
+    def _text(self) -> io.TextIOWrapper:
+        """The open text stream: the file, or for a .gz transcript its current gzip member
+        (opened here after a `sync` ended the last one)."""
+        if self._f is None:
+            if self._raw is None:
+                self._f = self.path.open("a", encoding="utf-8", newline="\n")
+            else:
+                self._f = io.TextIOWrapper(gzip.GzipFile(mode="ab", fileobj=self._raw),
+                                           encoding="utf-8", newline="\n")
+        return self._f
 
     def __call__(self, event: dict) -> None:
-        self._f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        f = self._text()
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
         if self.flush_each:
-            self._f.flush()
+            f.flush()
 
     def append_file(self, path: Path) -> None:
         """Append, unchanged, the lines another recorder wrote to `path` (the transcript of
-        one episode played in parallel)."""
+        one episode played in parallel). Returns once they are on disk (`sync`), so the caller
+        may then delete `path`: a kill during the copy leaves `path` in place."""
         with path.open("r", encoding="utf-8") as src:
-            shutil.copyfileobj(src, self._f)
+            shutil.copyfileobj(src, self._text())
+        self.sync()
+
+    def sync(self) -> None:
+        """Put every line written so far on disk (os.fsync), readable to its end: a .gz
+        transcript's gzip member is ended (its CRC and length written), and the next line
+        starts a new member."""
+        if self._raw is None:
+            f = self._text()
+            f.flush()
+            os.fsync(f.fileno())
+            return
+        if self._f is not None:
+            f, self._f = self._f, None
+            f.close()  # ends the member; the file itself stays open
+        self._raw.flush()
+        os.fsync(self._raw.fileno())
 
     def close(self) -> None:
-        self._f.close()
+        try:
+            if self._f is not None:
+                f, self._f = self._f, None
+                f.close()
+        finally:
+            if self._raw is not None:
+                self._raw.close()
 
 
 @dataclass
@@ -579,6 +621,7 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
             if parallel == 1:
                 for ep in episodes:
                     r = run_episode(ep, cell, cfg, transport, recorder)
+                    recorder.sync()  # the episode's transcript is on disk before its record
                     runs.append(r)
                     write(r)
                     reason = _stop_reason(runs, r, cfg, abort_after_api_errors)
@@ -600,7 +643,7 @@ def run_batch(episodes: list[Episode], cell: CellSpec, cfg: HarnessConfig,
                     if r is not None:
                         write(r)
                     if spool(i).exists():
-                        recorder.append_file(spool(i))
+                        recorder.append_file(spool(i))  # returns once the lines are on disk
                         spool(i).unlink()
 
                 play = ParallelPlay(

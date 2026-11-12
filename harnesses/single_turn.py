@@ -409,6 +409,7 @@ def run_controls(prompts: list[Prompt], cfg: HarnessConfig, transport: runner.Tr
             if parallel == 1:
                 for p in prompts:
                     r = run_prompt(p, cfg, transport, recorder, repeat_index=repeat_index)
+                    recorder.sync()  # the prompt's transcript is on disk before its record
                     runs.append(r)
                     write(r)
                     reason = runner._stop_reason(runs, r, cfg, abort_after_api_errors)
@@ -430,7 +431,7 @@ def run_controls(prompts: list[Prompt], cfg: HarnessConfig, transport: runner.Tr
                     if r is not None:
                         write(r)
                     if spool(i).exists():
-                        recorder.append_file(spool(i))
+                        recorder.append_file(spool(i))  # returns once the lines are on disk
                         spool(i).unlink()
 
                 play = ParallelPlay(

@@ -836,4 +836,6 @@ The run's descriptive readings are `analysis/haiku_control.py`. Tests: `tests/te
 
 **The runs.** `harnesses/r12_rounds.py` builds each part's commands from the latest committed forecast (`analysis/r12_forecast.py`) and runs them one after another, stopping at the first that does not end COMPLETED. It never arms paid calls itself: without `PERSISTGYM_ALLOW_PAID=1` on its own command it refuses before running anything, and it passes the switch through to each child only as the operator set it. After a stop, `--from N` resumes the part at its N-th run, once an early-ended run has been continued under §7.9.
 
-Tests: `tests/test_r12_cells.py`, `tests/test_r12_guard.py` and `tests/test_r12_rounds.py`.
+The check between the pilots and the main runs is `analysis/r12_pilot.py`. The descriptive readings are `analysis/r12.py`, written while the runs played, as §17.12 allows. No registered stop closes an R12 sweep, so a short sweep needs the researcher's `--sweep-closed` for its experiment. Its §2.8 check replays W-b-0 with the block rule (`analysis/persistgym_h1h3.py` `window_recheck`, `truncation="block"`).
+
+Tests: `tests/test_r12_cells.py`, `tests/test_r12_guard.py`, `tests/test_r12_rounds.py`, `analysis/tests/test_r12.py` and `analysis/tests/test_r12_pilot.py`.

@@ -744,6 +744,39 @@ def test_reading_5_names_a_missing_transcript_and_refuses_a_disagreeing_one(tmp_
         r12.responses(arm, arm.resolved, NR_FAR, 300, tmp_path, {"e1": FACT})
 
 
+def test_reading_5_allows_and_names_a_line_a_recovered_run_declares_missing(tmp_path):
+    """A run whose process was killed can lose the transcript line it was writing. Its
+    recovered meta.json names it (`recovered.missing_transcript_line`), and reading 5 then
+    reads the other lines, counts the episode's record in full, and names the line."""
+    import types
+    _write(tmp_path / SONNET / "run" / "transcript.jsonl.gz",
+           [_line("e1", 0, thinking=True), _line("e1", 1), _line("e1", 2, thinking=True)])
+    folder = tmp_path / "results" / SONNET / "run"
+    folder.mkdir(parents=True)
+    run = types.SimpleNamespace(run_id="run", folder=folder)
+    rec = _record("e1")
+    arm = r12.Arm("F-0", "F-0", SONNET_MODEL, SONNET, _resolved("F-0", rec), [run])
+
+    def meta(episode_id):
+        (folder / "meta.json").write_text(json.dumps({"recovered": {"missing_transcript_line": {
+            "episode_id": episode_id, "request_index": 3}}}), encoding="utf-8")
+
+    meta("another")                                     # a line of an episode not counted
+    with pytest.raises(hh.Refusal, match="hold 3 responses, its records 4$"):
+        r12.responses(arm, arm.resolved, NR_FAR, 225, tmp_path, {"e1": FACT})
+    meta("e1")
+    reading, _ = r12.responses(arm, arm.resolved, NR_FAR, 225, tmp_path, {"e1": FACT})
+    assert (reading["responses"], reading["responses_in_transcript"]) == (4, 3)
+    assert reading["with_thinking"] == 2
+    assert reading["responses_not_in_transcript"] == [
+        {"run_id": "run", "episode_id": "e1", "request_index": 3}]
+    with gzip.open(tmp_path / SONNET / "run" / "transcript.jsonl.gz", "wt",
+                   encoding="utf-8") as f:
+        f.write(json.dumps(_line("e1", 0)) + "\n")
+    with pytest.raises(hh.Refusal, match="less 1 line"):  # a second line missing refuses
+        r12.responses(arm, arm.resolved, NR_FAR, 225, tmp_path, {"e1": FACT})
+
+
 def test_reading_8_counts_the_block_drops_per_episode(tmp_path):
     def info(drop):
         return {"truncation": "block", "block_drop": drop}

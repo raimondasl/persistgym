@@ -9,6 +9,9 @@ from __future__ import annotations
 import copy
 import gzip
 import json
+import pickle
+import subprocess
+import sys
 import threading
 import time
 from collections import Counter
@@ -18,6 +21,7 @@ import httpx
 import openai
 import pytest
 
+from common import runmeta
 from common.costs import spend_usd
 from harnesses import blinding, parallel, runner
 from harnesses.cells import CELLS
@@ -612,6 +616,113 @@ def test_a_second_ctrl_c_abandons_the_episodes_in_flight(small_eps, tmp_path, mo
         assert meta["n_episodes_run"] == 0
     finally:
         release.set()  # let the abandoned (daemon) workers return
+
+
+# --- a kill loses no recorded request (2026-11-12) -------------------------------------------
+# R12's Sonnet F-0 run was killed by a session restart after an episode's spool had been copied
+# into the transcript and deleted but before the copy left the gzip buffers: the transcript lost
+# that episode's last request line, which episodes.jsonl's record counts, and its end-of-stream
+# marker. runner.JsonlRecorder.append_file now returns only once the lines are on disk.
+
+def _on_disk(raw: Path) -> bytes:
+    """The run's transcript as another process reads it now, through a new handle, while the
+    run may still have it open: gzip.open raises EOFError if it ends inside a gzip member."""
+    with gzip.open(raw / "transcript.jsonl.gz", "rb") as f:
+        return f.read()
+
+
+def test_a_spool_is_deleted_only_once_its_lines_are_in_the_transcript_on_disk(small_eps,
+                                                                              tmp_path,
+                                                                              monkeypatch):
+    """Parallel play copies each episode's spool (inflight/<index>.jsonl) into the transcript
+    and then deletes it. At each deletion the transcript on disk reads to its end and holds
+    exactly the spools copied so far, this one last."""
+    eps = small_eps[:8]
+    raw = tmp_path / "raw" / "persistgym" / "r"
+    real_unlink = Path.unlink
+    copied, checked = b"", []
+
+    def unlink(self, *args, **kwargs):
+        nonlocal copied
+        if self.parent.name == runner.INFLIGHT_DIR:
+            spool = self.read_bytes()
+            assert spool
+            copied += spool
+            assert _on_disk(raw) == copied
+            checked.append(self.name)
+        return real_unlink(self, *args, **kwargs)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    _run(eps, "F-r", FakeModel(_reply_fn(eps), ids="payload"), tmp_path, 4)
+    assert checked == [f"{i:06d}.jsonl" for i in range(len(eps))]
+    assert _on_disk(raw) == copied
+
+
+KILLED = 71
+KILL_AFTER = 3
+KILL_SCRIPT = """
+import os, pickle, sys
+from pathlib import Path
+from harnesses import runner
+from harnesses.cells import CELLS
+from harnesses.config import HarnessConfig
+from harnesses.fake import FakeModel
+
+tmp, n = Path(sys.argv[1]), int(sys.argv[2])
+eps = pickle.loads((tmp / "eps.pickle").read_bytes())
+written = []
+
+def kill():
+    written.append(1)
+    if len(written) == KILL_AFTER:
+        os._exit(KILLED)  # no cleanup and no Python buffer flushed, as when the process is killed
+
+if n == 1:  # sequential play: the stop rule runs right after an episode's record is written
+    real_stop = runner._stop_reason
+
+    def stop_reason(*args):
+        reason = real_stop(*args)
+        kill()
+        return reason
+    runner._stop_reason = stop_reason
+else:  # parallel play: emit writes an episode's record, then its transcript
+    class Play(runner.ParallelPlay):
+        def __init__(self, *args, emit, **kwargs):
+            def emit_then_die(i, r):
+                emit(i, r)
+                kill()
+            super().__init__(*args, emit=emit_then_die, **kwargs)
+    runner.ParallelPlay = Play
+runner.run_batch(eps, CELLS["F-r"], HarnessConfig(), FakeModel(ids="payload"),
+                 experiment="persistgym", run_id="r", results_root=tmp / "results",
+                 raw_root=tmp / "raw", parallel=n)
+sys.exit("the run was not killed")
+"""
+
+
+@pytest.mark.parametrize("n", [1, 4])
+def test_a_run_killed_after_an_episode_is_written_keeps_its_whole_transcript(small_eps, tmp_path,
+                                                                             n):
+    """A run killed (os._exit, in a subprocess) right after its third episode's record is in
+    episodes.jsonl: the transcript on disk reads to its end and holds every request of each
+    episode episodes.jsonl lists, and none of their spools is left."""
+    eps = small_eps[:8]
+    (tmp_path / "eps.pickle").write_bytes(pickle.dumps(eps))
+    done = subprocess.run(
+        [sys.executable, "-c", f"KILLED, KILL_AFTER = {KILLED}, {KILL_AFTER}\n{KILL_SCRIPT}",
+         str(tmp_path), str(n)], cwd=runmeta.REPO_ROOT, capture_output=True, text=True,
+        encoding="utf-8", timeout=300, check=False)
+    assert done.returncode == KILLED, done.stderr
+    records = [json.loads(x) for x in (tmp_path / "results" / "persistgym" / "r"
+                                       / "episodes.jsonl").read_text(encoding="utf-8")
+               .splitlines()]
+    assert [x["episode_id"] for x in records] == [e.episode_id for e in eps[:KILL_AFTER]]
+    raw = tmp_path / "raw" / "persistgym" / "r"
+    events = [json.loads(x) for x in _on_disk(raw).splitlines()]
+    assert Counter(e["episode_id"] for e in events) == {
+        x["episode_id"]: x["n_requests"] for x in records}
+    inflight = raw / runner.INFLIGHT_DIR
+    left = {p.name for p in inflight.iterdir()} if inflight.exists() else set()
+    assert not left & {f"{i:06d}.jsonl" for i in range(KILL_AFTER)}
 
 
 def test_fake_model_payload_ids_do_not_depend_on_call_order():

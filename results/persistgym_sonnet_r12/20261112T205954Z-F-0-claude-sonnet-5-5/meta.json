@@ -1,0 +1,281 @@
+{
+  "experiment": "persistgym_sonnet_r12",
+  "run_id": "20261112T205954Z-F-0-claude-sonnet-5-5",
+  "cell_or_config": "F-0",
+  "config": {
+    "harness_cell": "F-0",
+    "harness": {
+      "model": "claude-sonnet-5-5",
+      "reasoning_effort": "medium",
+      "reasoning_mode": "standard",
+      "reasoning_summary": null,
+      "service_tier": "standard",
+      "max_output_tokens": 32000,
+      "prompt_cache_key": null,
+      "W_tokens": null,
+      "window_counts_system_prompt": null,
+      "tokenizer": "o200k_base",
+      "notes_separator": "\n",
+      "summary_system_prompt": "You create concise conversation summaries for reliable continuation. Return only the requested summary.",
+      "summary_request_prompt": "Summarize the conversation so you can continue making progress on the task in a future context. The conversation history will be replaced by this summary and will no longer be available.\nUse your judgment about what matters for this task.",
+      "summary_bridge_template": "Earlier conversation history was compacted. Use the following summary as prior context. If it conflicts with newer input, prefer the newer input.\n\n{summary}",
+      "summary_max_output_tokens": 32000,
+      "summary_keep_recent_tokens": 0,
+      "summary_max_attempts": 4,
+      "stop_on_context_mismatch": true,
+      "stop_on_effort_mismatch": true,
+      "abort_after_mismatched_episodes": 2,
+      "max_turns": 200
+    },
+    "generator_config_hashes": [
+      "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b"
+    ],
+    "generator_config": {
+      "W_tokens": 24000,
+      "v_tokens": 1500,
+      "tokenizer": "o200k_base",
+      "token_tolerance": 0,
+      "near_gap_steps": 4,
+      "far_margin_tokens": 0,
+      "assumed_max_reply_tokens": 1000,
+      "window_counts_system_prompt": true,
+      "max_context_tokens": 64000,
+      "K_options": 10,
+      "k_targets": 1,
+      "need_index_range": [
+        20,
+        24
+      ],
+      "tail_steps_range": [
+        0,
+        2
+      ],
+      "lead_in_min_steps": 2,
+      "n_clues_choices": [
+        2,
+        3
+      ],
+      "clue_spacing_steps": 1,
+      "rule_placement": "with_last_clue",
+      "value_range": [
+        300,
+        899
+      ],
+      "minor_component_range": [
+        61,
+        98
+      ],
+      "option_spacing": 1,
+      "n_distractors": 2,
+      "restate_mode": "as_revealed",
+      "single_turn_reply_mode": "oracle",
+      "warn_future_need": true,
+      "lookup_max_per_episode": 3,
+      "lookup_scope": "revealed_so_far",
+      "accept_value_answers": true,
+      "strict_action_parse": false,
+      "validity_margin_pp": 10.0,
+      "skins": [
+        "warehouse",
+        "biobank",
+        "datacenter",
+        "archive",
+        "depot"
+      ],
+      "step_seconds": 75
+    },
+    "episode_ids": [
+      "main-000200/observed-nonrec-far/base",
+      "main-000200/derived-nonrec-far/base",
+      "main-000201/observed-nonrec-far/base",
+      "main-000201/derived-nonrec-far/base",
+      "main-000202/observed-nonrec-far/base",
+      "main-000202/derived-nonrec-far/base",
+      "main-000203/observed-nonrec-far/base",
+      "main-000203/derived-nonrec-far/base",
+      "main-000204/observed-nonrec-far/base",
+      "main-000204/derived-nonrec-far/base",
+      "main-000205/observed-nonrec-far/base",
+      "main-000205/derived-nonrec-far/base",
+      "main-000206/observed-nonrec-far/base",
+      "main-000206/derived-nonrec-far/base",
+      "main-000207/observed-nonrec-far/base",
+      "main-000207/derived-nonrec-far/base",
+      "main-000208/observed-nonrec-far/base",
+      "main-000208/derived-nonrec-far/base",
+      "main-000209/observed-nonrec-far/base",
+      "main-000209/derived-nonrec-far/base",
+      "main-000210/observed-nonrec-far/base",
+      "main-000210/derived-nonrec-far/base",
+      "main-000211/observed-nonrec-far/base",
+      "main-000211/derived-nonrec-far/base",
+      "main-000212/observed-nonrec-far/base",
+      "main-000212/derived-nonrec-far/base",
+      "main-000213/observed-nonrec-far/base",
+      "main-000213/derived-nonrec-far/base",
+      "main-000214/observed-nonrec-far/base",
+      "main-000214/derived-nonrec-far/base",
+      "main-000215/observed-nonrec-far/base",
+      "main-000215/derived-nonrec-far/base",
+      "main-000216/observed-nonrec-far/base",
+      "main-000216/derived-nonrec-far/base",
+      "main-000217/observed-nonrec-far/base",
+      "main-000217/derived-nonrec-far/base",
+      "main-000218/observed-nonrec-far/base",
+      "main-000218/derived-nonrec-far/base",
+      "main-000219/observed-nonrec-far/base",
+      "main-000219/derived-nonrec-far/base",
+      "main-000220/observed-nonrec-far/base",
+      "main-000220/derived-nonrec-far/base",
+      "main-000221/observed-nonrec-far/base",
+      "main-000221/derived-nonrec-far/base",
+      "main-000222/observed-nonrec-far/base",
+      "main-000222/derived-nonrec-far/base",
+      "main-000223/observed-nonrec-far/base",
+      "main-000223/derived-nonrec-far/base",
+      "main-000224/observed-nonrec-far/base",
+      "main-000224/derived-nonrec-far/base"
+    ],
+    "run_matrix": {
+      "name": "full",
+      "templates_per_task_cell": {
+        "observed-nonrec-far": 25,
+        "derived-nonrec-far": 25
+      },
+      "n_templates": 25,
+      "n_episodes": 50
+    }
+  },
+  "model_requested": "claude-sonnet-5-5",
+  "model_returned": [
+    "claude-sonnet-5-5"
+  ],
+  "reasoning_effort": "medium",
+  "reasoning_effort_echoed": null,
+  "reasoning_mode": "standard",
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "service_tier_requested": "standard",
+  "template_id": [
+    "main-000200",
+    "main-000201",
+    "main-000202",
+    "main-000203",
+    "main-000204",
+    "main-000205",
+    "main-000206",
+    "main-000207",
+    "main-000208",
+    "main-000209",
+    "main-000210",
+    "main-000211",
+    "main-000212",
+    "main-000213",
+    "main-000214",
+    "main-000215",
+    "main-000216",
+    "main-000217",
+    "main-000218",
+    "main-000219",
+    "main-000220",
+    "main-000221",
+    "main-000222",
+    "main-000223",
+    "main-000224"
+  ],
+  "repeat_index": 0,
+  "seeds": {
+    "template_seeds": [
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215,
+      216,
+      217,
+      218,
+      219,
+      220,
+      221,
+      222,
+      223,
+      224
+    ]
+  },
+  "started_utc": "2026-11-12T20:59:55+00:00",
+  "finished_utc": "2026-11-12T21:02:59+00:00",
+  "exit_reason": "ERROR:ProcessKilled",
+  "tokens": {
+    "input_tokens": 5020698,
+    "cached_input_tokens": 4659351,
+    "cache_write_tokens": 360635,
+    "output_tokens": 7752,
+    "reasoning_tokens": 0
+  },
+  "cost_usd": {
+    "list": 1.4464666000000002,
+    "billed_est": 1.4464666000000002,
+    "costs_csv_row_appended": true
+  },
+  "raw_transcript_path": "results/raw/persistgym_sonnet_r12/20261112T205954Z-F-0-claude-sonnet-5-5/transcript.jsonl.gz",
+  "paid": true,
+  "n_episodes_run": 7,
+  "n_excluded": 0,
+  "parallel": {
+    "max_episodes_in_flight": 2,
+    "episodes_started": 9,
+    "abandoned_episode_ids": [
+      "main-000203/derived-nonrec-far/base",
+      "main-000204/observed-nonrec-far/base"
+    ],
+    "stop_reason": "ERROR:ProcessKilled"
+  },
+  "api": "anthropic.messages",
+  "echo_note": "the Messages API echoes neither the effort nor a reasoning context: reasoning_context_requested, reasoning_context_echoed and reasoning_effort_echoed are null (not echoed, never a mismatch); instead every request passed the request-side check before it was sent (harnesses/wire.py MessagesWire.check_payload: adaptive thinking, the effort, max_tokens, no thinking block), PREREG §17.8 (amendment R8)",
+  "prompt_size": null,
+  "inference_geos": null,
+  "recovered": {
+    "by": "hand, drafts/r12_ops/account_killed_f0.py (harnesses account-run cannot rebuild a Messages API run or an interrupted one)",
+    "accounted_utc": "2026-11-12T22:25:40+00:00",
+    "cause": "the process was killed at about 21:02 UTC on 2026-11-12, when the Claude Code session that had started it as a background task restarted (the researcher thinks an application update caused it), so finalize never ran",
+    "what": "the run's process was killed, so run_batch wrote neither summary.json nor meta.json and finalize wrote no costs row. The row and both files were rebuilt from run_plan.json, episodes.jsonl and the raw transcript with the repo's own code. The raw transcript's last line (the cut-off call) was incomplete: the cut-off file is kept as transcript.jsonl.gz.cut and transcript.jsonl.gz holds its 177 complete lines",
+    "abandoned_episode_ids": [
+      "main-000203/derived-nonrec-far/base",
+      "main-000204/observed-nonrec-far/base"
+    ],
+    "missing_transcript_line": {
+      "episode_id": "main-000203/observed-nonrec-far/base",
+      "request_index": 21
+    },
+    "approximate": {
+      "finished_utc": "the raw files' last write",
+      "costs_row_timestamp_utc": "the raw files' last write",
+      "costs_row_latency_s": "the median of the finished episodes' per-call timings"
+    },
+    "settings_from": "run_plan.json",
+    "run_plan": "results/raw/persistgym_sonnet_r12/20261112T205954Z-F-0-claude-sonnet-5-5/run_plan.json",
+    "cost_note": "cost_usd sums the 7 finished episodes, as run_batch sums a run's episodes. The costs.csv row (1.608426 billed) also counts the 24 recorded calls of the 2 abandoned episodes (0.161959)."
+  },
+  "config_hash": "8af854ac314139674ac28466163fe45a81a77e8501a2204719f52dc7a145512b",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "39e8dc73a02fd8d487a895aad56571d637046ceb",
+  "git_dirty": true
+}

@@ -422,11 +422,31 @@ def _transcript(raw: Path, experiment: str, run_id: str) -> Path:
     return raw / experiment / run_id / "transcript.jsonl.gz"
 
 
+def declared_missing(a: Arm, by_run: dict[str, dict[str, dict]]) -> list[dict]:
+    """The transcript lines that a recovered run's meta.json declares missing
+    (`recovered.missing_transcript_line`), for the episodes this reading counts. A run whose
+    process was killed can lose the line it was writing: R12's first Sonnet F-0 run lost the
+    last request of one episode, whose record, usage and cost episodes.jsonl holds
+    (results/decisions.md, 2026-11-12). The responses read from the transcripts are then
+    that many fewer than the records count, and the output names each such line."""
+    out = []
+    for run in a.runs:
+        if run.run_id not in by_run:
+            continue
+        meta = json.loads((run.folder / "meta.json").read_text(encoding="utf-8"))
+        line = (meta.get("recovered") or {}).get("missing_transcript_line")
+        if line and line.get("episode_id") in by_run[run.run_id]:
+            out.append({"run_id": run.run_id, "episode_id": line["episode_id"],
+                        "request_index": line.get("request_index")})
+    return out
+
+
 def responses(a: Arm, restricted: dict, task_cells: tuple[str, ...], stop: int, raw: Path,
               facts: dict[str, dict] | None = None) -> tuple[dict | None, list[str]]:
     """Reading 5's transcript part for one arm, from its restricted resolution, and the runs
     with no transcript. The reading is None when any is missing. `facts` defaults to the
-    generator's for the arm's templates and task cells."""
+    generator's for the arm's templates and task cells. Transcript lines a recovered run
+    declares missing (`declared_missing`) are allowed for and named in the output."""
     by_run = _by_run(restricted, a.cell, task_cells, stop)
     missing = sorted(run_id for run_id in by_run
                      if not _transcript(raw, a.experiment, run_id).is_file())
@@ -439,12 +459,16 @@ def responses(a: Arm, restricted: dict, task_cells: tuple[str, ...], stop: int, 
     t = hpe.merge([hpe.transcript_readings(_transcript(raw, a.experiment, run_id), recs, facts)
                    for run_id, recs in sorted(by_run.items())])
     from_records = hpe.record_readings(list(records.values()))
-    if t["responses"] != from_records["responses"]:
+    gaps = declared_missing(a, by_run)
+    if t["responses"] != from_records["responses"] - len(gaps):
         raise hh.Refusal(f"{a.name}'s transcripts in {a.experiment} hold {t['responses']} "
-                         f"responses, its records {from_records['responses']}")
+                         f"responses, its records {from_records['responses']}"
+                         + (f", less {len(gaps)} line(s) a recovered run declares missing"
+                            if gaps else ""))
     s = hpe.arm_transcript_summary(t, records, task_cells)
     return ({"episodes": len(records), "runs": sorted(by_run),
              "responses": from_records["responses"],
+             "responses_not_in_transcript": gaps,
              "refused_responses": from_records["refused_responses"],
              "refused_share": from_records["refused_share"],
              "refusal_categories": dict(sorted(from_records["refusal_categories"].items())),
@@ -895,6 +919,14 @@ def _experiment_lines(x: dict) -> list[str]:
                          f"{'n/a' if n is None else _num(n['reply_chars_median'], '.0f')} | "
                          f"{_num(c['output_tokens_mean'], '.0f')} | "
                          f"{_num(c['cost_usd_billed_mean'], '.5f')} |")
+    for a in x["arms"]:
+        for g in (a.get("responses") or {}).get("responses_not_in_transcript") or []:
+            lines += ["", (f"{a['arm']}: request {g['request_index']} of {g['episode_id']} in "
+                           f"run {g['run_id']} is not in its transcript, whose process was "
+                           "killed while writing it. The episode's record, usage and cost are "
+                           "counted. The thinking-block share is out of the responses in the "
+                           "transcripts, and the need-step columns leave the episode out if "
+                           "that request was its need step.")]
     if "rounds" in x:
         lines += ["", "**6. Rounds** (described only):", "",
                   ("Task cell \"all\" pools the task cells: success per arm and round, as §17.12 "

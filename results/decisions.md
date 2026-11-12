@@ -1827,3 +1827,101 @@ approved_block: 8-r12 | experiments: persistgym_pilot,persistgym_haiku_r12_notes
 **Between the pilots and the main runs.** Claude checks each pilot's errors, payloads and cost per episode. If a pilot ends other than COMPLETED, or costs more than 1.10 times its high forecast per episode, Claude stops and tells the researcher before any main run. At that rate every main run's stop still fits in the block. Otherwise the main runs follow, in the order above.
 
 **Approval.** The researcher's merge of the pull request that adds this entry approves block `8-r12` at the amount above and A14's cap. Each run's stop is its high forecast times 1.25. The paid guard admits a run only if its stop fits in what is left of the block and of the cap, so a run that no longer fits refuses, and Claude stops and asks.
+
+## 2026-11-12: R12's experiments 1 and 2: results (exploratory); experiment 3 deferred
+**The runs,** after the researcher merged PR #90 (block `8-r12`), with the researcher's key moved to the other of the project's two organizations:
+- **The organization:** `harnesses org-check` found the key in the organization that R8's rate-limit errors name, before the pilots (07:09 UTC), before F-0's continuation (22:26 UTC) and after the runs (22:41 UTC) (`results/r12_org/`). R11's checks found the key in the other organization, the one R10's error names, and R10's later runs are inferred to be under that one, not recorded (the correction of 2026-11-02). Each check gives the key's organization at its moment, not what the calls were served under. No R12 check falls between 07:25 and 22:26 UTC, which covers all of experiment 1 and most of experiment 2.
+- **The pilots** (`persistgym_pilot`, 07:10 to 07:25 UTC): all six ended COMPLETED, at $8.26 billed. The check between the pilots and the main runs said GO on every condition. Each cost per episode was under 1.10 times its high forecast: W-nd-0 $0.0419, W-nx-0 $0.0378, W-b-0 $0.0117, and claude-sonnet-5-5's ("Sonnet") W-n-0 $0.812, W-np-0 $0.972 and F-0 $0.178. The committed `analysis/r12_pilot.py`, written while the runs played, gives the same result (`results/r12_pilot/20261112T225943Z/`).
+- **Experiment 1** (`persistgym_haiku_r12_notes`, claude-haiku-5-5, "Haiku"): 16 runs from 15:06 to 19:54 UTC, all COMPLETED, every episode DONE, $37.64 billed. Each arm ran first in one of the four rounds.
+- **Experiment 2** (`persistgym_sonnet_r12`):
+  - W-n-0 (19:54 to 20:22 UTC) and W-np-0 (20:22 to 20:59 UTC) ran COMPLETED, at $52.26 and $55.89. W-n-0 came in 19% above its high forecast and under its stop.
+  - F-0's first run (`20261112T205954Z`) was killed after 7 of its 50 episodes, below.
+  - Its continuation (`20261112T222631Z`, templates 203-224) ran COMPLETED at $8.93. F-0's two runs cost $10.54 together, against a high forecast of $9.95.
+- **Experiment 3** (`persistgym_haiku_r12_block`) has not run. The researcher asked to pause before it, to check the account's credit, and may run it later with other experiments. Its approval in block `8-r12` stands, and its pilot passed.
+- **Spend:** block `8-r12` $164.59 of $213, with at most $29.64 more for experiment 3 by its stops. Phase 1a $563.03 of $620. Project total $1,091.55 over 120 ledger rows.
+
+**Departures from the run plan in §17.12 and the 2026-11-11 entry** (PREREG §13):
+1. **F-0's first run was killed.** At about 21:02 UTC the Claude Code session that had started the runs as a background task restarted, and the run's process ended with it. The researcher thinks an application update caused it. The run left its paid-run lock and spend reservation and no costs row, and `harnesses account-run` cannot rebuild a Messages API run. The researcher approved the steps below on 2026-11-12. `results/r12_recovery/account_killed_f0.py`, committed with lint-only changes, did steps 1 and 2:
+   1. **The costs row**, $1.608426 over 202 calls, was rebuilt from the raw files with the repo's pricing code. For the six finished episodes whose transcripts are whole, the rebuilt usage and cost equal episodes.jsonl's exactly. The row also counts the 24 recorded calls of the 2 episodes in flight. At most 2 calls in flight when the process died are recorded nowhere.
+   2. **The run's files:** `summary.json` and `meta.json` were rebuilt, with exit reason `ERROR:ProcessKilled` and a `recovered` field. The lock and the reservation were then released.
+   3. **The continuation,** under DESIGN §7.9, played templates 203-224 at a planned $10.83, the original $12.44 less the spend. §7.8's first-final-record rule keeps the killed run's record of `main-000203/observed-nonrec-far` and drops the continuation's duplicate, its only one.
+   4. **Where the paid runs ran:** the continuation ran in a terminal of the app instead of a background task of the session.
+2. **One transcript line is lost.** The killed run's process died while it wrote the last request of `main-000203/observed-nonrec-far`, the episode's need-step request. The episode's record, usage and cost are complete. The gzip file was cut off, so it is kept as `transcript.jsonl.gz.cut`, beside a rewritten `transcript.jsonl.gz` that holds its 177 complete lines (both gitignored). Reading 5 for Sonnet's F-0 therefore counts thinking blocks over 1,241 of 1,242 responses. Its need-step columns read 24 of 25 episodes in the observed cell. The cause is a gap in the runner's hand-off between an episode's spool file and the gzip transcript, which a separate task is fixing.
+3. **Two changes to the analysis script after it was merged** (PR #92), both before any reading of the outcomes:
+   - `--experiment` (PR #93) reads only the experiments it names, so experiments 1 and 2 are FINAL while experiment 3 has not run.
+   - Commit 26207b6 lets reading 5 allow for a transcript line that a recovered run's `meta.json` declares missing, and names the line in the output. Any other difference still refuses. The first try at the readings refused on that line before printing anything, which is what led to the change.
+4. **The main runs started about 8 hours after the pilots.** A session restart came between the pilots' end and Claude's check of them, so experiment 1 started at 15:06 UTC. §17.12 registers no start time.
+5. **`git_dirty` is true** for every main run after experiment 1's first, because the earlier runs' rows had been appended to `results/costs.csv`. No other file differed. The runs were committed only after experiment 2, so that every run records the same commit, 39e8dc7.
+
+**The analysis,** `uv run python -m analysis.r12 --experiment notes --experiment sonnet --rerun 20261112T222631Z-F-0-claude-sonnet-5-5=20261112T205954Z-F-0-claude-sonnet-5-5` on clean commit 26207b6, wrote `results/r12/20261112T224901Z/`.
+- **Status:** FINAL. §2.8's replay of 800 and 100 need steps found no bug. There is no exclusion and no API error.
+- **Templates read:** every registered template, 200-299 and 200-224.
+- **The independent re-derivation:** two agents each wrote their own code from the run records and raw transcripts, without the repo's analysis code. They matched all 1,128 numbers they compared, the bootstrap intervals included.
+
+**Experiment 1's readings** (registered in §17.12; descriptive, not tested; 100 episodes per arm and task cell, templates 200-299; 90% template-cluster intervals):
+
+| Arm | Success, observed | Success, derived | P(carried), observed and derived | Success given carried |
+|---|---|---|---|---|
+| W-n-0 | 3.0% (1.0 to 6.0) | 5.0% (2.0 to 9.0) | 3%, 34% | 3/3, 5/34 |
+| W-np-0 (request for sources) | 85.0% (79.0 to 91.0) | 86.0% (80.0 to 91.0) | 87%, 89% | 85/87, 86/89 |
+| W-nd-0 (disclosure only) | 35.0% (27.0 to 43.0) | 44.0% (36.0 to 52.0) | 38%, 67% | 35/38, 44/67 |
+| W-nx-0 (length-matched neutral) | 1.0% (0.0 to 3.0) | 1.0% (0.0 to 3.0) | 3%, 26% | 1/3, 1/26 |
+
+- **Contrasts** (percentage points, observed then derived, 90% intervals over the same resamples, no correction):
+  - W-np-0 minus W-n-0: +82.0 (+75 to +88), +81.0 (+74 to +88).
+  - W-nd-0 minus W-n-0: +32.0 (+23 to +41), +39.0 (+30 to +48).
+  - W-nx-0 minus W-n-0: −2.0 (−5 to +1), −4.0 (−8 to 0).
+  - W-np-0 minus W-nx-0: +84.0 (+78 to +90), +85.0 (+79 to +91).
+  - W-np-0 minus W-nd-0: +50.0 (+40 to +60), +42.0 (+31 to +52).
+- **Choices with the fact evicted:** every option chosen was correct, in every arm.
+- **Responses:**
+  - Refused: 22, 91, 59 and 15 of 4,812 per arm (W-n-0, W-np-0, W-nd-0, W-nx-0), all category "bio".
+  - With a thinking block: 51.1%, 94.4%, 72.4% and 51.4%.
+  - At the need step: the median retained replies per episode are 14, 11, 14 and 14. One retained reply's median length is 103 and 107, 1,137 and 1,147, 140 and 156, and 115 and 116 characters (observed and derived).
+  - Output tokens per episode: about 2,100 to 2,800 for W-n-0 and W-nx-0, 4,500 to 5,600 for W-nd-0, and 12,600 to 13,600 for W-np-0.
+  - Cost per episode: $0.0435 to $0.0547.
+- **Rounds** (success per arm and round, the two cells pooled, 50 episodes each):
+  - W-n-0: 4%, 4%, 4% and 4%.
+  - W-np-0: 88%, 86%, 86% and 82%.
+  - W-nd-0: 36%, 38%, 50% and 34%.
+  - W-nx-0: 0%, 2%, 2% and 0%.
+
+**Experiment 2's readings** (Sonnet; 25 episodes per arm and task cell, templates 200-224):
+
+| Arm | Success, observed | Success, derived | P(carried), observed and derived | Success given carried |
+|---|---|---|---|---|
+| W-n-0 | 96.0% (88.0 to 100.0) | 100.0% (100.0 to 100.0) | 96%, 100% | 24/24, 25/25 |
+| W-np-0 | 96.0% (88.0 to 100.0) | 92.0% (84.0 to 100.0) | 96%, 100% | 24/24, 23/25 |
+| F-0 | 100.0% (100.0 to 100.0) | 100.0% (100.0 to 100.0) | n/a | n/a |
+
+- **Contrasts:**
+  - W-np-0 minus W-n-0: 0.0 (−8 to +8), −8.0 (−16 to 0).
+  - F-0 minus W-n-0: +4.0 (0 to +12), 0.0 (0 to 0).
+- **Responses:**
+  - Refused: 8 of 1,242 in W-np-0, all category "reasoning_extraction", in 4 derived-cell episodes. W-n-0 and F-0 had none.
+  - With a thinking block: 0.2%, 0.2% and 0.0%.
+  - At the need step: the median retained replies per episode are 12, 10 to 11, and 23 to 23.5. One retained reply's median length is 752 to 766, 874 to 1,625, and 105 to 107 characters.
+  - Output tokens per episode: about 7,600 to 8,100, 11,600 to 12,700, and 1,200 to 1,300.
+  - Cost per episode: about $1.04 to $1.05, $1.11 to $1.13, and $0.20 to $0.21.
+- **Beside Haiku** (reading 7, templates 200-224, described only): Haiku's experiment-1 arms on the same 25 templates, observed and derived:
+  - W-n-0: 4% and 4%.
+  - W-np-0: 84% and 92%.
+  - W-nd-0: 36% and 36%.
+  - W-nx-0: 0% and 0%.
+
+**What it points to,** by the outcomes §17.12 stated before the runs:
+- **Experiment 1:** the first case, "W-np-0 well above W-n-0, and W-nx-0 near W-n-0". It points to the request for sources (R10's provenance sentence, the only sentence W-np-0 adds), not a sentence of that length, as what raised success on templates the wording was not written for.
+  - W-nd-0, the disclosure sentence alone, is also well above W-n-0. By §17.12's pointer, "disclosure alone may be enough", this points to disclosure alone raising success, though not to W-np-0's level.
+  - W-np-0's levels, 85% and 86%, are near R10's W-np-0 (88.0% and 86.5% on templates 0-199) and R11's reading of it (88.8% and 86.2% on templates 0-195). They came about 10 days later, with the key in the other organization at the checks.
+- **Experiment 2:** the first case, "F-0 near 100% and W-n-0 near F-0". Sonnet keeps and uses its notes where Haiku disowned them, so the retraction is not a property of the notes sentence on every model of this provider.
+
+**What it does not show:**
+- **No model comparison and no ranking.** Experiment 2 is one run per arm on 25 templates, at effort medium, whose levels on Sonnet 5.5 are recalibrated and not matched to Haiku's medium. Setting its arms beside Haiku's describes how each behaved on these episodes.
+- **Which words of the provenance sentence do the work.** W-np-0 adds the request for sources alone, W-nd-0 the disclosure alone, and both together were read only in R10's W-npd-0, not in R12. The neutral sentence is length-matched, not a no-effect control. The wordings were written after reading R9's replies. Templates 200-299 are new, but the task family is the same.
+- **Why Sonnet refused 8 responses** with category "reasoning_extraction", only under W-np-0. The responses and the thinking text were not inspected.
+- **Not concurrent with R10 or R11,** so the comparison with R10's levels mixes the date and possibly the organization, as R11's entry says. Within R12 the arms ran one run at a time: interleaved in rotating rounds in experiment 1, and in sequence over about 2.8 hours in experiment 2.
+- **The organization.** The checks record the key's organization at three moments, not what the runs' calls were served under, and none falls inside experiment 1.
+- **Each template once per arm (repeat 0), no repeat,** and 2 of the 4 far cells.
+- **Everything else** R8 to R11 and §17.12 say they do not show also holds here. This is one exploratory reading on synthetic tasks, not a test of note-taking instructions in general.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the runs, the departures and the readings. It adds no spending approval. The pull request is $0. Experiment 3 needs the researcher's go-ahead before it runs, under block `8-r12`.

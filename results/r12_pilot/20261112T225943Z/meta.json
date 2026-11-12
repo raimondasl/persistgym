@@ -1,0 +1,57 @@
+{
+  "experiment": "r12_pilot",
+  "run_id": "20261112T225943Z",
+  "cell_or_config": "claude-haiku-5-5 W-nd-0,claude-haiku-5-5 W-nx-0,claude-haiku-5-5 W-b-0,claude-sonnet-5-5 W-n-0,claude-sonnet-5-5 W-np-0,claude-sonnet-5-5 F-0",
+  "config": {
+    "runs": [
+      "20261112T071017Z-W-nd-0-claude-haiku-5-5",
+      "20261112T071231Z-W-nx-0-claude-haiku-5-5",
+      "20261112T071416Z-W-b-0-claude-haiku-5-5",
+      "20261112T071642Z-W-n-0-claude-sonnet-5-5",
+      "20261112T071944Z-W-np-0-claude-sonnet-5-5",
+      "20261112T072401Z-F-0-claude-sonnet-5-5"
+    ],
+    "named": false,
+    "forecast": "results/r12_forecast/20261111T060105Z",
+    "factor": 1.1,
+    "go": true
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {},
+  "started_utc": "2026-11-12T22:59:43+00:00",
+  "finished_utc": "2026-11-12T22:59:43+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "check.json",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261112T071017Z-W-nd-0-claude-haiku-5-5",
+    "20261112T071231Z-W-nx-0-claude-haiku-5-5",
+    "20261112T071416Z-W-b-0-claude-haiku-5-5",
+    "20261112T071642Z-W-n-0-claude-sonnet-5-5",
+    "20261112T071944Z-W-np-0-claude-sonnet-5-5",
+    "20261112T072401Z-F-0-claude-sonnet-5-5"
+  ],
+  "config_hash": "a187b52196888d92c1af007ed907546c28ca6c52fc5b35c610a1df3aba65d16a",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "cff9ad967cf1b270d0b25c20946bc46113d55ff4",
+  "git_dirty": false
+}

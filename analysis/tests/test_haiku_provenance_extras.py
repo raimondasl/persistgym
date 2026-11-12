@@ -206,3 +206,23 @@ def test_the_arm_summary_pools_turns_and_cells(transcript):
     assert s["leak_check"]["observed-nonrec-far"]["target_in_need_option_line"] == 1
     assert s["at_need"]["observed-nonrec-far"]["episodes"] == 1
     assert s["at_need"]["derived-nonrec-far"]["episodes"] == 0
+
+
+def test_a_redacted_thinking_block_is_a_thinking_block(tmp_path):
+    """As `harnesses.wire.THINKING_BLOCKS` has it. The tally also counts the redacted ones apart,
+    for R12's reading 5 (`analysis.r12`). R9 to R11's transcripts hold none, so their outputs do
+    not change."""
+    assert hpe._has_thinking({"content": [{"type": "redacted_thinking", "data": "x"}]})
+    assert not hpe._has_redacted_thinking({"content": [{"type": "thinking", "thinking": ""}]})
+    redacted = _line(0)
+    redacted["response"]["content"].insert(0, {"type": "redacted_thinking", "data": "x"})
+    path = tmp_path / "t.jsonl.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        for x in (redacted, _line(1, thinking=True), _line(2), _line(3)):
+            f.write(json.dumps(x) + "\n")
+    t = hpe.transcript_readings(path, {"e1": _record()}, {"e1": FACT})
+    assert (t["thinking"], t["redacted_thinking"]) == (2, 1)
+    assert hpe.merge([t, t])["redacted_thinking"] == 2
+    # the need step's first request (step 3) keeps its replies' lengths, one by one
+    assert t["need_reply_chars"] == {"e1": [len("noted 568")]}
+    assert hpe.merge([t])["need_reply_chars"] == t["need_reply_chars"]

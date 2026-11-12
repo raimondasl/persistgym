@@ -23,6 +23,10 @@ from harnesses import cli, r12_rounds, registered
 
 REPO = Path(__file__).resolve().parents[2]
 FORECAST = r12_rounds.latest_forecast(REPO)
+FORECAST_META = json.loads((max(
+    p for p in (REPO / "results" / "r12_forecast").iterdir() if (p / "forecast.json").exists()
+) / "meta.json").read_text(encoding="utf-8"))
+"""The meta.json beside `FORECAST` (the latest forecast, as `r12_rounds.latest_forecast` picks it)."""
 
 
 def _parse(args):
@@ -63,7 +67,11 @@ def test_experiment_1_rotates_its_arms_over_four_rounds():
 
 def test_the_block_fits_the_cap_and_the_approval_line_names_it():
     t = FORECAST["totals"]
-    spent = costs.spend_by_phase(costs.read_rows())["1a"]
+    # Phase 1a's spend before the block: the rows written before the forecast. The block's own
+    # pilots and runs come after it, so they are not counted twice once they are in the ledger.
+    before = [r for r in costs.read_rows() if r["timestamp_utc"] < FORECAST_META["started_utc"]]
+    spent = costs.spend_by_phase(before)["1a"]
+    assert spent == pytest.approx(FORECAST["phase_1a_spent_usd"])
     assert spent + t["block_max_usd"] <= costs.PHASE_CAPS["1a"]
     assert t["block_max_usd"] >= t["high"] + t["pilots"]
     text = (REPO / "results" / "decisions.md").read_text(encoding="utf-8")

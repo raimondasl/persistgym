@@ -13,12 +13,21 @@ import pytest
 from analysis import sol_h1_forecast as f
 from common import costs
 
-ROWS = {r["run_id"]: r for r in csv.DictReader(costs.COSTS_CSV.open(encoding="utf-8"))}
+LEDGER = costs.read_rows()
+"""One read of results/costs.csv, under its lock, for every test here. A paid run can append a
+row while the suite runs, so the forecast is built from this same snapshot (`built`), never from
+a later read of the live file."""
+ROWS = {r["run_id"]: r for r in LEDGER}
 
 
 @pytest.fixture(scope="module")
-def built():
-    return f.build()
+def built(tmp_path_factory):
+    path = tmp_path_factory.mktemp("ledger") / "costs.csv"
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=costs.COLUMNS, lineterminator="\n")
+        w.writeheader()
+        w.writerows(LEDGER)
+    return f.build(costs_path=path)
 
 
 def _billed(run_id: str) -> float:

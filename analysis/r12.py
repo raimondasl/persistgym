@@ -21,7 +21,8 @@ with the re-run links of ``--rerun``, §13's exclusions on the Messages API (no 
 the episodes a request-side check stopped excluded (`request_check_stops`). Refusals and empty
 replies score 0 at the need step, as the runner records them. Before any reading:
 - Every record must be on its experiment's registered cells, task cells and templates, base
-  episodes at repeat 0, and every run folder under an experiment must be one of its runs.
+  episodes at repeat 0, and every run folder under an experiment must be one of its runs, on
+  one of its registered cells (a single-turn run too).
 - An API error awaiting its §13 re-run refuses, whether or not the sweep is closed.
 - Each experiment's sweep must be complete over its registered templates
   (`persistgym_h1h3.completeness`), or closed by the researcher with ``--sweep-closed`` for that
@@ -59,11 +60,16 @@ the templates not read left out of each mean (NaN).
    Experiment 2: W-np-0 minus W-n-0, and F-0 minus W-n-0. Experiment 3, per task cell: W-b-0
    minus R8's W-0, and minus R8's F-0.
 5. Responses per arm, from the raw transcripts (`analysis.haiku_provenance_extras`'s code):
-   refusals by category, responses with a thinking block (presence only), the retained replies
-   at the need step's first request (how many, and the median of their length in characters),
-   and output tokens and cost per episode (billed estimate) from the records.
-6. Experiment 1's rounds: success per arm, round (200-224, 225-249, 250-274, 275-299) and task
-   cell on the templates read, and each run's start and finish (UTC). Described only.
+   refusals by category, responses with a thinking block (presence only, a ``redacted_thinking``
+   block counting as one, and also counted apart with a warning), the retained replies at the
+   need step's first request, and output tokens and cost per episode (billed estimate) from the
+   records. For the retained replies, §17.12's "median length" is one reply's length: the
+   median over the replies pooled per arm and task cell (`retained`). Beside it, how many an
+   episode retains (median over episodes), and as extra detail each episode's total characters
+   (median over episodes), the figure R10 and R11 gave.
+6. Experiment 1's rounds: success per arm and round (200-224, 225-249, 250-274, 275-299) on the
+   templates read, pooled over the 2 task cells (task cell "all"), then per task cell as extra
+   detail, and each run's start and finish (UTC). Described only.
 7. Experiment 2 beside Haiku: Sonnet's arms and Haiku's experiment-1 arms on the templates of
    200-224 that both experiments read, success, P(carried) and success given carried. Described
    only. No contrast between the models is computed or tested.
@@ -73,6 +79,9 @@ the templates not read left out of each mean (NaN).
    block drops per episode (step requests whose info says ``block_drop``, from its
    transcripts), and the near-cell episodes whose evidence was not in the need step's request
    (``need_payload.S`` false).
+
+The summary and readings.json also state §17.12's "What it does not show" (`DOES_NOT_SHOW`),
+and the summary repeats its caveats next to readings 4 (experiment 1), 5, 7 and 8.
 
 Run: ``uv run python -m analysis.r12 [--rerun RUN=ORIGINAL ...] [--sweep-closed notes|sonnet|block
 ...]``. It writes ``results/r12/<UTC>/readings.json``, ``summary.md`` and ``meta.json``. With
@@ -84,6 +93,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import statistics
 import sys
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -126,6 +136,34 @@ CONTRASTS = {
     BLOCK: (("W-b-0", "W-0 (R8)"), ("W-b-0", "F-0 (R8)")),
 }
 """Reading 4: (minuend arm, subtrahend arm) per experiment, in §17.12's order."""
+DOES_NOT_SHOW = (
+    ("Everything R8 to R11 say they do not show also holds here: one model per provider in the "
+     "confirmatory sense, the same synthetic task family, thinking text not inspected."),
+    ("No model comparison. Experiment 2 is one run per arm on 25 templates of one larger model "
+     "of the same provider, at effort medium, whose levels on Sonnet 5.5 are recalibrated and "
+     "not matched to Haiku's medium ([effort](https://platform.claude.com/docs/en/build-with-"
+     "claude/effort), checked 2026-11-11). Setting its arms beside Haiku's describes how each "
+     "behaved on these episodes. It does not rank them."),
+    ("The sentences. Three wordings beside R10's two, one run each. Other wordings, other models "
+     "and other tasks are not run. The neutral sentence is a length-matched control, not a "
+     "no-effect control: it points attention at the action's format and may change replies by "
+     "itself."),
+    ("Experiment 3 is not concurrent with R8's W-0 and F-0, its comparators, which ran on "
+     "2026-10-18. Cost comes mostly from caching mechanics, but success differences against "
+     "them mix the rule with any change in serving since. One block size (W // 2) is run, on "
+     "Haiku's short replies, without notes."),
+    ("Coarse intervals. Experiment 2 bootstraps over at most 25 templates. Experiment 1's arms "
+     "play each template once."),
+)
+"""§17.12's "What it does not show", as the summary and readings.json state it."""
+NOTE_NEUTRAL = ("W-nx-0 is a length-matched control, not a no-effect control (see What it does "
+                "not show).")
+NOTE_THINKING = ("Thinking blocks by their presence only, so the thinking text is not inspected. "
+                 "A redacted_thinking block counts as one.")
+NOTE_EFFORT = ("Sonnet runs at effort medium, whose levels on Sonnet 5.5 are recalibrated, so it "
+               "is not matched to Haiku's medium.")
+NOTE_BLOCK = "W-b-0 runs one block size, W // 2, on Haiku's short replies, without notes."
+"""The caveats the summary repeats next to readings 4 (experiment 1), 5, 7 and 8."""
 
 
 def r8_name(cell: str) -> str:
@@ -166,8 +204,9 @@ def profile(experiment: str) -> hh.Profile:
 
 def discover(root: Path, experiment: str) -> list:
     """The experiment's runs (none if its folder does not exist). A folder that is not one of
-    its runs, or a record off its registered task cells, templates, variant or repeat,
-    refuses."""
+    its runs, a run off its registered cells, or a record off its registered task cells,
+    templates, variant or repeat, refuses. `persistgym_h1h3.discover` admits a single-turn run
+    beside any profile's cells, so the cells are checked here too."""
     if not (root / "results" / experiment).is_dir():
         return []
     runs, skipped = hh.discover(root / "results", prof=profile(experiment))
@@ -175,6 +214,10 @@ def discover(root: Path, experiment: str) -> list:
         raise hh.Refusal(f"run folders under results/{experiment}/ that are not R12's runs of "
                          "it: " + "; ".join(f"{x['folder']}: {x['reason']}" for x in skipped))
     s, registered_templates = spec(experiment), templates_of(experiment)
+    off_cells = [f"{run.run_id}: cell {run.cell!r} is not one of R12's {experiment} cells "
+                 f"({', '.join(s['cells'])})" for run in runs if run.cell not in s["cells"]]
+    if off_cells:
+        raise hh.Refusal("\n".join(off_cells))
     records = [rec for run in runs for rec in run.records]
     off = sorted({rec["task_cell"] for rec in records} - set(s["task_cells"]))
     if off:
@@ -395,13 +438,6 @@ def responses(a: Arm, restricted: dict, task_cells: tuple[str, ...], stop: int, 
         raise hh.Refusal(f"{a.name}'s transcripts in {a.experiment} hold {t['responses']} "
                          f"responses, its records {from_records['responses']}")
     s = hpe.arm_transcript_summary(t, records, task_cells)
-    at_need = {}
-    for tc in task_cells:
-        k = s["at_need"][tc]
-        q = k["reply_chars_quartiles"]
-        at_need[tc] = {"episodes": k["episodes"],
-                       "retained_replies_median": k["retained_replies_median"],
-                       "retained_reply_chars_median": q[1] if len(q) == 3 else None}
     return ({"episodes": len(records), "runs": sorted(by_run),
              "responses": from_records["responses"],
              "refused_responses": from_records["refused_responses"],
@@ -409,7 +445,29 @@ def responses(a: Arm, restricted: dict, task_cells: tuple[str, ...], stop: int, 
              "refusal_categories": dict(sorted(from_records["refusal_categories"].items())),
              "responses_in_transcript": s["responses_in_transcript"],
              "with_thinking": s["with_thinking"], "thinking_share": s["thinking_share"],
-             "at_need": at_need}, [])
+             "with_redacted_thinking": t["redacted_thinking"],
+             "at_need": {tc: retained(t["need_reply_chars"], records, tc)
+                         for tc in task_cells}}, [])
+
+
+def _median(xs: list[int]) -> float | None:
+    return float(statistics.median(xs)) if xs else None
+
+
+def retained(lengths: dict[str, list[int]], records: dict[str, dict], task_cell: str) -> dict:
+    """Reading 5's retained replies at the need step's first request, in one task cell, from
+    each episode's reply lengths (`haiku_provenance_extras.transcript_readings`). §17.12's
+    "median length" is the median over the replies, pooled over the arm's episodes in the cell,
+    so it is one reply's length. Also how many an episode retains (median over episodes), how
+    many are pooled, and each episode's total characters (median over episodes: the count times
+    the length, as R10 and R11 gave it), which is extra detail."""
+    per = [lengths[e] for e, rec in sorted(records.items())
+           if rec["task_cell"] == task_cell and e in lengths]
+    pooled = [n for xs in per for n in xs]
+    return {"episodes": len(per),
+            "retained_replies_median": statistics.median(len(xs) for xs in per) if per else None,
+            "retained_replies_pooled": len(pooled), "reply_chars_median": _median(pooled),
+            "chars_per_episode_median": _median([sum(xs) for xs in per])}
 
 
 def block_drops(a: Arm, restricted: dict, task_cells: tuple[str, ...], stop: int,
@@ -464,7 +522,9 @@ def _rate(values: list[float]) -> dict:
 
 
 def rounds(arms: list[Arm], read: list[int], task_cells: tuple[str, ...]) -> list[dict]:
-    """Reading 6's success per arm, round and task cell, on the templates read."""
+    """Reading 6's success per arm and round on the templates read: §17.12's reading pools the
+    task cells (task cell "all", n = the task cells times the templates read in the round).
+    The rows per task cell that follow it are extra detail."""
     first = templates_of(NOTES).start
     n_rounds = len(templates_of(NOTES)) // ROUND
     rows = []
@@ -472,9 +532,9 @@ def rounds(arms: list[Arm], read: list[int], task_cells: tuple[str, ...]) -> lis
         lo, hi = first + k * ROUND, first + (k + 1) * ROUND
         ts = [t for t in read if lo <= t < hi]
         for a in arms:
-            for tc in task_cells:
-                vals = [float(bool(a.resolved[_key(a.cell, t, tc)].record.get("need_correct")))
-                        for t in ts]
+            per = {tc: [float(bool(a.resolved[_key(a.cell, t, tc)].record.get("need_correct")))
+                        for t in ts] for tc in task_cells}
+            for tc, vals in (("all", [v for c in task_cells for v in per[c]]), *per.items()):
                 rows.append({"round": k + 1, "templates": f"{lo}-{hi - 1}",
                              "templates_read": len(ts), "arm": a.name, "task_cell": tc,
                              **_rate(vals)})
@@ -618,6 +678,7 @@ def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozens
                           "experiment_3": "R8 to R11's resamples (T = 200), by template number"},
             "experiments": out,
             "beside": beside(readable[NOTES], readable[SONNET]),
+            "does_not_show": list(DOES_NOT_SHOW),
             "warnings": [*warnings, *missing_values(out)]}
 
 
@@ -657,6 +718,11 @@ def _experiment(e: str, st: dict, check: dict, raw: Path, boot_seed: int,
         warnings += [f"{LABEL[e]}, {a.name}: {w}" for w in warn]
         reading["responses"], missing = responses(a, restricted[a.name], task_cells, stop, raw,
                                                   facts)
+        redacted = (reading["responses"] or {}).get("with_redacted_thinking")
+        if redacted:
+            warnings.append(f"{LABEL[e]}, {a.name}: {redacted} response(s) hold a "
+                            "redacted_thinking block, counted among those with a thinking "
+                            "block in reading 5")
         for run_id in missing:
             incomplete.append(f"{LABEL[e]}: no raw transcript for {run_id} under {raw} "
                               f"({a.name}): reading 5 cannot be made")
@@ -782,13 +848,19 @@ def _experiment_lines(x: dict) -> list[str]:
                          f"{c['episodes']}, {c['correct']} correct.")
     lines += ["", ("**4. Contrasts** (percentage points, 90% interval over the same template "
                    "resamples, described, not tested):"), ""]
+    if x["experiment"] == NOTES:
+        lines += [NOTE_NEUTRAL, ""]
     for name, by_tc in x["contrasts"].items():
         for tc, v in by_tc.items():
             lines.append(f"- {name}, {tc}: {hp._pp(v)}")
-    lines += ["", "**5. Responses:**", "",
+    lines += ["", "**5. Responses:**", "", NOTE_THINKING + (
+                  " The retained replies are those in the need step's first request. Their "
+                  "length is one reply's, the median over the replies pooled in the task cell."),
+              "",
               ("| Arm | Refused responses | Categories | With a thinking block | Task cell | "
-               "Retained replies at the need step (median) | Their length (median characters) "
-               "| Output tokens per episode | Cost per episode (USD) |"),
+               "Retained replies at the need step (median per episode) | One retained reply's "
+               "length (median characters) | Output tokens per episode | Cost per episode "
+               "(USD) |"),
               "|---|---|---|---|---|---|---|---|---|"]
     for a in x["arms"]:
         s = a.get("responses")
@@ -797,15 +869,19 @@ def _experiment_lines(x: dict) -> list[str]:
             head = (f"| {a['arm']} | (no transcripts) | | | " if s is None else
                     f"| {a['arm']} | {_share(s['refused_responses'], s['responses'])} | "
                     f"{s['refusal_categories'] or '-'} | "
-                    f"{_share(s['with_thinking'], s['responses_in_transcript'])} | ")
+                    f"{_share(s['with_thinking'], s['responses_in_transcript'])}"
+                    + (f", {s['with_redacted_thinking']} redacted"
+                       if s.get("with_redacted_thinking") else "") + " | ")
             n = None if s is None else s["at_need"][tc]
             lines.append(head + f"{tc} | "
                          f"{'n/a' if n is None else n['retained_replies_median']} | "
-                         f"{'n/a' if n is None else n['retained_reply_chars_median']} | "
+                         f"{'n/a' if n is None else _num(n['reply_chars_median'], '.0f')} | "
                          f"{_num(c['output_tokens_mean'], '.0f')} | "
                          f"{_num(c['cost_usd_billed_mean'], '.5f')} |")
     if "rounds" in x:
         lines += ["", "**6. Rounds** (described only):", "",
+                  ("Task cell \"all\" pools the task cells: success per arm and round, as §17.12 "
+                   "registers it. The rows per task cell are extra detail."), "",
                   "| Round | Templates | Read | Arm | Task cell | Success |",
                   "|---|---|---|---|---|---|"]
         for r in x["rounds"]["success"]:
@@ -820,7 +896,7 @@ def _experiment_lines(x: dict) -> list[str]:
     if "cost_and_context" in x:
         cc = x["cost_and_context"]
         lines += ["", "**8. Cost and context** (per episode, with R8's arms run on 2026-10-18):",
-                  "",
+                  "", NOTE_BLOCK, "",
                   ("| Arm | Task cell | Episodes | Cost (USD) | Input tokens | Cache-read share "
                    "of input |"), "|---|---|---|---|---|---|"]
         for a in cc["arms"]:
@@ -856,10 +932,9 @@ def summary(r: dict) -> str:
     lines = ["# R12: Haiku's notes sentences, claude-sonnet-5-5, and a block-truncation window",
              "",
              (f"**{r['status']}.** {r['prereg']}. Exploratory: no test, no label. Repeat 0, base "
-              "episodes. Not a model comparison, and nothing is ranked. Experiment 3 is not "
-              "concurrent with R8's W-0 and F-0 (2026-10-18), so its differences from them mix "
-              "the rule with any change in serving since. Experiment 2 bootstraps over at most "
-              "25 templates, and experiment 1's arms play each template once."), ""]
+              "episodes. Not a model comparison, and nothing is ranked."), "",
+             "## What it does not show", "",
+             *(f"- {x}" for x in r["does_not_show"]), ""]
     for e in EXPERIMENTS:
         x = r["experiments"][e]
         if x is None:
@@ -868,7 +943,7 @@ def summary(r: dict) -> str:
         lines += _experiment_lines(x)
     b = r["beside"]
     lines += ["## 7. Experiment 2 beside Haiku (described only, no contrast between the models)",
-              ""]
+              "", NOTE_EFFORT, ""]
     if b is None:
         lines += ["Not read: experiment 1 or 2 has no template read.", ""]
     else:

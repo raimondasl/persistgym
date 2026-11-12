@@ -15,7 +15,9 @@ transcript under ``--raw-root`` (default ``results/raw``). It reports, per arm:
 3. **Thinking blocks:** the share of responses holding one (only the block's presence: its text
    is empty in every response), over all responses and by turn on each step's first request,
    both with and without the need steps, which start entering the rows at turn 20 and nearly
-   always hold one, and on the need step's first request.
+   always hold one, and on the need step's first request. A ``redacted_thinking`` block counts
+   as one, as in the harness's wire (`harnesses.wire.THINKING_BLOCKS`). R9 to R11's transcripts
+   hold none.
 4. **What the model kept at the need step,** on its first request there: the retained replies,
    how many and how long, and from the last evidence step to the step before the need step, how
    many replies hold the fact's value (whole-word match, `survival.whole_word_regex`; refused
@@ -53,6 +55,7 @@ from analysis import haiku_notes_replies as hnr
 from analysis import haiku_provenance as hp
 from common import runmeta
 from harnesses import registered
+from harnesses.wire import THINKING_BLOCKS
 from persistgym.config import PRESETS
 from persistgym.episode import TaskCell
 from persistgym.render import generate
@@ -130,7 +133,12 @@ def episode_facts(templates: range | None = None,
 
 
 def _has_thinking(response: dict) -> bool:
-    return any(b.get("type") == "thinking" for b in response.get("content") or [])
+    """A thinking block of either kind the harness's wire knows (`THINKING_BLOCKS`)."""
+    return any(b.get("type") in THINKING_BLOCKS for b in response.get("content") or [])
+
+
+def _has_redacted_thinking(response: dict) -> bool:
+    return any(b.get("type") == "redacted_thinking" for b in response.get("content") or [])
 
 
 def need_request_reading(payload: dict, fact: dict) -> dict:
@@ -162,10 +170,13 @@ def need_request_reading(payload: dict, fact: dict) -> dict:
 def transcript_readings(path: Path, records: dict[str, dict],
                         facts: dict[str, dict]) -> dict:
     """Readings 3 to 6, from one run's transcript, for the episodes whose counted record it holds.
-    Returns plain tallies, added up over an arm's runs by `merge`."""
-    tally = {"responses": 0, "thinking": 0, "turn_first": Counter(), "turn_thinking": Counter(),
-             "routine_first": Counter(), "routine_thinking": Counter(), "need_first": 0,
-             "need_thinking": 0, "later_need_requests": Counter(), "need": {}, "held": {},
+    Returns plain tallies, added up over an arm's runs by `merge`. Two of them only R12's
+    reading 5 reads (`analysis.r12`): the responses holding a ``redacted_thinking`` block, and
+    each retained reply's length at the need step's first request."""
+    tally = {"responses": 0, "thinking": 0, "redacted_thinking": 0, "turn_first": Counter(),
+             "turn_thinking": Counter(), "routine_first": Counter(),
+             "routine_thinking": Counter(), "need_first": 0, "need_thinking": 0,
+             "later_need_requests": Counter(), "need": {}, "need_reply_chars": {}, "held": {},
              "user_hash": {}}
     seen = set()
     with gzip.open(path, "rt", encoding="utf-8") as f:
@@ -179,6 +190,7 @@ def transcript_readings(path: Path, records: dict[str, dict],
             ns = hnr.need_step(rec)
             tally["responses"] += 1
             tally["thinking"] += _has_thinking(response)
+            tally["redacted_thinking"] += _has_redacted_thinking(response)
             first = (eid, step) not in seen
             seen.add((eid, step))
             if not first:
@@ -199,6 +211,8 @@ def transcript_readings(path: Path, records: dict[str, dict],
                 user.encode("utf-8")).hexdigest()
             if step == ns:
                 tally["need"][eid] = need_request_reading(d["payload"], facts[eid])
+                tally["need_reply_chars"][eid] = [len(text) for role, text in pairs
+                                                  if role == "assistant"]
             if (max(rec["designed"]["evidence_steps"]) <= step < ns
                     and response.get("stop_reason") != "refusal"):
                 reply = hnr.reply_text(response)
@@ -209,17 +223,18 @@ def transcript_readings(path: Path, records: dict[str, dict],
 
 
 def merge(tallies: list[dict]) -> dict:
-    out = {"responses": 0, "thinking": 0, "turn_first": Counter(), "turn_thinking": Counter(),
-           "routine_first": Counter(), "routine_thinking": Counter(), "need_first": 0,
-           "need_thinking": 0, "later_need_requests": Counter(), "need": {}, "held": {},
+    out = {"responses": 0, "thinking": 0, "redacted_thinking": 0, "turn_first": Counter(),
+           "turn_thinking": Counter(), "routine_first": Counter(),
+           "routine_thinking": Counter(), "need_first": 0, "need_thinking": 0,
+           "later_need_requests": Counter(), "need": {}, "need_reply_chars": {}, "held": {},
            "user_hash": {}}
     for t in tallies:
-        for k in ("responses", "thinking", "need_first", "need_thinking"):
+        for k in ("responses", "thinking", "redacted_thinking", "need_first", "need_thinking"):
             out[k] += t[k]
         for k in ("turn_first", "turn_thinking", "routine_first", "routine_thinking",
                   "later_need_requests"):
             out[k].update(t[k])
-        for k in ("need", "held", "user_hash"):
+        for k in ("need", "need_reply_chars", "held", "user_hash"):
             out[k].update(t[k])
     return out
 

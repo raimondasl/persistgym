@@ -317,13 +317,21 @@ def test_reading_6_rounds_and_run_times(root):
     ids = root.notes()
     x = _read(root)["experiments"][NOTES]
     rows = x["rounds"]["success"]
-    assert len(rows) == 4 * 4 * 2 and {r["templates"] for r in rows} == {
+    assert len(rows) == 4 * 4 * 3 and {r["templates"] for r in rows} == {
         "200-224", "225-249", "250-274", "275-299"}
-    for cell in NOTES_SOURCES:
+    for cell, src in NOTES_SOURCES.items():
         for tc in NR_FAR:
             mine = [r for r in rows if r["arm"] == cell and r["task_cell"] == tc]
             assert sum(r["successes"] for r in mine) == _cell(_arm(x, cell), tc)["successes"]
             assert [r["n"] for r in mine] == [25, 25, 25, 25]
+        # §17.12's success per arm and round: the 2 task cells pooled, n = 2 x templates read
+        pooled = [r for r in rows if r["arm"] == cell and r["task_cell"] == "all"]
+        assert [r["n"] for r in pooled] == [50, 50, 50, 50]
+        for k, p in enumerate(pooled):
+            ts = range(200 + 25 * k, 225 + 25 * k)
+            assert p["round"] == k + 1
+            assert p["successes"] == sum(int(success(src, ts, tc, 200).sum()) for tc in NR_FAR)
+            assert p["rate"] == pytest.approx(p["successes"] / 50)
     runs = x["rounds"]["runs"]
     assert [r["run_id"] for r in runs] == ids                # in start order
     assert runs[0]["started_utc"] == "2026-11-12T08:10:00+00:00"
@@ -418,6 +426,16 @@ def test_a_cell_off_the_experiment_refuses(root):
     root.run(SONNET, "W-nd-0", records("R10 W-npd-0", "W-nd-0", range(200, 201), NR_FAR, 200),
              model=SONNET_MODEL)
     with pytest.raises(hh.Refusal, match="is not one of"):
+        _read(root)
+
+
+def test_a_single_turn_run_in_an_experiment_refuses(root):
+    """`persistgym_h1h3.discover` admits a single-turn run beside any profile's cells, so R12's
+    own check refuses every run off the experiment's registered cells."""
+    root.sonnet()
+    root.run(SONNET, "single-turn", records("R8 single-turn", "single-turn", range(200, 225),
+                                            NR_FAR, 200), model=SONNET_MODEL)
+    with pytest.raises(hh.Refusal, match="cell 'single-turn' is not one of R12's"):
         _read(root)
 
 
@@ -519,7 +537,8 @@ def test_a_bug_in_the_replay_stops_the_analysis_even_as_provisional(root, monkey
 
 def test_the_summary_names_the_caveats_and_every_reading(root):
     root.all()
-    text = r12.summary(_read(root))
+    r = _read(root)
+    text = r12.summary(r)
     for needle in ("Exploratory: no test", "Not a model comparison", "not concurrent with R8's",
                    "**1. Success:**", "**2. §2.8 accounting**", "**3. Choices",
                    "**4. Contrasts**", "**5. Responses:**", "**6. Rounds**",
@@ -527,6 +546,24 @@ def test_the_summary_names_the_caveats_and_every_reading(root):
                    "W-b-0 - F-0 (R8), derived-rec-near"):
         assert needle in text, needle
     assert "PROVISIONAL" in text
+    # §17.12's "What it does not show", in the readings and in the summary
+    assert r["does_not_show"] == list(r12.DOES_NOT_SHOW)
+    assert "## What it does not show" in text
+    for needle in ("one model per provider in the confirmatory sense",
+                   "the same synthetic task family", "thinking text not inspected",
+                   "not matched to Haiku's medium", "Three wordings beside R10's two, one run each",
+                   "not a no-effect control", "One block size (W // 2)",
+                   "on Haiku's short replies, without notes",
+                   "Experiment 2 bootstraps over at most 25 templates"):
+        assert needle in text, needle
+        assert any(needle in x for x in r12.DOES_NOT_SHOW), needle
+    # and next to the readings they bear on
+    for needle in (r12.NOTE_NEUTRAL, r12.NOTE_THINKING, r12.NOTE_EFFORT, r12.NOTE_BLOCK):
+        assert needle in text, needle
+    assert text.index(r12.NOTE_NEUTRAL) > text.index("**4. Contrasts**")
+    assert text.index(r12.NOTE_EFFORT) > text.index("## 7. Experiment 2 beside Haiku")
+    assert text.index(r12.NOTE_BLOCK) > text.index("**8. Cost and context**")
+    assert text.count(r12.NOTE_NEUTRAL) == 1             # experiment 1's contrasts only
 
 
 def test_main_writes_its_three_files(root, tmp_path):
@@ -559,12 +596,24 @@ def _record(eid, cell=NR_FAR[0], template="main-000200", n_requests=4, refusals=
             "designed": {"evidence_steps": [1], "gap_steps_latest": 2}}
 
 
-def _line(eid, step, *, thinking=False, text="x", stop="end_turn", info=None):
-    content = ([{"type": "thinking", "thinking": ""}] if thinking else []) + [
-        {"type": "text", "text": text}]
+def _line(eid, step, *, thinking=False, text="x", stop="end_turn", info=None, payload=None,
+          redacted=False):
+    content = (([{"type": "thinking", "thinking": ""}] if thinking else [])
+               + ([{"type": "redacted_thinking", "data": "opaque"}] if redacted else [])
+               + [{"type": "text", "text": text}])
     return {"episode_id": eid, "kind": "step", "turn": step, "pending_step": step,
-            "is_lookup_result": False, "info": info or {}, "payload": PAYLOAD,
+            "is_lookup_result": False, "info": info or {}, "payload": payload or PAYLOAD,
             "response": {"content": content, "stop_reason": stop}}
+
+
+def _payload(*replies: str) -> dict:
+    """A need step's first request that retains these replies."""
+    msgs = []
+    for i, reply in enumerate(replies):
+        msgs += [{"role": "user", "content": f"obs {i}"},
+                 {"role": "assistant", "content": [{"type": "text", "text": reply}]}]
+    return {"system": "Follow the rules.",
+            "messages": [*msgs, {"role": "user", "content": "pick:\nA) 12\nI) 568\n"}]}
 
 
 def _resolved(cell, *recs, run="run"):
@@ -590,10 +639,56 @@ def test_reading_5_from_a_transcript(tmp_path):
     assert (reading["episodes"], reading["responses"], reading["refused_responses"]) == (1, 4, 1)
     assert reading["refusal_categories"] == {"refusal:bio": 1}
     assert (reading["with_thinking"], reading["responses_in_transcript"]) == (2, 4)
+    assert reading["with_redacted_thinking"] == 0
     # the need step's first request (step 3) retains one reply, "noted 568", of 9 characters
     assert reading["at_need"][NR_FAR[0]] == {"episodes": 1, "retained_replies_median": 1,
-                                             "retained_reply_chars_median": 9.0}
-    assert reading["at_need"][NR_FAR[1]]["episodes"] == 0
+                                             "retained_replies_pooled": 1, "reply_chars_median": 9.0,
+                                             "chars_per_episode_median": 9.0}
+    assert reading["at_need"][NR_FAR[1]] == {"episodes": 0, "retained_replies_median": None,
+                                             "retained_replies_pooled": 0, "reply_chars_median": None,
+                                             "chars_per_episode_median": None}
+
+
+def test_reading_5_gives_the_length_of_one_retained_reply_not_an_episodes_total(tmp_path):
+    """§17.12's "the retained replies' median length at the need step": the median over the
+    arm's retained replies in a task cell, pooled, beside how many an episode retains. The
+    episode's total, the reply count times the reply length, is kept apart."""
+    two = _payload("noted 568", "ok")                     # 9 and 2 characters
+    one = _payload("0123456789")                          # 10 characters
+    e1, e2 = _record("e1"), _record("e2")
+    _write(tmp_path / NOTES / "run" / "transcript.jsonl.gz",
+           [*(_line("e1", s, payload=two if s == 3 else None) for s in range(4)),
+            *(_line("e2", s, payload=one if s == 3 else None) for s in range(4))])
+    arm = r12.Arm("W-n-0", "W-n-0", HAIKU, NOTES, _resolved("W-n-0", e1, e2), [])
+    reading, _ = r12.responses(arm, arm.resolved, NR_FAR, 300, tmp_path,
+                               {"e1": FACT, "e2": FACT})
+    assert reading["at_need"][NR_FAR[0]] == {
+        "episodes": 2, "retained_replies_median": 1.5, "retained_replies_pooled": 3,
+        "reply_chars_median": 9.0,                       # median of 9, 2 and 10
+        "chars_per_episode_median": 10.5}                # median of 11 and 10
+
+
+def test_reading_5_counts_a_redacted_thinking_block_and_names_it(tmp_path):
+    """The harness's wire treats `redacted_thinking` as a thinking block
+    (`harnesses.wire.THINKING_BLOCKS`), so reading 5 counts it, and also says how many."""
+    _write(tmp_path / SONNET / "run" / "transcript.jsonl.gz",
+           [_line("e1", 0, redacted=True), _line("e1", 1, thinking=True, redacted=True),
+            _line("e1", 2, thinking=True), _line("e1", 3)])
+    rec = _record("e1")
+    arm = r12.Arm("F-0", "F-0", SONNET_MODEL, SONNET, _resolved("F-0", rec), [])
+    reading, _ = r12.responses(arm, arm.resolved, NR_FAR, 225, tmp_path, {"e1": FACT})
+    assert (reading["with_thinking"], reading["with_redacted_thinking"]) == (3, 2)
+    assert reading["thinking_share"] == pytest.approx(0.75)
+
+
+def test_a_redacted_thinking_block_is_a_warning(root, monkeypatch):
+    root.sonnet()
+    _final(monkeypatch)
+    monkeypatch.setattr(r12, "responses", lambda a, *rest, **k: (
+        {"with_redacted_thinking": 2 if a.cell == "F-0" else 0}, []))
+    r = r12.readings(root.path, {}, frozenset(), allow_incomplete=True)
+    (w,) = [x for x in r["warnings"] if "redacted" in x]
+    assert w.startswith("Experiment 2, F-0: 2 response(s) hold a redacted_thinking block")
 
 
 def test_reading_5_names_a_missing_transcript_and_refuses_a_disagreeing_one(tmp_path):

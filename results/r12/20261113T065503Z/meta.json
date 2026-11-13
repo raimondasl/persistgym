@@ -1,0 +1,83 @@
+{
+  "experiment": "r12",
+  "run_id": "20261113T065503Z",
+  "cell_or_config": "persistgym_haiku_r12_notes,persistgym_sonnet_r12,persistgym_haiku_r12_block",
+  "config": {
+    "experiments": [
+      "persistgym_haiku_r12_notes",
+      "persistgym_sonnet_r12",
+      "persistgym_haiku_r12_block"
+    ],
+    "rerun_links": {
+      "20261112T222631Z-F-0-claude-sonnet-5-5": "20261112T205954Z-F-0-claude-sonnet-5-5"
+    },
+    "sweep_closed": [],
+    "allow_incomplete": false,
+    "status": "FINAL",
+    "r8_output": "results/persistgym_h1h3_haiku/20261019T003254Z",
+    "templates": {
+      "persistgym_haiku_r12_notes": "200-299",
+      "persistgym_sonnet_r12": "200-224",
+      "persistgym_haiku_r12_block": "0-199"
+    }
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {
+    "bootstrap": 4086943125952605544
+  },
+  "started_utc": "2026-11-13T06:55:03+00:00",
+  "finished_utc": "2026-11-13T06:57:47+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "readings.json",
+    "summary.md",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261112T150644Z-W-n-0-claude-haiku-5-5",
+    "20261112T152127Z-W-np-0-claude-haiku-5-5",
+    "20261112T155022Z-W-nd-0-claude-haiku-5-5",
+    "20261112T160838Z-W-nx-0-claude-haiku-5-5",
+    "20261112T162328Z-W-np-0-claude-haiku-5-5",
+    "20261112T165047Z-W-nd-0-claude-haiku-5-5",
+    "20261112T170658Z-W-nx-0-claude-haiku-5-5",
+    "20261112T171952Z-W-n-0-claude-haiku-5-5",
+    "20261112T173336Z-W-nd-0-claude-haiku-5-5",
+    "20261112T175138Z-W-nx-0-claude-haiku-5-5",
+    "20261112T180539Z-W-n-0-claude-haiku-5-5",
+    "20261112T181844Z-W-np-0-claude-haiku-5-5",
+    "20261112T184402Z-W-nx-0-claude-haiku-5-5",
+    "20261112T185728Z-W-n-0-claude-haiku-5-5",
+    "20261112T191112Z-W-np-0-claude-haiku-5-5",
+    "20261112T193815Z-W-nd-0-claude-haiku-5-5",
+    "20261112T195445Z-W-n-0-claude-sonnet-5-5",
+    "20261112T202234Z-W-np-0-claude-sonnet-5-5",
+    "20261112T205954Z-F-0-claude-sonnet-5-5",
+    "20261112T222631Z-F-0-claude-sonnet-5-5",
+    "20261112T235047Z-W-b-0-claude-haiku-5-5",
+    "20261113T011523Z-W-b-0-claude-haiku-5-5",
+    "20261113T023608Z-W-b-0-claude-haiku-5-5",
+    "20261113T035847Z-W-b-0-claude-haiku-5-5"
+  ],
+  "config_hash": "26affa48e6ae2e7cefe7ab5075669d44e27cf6e07858b9403617e16191c40ad2",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "8a9c32f96fd178f0f6659a8f9bdca3dd0c829bfb",
+  "git_dirty": false
+}

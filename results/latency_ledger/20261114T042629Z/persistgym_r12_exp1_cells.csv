@@ -1,0 +1,5 @@
+model,tier_served,harness_cell,variant,n_runs,n_records,n_calls,n_calls_gate_waited,median_s_per_call,median_s_per_call_runs_gate_held_none,p90_s_per_call,median_calls_per_record,median_model_s_per_record,output_tokens_per_call
+claude-haiku-5-5,standard,W-n-0,base,4,200,4812,0,1.125,1.125,2.0,24.0,31.1,103
+claude-haiku-5-5,standard,W-nd-0,base,4,200,4812,0,1.375,1.375,2.781,24.0,38.1,209
+claude-haiku-5-5,standard,W-np-0,base,4,200,4812,0,2.328,2.328,4.266,24.0,62.9,544
+claude-haiku-5-5,standard,W-nx-0,base,4,200,4812,0,1.125,1.125,2.0,24.0,31.0,108

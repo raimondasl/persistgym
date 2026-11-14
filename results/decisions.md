@@ -1998,3 +1998,40 @@ Both windows' success intervals are 100 to 100 or 0 to 0 in every cell. F-0's ar
 **A clerical fix in PREREG.md.** The index line of §17 ("Amendments made: ...") now lists R12 (2026-11-11, §17.12). R10's and R11's commits added themselves to that line, and R12's commit left itself out. No amendment text changes.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the runs, the departures and the readings. It adds no spending approval. The pull request is $0.
+
+## 2026-11-14: Exploratory: latency in the study's records, by harness configuration
+**Question.** The researcher asked what the study's recorded latencies show by harness configuration (2026-11-13). PREREG registers no latency outcome. The study recorded latency only as an operational field. D20's latency-incident rule reads it (PREREG §7.5, §17.6), and every `costs.csv` row carries its batch's median seconds per call. ARC's 12 h clock (§17.5) is a wall-clock limit, which slow calls run into. Exploratory, $0, after all results were read.
+
+**Method.** `analysis/latency_ledger.py` reads three sources. Output: `results/latency_ledger/20261114T042629Z/` (commit `c9f88e5`, clean).
+- **For ARC,** each path run's `meta.json` and `costs.csv` row, and the counted run of each game and configuration as H4's reading flags it.
+- **ARC's published recordings** of Gemini 3.8 Flash at high effort (`results/arc_public_ops/20261001T185155Z/recordings_per_action.csv`).
+- **For PersistGym,** each episode record's per-call timings (`call_latency_s` in `episodes.jsonl`) in the sweeps from luna's main sweep to R12, without validity runs or pilots. Cells are pooled by model, tier, harness cell and variant, so the restated-at-need control is its own row.
+
+An independent agent, with its own code from the same files and without the script, matched the ARC ranges, the clock endings, the published medians and the Haiku medians of a first draft. A review of the branch, with each finding checked adversarially and a completeness critic, led to the variant split, the per-action and matched-run comparisons, the published mean step, and the corrections to the ledger point and the drift wording below.
+
+**Findings (exploratory):**
+- **ARC.** The counted runs on the four path games, on Gemini 3.8 Flash at high thinking on the standard tier. S0 and S4 took turns over 6-9 October, and S1 and S2 ran on 10-12 October, one game at a time.
+  - Wall clock per action, per run: S0 76.4-202.3 s, S1 32.6-111.7 s, S2 53.0-116.7 s and S4 26.7-59.0 s.
+  - Median seconds per model call, per run: S0 51.0-176.0 s, S1 15.5-80.8 s, S2 18.1-93.8 s and S4 9.0-31.5 s. S1's, S2's and S4's calls include their summary calls, and S0 makes none, so seconds per action is the comparable measure.
+  - Reasoning tokens per action, per run: S0 3,185-28,403 and S4 2,315-7,295. On FT09, SB26 and CD82, S0's runs used far more than S4's. On R11L, S0 used less than half of S4's (3,185 against 7,295) and was still slower per action (76.4 against 59.0 s).
+  - The 12 h clock ended S0's FT09 and CD82 runs. The FT09 original, which its re-run replaced, also hit it. No counted S1, S2 or S4 run did. The longest took 10.09 h (S1), 9.27 h (S2) and 4.61 h (S4).
+- **ARC's published recordings** also have Standard slower than the Provider Adapter. Over 10 games, the median of the mean step is 83.0 s against 22.1 s, and the median of the median step 80.1 s against 5.9 s. They are timed from recording timestamps, on other dates, so they are not set beside our numbers.
+- **PersistGym, claude-haiku-5-5** on the standard tier.
+  - Pooled over the runs whose spend gate held no call, the median seconds per call were F-0 0.77, W-0 0.89, W-b-0 0.94 and W-n-0 0.95. That spread is smaller than the spread of W-n-0's own runs across batches from 24 October to 12 November (0.94-1.16 s). So those four cells are not ranked.
+  - R12 experiment 1 played the same 200 episodes in all four notes cells, in rotated order on 12 November. There, W-n-0 and W-nx-0 both took 1.13 s per call, W-nd-0 1.38 s and W-np-0 2.33 s. W-np-0 wrote 544 output tokens per call, against W-n-0's 103.
+- **The other models.** gpt-6-luna on Flex: F-0 1.67 (the restated-at-need control 1.61), W-0 1.38, W-n-0 1.64 and Σ-n-0 1.59 s per call. claude-sonnet-5-5 (R12, 25 templates): F-0 1.56, W-n-0 2.28 and W-np-0 3.06 s per call.
+- **The spend gate's waits put three runs' medians above `costs.csv`'s.** In a parallel paid run, the runner's per-call timing (`call_latency_s`) wraps the whole send, including any wait at the per-call spend gate. `costs.csv`'s `latency_s` takes its median from the transport's timing (`harnesses/pricing.py`), which starts after the gate. Rows that `harnesses/account.py` rebuilt for a killed run, such as R12's Sonnet F-0 run, take the runner's timings instead. The gate held calls in four runs:
+  - R8's F-0 repeat run and the restated-at-need control's repeat run: 1,475 and 1,481 of 3,800 calls. Their episodes' medians are 0.844 and 0.828 s, against 0.765 and 0.750 in `costs.csv`.
+  - A short W-0 run of 2026-10-18: 40 of 178 calls, 0.829 s against 0.813.
+  - R11's run: 17 of 9,440 calls. Its two medians agree (0.969 s).
+
+  Four runs the gate never held, or that recorded no gate, differ by 0.001-0.008 s: two of R10's three runs (W-np-0's first and W-npd-0), R12's first W-n-0 run and an 8-episode luna F-0 run of 10 October. The runner rounds each call to the millisecond, and its clock also covers the transport's checks and bookkeeping around the call. The script reports both medians and the calls that waited. D20 reads only ARC's rows, and ARC has no such gate.
+
+**What it does not show:**
+- **Why the configurations differ in speed.** S0 used more reasoning tokens per action than S4 on three games and fewer on R11L, where it was still slower. That is an association, not a measured cause.
+- **That S0 would have scored more with more time.**
+- **Like-for-like cell contrasts outside R12 experiment 1.** Each pooled PersistGym cell mixes runs from different dates, template sets and numbers of episodes in flight (2 to 16 for claude-haiku-5-5).
+- **Anything about other models, providers, tiers or efforts.** Latency here is mostly the provider's response time when each run happened. It also includes retry waits, and on PersistGym any wait at the spend gate. It drifted within the study: three of S0's four counted runs took 2.1-2.4 times its pilot's seconds per call (§17.6). The fourth, on R11L, the pilot's own game, took 51.0 s against the pilot's 73.3 s. The configurations ran at different times, with one counted run per game and configuration on ARC. So a difference between configurations mixes what the configuration asks of the model with when and how it ran.
+- **A comparison between models.** The models differ in provider, tier and dates, and the ARC and PersistGym numbers come from different models. None of them are compared.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the summary. It adds no spending approval. The pull request is $0.

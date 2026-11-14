@@ -1,0 +1,3 @@
+harness,n_games,s_per_step_median_min,s_per_step_median_max,s_per_step_median_median,s_per_step_mean_min,s_per_step_mean_max,s_per_step_mean_median,reasoning_per_step_mean_median
+standard,10,32.9,131.4,80.1,49.2,128.3,83.0,26083
+provider_adapter,10,4.3,26.3,5.9,12.1,40.1,22.1,4690

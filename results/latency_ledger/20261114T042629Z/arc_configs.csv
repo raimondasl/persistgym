@@ -1,0 +1,5 @@
+config,n_counted_runs,games,s_per_action_min,s_per_action_max,s_per_action_median,median_s_per_call_min,median_s_per_call_max,median_s_per_call_median,wall_clock_h_max,n_clock_endings,reasoning_tokens_per_action_min,reasoning_tokens_per_action_max
+S0,4,cd82 ft09 r11l sb26,76.4,202.3,175.3,50.977,175.953,163.37,12.03,2,3185,28403
+S1,4,cd82 ft09 r11l sb26,32.6,111.7,77.1,15.469,80.797,33.343,10.09,0,3530,16264
+S2,4,cd82 ft09 r11l sb26,53.0,116.7,108.2,18.14,93.758,80.984,9.27,0,6731,18173
+S4,4,cd82 ft09 r11l sb26,26.7,59.0,37.9,9.047,31.547,15.16,4.61,0,2315,7295

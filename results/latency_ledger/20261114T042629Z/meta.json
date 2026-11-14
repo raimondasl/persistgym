@@ -1,0 +1,56 @@
+{
+  "experiment": "latency_ledger",
+  "run_id": "20261114T042629Z",
+  "cell_or_config": "all",
+  "config": {
+    "published": "results/arc_public_ops/20261001T185155Z/recordings_per_action.csv",
+    "h4": "results/arc_h4/20261012T174002Z/h4.json",
+    "persistgym_experiments": [
+      "persistgym",
+      "persistgym_haiku",
+      "persistgym_haiku_notes",
+      "persistgym_haiku_provenance",
+      "persistgym_haiku_control",
+      "persistgym_haiku_r12_notes",
+      "persistgym_sonnet_r12",
+      "persistgym_haiku_r12_block"
+    ],
+    "r12_exp1": "persistgym_haiku_r12_notes"
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {},
+  "started_utc": "2026-11-14T04:26:29+00:00",
+  "finished_utc": "2026-11-14T04:26:31+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "arc_configs.csv",
+    "arc_runs.csv",
+    "arc_published.csv",
+    "persistgym_cells.csv",
+    "persistgym_r12_exp1_cells.csv",
+    "persistgym_runs.csv",
+    "summary.md",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "config_hash": "6b91640861f59b577eb321306a0c4f42e43c4930933f94f17beb90a1a2e8ead2",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "c9f88e51b72103e15dfdf4e9f882627a8ad3600a",
+  "git_dirty": false
+}

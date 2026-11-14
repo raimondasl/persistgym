@@ -1,0 +1,5794 @@
+{
+  "prereg": "PREREG.md §17.12 (amendment R12)",
+  "block": "8-r12",
+  "status": "FINAL",
+  "experiments_in_reading": [
+    "persistgym_haiku_r12_notes",
+    "persistgym_sonnet_r12",
+    "persistgym_haiku_r12_block"
+  ],
+  "incomplete": [],
+  "rerun_links": {
+    "20261112T222631Z-F-0-claude-sonnet-5-5": "20261112T205954Z-F-0-claude-sonnet-5-5"
+  },
+  "sweep_closed": [],
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 4086943125952605544,
+    "interval": "90% percentile, template-cluster",
+    "experiments_1_2": "over the templates read, mapped to 0..n-1",
+    "experiment_3": "R8 to R11's resamples (T = 200), by template number"
+  },
+  "experiments": {
+    "persistgym_haiku_r12_notes": {
+      "label": "Experiment 1",
+      "experiment": "persistgym_haiku_r12_notes",
+      "model": "claude-haiku-5-5",
+      "cells": [
+        "W-n-0",
+        "W-np-0",
+        "W-nd-0",
+        "W-nx-0"
+      ],
+      "task_cells": [
+        "observed-nonrec-far",
+        "derived-nonrec-far"
+      ],
+      "templates_registered": "200-299",
+      "templates_read": 100,
+      "templates": "200-299",
+      "left_out": [],
+      "templates_never_played": 0,
+      "resamples_over": 100,
+      "deviations": [],
+      "accounting_check": {
+        "checked": 800,
+        "bugs": [],
+        "missing_transcripts": []
+      },
+      "exclusions": [
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-np-0",
+          "cell": "W-np-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-np-0",
+          "cell": "W-np-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-nd-0",
+          "cell": "W-nd-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-nd-0",
+          "cell": "W-nd-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-nx-0",
+          "cell": "W-nx-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-nx-0",
+          "cell": "W-nx-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        }
+      ],
+      "runs": [
+        {
+          "run_id": "20261112T150644Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T15:06:46+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T152127Z-W-np-0-claude-haiku-5-5",
+          "cell": "W-np-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T15:21:29+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T155022Z-W-nd-0-claude-haiku-5-5",
+          "cell": "W-nd-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T15:50:24+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T160838Z-W-nx-0-claude-haiku-5-5",
+          "cell": "W-nx-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T16:08:41+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T162328Z-W-np-0-claude-haiku-5-5",
+          "cell": "W-np-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T16:23:30+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T165047Z-W-nd-0-claude-haiku-5-5",
+          "cell": "W-nd-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T16:50:49+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T170658Z-W-nx-0-claude-haiku-5-5",
+          "cell": "W-nx-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T17:06:59+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T171952Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T17:19:54+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T173336Z-W-nd-0-claude-haiku-5-5",
+          "cell": "W-nd-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T17:33:37+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T175138Z-W-nx-0-claude-haiku-5-5",
+          "cell": "W-nx-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T17:51:39+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T180539Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T18:05:40+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T181844Z-W-np-0-claude-haiku-5-5",
+          "cell": "W-np-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T18:18:45+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T184402Z-W-nx-0-claude-haiku-5-5",
+          "cell": "W-nx-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T18:44:04+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T185728Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T18:57:29+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T191112Z-W-np-0-claude-haiku-5-5",
+          "cell": "W-np-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T19:11:13+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T193815Z-W-nd-0-claude-haiku-5-5",
+          "cell": "W-nd-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T19:38:16+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        }
+      ],
+      "arms": [
+        {
+          "arm": "W-n-0",
+          "cell": "W-n-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "counted_repeat_0": 200,
+          "cells": [
+            {
+              "kind": "W-n-0",
+              "cell": "W-n-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 3,
+              "rate": 0.03,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 79
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.01,
+                0.06
+              ]
+            },
+            {
+              "kind": "W-n-0",
+              "cell": "W-n-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 5,
+              "rate": 0.05,
+              "content_failures": {
+                "incomplete": 2,
+                "unparsed": 79
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 15
+              },
+              "episodes_with_a_refusal": 12,
+              "interval_90": [
+                0.02,
+                0.09
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-n-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 3,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 3,
+                "rate": 0.03
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 97,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 3,
+                "rate": 0.03
+              },
+              "used_given_carried": {
+                "n": 3,
+                "successes": 3,
+                "rate": 1.0
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-n-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 34,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 5,
+                "rate": 0.05
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 66,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 34,
+                "rate": 0.34
+              },
+              "used_given_carried": {
+                "n": 34,
+                "successes": 5,
+                "rate": 0.14705882352941177
+              },
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 3,
+              "correct": 3
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 5,
+              "correct": 5
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.043496507200000006,
+              "cost_missing": 0,
+              "output_tokens_mean": 2093.56,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 546706.6,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41173331362745574,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.0437109893,
+              "cost_missing": 0,
+              "output_tokens_mean": 2838.79,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 548652.07,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4166338605083546,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 200,
+            "runs": [
+              "20261112T150644Z-W-n-0-claude-haiku-5-5",
+              "20261112T171952Z-W-n-0-claude-haiku-5-5",
+              "20261112T180539Z-W-n-0-claude-haiku-5-5",
+              "20261112T185728Z-W-n-0-claude-haiku-5-5"
+            ],
+            "responses": 4812,
+            "responses_not_in_transcript": [],
+            "refused_responses": 22,
+            "refused_share": 0.00457190357439734,
+            "refusal_categories": {
+              "refusal:bio": 22
+            },
+            "responses_in_transcript": 4812,
+            "with_thinking": 2460,
+            "thinking_share": 0.5112219451371571,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1399,
+                "reply_chars_median": 103.0,
+                "chars_per_episode_median": 1403.0
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1399,
+                "reply_chars_median": 107.0,
+                "chars_per_episode_median": 1617.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-np-0",
+          "cell": "W-np-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "counted_repeat_0": 200,
+          "cells": [
+            {
+              "kind": "W-np-0",
+              "cell": "W-np-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 85,
+              "rate": 0.85,
+              "content_failures": {
+                "incomplete": 2,
+                "unparsed": 6
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 39
+              },
+              "episodes_with_a_refusal": 15,
+              "interval_90": [
+                0.79,
+                0.91
+              ]
+            },
+            {
+              "kind": "W-np-0",
+              "cell": "W-np-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 86,
+              "rate": 0.86,
+              "content_failures": {
+                "incomplete": 3,
+                "unparsed": 7
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 52
+              },
+              "episodes_with_a_refusal": 20,
+              "interval_90": [
+                0.8,
+                0.9104999999999928
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-np-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 87,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 85,
+                "rate": 0.85
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 13,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 87,
+                "rate": 0.87
+              },
+              "used_given_carried": {
+                "n": 87,
+                "successes": 85,
+                "rate": 0.9770114942528736
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-np-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 89,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 86,
+                "rate": 0.86
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 11,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 89,
+                "rate": 0.89
+              },
+              "used_given_carried": {
+                "n": 89,
+                "successes": 86,
+                "rate": 0.9662921348314607
+              },
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 85,
+              "correct": 85
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 86,
+              "correct": 86
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.054009246749999996,
+              "cost_missing": 0,
+              "output_tokens_mean": 12635.46,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 567651.19,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.3563498210934782,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.054741939249999996,
+              "cost_missing": 0,
+              "output_tokens_mean": 13560.88,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 568972.01,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.3539196945733763,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 200,
+            "runs": [
+              "20261112T152127Z-W-np-0-claude-haiku-5-5",
+              "20261112T162328Z-W-np-0-claude-haiku-5-5",
+              "20261112T181844Z-W-np-0-claude-haiku-5-5",
+              "20261112T191112Z-W-np-0-claude-haiku-5-5"
+            ],
+            "responses": 4812,
+            "responses_not_in_transcript": [],
+            "refused_responses": 91,
+            "refused_share": 0.018911055694098088,
+            "refusal_categories": {
+              "refusal:bio": 91
+            },
+            "responses_in_transcript": 4812,
+            "with_thinking": 4543,
+            "thinking_share": 0.9440980881130507,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 11.0,
+                "retained_replies_pooled": 1157,
+                "reply_chars_median": 1137.0,
+                "chars_per_episode_median": 12854.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 11.0,
+                "retained_replies_pooled": 1149,
+                "reply_chars_median": 1147.0,
+                "chars_per_episode_median": 13785.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-nd-0",
+          "cell": "W-nd-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "counted_repeat_0": 200,
+          "cells": [
+            {
+              "kind": "W-nd-0",
+              "cell": "W-nd-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 35,
+              "rate": 0.35,
+              "content_failures": {
+                "incomplete": 2,
+                "unparsed": 54
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 12
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.27,
+                0.43
+              ]
+            },
+            {
+              "kind": "W-nd-0",
+              "cell": "W-nd-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 44,
+              "rate": 0.44,
+              "content_failures": {
+                "incomplete": 5,
+                "unparsed": 44
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 47
+              },
+              "episodes_with_a_refusal": 19,
+              "interval_90": [
+                0.36,
+                0.52
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-nd-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 38,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 35,
+                "rate": 0.35
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 62,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 38,
+                "rate": 0.38
+              },
+              "used_given_carried": {
+                "n": 38,
+                "successes": 35,
+                "rate": 0.9210526315789473
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-nd-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 67,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 44,
+                "rate": 0.44
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 33,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 67,
+                "rate": 0.67
+              },
+              "used_given_carried": {
+                "n": 67,
+                "successes": 44,
+                "rate": 0.6567164179104478
+              },
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 35,
+              "correct": 35
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 44,
+              "correct": 44
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.0459855787,
+              "cost_missing": 0,
+              "output_tokens_mean": 4453.84,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 553246.34,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.39914176386598416,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.04674562095,
+              "cost_missing": 0,
+              "output_tokens_mean": 5590.59,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 554887.41,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.39817234274607166,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 200,
+            "runs": [
+              "20261112T155022Z-W-nd-0-claude-haiku-5-5",
+              "20261112T165047Z-W-nd-0-claude-haiku-5-5",
+              "20261112T173336Z-W-nd-0-claude-haiku-5-5",
+              "20261112T193815Z-W-nd-0-claude-haiku-5-5"
+            ],
+            "responses": 4812,
+            "responses_not_in_transcript": [],
+            "refused_responses": 59,
+            "refused_share": 0.012261014131338321,
+            "refusal_categories": {
+              "refusal:bio": 59
+            },
+            "responses_in_transcript": 4812,
+            "with_thinking": 3486,
+            "thinking_share": 0.7244389027431422,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1350,
+                "reply_chars_median": 140.0,
+                "chars_per_episode_median": 1961.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1334,
+                "reply_chars_median": 156.0,
+                "chars_per_episode_median": 2582.5
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-nx-0",
+          "cell": "W-nx-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "counted_repeat_0": 200,
+          "cells": [
+            {
+              "kind": "W-nx-0",
+              "cell": "W-nx-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 1,
+              "rate": 0.01,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 89
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 2
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                0.0,
+                0.03
+              ]
+            },
+            {
+              "kind": "W-nx-0",
+              "cell": "W-nx-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 1,
+              "rate": 0.01,
+              "content_failures": {
+                "incomplete": 3,
+                "unparsed": 84
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 13
+              },
+              "episodes_with_a_refusal": 9,
+              "interval_90": [
+                0.0,
+                0.03
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-nx-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 3,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 1,
+                "rate": 0.01
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 97,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 3,
+                "rate": 0.03
+              },
+              "used_given_carried": {
+                "n": 3,
+                "successes": 1,
+                "rate": 0.3333333333333333
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-nx-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 26,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 1,
+                "rate": 0.01
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 74,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 26,
+                "rate": 0.26
+              },
+              "used_given_carried": {
+                "n": 26,
+                "successes": 1,
+                "rate": 0.038461538461538464
+              },
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 1,
+              "correct": 1
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 1,
+              "correct": 1
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.043813817100000006,
+              "cost_missing": 0,
+              "output_tokens_mean": 2338.55,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 549211.56,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41172851496425167,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.04384417475,
+              "cost_missing": 0,
+              "output_tokens_mean": 2841.19,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 550255.05,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4165008571934051,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 200,
+            "runs": [
+              "20261112T160838Z-W-nx-0-claude-haiku-5-5",
+              "20261112T170658Z-W-nx-0-claude-haiku-5-5",
+              "20261112T175138Z-W-nx-0-claude-haiku-5-5",
+              "20261112T184402Z-W-nx-0-claude-haiku-5-5"
+            ],
+            "responses": 4812,
+            "responses_not_in_transcript": [],
+            "refused_responses": 15,
+            "refused_share": 0.003117206982543641,
+            "refusal_categories": {
+              "refusal:bio": 15
+            },
+            "responses_in_transcript": 4812,
+            "with_thinking": 2473,
+            "thinking_share": 0.5139235245220283,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1399,
+                "reply_chars_median": 115.0,
+                "chars_per_episode_median": 1660.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1400,
+                "reply_chars_median": 116.0,
+                "chars_per_episode_median": 1669.5
+              }
+            }
+          }
+        }
+      ],
+      "contrasts": {
+        "W-np-0 - W-n-0": {
+          "observed-nonrec-far": {
+            "pp": 82.0,
+            "ci90": [
+              75.0,
+              88.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 81.0,
+            "ci90": [
+              74.0,
+              88.0
+            ]
+          }
+        },
+        "W-nd-0 - W-n-0": {
+          "observed-nonrec-far": {
+            "pp": 31.999999999999996,
+            "ci90": [
+              23.0,
+              41.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 39.0,
+            "ci90": [
+              30.000000000000004,
+              48.0
+            ]
+          }
+        },
+        "W-nx-0 - W-n-0": {
+          "observed-nonrec-far": {
+            "pp": -1.9999999999999998,
+            "ci90": [
+              -5.0,
+              1.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": -4.0,
+            "ci90": [
+              -8.0,
+              0.0
+            ]
+          }
+        },
+        "W-np-0 - W-nx-0": {
+          "observed-nonrec-far": {
+            "pp": 84.0,
+            "ci90": [
+              78.0,
+              90.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 85.0,
+            "ci90": [
+              79.0,
+              91.0
+            ]
+          }
+        },
+        "W-np-0 - W-nd-0": {
+          "observed-nonrec-far": {
+            "pp": 50.0,
+            "ci90": [
+              40.0,
+              60.00000000000001
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 42.0,
+            "ci90": [
+              31.000000000000007,
+              52.0
+            ]
+          }
+        }
+      },
+      "rounds": {
+        "success": [
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 2,
+            "rate": 0.04
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 44,
+            "rate": 0.88
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 21,
+            "rate": 0.84
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 23,
+            "rate": 0.92
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 18,
+            "rate": 0.36
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 9,
+            "rate": 0.36
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 9,
+            "rate": 0.36
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 2,
+            "rate": 0.04
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 43,
+            "rate": 0.86
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 21,
+            "rate": 0.84
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 22,
+            "rate": 0.88
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 19,
+            "rate": 0.38
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 10,
+            "rate": 0.4
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 9,
+            "rate": 0.36
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 1,
+            "rate": 0.02
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 2,
+            "rate": 0.04
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 43,
+            "rate": 0.86
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 22,
+            "rate": 0.88
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 21,
+            "rate": 0.84
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 25,
+            "rate": 0.5
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 11,
+            "rate": 0.44
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 14,
+            "rate": 0.56
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 1,
+            "rate": 0.02
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 2,
+            "rate": 0.04
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 2,
+            "rate": 0.08
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 41,
+            "rate": 0.82
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 21,
+            "rate": 0.84
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-np-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 20,
+            "rate": 0.8
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 17,
+            "rate": 0.34
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 5,
+            "rate": 0.2
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nd-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 12,
+            "rate": 0.48
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "all",
+            "n": 50,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nx-0",
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          }
+        ],
+        "runs": [
+          {
+            "run_id": "20261112T150644Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "200-224",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T15:06:46+00:00",
+            "finished_utc": "2026-11-12T15:21:17+00:00"
+          },
+          {
+            "run_id": "20261112T152127Z-W-np-0-claude-haiku-5-5",
+            "arm": "W-np-0",
+            "templates": "200-224",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T15:21:29+00:00",
+            "finished_utc": "2026-11-12T15:50:13+00:00"
+          },
+          {
+            "run_id": "20261112T155022Z-W-nd-0-claude-haiku-5-5",
+            "arm": "W-nd-0",
+            "templates": "200-224",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T15:50:24+00:00",
+            "finished_utc": "2026-11-12T16:08:28+00:00"
+          },
+          {
+            "run_id": "20261112T160838Z-W-nx-0-claude-haiku-5-5",
+            "arm": "W-nx-0",
+            "templates": "200-224",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T16:08:41+00:00",
+            "finished_utc": "2026-11-12T16:23:17+00:00"
+          },
+          {
+            "run_id": "20261112T162328Z-W-np-0-claude-haiku-5-5",
+            "arm": "W-np-0",
+            "templates": "225-249",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T16:23:30+00:00",
+            "finished_utc": "2026-11-12T16:50:39+00:00"
+          },
+          {
+            "run_id": "20261112T165047Z-W-nd-0-claude-haiku-5-5",
+            "arm": "W-nd-0",
+            "templates": "225-249",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T16:50:49+00:00",
+            "finished_utc": "2026-11-12T17:06:49+00:00"
+          },
+          {
+            "run_id": "20261112T170658Z-W-nx-0-claude-haiku-5-5",
+            "arm": "W-nx-0",
+            "templates": "225-249",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T17:06:59+00:00",
+            "finished_utc": "2026-11-12T17:19:41+00:00"
+          },
+          {
+            "run_id": "20261112T171952Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "225-249",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T17:19:54+00:00",
+            "finished_utc": "2026-11-12T17:33:27+00:00"
+          },
+          {
+            "run_id": "20261112T173336Z-W-nd-0-claude-haiku-5-5",
+            "arm": "W-nd-0",
+            "templates": "250-274",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T17:33:37+00:00",
+            "finished_utc": "2026-11-12T17:51:29+00:00"
+          },
+          {
+            "run_id": "20261112T175138Z-W-nx-0-claude-haiku-5-5",
+            "arm": "W-nx-0",
+            "templates": "250-274",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T17:51:39+00:00",
+            "finished_utc": "2026-11-12T18:05:30+00:00"
+          },
+          {
+            "run_id": "20261112T180539Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "250-274",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T18:05:40+00:00",
+            "finished_utc": "2026-11-12T18:18:36+00:00"
+          },
+          {
+            "run_id": "20261112T181844Z-W-np-0-claude-haiku-5-5",
+            "arm": "W-np-0",
+            "templates": "250-274",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T18:18:45+00:00",
+            "finished_utc": "2026-11-12T18:43:54+00:00"
+          },
+          {
+            "run_id": "20261112T184402Z-W-nx-0-claude-haiku-5-5",
+            "arm": "W-nx-0",
+            "templates": "275-299",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T18:44:04+00:00",
+            "finished_utc": "2026-11-12T18:57:19+00:00"
+          },
+          {
+            "run_id": "20261112T185728Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "275-299",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T18:57:29+00:00",
+            "finished_utc": "2026-11-12T19:11:03+00:00"
+          },
+          {
+            "run_id": "20261112T191112Z-W-np-0-claude-haiku-5-5",
+            "arm": "W-np-0",
+            "templates": "275-299",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T19:11:13+00:00",
+            "finished_utc": "2026-11-12T19:38:07+00:00"
+          },
+          {
+            "run_id": "20261112T193815Z-W-nd-0-claude-haiku-5-5",
+            "arm": "W-nd-0",
+            "templates": "275-299",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-12T19:38:16+00:00",
+            "finished_utc": "2026-11-12T19:54:32+00:00"
+          }
+        ]
+      }
+    },
+    "persistgym_sonnet_r12": {
+      "label": "Experiment 2",
+      "experiment": "persistgym_sonnet_r12",
+      "model": "claude-sonnet-5-5",
+      "cells": [
+        "W-n-0",
+        "W-np-0",
+        "F-0"
+      ],
+      "task_cells": [
+        "observed-nonrec-far",
+        "derived-nonrec-far"
+      ],
+      "templates_registered": "200-224",
+      "templates_read": 25,
+      "templates": "200-224",
+      "left_out": [],
+      "templates_never_played": 0,
+      "resamples_over": 25,
+      "deviations": [],
+      "accounting_check": {
+        "checked": 100,
+        "bugs": [],
+        "missing_transcripts": []
+      },
+      "exclusions": [
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 25,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 25,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-np-0",
+          "cell": "W-np-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 25,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-np-0",
+          "cell": "W-np-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 25,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "F-0",
+          "cell": "F-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 25,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 1
+        },
+        {
+          "kind": "F-0",
+          "cell": "F-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 25,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        }
+      ],
+      "runs": [
+        {
+          "run_id": "20261112T195445Z-W-n-0-claude-sonnet-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T19:54:46+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T202234Z-W-np-0-claude-sonnet-5-5",
+          "cell": "W-np-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T20:22:36+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T205954Z-F-0-claude-sonnet-5-5",
+          "cell": "F-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T20:59:55+00:00",
+          "exit_reason": "ERROR:ProcessKilled",
+          "records": 7,
+          "records_counted": 7,
+          "model_returned": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "run_id": "20261112T222631Z-F-0-claude-sonnet-5-5",
+          "cell": "F-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T22:26:32+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 44,
+          "records_counted": 43,
+          "model_returned": [
+            "claude-sonnet-5-5"
+          ]
+        }
+      ],
+      "arms": [
+        {
+          "arm": "W-n-0",
+          "cell": "W-n-0",
+          "model": "claude-sonnet-5-5",
+          "experiment": "persistgym_sonnet_r12",
+          "counted_repeat_0": 50,
+          "cells": [
+            {
+              "kind": "W-n-0",
+              "cell": "W-n-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 25,
+              "successes": 24,
+              "rate": 0.96,
+              "content_failures": {
+                "unparsed": 1
+              },
+              "exploratory": false,
+              "stopped_responses": {},
+              "episodes_with_a_refusal": 0,
+              "interval_90": [
+                0.88,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-n-0",
+              "cell": "W-n-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 25,
+              "successes": 25,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {},
+              "episodes_with_a_refusal": 0,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-n-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 25,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 25,
+              "S_verbatim_unknown": 0,
+              "S_1": 24,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 25,
+                "successes": 24,
+                "rate": 0.96
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 25,
+                "carried": 24,
+                "rate": 0.96
+              },
+              "used_given_carried": {
+                "n": 24,
+                "successes": 24,
+                "rate": 1.0
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-n-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 25,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 25,
+              "S_verbatim_unknown": 0,
+              "S_1": 25,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 25,
+                "successes": 25,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": {
+                "n": 25,
+                "carried": 25,
+                "rate": 1.0
+              },
+              "used_given_carried": {
+                "n": 25,
+                "successes": 25,
+                "rate": 1.0
+              },
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 25,
+              "chose_an_option": 24,
+              "correct": 24
+            },
+            "derived-nonrec-far": {
+              "episodes": 25,
+              "chose_an_option": 25,
+              "correct": 25
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 25,
+              "cost_usd_billed_mean": 1.046742704,
+              "cost_missing": 0,
+              "output_tokens_mean": 7601.76,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 587065.28,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.35266408532965876,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 25,
+              "cost_usd_billed_mean": 1.043729588,
+              "cost_missing": 0,
+              "output_tokens_mean": 8127.8,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 586924.68,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.358372525755775,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 50,
+            "runs": [
+              "20261112T195445Z-W-n-0-claude-sonnet-5-5"
+            ],
+            "responses": 1242,
+            "responses_not_in_transcript": [],
+            "refused_responses": 0,
+            "refused_share": 0.0,
+            "refusal_categories": {},
+            "responses_in_transcript": 1242,
+            "with_thinking": 2,
+            "thinking_share": 0.001610305958132045,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 25,
+                "retained_replies_median": 12,
+                "retained_replies_pooled": 307,
+                "reply_chars_median": 752.0,
+                "chars_per_episode_median": 9410.0
+              },
+              "derived-nonrec-far": {
+                "episodes": 25,
+                "retained_replies_median": 12,
+                "retained_replies_pooled": 303,
+                "reply_chars_median": 766.0,
+                "chars_per_episode_median": 10356.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-np-0",
+          "cell": "W-np-0",
+          "model": "claude-sonnet-5-5",
+          "experiment": "persistgym_sonnet_r12",
+          "counted_repeat_0": 50,
+          "cells": [
+            {
+              "kind": "W-np-0",
+              "cell": "W-np-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 25,
+              "successes": 24,
+              "rate": 0.96,
+              "content_failures": {
+                "unparsed": 1
+              },
+              "exploratory": false,
+              "stopped_responses": {},
+              "episodes_with_a_refusal": 0,
+              "interval_90": [
+                0.88,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-np-0",
+              "cell": "W-np-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 25,
+              "successes": 23,
+              "rate": 0.92,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:reasoning_extraction": 8
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.84,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-np-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 25,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 25,
+              "S_verbatim_unknown": 0,
+              "S_1": 24,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 25,
+                "successes": 24,
+                "rate": 0.96
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 25,
+                "carried": 24,
+                "rate": 0.96
+              },
+              "used_given_carried": {
+                "n": 24,
+                "successes": 24,
+                "rate": 1.0
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-np-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 25,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 25,
+              "S_verbatim_unknown": 0,
+              "S_1": 25,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 25,
+                "successes": 23,
+                "rate": 0.92
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": {
+                "n": 25,
+                "carried": 25,
+                "rate": 1.0
+              },
+              "used_given_carried": {
+                "n": 25,
+                "successes": 23,
+                "rate": 0.92
+              },
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 25,
+              "chose_an_option": 24,
+              "correct": 24
+            },
+            "derived-nonrec-far": {
+              "episodes": 25,
+              "chose_an_option": 23,
+              "correct": 23
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 25,
+              "cost_usd_billed_mean": 1.127938588,
+              "cost_missing": 0,
+              "output_tokens_mean": 12661.8,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 591768.28,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.3365974262763797,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 25,
+              "cost_usd_billed_mean": 1.107748932,
+              "cost_missing": 0,
+              "output_tokens_mean": 11573.88,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 591595.56,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.34294902416103323,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 50,
+            "runs": [
+              "20261112T202234Z-W-np-0-claude-sonnet-5-5"
+            ],
+            "responses": 1242,
+            "responses_not_in_transcript": [],
+            "refused_responses": 8,
+            "refused_share": 0.00644122383252818,
+            "refusal_categories": {
+              "refusal:reasoning_extraction": 8
+            },
+            "responses_in_transcript": 1242,
+            "with_thinking": 3,
+            "thinking_share": 0.0024154589371980675,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 25,
+                "retained_replies_median": 10,
+                "retained_replies_pooled": 274,
+                "reply_chars_median": 1625.0,
+                "chars_per_episode_median": 19425.0
+              },
+              "derived-nonrec-far": {
+                "episodes": 25,
+                "retained_replies_median": 11,
+                "retained_replies_pooled": 283,
+                "reply_chars_median": 874.0,
+                "chars_per_episode_median": 14771.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "F-0",
+          "cell": "F-0",
+          "model": "claude-sonnet-5-5",
+          "experiment": "persistgym_sonnet_r12",
+          "counted_repeat_0": 50,
+          "cells": [
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 25,
+              "successes": 25,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {},
+              "episodes_with_a_refusal": 0,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 25,
+              "successes": 25,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {},
+              "episodes_with_a_refusal": 0,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "F-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 25,
+              "S_planned": 1,
+              "S_verbatim_1": 25,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 25,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 25,
+                "successes": 25,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 25,
+              "S_planned": 1,
+              "S_verbatim_1": 25,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 25,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 25,
+                "successes": 25,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": null,
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 25,
+              "cost_usd_billed_mean": 0.20749576400000003,
+              "cost_missing": 0,
+              "output_tokens_mean": 1184.16,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 686762.6,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9229309225633429,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 25,
+              "cost_usd_billed_mean": 0.200455232,
+              "cost_missing": 0,
+              "output_tokens_mean": 1285.44,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 687767.84,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9279833729940034,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 50,
+            "runs": [
+              "20261112T205954Z-F-0-claude-sonnet-5-5",
+              "20261112T222631Z-F-0-claude-sonnet-5-5"
+            ],
+            "responses": 1242,
+            "responses_not_in_transcript": [
+              {
+                "run_id": "20261112T205954Z-F-0-claude-sonnet-5-5",
+                "episode_id": "main-000203/observed-nonrec-far/base",
+                "request_index": 21
+              }
+            ],
+            "refused_responses": 0,
+            "refused_share": 0.0,
+            "refusal_categories": {},
+            "responses_in_transcript": 1241,
+            "with_thinking": 0,
+            "thinking_share": 0.0,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 24,
+                "retained_replies_median": 23.5,
+                "retained_replies_pooled": 549,
+                "reply_chars_median": 105.0,
+                "chars_per_episode_median": 2455.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 25,
+                "retained_replies_median": 23,
+                "retained_replies_pooled": 570,
+                "reply_chars_median": 107.0,
+                "chars_per_episode_median": 2692.0
+              }
+            }
+          }
+        }
+      ],
+      "contrasts": {
+        "W-np-0 - W-n-0": {
+          "observed-nonrec-far": {
+            "pp": 0.0,
+            "ci90": [
+              -7.9999999999999964,
+              7.9999999999999964
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": -7.9999999999999964,
+            "ci90": [
+              -16.000000000000004,
+              0.0
+            ]
+          }
+        },
+        "F-0 - W-n-0": {
+          "observed-nonrec-far": {
+            "pp": 4.0000000000000036,
+            "ci90": [
+              0.0,
+              12.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      }
+    },
+    "persistgym_haiku_r12_block": {
+      "label": "Experiment 3",
+      "experiment": "persistgym_haiku_r12_block",
+      "model": "claude-haiku-5-5",
+      "cells": [
+        "W-b-0"
+      ],
+      "task_cells": [
+        "observed-nonrec-near",
+        "observed-nonrec-far",
+        "observed-rec-near",
+        "observed-rec-far",
+        "derived-nonrec-near",
+        "derived-nonrec-far",
+        "derived-rec-near",
+        "derived-rec-far"
+      ],
+      "templates_registered": "0-199",
+      "templates_read": 200,
+      "templates": "0-199",
+      "left_out": [],
+      "templates_never_played": 0,
+      "resamples_over": 200,
+      "deviations": [],
+      "accounting_check": {
+        "checked": 1600,
+        "bugs": [],
+        "missing_transcripts": []
+      },
+      "exclusions": [
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "observed-rec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "observed-rec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "derived-rec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-b-0",
+          "cell": "W-b-0",
+          "variant": "base",
+          "task_cell": "derived-rec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        }
+      ],
+      "runs": [
+        {
+          "run_id": "20261112T235047Z-W-b-0-claude-haiku-5-5",
+          "cell": "W-b-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-12T23:50:48+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261113T011523Z-W-b-0-claude-haiku-5-5",
+          "cell": "W-b-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-13T01:15:24+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261113T023608Z-W-b-0-claude-haiku-5-5",
+          "cell": "W-b-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-13T02:36:10+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261113T035847Z-W-b-0-claude-haiku-5-5",
+          "cell": "W-b-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-13T03:58:48+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        }
+      ],
+      "arms": [
+        {
+          "arm": "W-b-0",
+          "cell": "W-b-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_block",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 1
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 165
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 6
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 1
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 1
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 2
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 2,
+                "unparsed": 163
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 1,
+              "correct": 0
+            },
+            "derived-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 0,
+              "correct": 0
+            }
+          },
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0129053855,
+              "cost_missing": 0,
+              "output_tokens_mean": 969.05,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 453735.98,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8488700851980043,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0122839264,
+              "cost_missing": 0,
+              "output_tokens_mean": 1372.065,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 453823.135,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8646845758535426,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.013074902450000002,
+              "cost_missing": 0,
+              "output_tokens_mean": 1190.67,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 456359.815,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8491203262495844,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.013222670525,
+              "cost_missing": 0,
+              "output_tokens_mean": 1246.895,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 478743.57,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8580652373043882,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01212486535,
+              "cost_missing": 0,
+              "output_tokens_mean": 1188.76,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 453781.605,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8659559591447079,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.011902795400000001,
+              "cost_missing": 0,
+              "output_tokens_mean": 1528.135,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 454005.665,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.87356842783008,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01228514565,
+              "cost_missing": 0,
+              "output_tokens_mean": 1365.87,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 456362.81,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8658392650356412,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01286422955,
+              "cost_missing": 0,
+              "output_tokens_mean": 1427.48,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 478995.245,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8663317837320076,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.012582990103125,
+              "cost_missing": 0,
+              "output_tokens_mean": 1286.115625,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 460725.978125,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8615587330573862,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 1600,
+            "runs": [
+              "20261112T235047Z-W-b-0-claude-haiku-5-5",
+              "20261113T011523Z-W-b-0-claude-haiku-5-5",
+              "20261113T023608Z-W-b-0-claude-haiku-5-5",
+              "20261113T035847Z-W-b-0-claude-haiku-5-5"
+            ],
+            "responses": 38858,
+            "responses_not_in_transcript": [],
+            "refused_responses": 26,
+            "refused_share": 0.0006691028874363066,
+            "refusal_categories": {
+              "refusal:bio": 26
+            },
+            "responses_in_transcript": 38858,
+            "with_thinking": 15038,
+            "thinking_share": 0.38699881620258375,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 20.0,
+                "chars_per_episode_median": 420.5
+              },
+              "observed-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 447.5
+              },
+              "observed-rec-near": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 459.5
+              },
+              "observed-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 465.0
+              },
+              "derived-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 20.0,
+                "chars_per_episode_median": 444.0
+              },
+              "derived-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 454.5
+              },
+              "derived-rec-near": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 20.0,
+                "chars_per_episode_median": 459.5
+              },
+              "derived-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 12.0,
+                "retained_replies_pooled": 2161,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 476.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-0 (R8)",
+          "cell": "W-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 6
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 177
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 3
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 2
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 5
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 172
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 14
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 5,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 0,
+              "correct": 0
+            },
+            "derived-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 0,
+              "correct": 0
+            }
+          },
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0423654869,
+              "cost_missing": 0,
+              "output_tokens_mean": 970.095,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540153.32,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4127060442764658,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.04224767455,
+              "cost_missing": 0,
+              "output_tokens_mean": 1350.46,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540114.38,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41761604273524433,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0426273049,
+              "cost_missing": 0,
+              "output_tokens_mean": 1154.985,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 542994.48,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4135215886540872,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.046382664025,
+              "cost_missing": 0,
+              "output_tokens_mean": 1259.655,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 574494.195,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.3943950904499566,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.041780378699999995,
+              "cost_missing": 0,
+              "output_tokens_mean": 1199.145,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540436.6,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4243165988387907,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.041798759025,
+              "cost_missing": 0,
+              "output_tokens_mean": 1681.485,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540697.46,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.42821925777124975,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.042168220650000005,
+              "cost_missing": 0,
+              "output_tokens_mean": 1361.29,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 543300.78,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4228999818479922,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.046072871024999996,
+              "cost_missing": 0,
+              "output_tokens_mean": 1556.84,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 575050.44,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.40199650138516546,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.04318041997187501,
+              "cost_missing": 0,
+              "output_tokens_mean": 1316.744375,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 549655.206875,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41421104021630123,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 1600,
+            "runs": [
+              "20261018T144829Z-W-0-claude-haiku-5-5",
+              "20261018T154817Z-W-0-claude-haiku-5-5",
+              "20261018T154918Z-W-0-claude-haiku-5-5"
+            ],
+            "responses": 38860,
+            "responses_not_in_transcript": [],
+            "refused_responses": 48,
+            "refused_share": 0.0012352032938754503,
+            "refusal_categories": {
+              "refusal:bio": 48
+            },
+            "responses_in_transcript": 38860,
+            "with_thinking": 14755,
+            "thinking_share": 0.3796963458569223,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 533.5
+              },
+              "observed-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 537.0
+              },
+              "observed-rec-near": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 580.5
+              },
+              "observed-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 595.0
+              },
+              "derived-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 21.0,
+                "chars_per_episode_median": 589.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 592.5
+              },
+              "derived-rec-near": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 594.0
+              },
+              "derived-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 2800,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 644.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "F-0 (R8)",
+          "cell": "F-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 199,
+              "rate": 0.995,
+              "content_failures": {
+                "incomplete": 1
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 10
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.985,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 3
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 199,
+              "rate": 0.995,
+              "content_failures": {
+                "incomplete": 1
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                0.985,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 8
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 10
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 12
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 10
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 12
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "F-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 199,
+                "rate": 0.995
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 199,
+                "rate": 0.995
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "choices_nr_far": null,
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012686527125,
+              "cost_missing": 0,
+              "output_tokens_mean": 939.39,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 638843.49,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9206337455203621,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0124090843,
+              "cost_missing": 0,
+              "output_tokens_mean": 977.0,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 639157.29,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9247458164796962,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012863809975,
+              "cost_missing": 0,
+              "output_tokens_mean": 1172.195,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 642883.46,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9208554455577377,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012624179975,
+              "cost_missing": 0,
+              "output_tokens_mean": 1154.32,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 641865.49,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9237173430215107,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01224550935,
+              "cost_missing": 0,
+              "output_tokens_mean": 1146.805,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 639013.04,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9280904658847025,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012320881325,
+              "cost_missing": 0,
+              "output_tokens_mean": 1187.84,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 639407.61,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9274425041641278,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012385354925000001,
+              "cost_missing": 0,
+              "output_tokens_mean": 1332.855,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 642386.325,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9282909003394492,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01260960745,
+              "cost_missing": 0,
+              "output_tokens_mean": 1407.97,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 643963.01,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9261583518593716,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.012518119303124998,
+              "cost_missing": 0,
+              "output_tokens_mean": 1164.796875,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 640939.964375,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.924991612635857,
+              "cache_read_share_missing": 0
+            }
+          },
+          "responses": {
+            "episodes": 1600,
+            "runs": [
+              "20261018T141157Z-F-0-claude-haiku-5-5"
+            ],
+            "responses": 38467,
+            "responses_not_in_transcript": [],
+            "refused_responses": 69,
+            "refused_share": 0.00179374528816908,
+            "refusal_categories": {
+              "refusal:bio": 69
+            },
+            "responses_in_transcript": 38467,
+            "with_thinking": 13874,
+            "thinking_share": 0.36067278446460604,
+            "with_redacted_thinking": 0,
+            "at_need": {
+              "observed-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4402,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 991.0
+              },
+              "observed-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4402,
+                "reply_chars_median": 23.0,
+                "chars_per_episode_median": 1018.5
+              },
+              "observed-rec-near": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4406,
+                "reply_chars_median": 24.0,
+                "chars_per_episode_median": 1143.0
+              },
+              "observed-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4402,
+                "reply_chars_median": 23.0,
+                "chars_per_episode_median": 1169.0
+              },
+              "derived-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4402,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 1029.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4402,
+                "reply_chars_median": 22.0,
+                "chars_per_episode_median": 1097.5
+              },
+              "derived-rec-near": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4404,
+                "reply_chars_median": 24.0,
+                "chars_per_episode_median": 1183.0
+              },
+              "derived-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 22.0,
+                "retained_replies_pooled": 4407,
+                "reply_chars_median": 24.0,
+                "chars_per_episode_median": 1237.5
+              }
+            }
+          }
+        }
+      ],
+      "contrasts": {
+        "W-b-0 - W-0 (R8)": {
+          "observed-nonrec-near": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "observed-nonrec-far": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "observed-rec-near": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "observed-rec-far": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "derived-nonrec-near": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "derived-rec-near": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          },
+          "derived-rec-far": {
+            "pp": 0.0,
+            "ci90": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "W-b-0 - F-0 (R8)": {
+          "observed-nonrec-near": {
+            "pp": 0.5000000000000004,
+            "ci90": [
+              0.0,
+              1.5000000000000013
+            ]
+          },
+          "observed-nonrec-far": {
+            "pp": -100.0,
+            "ci90": [
+              -100.0,
+              -100.0
+            ]
+          },
+          "observed-rec-near": {
+            "pp": 0.5000000000000004,
+            "ci90": [
+              0.0,
+              1.5000000000000013
+            ]
+          },
+          "observed-rec-far": {
+            "pp": 1.0000000000000009,
+            "ci90": [
+              0.0,
+              2.500000000000002
+            ]
+          },
+          "derived-nonrec-near": {
+            "pp": 1.0000000000000009,
+            "ci90": [
+              0.0,
+              2.500000000000002
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": -100.0,
+            "ci90": [
+              -100.0,
+              -100.0
+            ]
+          },
+          "derived-rec-near": {
+            "pp": 1.0000000000000009,
+            "ci90": [
+              0.0,
+              2.500000000000002
+            ]
+          },
+          "derived-rec-far": {
+            "pp": 1.0000000000000009,
+            "ci90": [
+              0.0,
+              2.500000000000002
+            ]
+          }
+        }
+      },
+      "comparators": {
+        "output": "results/persistgym_h1h3_haiku/20261019T003254Z",
+        "runs": [
+          "20261018T141157Z-F-0-claude-haiku-5-5",
+          "20261018T144829Z-W-0-claude-haiku-5-5",
+          "20261018T154817Z-W-0-claude-haiku-5-5",
+          "20261018T154918Z-W-0-claude-haiku-5-5"
+        ]
+      },
+      "cost_and_context": {
+        "arms": [
+          {
+            "arm": "W-b-0",
+            "costs": {
+              "observed-nonrec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.0129053855,
+                "cost_missing": 0,
+                "output_tokens_mean": 969.05,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 453735.98,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8488700851980043,
+                "cache_read_share_missing": 0
+              },
+              "observed-nonrec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.0122839264,
+                "cost_missing": 0,
+                "output_tokens_mean": 1372.065,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 453823.135,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8646845758535426,
+                "cache_read_share_missing": 0
+              },
+              "observed-rec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.013074902450000002,
+                "cost_missing": 0,
+                "output_tokens_mean": 1190.67,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 456359.815,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8491203262495844,
+                "cache_read_share_missing": 0
+              },
+              "observed-rec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.013222670525,
+                "cost_missing": 0,
+                "output_tokens_mean": 1246.895,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 478743.57,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8580652373043882,
+                "cache_read_share_missing": 0
+              },
+              "derived-nonrec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.01212486535,
+                "cost_missing": 0,
+                "output_tokens_mean": 1188.76,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 453781.605,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8659559591447079,
+                "cache_read_share_missing": 0
+              },
+              "derived-nonrec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.011902795400000001,
+                "cost_missing": 0,
+                "output_tokens_mean": 1528.135,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 454005.665,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.87356842783008,
+                "cache_read_share_missing": 0
+              },
+              "derived-rec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.01228514565,
+                "cost_missing": 0,
+                "output_tokens_mean": 1365.87,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 456362.81,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8658392650356412,
+                "cache_read_share_missing": 0
+              },
+              "derived-rec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.01286422955,
+                "cost_missing": 0,
+                "output_tokens_mean": 1427.48,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 478995.245,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8663317837320076,
+                "cache_read_share_missing": 0
+              },
+              "all": {
+                "n": 1600,
+                "cost_usd_billed_mean": 0.012582990103125,
+                "cost_missing": 0,
+                "output_tokens_mean": 1286.115625,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 460725.978125,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.8615587330573862,
+                "cache_read_share_missing": 0
+              }
+            },
+            "near_need_payload_S_false": {
+              "observed-nonrec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "observed-rec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "derived-nonrec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "derived-rec-near": {
+                "n": 200,
+                "S_false": 0
+              }
+            }
+          },
+          {
+            "arm": "W-0 (R8)",
+            "costs": {
+              "observed-nonrec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.0423654869,
+                "cost_missing": 0,
+                "output_tokens_mean": 970.095,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 540153.32,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.4127060442764658,
+                "cache_read_share_missing": 0
+              },
+              "observed-nonrec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.04224767455,
+                "cost_missing": 0,
+                "output_tokens_mean": 1350.46,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 540114.38,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.41761604273524433,
+                "cache_read_share_missing": 0
+              },
+              "observed-rec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.0426273049,
+                "cost_missing": 0,
+                "output_tokens_mean": 1154.985,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 542994.48,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.4135215886540872,
+                "cache_read_share_missing": 0
+              },
+              "observed-rec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.046382664025,
+                "cost_missing": 0,
+                "output_tokens_mean": 1259.655,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 574494.195,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.3943950904499566,
+                "cache_read_share_missing": 0
+              },
+              "derived-nonrec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.041780378699999995,
+                "cost_missing": 0,
+                "output_tokens_mean": 1199.145,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 540436.6,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.4243165988387907,
+                "cache_read_share_missing": 0
+              },
+              "derived-nonrec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.041798759025,
+                "cost_missing": 0,
+                "output_tokens_mean": 1681.485,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 540697.46,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.42821925777124975,
+                "cache_read_share_missing": 0
+              },
+              "derived-rec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.042168220650000005,
+                "cost_missing": 0,
+                "output_tokens_mean": 1361.29,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 543300.78,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.4228999818479922,
+                "cache_read_share_missing": 0
+              },
+              "derived-rec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.046072871024999996,
+                "cost_missing": 0,
+                "output_tokens_mean": 1556.84,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 575050.44,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.40199650138516546,
+                "cache_read_share_missing": 0
+              },
+              "all": {
+                "n": 1600,
+                "cost_usd_billed_mean": 0.04318041997187501,
+                "cost_missing": 0,
+                "output_tokens_mean": 1316.744375,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 549655.206875,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.41421104021630123,
+                "cache_read_share_missing": 0
+              }
+            },
+            "near_need_payload_S_false": {
+              "observed-nonrec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "observed-rec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "derived-nonrec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "derived-rec-near": {
+                "n": 200,
+                "S_false": 0
+              }
+            }
+          },
+          {
+            "arm": "F-0 (R8)",
+            "costs": {
+              "observed-nonrec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.012686527125,
+                "cost_missing": 0,
+                "output_tokens_mean": 939.39,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 638843.49,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9206337455203621,
+                "cache_read_share_missing": 0
+              },
+              "observed-nonrec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.0124090843,
+                "cost_missing": 0,
+                "output_tokens_mean": 977.0,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 639157.29,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9247458164796962,
+                "cache_read_share_missing": 0
+              },
+              "observed-rec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.012863809975,
+                "cost_missing": 0,
+                "output_tokens_mean": 1172.195,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 642883.46,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9208554455577377,
+                "cache_read_share_missing": 0
+              },
+              "observed-rec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.012624179975,
+                "cost_missing": 0,
+                "output_tokens_mean": 1154.32,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 641865.49,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9237173430215107,
+                "cache_read_share_missing": 0
+              },
+              "derived-nonrec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.01224550935,
+                "cost_missing": 0,
+                "output_tokens_mean": 1146.805,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 639013.04,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9280904658847025,
+                "cache_read_share_missing": 0
+              },
+              "derived-nonrec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.012320881325,
+                "cost_missing": 0,
+                "output_tokens_mean": 1187.84,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 639407.61,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9274425041641278,
+                "cache_read_share_missing": 0
+              },
+              "derived-rec-near": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.012385354925000001,
+                "cost_missing": 0,
+                "output_tokens_mean": 1332.855,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 642386.325,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9282909003394492,
+                "cache_read_share_missing": 0
+              },
+              "derived-rec-far": {
+                "n": 200,
+                "cost_usd_billed_mean": 0.01260960745,
+                "cost_missing": 0,
+                "output_tokens_mean": 1407.97,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 643963.01,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.9261583518593716,
+                "cache_read_share_missing": 0
+              },
+              "all": {
+                "n": 1600,
+                "cost_usd_billed_mean": 0.012518119303124998,
+                "cost_missing": 0,
+                "output_tokens_mean": 1164.796875,
+                "output_tokens_missing": 0,
+                "input_tokens_mean": 640939.964375,
+                "input_tokens_missing": 0,
+                "cache_read_share": 0.924991612635857,
+                "cache_read_share_missing": 0
+              }
+            },
+            "near_need_payload_S_false": {
+              "observed-nonrec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "observed-rec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "derived-nonrec-near": {
+                "n": 200,
+                "S_false": 0
+              },
+              "derived-rec-near": {
+                "n": 200,
+                "S_false": 0
+              }
+            }
+          }
+        ],
+        "block_drops": {
+          "observed-nonrec-near": {
+            "episodes": 200,
+            "drops_per_episode": 1.405,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 119,
+              "2": 81
+            }
+          },
+          "observed-nonrec-far": {
+            "episodes": 200,
+            "drops_per_episode": 1.405,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 119,
+              "2": 81
+            }
+          },
+          "observed-rec-near": {
+            "episodes": 200,
+            "drops_per_episode": 1.405,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 119,
+              "2": 81
+            }
+          },
+          "observed-rec-far": {
+            "episodes": 200,
+            "drops_per_episode": 1.6,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 80,
+              "2": 120
+            }
+          },
+          "derived-nonrec-near": {
+            "episodes": 200,
+            "drops_per_episode": 1.405,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 119,
+              "2": 81
+            }
+          },
+          "derived-nonrec-far": {
+            "episodes": 200,
+            "drops_per_episode": 1.405,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 119,
+              "2": 81
+            }
+          },
+          "derived-rec-near": {
+            "episodes": 200,
+            "drops_per_episode": 1.405,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 119,
+              "2": 81
+            }
+          },
+          "derived-rec-far": {
+            "episodes": 200,
+            "drops_per_episode": 1.6,
+            "episodes_with_a_drop": 200,
+            "distribution": {
+              "1": 80,
+              "2": 120
+            }
+          },
+          "all": {
+            "episodes": 1600,
+            "drops_per_episode": 1.45375,
+            "episodes_with_a_drop": 1600,
+            "distribution": {
+              "1": 874,
+              "2": 726
+            }
+          }
+        }
+      }
+    }
+  },
+  "beside": {
+    "templates": "200-224",
+    "n_templates": 25,
+    "arms": [
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "W-n-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 24,
+            "rate": 0.96
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 25,
+            "rate": 1.0
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 24,
+              "rate": 0.96
+            },
+            "used_given_carried": {
+              "n": 24,
+              "successes": 24,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 25,
+              "rate": 1.0
+            },
+            "used_given_carried": {
+              "n": 25,
+              "successes": 25,
+              "rate": 1.0
+            }
+          }
+        ]
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "W-np-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 24,
+            "rate": 0.96
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 23,
+            "rate": 0.92
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 24,
+              "rate": 0.96
+            },
+            "used_given_carried": {
+              "n": 24,
+              "successes": 24,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 25,
+              "rate": 1.0
+            },
+            "used_given_carried": {
+              "n": 25,
+              "successes": 23,
+              "rate": 0.92
+            }
+          }
+        ]
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "F-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 25,
+            "rate": 1.0
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 25,
+            "rate": 1.0
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": null,
+            "used_given_carried": null
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": null,
+            "used_given_carried": null
+          }
+        ]
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "W-n-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 1,
+              "rate": 0.04
+            },
+            "used_given_carried": {
+              "n": 1,
+              "successes": 1,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 10,
+              "rate": 0.4
+            },
+            "used_given_carried": {
+              "n": 10,
+              "successes": 1,
+              "rate": 0.1
+            }
+          }
+        ]
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "W-np-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 21,
+            "rate": 0.84
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 23,
+            "rate": 0.92
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 22,
+              "rate": 0.88
+            },
+            "used_given_carried": {
+              "n": 22,
+              "successes": 21,
+              "rate": 0.9545454545454546
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 24,
+              "rate": 0.96
+            },
+            "used_given_carried": {
+              "n": 24,
+              "successes": 23,
+              "rate": 0.9583333333333334
+            }
+          }
+        ]
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "W-nd-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 9,
+            "rate": 0.36
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 9,
+            "rate": 0.36
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 9,
+              "rate": 0.36
+            },
+            "used_given_carried": {
+              "n": 9,
+              "successes": 9,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 18,
+              "rate": 0.72
+            },
+            "used_given_carried": {
+              "n": 18,
+              "successes": 9,
+              "rate": 0.5
+            }
+          }
+        ]
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "W-nx-0",
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 2,
+              "rate": 0.08
+            },
+            "used_given_carried": {
+              "n": 2,
+              "successes": 0,
+              "rate": 0.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "P_carried": {
+              "n": 25,
+              "carried": 8,
+              "rate": 0.32
+            },
+            "used_given_carried": {
+              "n": 8,
+              "successes": 0,
+              "rate": 0.0
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "does_not_show": [
+    "Everything R8 to R11 say they do not show also holds here: one model per provider in the confirmatory sense, the same synthetic task family, thinking text not inspected.",
+    "No model comparison. Experiment 2 is one run per arm on 25 templates of one larger model of the same provider, at effort medium, whose levels on Sonnet 5.5 are recalibrated and not matched to Haiku's medium ([effort](https://platform.claude.com/docs/en/build-with-claude/effort), checked 2026-11-11). Setting its arms beside Haiku's describes how each behaved on these episodes. It does not rank them.",
+    "The sentences. Three wordings beside R10's two, one run each. Other wordings, other models and other tasks are not run. The neutral sentence is a length-matched control, not a no-effect control: it points attention at the action's format and may change replies by itself.",
+    "Experiment 3 is not concurrent with R8's W-0 and F-0, its comparators, which ran on 2026-10-18. Cost comes mostly from caching mechanics, but success differences against them mix the rule with any change in serving since. One block size (W // 2) is run, on Haiku's short replies, without notes.",
+    "Coarse intervals. Experiment 2 bootstraps over at most 25 templates. Experiment 1's arms play each template once."
+  ],
+  "warnings": []
+}

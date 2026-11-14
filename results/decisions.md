@@ -1925,3 +1925,76 @@ approved_block: 8-r12 | experiments: persistgym_pilot,persistgym_haiku_r12_notes
 - **Everything else** R8 to R11 and §17.12 say they do not show also holds here. This is one exploratory reading on synthetic tasks, not a test of note-taking instructions in general.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the runs, the departures and the readings. It adds no spending approval. The pull request is $0. Experiment 3 needs the researcher's go-ahead before it runs, under block `8-r12`.
+
+## 2026-11-13: R12's experiment 3: results (exploratory)
+**The runs** (`persistgym_haiku_r12_block`, claude-haiku-5-5, "Haiku", in W-b-0 on all 8 task cells, main templates 0-199). W-b-0 is W-0 with block truncation (§17.12): the kept start stays put until the kept context passes W (24,000 tokens), then moves to the earliest turn whose context fits in W // 2, so the prompt prefix is unchanged between drops.
+- **Who ran them:** the researcher started `harnesses.r12_rounds --part block` in their own PowerShell window, outside the Claude Code session, after the pause they had asked for. The session had restarted several times, and its background tasks end with it (the 2026-11-12 entry, departure 1).
+- **The four runs:** from 23:50 UTC on 2026-11-12 to 05:22 UTC on 2026-11-13, one after another, at `--parallel 2`. All four ended COMPLETED, 400 episodes each, every episode DONE, at $5.07, $4.94, $5.10 and $5.03 billed. That is $20.13 in all, against a forecast of $5.38 to $5.93 per run ($21.53 to $23.71 for the four) and a stop of $7.41 per run.
+- **Commit:** all four runs record main 2152a83.
+- **The organization:** the last check before the runs (22:41 UTC on 2026-11-12) and the check after them (05:48 UTC on 2026-11-13, `results/r12_org/20261113T054825Z-after-experiment-3/`) found the key in the organization that R8's rate-limit errors of 2026-10-18 name. Each check gives the key's organization at its moment, not what the calls were served under.
+- **Spend:** block `8-r12` $184.73 of $213. Phase 1a $583.16 of $620. Project total $1,111.69 over 124 ledger rows. R12 is complete. No further paid run is made without a new dated amendment (§17.12, What it changes, 4).
+
+**Departures from the run plan in §17.12 and the 2026-11-11 entry** (PREREG §13):
+1. **The researcher, not Claude, started the runs,** in their own PowerShell window. The driver, its order and its stops were the registered ones.
+2. **A runner change between the experiments.** PR #94 (the crash-safe hand-off between an episode's spool file and the gzip transcript) was merged after experiments 1 and 2 and before experiment 3. It changes when a spool file is deleted, not any request.
+3. **`git_dirty` is true** for runs 2 to 4, because the earlier runs' rows had been appended to `results/costs.csv`. The commit that added the runs, 8a9c32f, changes no other file of 2152a83.
+
+**The analysis,** `uv run python -m analysis.r12 --rerun 20261112T222631Z-F-0-claude-sonnet-5-5=20261112T205954Z-F-0-claude-sonnet-5-5` on clean commit 8a9c32f, read all three experiments together, as registered, and wrote `results/r12/20261113T065503Z/`.
+- **Status:** FINAL. §2.8's replay of experiment 3's 1,600 need steps, with the block rule replayed, found no bug. There is no exclusion and no API error.
+- **Experiments 1 and 2** come out identical to the readings of 2026-11-12 (`results/r12/20261112T224901Z/`).
+- **Templates read:** every registered template, 0-199, in every arm.
+- **Comparators:** R8's W-0 and F-0 of 2026-10-18, as R8's cited output counted them (`results/persistgym_h1h3_haiku/20261019T003254Z`).
+- **The independent re-derivation:** two agents each wrote their own code from the run records and raw transcripts, without the repo's analysis code. They matched all 1,787 numbers they compared (899 on the records side, 888 on the transcript side), the bootstrap intervals included. One replayed the block rule from the text of §17.12 and DESIGN §4 and §13.13 on all 38,858 W-b-0 requests: the kept turns, the 2,326 drops and the context counts all agreed, with no bug. They also confirmed that the records' input tokens include cache reads and writes, and that R8's counted W-0 and F-0 records are those R8's own output counted.
+
+**Experiment 3's readings** (registered in §17.12; descriptive, not tested; 200 episodes per arm and task cell; 90% template-cluster intervals on R8 to R11's resamples):
+
+| Task cell | W-b-0 | W-0 (R8) | F-0 (R8) |
+|---|---|---|---|
+| observed, not recoverable, near | 100.0% | 100.0% | 99.5% |
+| observed, not recoverable, far | 0.0% | 0.0% | 100.0% |
+| observed, recoverable, near | 100.0% | 100.0% | 99.5% |
+| observed, recoverable, far | 100.0% | 100.0% | 99.0% |
+| derived, not recoverable, near | 100.0% | 100.0% | 99.0% |
+| derived, not recoverable, far | 0.0% | 0.0% | 100.0% |
+| derived, recoverable, near | 100.0% | 100.0% | 99.0% |
+| derived, recoverable, far | 100.0% | 100.0% | 99.0% |
+
+Both windows' success intervals are 100 to 100 or 0 to 0 in every cell. F-0's are 100 to 100 at 100%, 98.5 to 100 at 99.5%, and 97.5 to 100 at 99.0%.
+
+- **Contrasts** (percentage points, 90% intervals over the same resamples, no correction):
+  - W-b-0 minus R8's W-0 is 0.0 (0 to 0) in every task cell.
+  - W-b-0 minus R8's F-0 is −100.0 (−100 to −100) in the two not-recoverable far cells, and +0.5 to +1.0 in the other six, with intervals from 0 to at most +2.5.
+- **Choices with the fact evicted:** in the two not-recoverable far cells, the need step's request held the fact in none of the 200 episodes of each cell for both windows, and in all of them for F-0 (reading 2). W-b-0 chose one of the 10 options in 1 of 400 episodes, and it was wrong. R8's W-0 chose none.
+- **Responses:**
+  - Refused: 26 of 38,858 in W-b-0, 48 of 38,860 in R8's W-0, and 69 of 38,467 in R8's F-0, all category "bio". W-b-0's 26 are the incomplete responses the researcher's console showed. They fell in 17 episodes and are scored as invalid actions at the step where they fell (§17.8). W-b-0's success was still 100% in every cell other than the two not-recoverable far ones.
+  - With a thinking block: 38.7%, 38.0% and 36.1%.
+  - At the need step: the median retained replies per episode are 12, 14 and 22. One retained reply's median length is 20 to 22, 21 to 22, and 22 to 24 characters.
+  - Output tokens per episode: about 970 to 1,530, 970 to 1,680, and 940 to 1,410.
+- **Cost and context** (reading 8, over all 8 task cells, 1,600 episodes per arm):
+
+| Arm | Cost per episode | Input tokens per episode | Cache-read share of input |
+|---|---|---|---|
+| W-b-0 | $0.01258 | 460,726 | 86.2% |
+| W-0 (R8) | $0.04318 | 549,655 | 41.4% |
+| F-0 (R8) | $0.01252 | 640,940 | 92.5% |
+
+  - Per task cell, W-b-0 cost $0.01190 to $0.01322 per episode, R8's W-0 $0.04178 to $0.04638, and R8's F-0 $0.01225 to $0.01286.
+  - **Drops:** every W-b-0 episode dropped turns at least once, 1.45 times per episode on average (874 episodes once, 726 twice). The recoverable far cells, whose episodes carry more input tokens, dropped 1.60 times per episode, the other six 1.41.
+  - **Near-cell evidence:** in every arm, the need step's request held the evidence in all 200 episodes of each near cell (`need_payload.S` false in 0 of 200).
+
+**What it points to,** by the outcome §17.12 stated before the runs: "W-b-0's cost per episode well below W-0's, with success in each task cell near W-0's: block truncation keeps the window's success profile at a lower cost, and the near-cell losses, if any, show what it trades."
+- The readings fit that outcome. W-b-0's cost per episode is about 0.29 times R8's W-0's, and its success equals W-0's in every task cell. The block rule lost no near-cell evidence on these episodes, so the trade §17.12 named did not show here.
+- Beyond that outcome, W-b-0 cost about the same per episode as R8's full-history F-0. So on these episodes this window rule did not show the 3.3 to 3.7 times full history's cost that R8's W-0 had, the finding behind §17.12's third question. Its success profile is the window's, though: 0% in the two not-recoverable far cells, where F-0 had 100%.
+
+**What it does not show:**
+- **Not concurrent with its comparators.** R8's W-0 and F-0 ran on 2026-10-18, about 25 days before. Cost comes mostly from caching mechanics, but the cost and success differences mix the rule with any change in serving since.
+- **The organization.** The checks before and after found the key in the organization that R8's errors name, which points to the same organization as R8's comparators. R8's organization is inferred from the error texts of its W-0 and single-turn runs, and R12's from checks at moments, none of them inside the runs (23:50 to 05:22 UTC). Neither is recorded for every call.
+- **Success where it is not at a ceiling or floor.** In this task family Haiku's windows without notes, W-0 and W-b-0, succeed in every episode of six cells and fail in every episode of the two not-recoverable far ones. W-b-0 matched W-0 at 100% and 0%, so the intervals of 0 to 0 reflect those levels, not a precise estimate of a small effect. Tasks where these windows' success is in between are not run.
+- **Other block sizes and other replies.** One block size (W // 2) is run, on Haiku's short replies (about 20 characters at the median), without notes. A rule that drops to W // 2 keeps less context, and the near evidence here sits close enough to the need step that a drop never removed it. Longer replies, other distances or other block sizes could lose near evidence.
+- **Cost at other lengths and prices.** Every episode here dropped turns once or twice. W-b-0's cost ratios to W-0 and F-0 depend on this provider's cache prices, as R8's entry says of its ratios, and on how far an episode runs past W.
+- **Each template once per arm (repeat 0), no repeat, one model.**
+- **Everything else** R8 to R11 and §17.12 say they do not show also holds here. This is one exploratory reading on synthetic tasks, not a test of truncation rules in general.
+
+**A clerical fix in PREREG.md.** The index line of §17 ("Amendments made: ...") now lists R12 (2026-11-11, §17.12). R10's and R11's commits added themselves to that line, and R12's commit left itself out. No amendment text changes.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the runs, the departures and the readings. It adds no spending approval. The pull request is $0.

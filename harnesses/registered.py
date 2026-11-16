@@ -506,7 +506,8 @@ R13, merged by the researcher. That pull request approves no spending: no R13 ru
 until the researcher merges block `R13_BLOCK`'s approval line in results/decisions.md. The
 later pull request that adds it also raises phase 1a's cap (a PLAN amendment), since the block
 would pass $620. The paid guard checks each run's stop against the cap's headroom, and
-`harnesses.r13_rounds.cap_refusal` refuses a part whose runs' stops do not all fit. A kill switch: set
+`harnesses.r13_rounds.room_refusal` refuses a part whose runs' stops do not all fit in the
+block's room and the cap's headroom. A kill switch: set
 False, every run in R13's experiments and every R13 pilot refuses (`R13_STOP`), and R8's to
 R12's runs are unaffected. With `R8_IN_EFFECT` False they refuse too (R8's `R8_STOP` comes
 first). Tests monkeypatch it."""

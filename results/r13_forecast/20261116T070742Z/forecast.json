@@ -713,8 +713,8 @@
     "stops": 56.279999999999994,
     "one_send": 0.1386,
     "pilots": 1.42,
-    "block_max_usd": 51
+    "block_max_usd": 60
   },
   "phase_1a_spent_usd": 583.160493,
-  "phase_1a_after_block_usd": 634.160493
+  "phase_1a_after_block_usd": 643.160493
 }

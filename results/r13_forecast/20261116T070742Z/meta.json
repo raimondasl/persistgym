@@ -1,6 +1,6 @@
 {
   "experiment": "r13_forecast",
-  "run_id": "20261116T060014Z",
+  "run_id": "20261116T070742Z",
   "cell_or_config": "R13",
   "config": {
     "sources": {
@@ -26,7 +26,7 @@
       ]
     },
     "stop_margin": 1.25,
-    "block_margin": 1.1,
+    "block_rule": "every run's stop, pilots included, plus one send past each",
     "max_attempts": 6,
     "max_prompt_tokens": 40000,
     "pilot_extra_usd": 0.5,
@@ -69,8 +69,8 @@
   "template_id": null,
   "repeat_index": 0,
   "seeds": {},
-  "started_utc": "2026-11-16T06:00:14+00:00",
-  "finished_utc": "2026-11-16T06:01:24+00:00",
+  "started_utc": "2026-11-16T07:07:42+00:00",
+  "finished_utc": "2026-11-16T07:08:53+00:00",
   "exit_reason": "completed",
   "tokens": null,
   "cost_usd": 0.0,
@@ -80,7 +80,7 @@
     "meta.json"
   ],
   "paid_calls": 0,
-  "config_hash": "054a227a0e25e0bc8fe76f26387a1700504be8be9d03a7627e5d87daa612216a",
+  "config_hash": "2d4f07326a388764351e44a7f0c6d302df5040d3f53577b32a6746c9ddb74dd7",
   "prereg_version": "1.0",
   "sdk_versions": {
     "openai": "3.22.1",
@@ -89,6 +89,6 @@
     "arc-agi": null,
     "tiktoken": "0.14.0"
   },
-  "git_commit": "4a316abe082b0a469730df723d3030aad04cc4ab",
+  "git_commit": "4f8c1531b1efd9f90497879f0d82cbafdfd0415a",
   "git_dirty": false
 }

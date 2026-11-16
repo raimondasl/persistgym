@@ -379,8 +379,8 @@ def test_dry_run_on_the_messages_wire(capsys):
 
 
 def test_dry_run_refuses_a_cell_the_messages_wire_does_not_send(capsys):
-    assert cli.main(["dry-run", "--model", HAIKU, "--cell", "sigma-n-0"]) == 2
-    assert "refused: cell Σ-n-0 summarizes at W" in capsys.readouterr().err
+    assert cli.main(["dry-run", "--model", HAIKU, "--cell", "sigma-n-r"]) == 2
+    assert "refused: cell Σ-n-r replays reasoning" in capsys.readouterr().err
 
 
 def test_service_tier_defaults_per_wire():

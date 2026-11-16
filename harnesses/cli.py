@@ -285,7 +285,7 @@ from harnesses import (
     token_count,
 )
 from harnesses.anthropic_transport import AnthropicMessagesTransport
-from harnesses.cells import CELLS, NOTES_VARIANT_CELLS, R12_CELLS, get_cell
+from harnesses.cells import CELLS, NOTES_VARIANT_CELLS, R12_CELLS, R13_CELLS, get_cell
 from harnesses.config import HarnessConfig
 from harnesses.fake import FakeModel
 from harnesses.matrix import RunMatrix
@@ -402,8 +402,10 @@ def _run_what(a, cell, n_episodes: int) -> str:
 
 def cmd_cells(a) -> int:
     print(f"{'cell':<8}{'ascii':<12}{'history':<9}{'notes':<7}{'reasoning.context':<19}role")
-    for c in (*CELLS.values(), *NOTES_VARIANT_CELLS.values(), *R12_CELLS.values()):
+    for c in (*CELLS.values(), *NOTES_VARIANT_CELLS.values(), *R12_CELLS.values(),
+              *R13_CELLS.values()):
         history = c.history + ("/block" if c.truncation == "block" else "")
+        history += "/pinned" if c.pinned_tokens else ""
         print(f"{c.cell_id:<8}{c.ascii_id:<12}{history:<9}{c.notes!s:<7}"
               f"{c.reasoning_context:<19}{c.role}{' (optional)' if c.optional else ''}")
     return 0
@@ -424,7 +426,7 @@ def cmd_dry_run(a) -> int:
     print(f"{ep.episode_id} under {cell.cell_id}: need step {ep.need_step}, "
           f"{run.n_requests} requests, exit {run.exit_reason}")
     print("  labels: U<t> observation of turn t, R<t>/A<t> its reasoning item and reply, "
-          "B<k> summary bridge k, Q summary request")
+          "B<k> summary bridge k, P pinned block of dropped replies (R13), Q summary request")
     for e in events:
         p = e["payload"]
         if wire_for(p["model"]) is RESPONSES:

@@ -10,8 +10,11 @@ runs in the forecast's order and refuses a forecast whose runs are not the part'
 runs in their registered order, so a round never plays out of turn.
 
 R13 is prepared, not run: until the researcher merges block 9-r13's approval line into
-results/decisions.md, with the PLAN amendment that raises phase 1a's cap, the paid guard
-(common/approval.py) refuses every one of these runs before any call.
+results/decisions.md, the paid guard (common/approval.py) refuses every one of these runs
+before any call. The full block would pass phase 1a's $620 cap, so the pull request that adds
+the line also raises the cap. The guard checks each run's stop against the cap's headroom when
+the run starts, and before a part starts the driver checks that the stops of all its runs left
+fit (`cap_refusal`), so a part that cannot finish does not start.
 
 The driver never arms paid calls itself: as for every paid command, the operator sets
 `PERSISTGYM_ALLOW_PAID=1` for this one command (DESIGN §8), and without it the driver refuses
@@ -35,6 +38,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from common import costs
 from common.approval import ALLOW_ENV
 from harnesses import registered
 from harnesses.cells import get_cell
@@ -162,6 +166,30 @@ def drive(cmds: list[list[str]], run: Callable[[list[str]], tuple[int, str]] = _
     return done, 0
 
 
+def cap_refusal(cmds: list[list[str]], rows: list[dict]) -> str | None:
+    """Why a part must not start, or None: the stops (`--planned-usd`) of the runs it has left,
+    summed by phase (`common.costs.EXPERIMENT_PHASE`), do not all fit in what the phase's cap
+    leaves (`costs.headroom`, from the ledger `rows`). The paid guard checks each run's stop
+    against the cap when the run starts. Checking the whole part first means a part that cannot
+    finish does not start, so experiment 5 never ends between rounds for want of room."""
+    need: dict[str, float] = {}
+    for args in cmds:
+        experiment = args[args.index("--experiment") + 1]
+        planned = float(args[args.index("--planned-usd") + 1])
+        phase = costs.phase_of(experiment)
+        if phase not in costs.PHASE_CAPS:
+            return f"experiment {experiment} has no phase cap (common/costs.py)"
+        need[phase] = need.get(phase, 0.0) + planned
+    for phase, usd in sorted(need.items()):
+        left = costs.headroom(0.0, phase, rows)
+        if usd > left + 1e-9:
+            return (f"the part's {len(cmds)} runs left need ${usd:.2f} by their stops and phase "
+                    f"{phase}'s cap (${costs.PHASE_CAPS[phase]:.2f}, common/costs.py) leaves "
+                    f"${left:.2f}: the pull request that approves block {registered.R13_BLOCK} "
+                    "also raises the cap (PREREG §17.13, Budget)")
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--part", choices=PARTS, required=True)
@@ -184,6 +212,10 @@ def main(argv: list[str] | None = None) -> int:
     if os.environ.get(ALLOW_ENV) != "1":
         print(f"refused: set {ALLOW_ENV}=1 for this one command to run paid calls "
               "(DESIGN §8); nothing was run", file=sys.stderr)
+        return 2
+    why = cap_refusal(cmds[a.first - 1:], costs.read_rows())
+    if why is not None:
+        print(f"refused: {why}; nothing was run", file=sys.stderr)
         return 2
     return drive(cmds, first=a.first)[1]
 

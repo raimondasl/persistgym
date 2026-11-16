@@ -503,8 +503,10 @@ R13_REF = "PREREG.md §17.13 (amendment R13)"
 R13_IN_EFFECT = True
 """Whether amendment R13 (PREREG §17.13) is in effect. True since the pull request that adds
 R13, merged by the researcher. That pull request approves no spending: no R13 run can be paid
-until the researcher merges block `R13_BLOCK`'s approval line in results/decisions.md and the
-PLAN amendment that raises phase 1a's cap, both in a later pull request. A kill switch: set
+until the researcher merges block `R13_BLOCK`'s approval line in results/decisions.md. The
+later pull request that adds it also raises phase 1a's cap (a PLAN amendment), since the block
+would pass $620. The paid guard checks each run's stop against the cap's headroom, and
+`harnesses.r13_rounds.cap_refusal` refuses a part whose runs' stops do not all fit. A kill switch: set
 False, every run in R13's experiments and every R13 pilot refuses (`R13_STOP`), and R8's to
 R12's runs are unaffected. With `R8_IN_EFFECT` False they refuse too (R8's `R8_STOP` comes
 first). Tests monkeypatch it."""

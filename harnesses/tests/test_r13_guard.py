@@ -15,9 +15,10 @@ amendment R13): fail closed. R13 is prepared, not run.
   and main runs are judged as before. Haiku's Σ-n-0 and W-nk-0 run nowhere else (R8's
   experiments, R9's to R12's), and W-nk-0 goes to `haiku_refusal` whatever the model.
 * The kill switches: with `R13_IN_EFFECT` False every R13 run refuses and R12's, R11's and
-  luna's still pass; with `R8_IN_EFFECT` False R13's refuse too.
-* The block rule: R13's runs need block 9-r13, which funds nothing else; R10's and R12's block
-  rules leave R13's runs to it; `harnesses run` and `single-turn` check it before the lock.
+  luna's still pass. With `R8_IN_EFFECT` False R13's refuse too.
+* The block rule: R13's runs need block 9-r13, which funds nothing else. R10's and R12's
+  block rules leave R13's runs to it, and `harnesses run` and `single-turn` check it before
+  the lock.
   The Anthropic transport admits R13's Haiku runs under a block that lists an R13 experiment.
   Haiku's new pilots are left out of the pooled report, as every Haiku pilot is.
 """
@@ -72,8 +73,8 @@ def test_the_repository_has_r13_in_effect():
 
 
 def test_the_repository_approves_no_r13_spending():
-    """Prepared, not run: no approval line for block 9-r13 counts in results/decisions.md (a
-    proposed line shown in a code block never does). The researcher's approval pull request
+    """Prepared, not run: no approval line for block 9-r13 counts in results/decisions.md (R13's
+    entry describes the line without writing it out). The researcher's approval pull request
     adds one, and updates this test with it."""
     text = (costs.REPO_ROOT / approval.DECISIONS_MD).read_text(encoding="utf-8")
     assert approval.approvals_in(text, BLOCK) == set()

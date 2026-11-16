@@ -243,3 +243,68 @@ def test_the_driver_never_arms_paid_calls(monkeypatch, capsys):
     src = Path(r13_rounds.__file__).read_text(encoding="utf-8")
     assert not re.search(r"environ\[[^\]]*\]\s*=|putenv|setdefault|environ\.update", src)
     assert src.count("ALLOW_ENV") == 3  # the import, the read and the refusal's text
+
+
+# --- the cap: a part starts only if the stops of all its runs left fit ----------------------
+
+def _ledger(spent_1a: float) -> list[dict]:
+    """A ledger whose only row puts `spent_1a` in phase 1a (R8's experiment)."""
+    from common import costs
+    return [{**{c: "" for c in costs.COLUMNS}, "experiment": "persistgym_haiku",
+             "cost_usd_list": f"{spent_1a:.2f}", "cost_usd_billed_est": f"{spent_1a:.2f}"}]
+
+
+# The fake forecast's stops: pilots $2.00, experiment 4 $27.00 (6.0 + 6.5 + 7.0 + 7.5) and
+# experiment 5 $21.24 (rounds 1-2: 2.51 + 2.50 + 2.60 + 2.61; rounds 3-4: 2.71 + 2.70 + 2.80
+# + 2.81, so $11.02 from its 5th run on). A $600 ledger leaves $20.00 of the $620 cap.
+@pytest.mark.parametrize("part, first, refused", [
+    ("pilots", 1, False), ("sigma", 1, True), ("sigma", 3, False), ("pinned", 1, True),
+    ("pinned", 5, False)])
+def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(part, first, refused):
+    from common import costs
+    assert costs.PHASE_CAPS["1a"] == 620.0
+    cmds = r13_rounds.commands(part, FORECAST)[first - 1:]
+    why = r13_rounds.cap_refusal(cmds, _ledger(600.0))
+    if refused:
+        need = {"sigma": 27.0, "pinned": 21.24}[part]
+        assert why == (f"the part's {len(cmds)} runs left need ${need:.2f} by their stops and "
+                       "phase 1a's cap ($620.00, common/costs.py) leaves $20.00: the pull "
+                       "request that approves block 9-r13 also raises the cap (PREREG §17.13, "
+                       "Budget)")
+    else:
+        assert why is None
+    # every part fits in an empty phase, and nothing fits in a full one
+    assert r13_rounds.cap_refusal(cmds, _ledger(0.0)) is None
+    assert r13_rounds.cap_refusal(cmds, _ledger(620.0)) is not None
+
+
+def test_a_stop_exactly_at_the_cap_fits():
+    cmds = r13_rounds.commands("pinned", FORECAST)[4:]  # $11.02
+    assert r13_rounds.cap_refusal(cmds, _ledger(608.98)) is None
+    assert r13_rounds.cap_refusal(cmds, _ledger(608.99)) is not None
+
+
+def test_an_experiment_with_no_phase_refuses():
+    args = r13_rounds.commands("pilots", FORECAST)[0]
+    bad = list(args)
+    bad[bad.index("--experiment") + 1] = "persistgym_unknown"
+    assert "has no phase cap" in r13_rounds.cap_refusal([bad], _ledger(0.0))
+
+
+def test_main_checks_the_cap_after_the_switch_and_before_any_run(monkeypatch, capsys):
+    """With a test-only switch name (the real PERSISTGYM_ALLOW_PAID is never set), a part
+    whose stops do not fit refuses before `drive`, and one that fits reaches it."""
+    monkeypatch.setattr(r13_rounds, "ALLOW_ENV", "R13_ROUNDS_TEST_SWITCH")
+    monkeypatch.setenv("R13_ROUNDS_TEST_SWITCH", "1")
+    monkeypatch.setattr(r13_rounds, "latest_forecast", lambda root=None: FORECAST)
+    monkeypatch.setattr(r13_rounds.costs, "read_rows", lambda *a, **k: _ledger(600.0))
+    calls = []
+    monkeypatch.setattr(r13_rounds, "drive",
+                        lambda cmds, first=1: calls.append((len(cmds), first)) or (0, 0))
+    assert r13_rounds.main(["--part", "pinned"]) == 2
+    err = capsys.readouterr().err
+    assert "the part's 8 runs left need $21.24" in err and "nothing was run" in err
+    assert calls == []
+    assert r13_rounds.main(["--part", "pinned", "--from", "5"]) == 0
+    assert calls == [(8, 5)]
+    assert "PERSISTGYM_ALLOW_PAID" not in os.environ

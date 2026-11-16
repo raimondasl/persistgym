@@ -19,7 +19,7 @@ R13 plays two harness cells that have never run on Haiku, Σ-n-0 (experiment 4) 
      minus thinking tokens, per request), in both arms; W-n-0's measured output.
    * High: W-nk-0's replies at `PINNED_HIGH_REPLY_TOKENS` (150, 2.4 to 2.8 times those means),
      so four of them fill the block to its 600-token cap (`R13_PINNED_TOKENS`) from the fourth
-     dropped turn on, and the window drops its first turn earlier; the difference is taken from
+     dropped turn on, and the window drops its first turn earlier. The difference is taken from
      W-n-0's replay at the mean, so it also holds what longer replies add to W-n-0's own turns.
      The output is W-n-0's measured output times `PINNED_HIGH_OUTPUT_FACTOR` (2), about what
      150-token replies would write, which also leaves room for a block that makes Haiku write
@@ -80,8 +80,8 @@ cache), refusals, and lookups (the high case's `worst_miss` covers R8's).
 
 Run: ``uv run python -m analysis.r13_forecast``. It writes
 ``results/r13_forecast/<UTC>/forecast.json`` and ``meta.json``, and prints the forecast. With
-``--no-write`` it only prints. ``--workers N`` replays in N processes (default: the CPUs);
-the output does not depend on N.
+``--no-write`` it only prints. ``--workers N`` replays in N processes (default: the CPUs).
+The output does not depend on N.
 """
 
 from __future__ import annotations
@@ -521,7 +521,7 @@ def run_order() -> list[tuple[str, str, tuple[int, int]]]:
 
 
 def pilot_episodes(cell: str) -> int:
-    """A pilot's episodes, as harnesses/r12_rounds.py plays them: pilot templates within
+    """A pilot's episodes, as harnesses/r13_rounds.py plays them: pilot templates within
     `R13_PILOT_TEMPLATES`, at most `R13_PILOT_MAX_EPISODES`, every task cell of the pilot."""
     task_cells = registered.R13_PILOTS[(HAIKU, cell)]
     first, stop = registered.R13_PILOT_TEMPLATES

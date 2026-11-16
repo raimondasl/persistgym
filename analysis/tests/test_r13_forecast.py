@@ -7,8 +7,11 @@
 * The replay on real episodes: the pinned block is written at every request it is in, and
   Σ-n-0's summary request writes its whole prompt; the sums do not depend on the workers.
 * R12's schema, the run order and round arms, the stop and block rules and the pilots, on
-  made-up per-episode costs, and the calibration on the forecast of two templates of each range
-  (the committed forecast replays all of them, so no number here is the forecast's).
+  made-up per-episode costs, and the reply and summary lengths the replays play. On the
+  forecast of two templates of each range: the calibration, every task cell's profile and cost
+  recomputed from the module docstring's formulas and the replay's sums, and the refusal of a
+  prompt outside the prices (the committed forecast replays all of them, so no number here is
+  the forecast's).
 * The specs it uses are `registered.R13_SPECS`'.
 """
 
@@ -337,6 +340,137 @@ def test_w_n_0s_forecast_is_r12_experiment_1s_measured_cost(small):
     assert p["episodes"] == 200  # 100 templates x the 2 far cells, every one finished
     lo, hi = out["per_episode_usd"][f"{HAIKU} W-n-0"]
     assert lo == hi == pytest.approx(r12.price(p, HAIKU))
+
+
+def _per_call(name: str, task_cell: str, templates: tuple[int, int]) -> dict:
+    """Billed tokens per request of source `name` in `task_cell`, from its records' sums (apart
+    from `rf.per_request`): visible output, output (thinking included) and thinking."""
+    rs = rf.rows(ROOT, name, (task_cell,), templates)
+    n = sum(int(r["n_requests"]) for r in rs)
+    out = sum(int(r["usage"]["output_tokens"]) for r in rs) / n
+    thinking = sum(int(r["usage"]["reasoning_tokens"] or 0) for r in rs) / n
+    return {"visible": out - thinking, "output": out, "thinking": thinking}
+
+
+def test_the_replays_play_the_measured_reply_and_summary_lengths():
+    plans, _ = rf.plans(ROOT)
+    reply = {p.name: p.reply for p in plans}
+    summary = {p.name: p.summary for p in plans}
+    for c in registered.HAIKU_TASK_CELLS:
+        luna = rf.luna_summary_tokens(ROOT, c)
+        assert reply["F-0"][c] == round(_per_call("R8 F-0", c, (0, 200))["visible"])
+        assert reply["W-0"][c] == reply["Σ-n-0 low"][c] == round(
+            _per_call("R8 W-0", c, (0, 200))["visible"])
+        assert reply["Σ-n-0 high"][c] == round(_per_call("R9 W-n-0", c, (0, 200))["visible"])
+        assert (summary["Σ-n-0 low"][c], summary["Σ-n-0 high"][c]) == (round(luna),
+                                                                        round(luna * 4))
+    for c in NR_FAR:
+        assert reply["W-n-0"][c] == reply["W-nk-0 low"][c] == round(
+            _per_call("R12 W-n-0", c, (200, 300))["visible"])
+        assert reply["W-nk-0 high"][c] == 150
+    assert (rf.SUMMARY_HIGH_FACTOR, rf.PINNED_HIGH_REPLY_TOKENS) == (4.0, 150)
+
+
+def test_sigma_n_0s_profiles_follow_the_module_docstrings_formulas(small):
+    # module docstring, 3: reads and writes the replay's times the scale, output per step call
+    # R8 W-0's (low) or R9 W-n-0's (high), output per summary call the summary in billed tokens
+    # plus R8 W-0's thinking per call, both 4 times in the high case
+    out, sims = small
+    sig = out["profiles"]["Σ-n-0"]
+    miss = {}
+    for c in registered.HAIKU_TASK_CELLS:
+        v = sig["by_task_cell"][c]
+        f0 = sims["F-0"][c]
+        scale = rf.profile(rf.rows(ROOT, "R8 F-0", (c,), (0, 200)))["input_tokens"] / (
+            f0["input"] / f0["episodes"])
+        w0 = _per_call("R8 W-0", c, (0, 200))
+        luna = rf.luna_summary_tokens(ROOT, c)
+        for case, steps, factor in (("low", w0, 1.0),
+                                    ("high", _per_call("R9 W-n-0", c, (0, 200)), 4.0)):
+            s = sims[f"Σ-n-0 {case}"][c]
+            n = s["episodes"]
+            assert n == 2 and s["summary_requests"] > 0
+            thinking = factor * w0["thinking"]
+            cached, write = s["read"] / n * scale, s["write"] / n * scale
+            want = {"input_tokens": cached + write, "cached_input_tokens": cached,
+                    "cache_write_tokens": write,
+                    "output_tokens": (s["step_requests"] * steps["output"]
+                                      + s["summary_requests"] * (factor * luna * scale
+                                                                 + thinking)) / n,
+                    "reasoning_tokens": (s["step_requests"] * steps["thinking"]
+                                         + s["summary_requests"] * thinking) / n}
+            assert v[case]["profile"] == pytest.approx(want)
+            assert v[case]["usd"] == pytest.approx(r12.price(want, HAIKU))
+        # the W-0 check: the same replay of R8's W-0, with its measured output, beside its cost
+        w = sims["W-0"][c]
+        measured = rf.profile(rf.rows(ROOT, "R8 W-0", (c,), (0, 200)))
+        cached, write = w["read"] / w["episodes"] * scale, w["write"] / w["episodes"] * scale
+        replayed = r12.price({"input_tokens": cached + write, "cached_input_tokens": cached,
+                              "cache_write_tokens": write,
+                              "output_tokens": measured["output_tokens"],
+                              "reasoning_tokens": measured["reasoning_tokens"]}, HAIKU)
+        assert v["w0_check"]["usd_replayed"] == pytest.approx(replayed)
+        assert v["w0_check"]["usd_measured"] == pytest.approx(measured["billed_usd_per_episode"])
+        miss[c] = measured["billed_usd_per_episode"] / replayed
+    worst = max(1.0, *miss.values())
+    assert sig["worst_miss"] == pytest.approx(worst) and worst > 1  # so the high case shows it
+    cells = sig["by_task_cell"].values()
+    lo, hi = out["per_episode_usd"][f"{HAIKU} Σ-n-0"]
+    assert lo == pytest.approx(sum(v["low"]["usd"] for v in cells) / 8)
+    assert hi == pytest.approx(sum(v["high"]["usd"] for v in cells) / 8 * worst)
+    for case in ("low", "high"):
+        assert sig[case] == pytest.approx(
+            {f: sum(v[case]["profile"][f] for v in cells) / 8 for f in rf.FIELDS})
+
+
+def test_w_nk_0s_profiles_are_w_n_0s_measured_plus_the_scaled_differences(small):
+    # module docstring, 2: R12's measured W-n-0 plus W-nk-0's replayed reads and writes less
+    # W-n-0's, times the scale; the output W-n-0's measured, twice it in the high case
+    out, sims = small
+    pin = out["profiles"]["W-nk-0"]
+    for c in NR_FAR:
+        v = pin["by_task_cell"][c]
+        wn = rf.profile(rf.rows(ROOT, "R12 W-n-0", (c,), (200, 300)))
+        base = sims["W-n-0"][c]
+        scale = wn["input_tokens"] / (base["input"] / base["episodes"])
+        for case, factor in (("low", 1.0), ("high", 2.0)):
+            k = sims[f"W-nk-0 {case}"][c]
+            assert k["episodes"] == base["episodes"] == 2
+            d_read = (k["read"] - base["read"]) / 2 * scale
+            d_write = (k["write"] - base["write"]) / 2 * scale
+            want = {"input_tokens": wn["input_tokens"] + d_read + d_write,
+                    "cached_input_tokens": wn["cached_input_tokens"] + d_read,
+                    "cache_write_tokens": wn["cache_write_tokens"] + d_write,
+                    "output_tokens": wn["output_tokens"] * factor,
+                    "reasoning_tokens": wn["reasoning_tokens"] * factor}
+            assert v[case]["profile"] == pytest.approx(want)
+            assert v[case]["usd"] == pytest.approx(r12.price(want, HAIKU))
+            assert (v[case]["added_read"], v[case]["added_write"]) == pytest.approx(
+                (d_read, d_write))
+        assert v["high"]["added_write"] > v["low"]["added_write"]
+    assert rf.PINNED_HIGH_OUTPUT_FACTOR == 2.0
+    cells = pin["by_task_cell"].values()
+    assert out["per_episode_usd"][f"{HAIKU} W-nk-0"] == pytest.approx(
+        [sum(v[case]["usd"] for v in cells) / 2 for case in ("low", "high")])
+    for case in ("low", "high"):
+        assert pin[case] == pytest.approx(
+            {f: sum(v[case]["profile"][f] for v in cells) / 2 for f in rf.FIELDS})
+
+
+def test_the_forecast_refuses_when_its_prompts_leave_the_prices(small, monkeypatch):
+    _, sims = small
+    seen = []
+
+    def refuse(*models):
+        seen.append(models)
+        raise SystemExit("refused")
+
+    monkeypatch.setattr(rf, "replay", lambda plans, workers=1: sims)
+    monkeypatch.setattr(rf, "check_prompts", refuse)
+    with pytest.raises(SystemExit, match="refused"):
+        rf.forecast(ROOT)
+    (models,) = seen  # both experiments' forecasts are checked
+    assert [tuple(m["by_task_cell"]) for m in models] == [registered.HAIKU_TASK_CELLS, NR_FAR]
 
 
 def test_main_writes_the_forecast_and_its_meta(small, tmp_path, monkeypatch):

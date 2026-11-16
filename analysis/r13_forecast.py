@@ -44,9 +44,9 @@ R13 plays two harness cells that have never run on Haiku, Σ-n-0 (experiment 4) 
 **The cache rule.** Every multi-turn request carries a top-level `cache_control` (automatic
 prompt caching, 5-minute TTL, `harnesses.wire.CACHE_CONTROL`), which writes one cache entry, at
 the request's last block. A request reads only entries that earlier requests wrote ("Cache
-reads look backward for entries that prior requests wrote"), at most 20 blocks back from its
-own last block, and the system prompt comes before the messages. Haiku 5.5's smallest
-cacheable prompt is 512 tokens, below every prompt here
+reads look backward for entries that prior requests wrote"), within 20 block positions, its own
+last block counted first (so at most 19 blocks back), and the system prompt comes before the
+messages. Haiku 5.5's smallest cacheable prompt is 512 tokens, below every prompt here
 (https://platform.claude.com/docs/en/build-with-claude/prompt-caching, read 2026-11-15). So
 each request reads the longest earlier prompt of its episode that is a prefix of its own
 (same system prompt, then the same first messages, within `LOOKBACK_BLOCKS`) and writes the
@@ -230,8 +230,8 @@ class CacheLedger:
     """A `run_episode` recorder that prices each request's prompt under the cache rule (module
     docstring): its size (the system prompt and every message's text, in the generator's
     tokenizer), the part read from the cache (the longest earlier prompt of the episode that
-    is a prefix of this one, within `lookback` blocks) and the part written (the rest). One
-    ledger per episode: no entry outlives its episode."""
+    is a prefix of this one, within `lookback` block positions, this one's last block first)
+    and the part written (the rest). One ledger per episode: no entry outlives its episode."""
 
     def __init__(self, lookback: int = LOOKBACK_BLOCKS):
         self.lookback = lookback

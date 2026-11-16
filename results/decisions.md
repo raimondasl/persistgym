@@ -2035,3 +2035,34 @@ An independent agent, with its own code from the same files and without the scri
 - **A comparison between models.** The models differ in provider, tier and dates, and the ARC and PersistGym numbers come from different models. None of them are compared.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the summary. It adds no spending approval. The pull request is $0.
+
+## 2026-11-15: Amendment R13, prepared and not run: Haiku's summary cell (experiment 4) and a pinned block of its own dropped replies (experiment 5)
+**The request.** On 2026-11-15 the researcher asked for the two remaining candidate experiments of 2026-11-11 to be prepared, not run: "Let's do preparation for both so we can run them any time we have credits. But let's not run either of them yet." The same day the researcher chose the designs from options Claude drafted: experiment 4 on all 8 task cells, and for experiment 5 a block of Haiku's own replies, on templates 200-299 with a W-n-0 arm run alongside. `PREREG.md` §17.13 (amendment R13) registers them. The researcher's merge of the pull request that adds this entry adopts R13. It approves no spending and changes no cap.
+
+**The runs** (§17.13, What it changes):
+- **Pilots** in `persistgym_pilot`: Haiku's Σ-n-0 (template 0, all 8 task cells, 8 episodes) and W-nk-0 (templates 0-1, the 2 not-recoverable far cells, 4 episodes).
+- **Experiment 4** (`persistgym_haiku_r13_sigma`): Haiku's Σ-n-0 on main templates 0-199, all 8 task cells, in 4 runs of 50 templates.
+- **Experiment 5** (`persistgym_haiku_r13_pinned`): Haiku's W-nk-0 and W-n-0 on main templates 200-299, the 2 not-recoverable far cells, in 4 rounds of 25 templates, W-nk-0 first in rounds 1 and 3 and W-n-0 first in rounds 2 and 4.
+
+**The forecast** (`uv run python -m analysis.r13_forecast` on clean commit 4a316ab, output `results/r13_forecast/20261116T060014Z/`): main runs $40.27 to $44.96, pilots at most $1.42 by their stops. Per episode: Σ-n-0 $0.0142 to $0.0165, W-nk-0 $0.0441 to $0.0489, W-n-0 $0.0436 (R12's measured cost). Each run's stop is its high forecast times 1.25. By R12's rule the block's limit is the high forecast times 1.10 plus the pilots' stops, $51, and one send can pass a run's stop by at most $0.14.
+
+**Spend and caps.** Phase 1a stands at $583.16 of its $620 cap (124 ledger rows, the last at 2026-11-13T05:21:59Z), so $36.84 is left. A $51 block would take phase 1a to $634.16, so the cap must be raised before R13 can run.
+
+**To run them later.** A pull request that the researcher merges when they decide to run:
+1. re-runs the forecast on a clean commit, since prices, the geo served and the ledger may have changed;
+2. adds a PLAN amendment raising phase 1a's cap to cover the block;
+3. adds block `9-r13`'s approval line to this file, at column 0. At today's forecast the line would read as below. It is shown in a code block here, where it does not count:
+
+```
+approved_block: 9-r13 | experiments: persistgym_pilot,persistgym_haiku_r13_sigma,persistgym_haiku_r13_pinned | max_usd: 51
+```
+
+Then the commands, one after another, with the app kept open, each arming paid calls for its own command only:
+
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r13_rounds --part pilots
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r13_rounds --part sigma
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r13_rounds --part pinned
+
+`--dry-run` prints a part's `harnesses run` commands without running them. Without the switch the driver refuses before running anything. It stops at the first run that does not end COMPLETED, and the researcher is told. Between the pilots and the main runs, `uv run python -m analysis.r13_pilot` checks each pilot's errors, payloads and cost per episode. If a pilot ends other than COMPLETED, or costs more than 1.10 times its high forecast per episode, Claude stops and tells the researcher before any main run.
+
+**Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R13 and its code. It adds no spending approval. With no approval line for block `9-r13`, the paid guard refuses every R13 run. The pull request is $0.

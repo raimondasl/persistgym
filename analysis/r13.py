@@ -18,7 +18,7 @@ under block `9-r13`:
    experiment 1's four arms on the same templates, as R12's cited output counted them, are set
    beside it, described only.
 
-This script implements the "Readings" of R13's contract (PREREG §17.13) as written. Nothing here
+This script implements the readings of PREREG §17.13 (amendment R13) as written. Nothing here
 is a test. It ranks nothing, and differences are described, not tested.
 
 **Exclusions and errors,** R8's (§17.8) as R9 to R12 apply them (`analysis.r12`). Each
@@ -57,12 +57,15 @@ not-recoverable far cells, on the templates read that it also finished in both, 
 its that leave one out are named. The arms set beside an experiment (luna's Σ-n-0, R12
 experiment 1's) are read on its templates read that they finished, naming the keys left out.
 
-**Intervals.** 90% template-cluster bootstrap percentiles, 10,000 resamples over the templates
-read, mapped to 0..n-1 in ascending order, seed SEED + 11 (`BOOT_SEED_OFFSET`; SEED from the
-committed draw), the same resamples for every arm of an experiment. In R9's contrast a template
-it did not finish is left out of each mean on both sides (NaN), with the same resamples.
+**Intervals.** 90% template-cluster bootstrap percentiles with 10,000 resamples, seed SEED + 10
+(`BOOT_SEED_OFFSET`, §9.1's, as for R8's to R12's; SEED from the committed draw), the same
+resamples for every arm of an experiment. Experiment 4 uses the resamples of R8 to R12 (T = 200),
+indexed by template number, as R12's experiment 3 did, with the templates not read left out of
+each mean (NaN). Experiment 5's resamples are over the templates read, mapped to 0..n-1 in
+ascending order. In R9's contrast a template it did not finish is left out of each mean on both
+sides (NaN), with the same resamples.
 
-**The readings** (the contract's, numbered as there). Experiment 4 (Σ-n-0):
+**The readings** (§17.13's, numbered as there). Experiment 4 (Σ-n-0):
 1. Success per arm and task cell, with its interval, and each cell's step responses that
    stopped short, by reason.
 2. Contrasts in percentage points per task cell, on the same templates and resamples: Σ-n-0
@@ -161,8 +164,8 @@ SHORT = {"sigma": SIGMA, "pinned": PINNED}
 """``--sweep-closed`` and ``--experiment`` name an experiment by these short names."""
 LABEL = {SIGMA: "Experiment 4", PINNED: "Experiment 5"}
 BOOT = hn.BOOT
-BOOT_SEED_OFFSET = 11
-"""R13's bootstrap seed is SEED + 11 (the contract), not §9.1's SEED + 10 of R8 to R12."""
+BOOT_SEED_OFFSET = hh.BOOT_SEED_OFFSET
+"""§9.1's bootstrap seed offset (SEED + 10), as for R8's to R12's (PREREG §17.13)."""
 ROUND = registered.R13_ROUND_TEMPLATES
 NR_FAR = registered.HAIKU_CONTROL_TASK_CELLS
 HAIKU = registered.HAIKU_MODEL
@@ -188,7 +191,7 @@ CONTRASTS = {
     PINNED: ((PINNED_CELL, "W-n-0"),),
 }
 """Reading 2: (minuend arm, subtrahend arm) per experiment, on every task cell, in the
-contract's order. Experiment 4's contrast with R9's W-n-0 (`R9_CONTRAST`) is on the 2
+order of §17.13. Experiment 4's contrast with R9's W-n-0 (`R9_CONTRAST`) is on the 2
 not-recoverable far cells only."""
 R9_CONTRAST = (SIGMA_CELL, WN_R9)
 DOES_NOT_SHOW = (
@@ -354,9 +357,12 @@ def luna_arm(root: Path) -> r12.Arm:
 
 # --- the templates read and the resamples ------------------------------------------------------
 
-def positions(read: list[int]) -> tuple[dict[int, int], int]:
-    """Where each template read sits in the bootstrap's arrays (the templates read, mapped to
-    0..n-1 in ascending order), and their length. Both experiments."""
+def positions(experiment: str, read: list[int]) -> tuple[dict[int, int], int]:
+    """Where each template read sits in the bootstrap's arrays, and their length. Experiment 4:
+    R8 to R12's (T = 200), by template number. Experiment 5: the templates read, mapped to
+    0..n-1 in ascending order."""
+    if experiment == SIGMA:
+        return {t: t for t in read}, registered.HAIKU_T
     return {t: i for i, t in enumerate(sorted(read))}, len(read)
 
 
@@ -897,7 +903,8 @@ def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozens
             "sweep_closed": sorted(sweep_closed),
             "bootstrap": {"resamples": BOOT, "seed": boot_seed, "seed_offset": BOOT_SEED_OFFSET,
                           "interval": "90% percentile, template-cluster",
-                          "over": "the templates read, mapped to 0..n-1, in both experiments"},
+                          "experiment_4": "R8 to R12's resamples (T = 200), by template number",
+                          "experiment_5": "over the templates read, mapped to 0..n-1"},
             "comparators": {"r8_output": hn.R8_OUTPUT, "r9_output": hp.R9_OUTPUT,
                             "r12_output": R12_OUTPUT, "luna_output": hh.LUNA_CITED_OUTPUT},
             "experiments": out,
@@ -925,7 +932,7 @@ def _experiment(e: str, st: dict, check: dict, raw: Path, boot_seed: int, facts:
                 incomplete: list[str], warnings: list[str], comp: Path) -> dict:
     """Every reading of one experiment."""
     read, task_cells, stop = st["read"], st["task_cells"], st["templates"].stop
-    pos, size = positions(read)
+    pos, size = positions(e, read)
     idx = hh.resample_indices(size, boot_seed, BOOT)
     restricted = {a.name: r12.restrict(a, read) for a in st["arms"]}
     arms_by_name = {a.name: a for a in st["arms"]}
@@ -1239,7 +1246,7 @@ def _pinned_lines(x: dict) -> list[str]:
               ("Task cell \"all\" pools the task cells: success per arm and round. The rows per "
                "task cell are extra detail."), "",
               ("\"First arm\" is the arm whose run started the round, read from the runs' start "
-               "times below. \"Registered\" is the contract's order."), "",
+               "times below. \"Registered\" is the order §17.13 registers."), "",
               ("| Round | Templates | Read | First arm | Registered first arm | Arm | Task cell | "
                "Success |"), "|---|---|---|---|---|---|---|---|"]
     for r in x["rounds"]["success"]:

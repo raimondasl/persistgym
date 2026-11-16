@@ -26,6 +26,7 @@ import json
 import re
 import shutil
 import statistics
+import warnings
 from dataclasses import replace
 from functools import cache
 
@@ -157,7 +158,15 @@ def _read(root, closed=frozenset(r13.EXPERIMENTS), **kw):
 
 
 def _seed() -> int:
-    return hh.read_seed(ROOT / "results")[0] + 11
+    return hh.read_seed(ROOT / "results")[0] + hh.BOOT_SEED_OFFSET
+
+
+def at_t(s: np.ndarray, templates) -> np.ndarray:
+    """Experiment 4's arrays: R8 to R12's T = 200 positions, by template number, NaN where a
+    template is not read."""
+    out = np.full(registered.HAIKU_T, np.nan)
+    out[list(templates)] = s
+    return out
 
 
 def _arm(x: dict, name: str) -> dict:
@@ -241,13 +250,14 @@ def test_the_experiments_are_r13s():
                                     ("Σ-n-0", "W-b-0 (R12)"))
     assert r13.CONTRASTS[PINNED] == (("W-nk-0", "W-n-0"),)
     assert r13.R9_CONTRAST == ("Σ-n-0", "W-n-0 (R9)")
-    assert (r13.BOOT, r13.BOOT_SEED_OFFSET, r13.ROUND) == (10_000, 11, 25)
+    assert (r13.BOOT, r13.BOOT_SEED_OFFSET, r13.ROUND) == (10_000, 10, 25)
+    assert r13.BOOT_SEED_OFFSET == hh.BOOT_SEED_OFFSET
     assert r13.R12_OUTPUT == "results/r12/20261113T065503Z"
 
 
-def test_the_templates_read_are_mapped_to_0_n_minus_1_in_both_experiments():
-    assert r13.positions([205, 200, 201]) == ({200: 0, 201: 1, 205: 2}, 3)
-    assert r13.positions([0, 7, 199]) == ({0: 0, 7: 1, 199: 2}, 3)
+def test_experiment_4_indexes_by_template_number_and_experiment_5_maps_to_0_n_minus_1():
+    assert r13.positions(PINNED, [205, 200, 201]) == ({200: 0, 201: 1, 205: 2}, 3)
+    assert r13.positions(SIGMA, [0, 7, 199]) == ({0: 0, 7: 7, 199: 199}, registered.HAIKU_T)
 
 
 def test_with_no_r13_run_it_names_both_experiments_and_writes_nothing(tmp_path, capsys):
@@ -274,10 +284,11 @@ def test_with_no_r13_run_it_names_both_experiments_and_writes_nothing(tmp_path, 
 def test_experiment_4_reads_sigma_and_its_comparators_on_the_same_templates(root):
     r = _read(root)
     assert r["status"] == "FINAL" and r["incomplete"] == []
-    assert r["bootstrap"]["seed"] == _seed() and r["bootstrap"]["seed_offset"] == 11
-    assert r["bootstrap"]["seed"] != hh.read_seed(ROOT / "results")[0] + hh.BOOT_SEED_OFFSET
+    assert r["bootstrap"]["seed"] == _seed() and r["bootstrap"]["seed_offset"] == 10
+    assert r["bootstrap"]["seed"] == hh.read_seed(ROOT / "results")[0] + hh.BOOT_SEED_OFFSET
     x = r["experiments"][SIGMA]
-    assert (x["templates_read"], x["templates"], x["resamples_over"]) == (3, "0-2", 3)
+    assert (x["templates_read"], x["templates"], x["resamples_over"]) == (
+        3, "0-2", registered.HAIKU_T)
     assert [a["arm"] for a in x["arms"]] == ["Σ-n-0", "W-0 (R8)", "F-0 (R8)", "W-b-0 (R12)"]
     mine = records(root, SIGMA)
     for tc in ALL8:
@@ -297,22 +308,27 @@ def test_experiment_4_reads_sigma_and_its_comparators_on_the_same_templates(root
 
 
 def test_experiment_4_intervals_and_contrasts_by_a_calculation_here(root):
-    """SEED + 11, 10,000 resamples over the 3 templates read (positions 0-2), the same resamples
-    for every arm."""
+    """SEED + 10, 10,000 resamples over R8 to R12's T = 200 positions, by template number, with
+    the 3 templates read at positions 0-2 and the rest left out of each mean (NaN); the same
+    resamples for every arm."""
     x = _read(root)["experiments"][SIGMA]
-    idx = hh.resample_indices(3, _seed(), 10_000)
+    idx = hh.resample_indices(registered.HAIKU_T, _seed(), 10_000)
     mine = records(root, SIGMA)
-    for tc in ALL8:
-        s = success(mine, tc, SIGMA_TEMPLATES)
-        means = s[idx].mean(axis=1)
-        assert _cell(_arm(x, "Σ-n-0"), tc)["interval_90"] == pytest.approx(
-            [np.percentile(means, 5), np.percentile(means, 95)])
-        for name, src in (("W-0 (R8)", "W-0"), ("F-0 (R8)", "F-0"), ("W-b-0 (R12)", "W-b-0")):
-            b = committed_success(src, tc, SIGMA_TEMPLATES)
-            v = x["contrasts"][f"Σ-n-0 - {name}"][tc]
-            d = 100 * (s[idx].mean(axis=1) - b[idx].mean(axis=1))
-            assert v["pp"] == pytest.approx(100 * (s.mean() - b.mean()))
-            assert v["ci90"] == pytest.approx([np.percentile(d, 5), np.percentile(d, 95)])
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # resamples that hold no template read
+        for tc in ALL8:
+            s = at_t(success(mine, tc, SIGMA_TEMPLATES), SIGMA_TEMPLATES)
+            means = np.nanmean(s[idx], axis=1)
+            assert _cell(_arm(x, "Σ-n-0"), tc)["interval_90"] == pytest.approx(
+                [np.nanpercentile(means, 5), np.nanpercentile(means, 95)])
+            for name, src in (("W-0 (R8)", "W-0"), ("F-0 (R8)", "F-0"),
+                              ("W-b-0 (R12)", "W-b-0")):
+                b = at_t(committed_success(src, tc, SIGMA_TEMPLATES), SIGMA_TEMPLATES)
+                v = x["contrasts"][f"Σ-n-0 - {name}"][tc]
+                d = 100 * (np.nanmean(s[idx], axis=1) - np.nanmean(b[idx], axis=1))
+                assert v["pp"] == pytest.approx(100 * (np.nanmean(s) - np.nanmean(b)))
+                assert v["ci90"] == pytest.approx([np.nanpercentile(d, 5),
+                                                   np.nanpercentile(d, 95)])
     assert set(x["contrasts"]) == {"Σ-n-0 - W-0 (R8)", "Σ-n-0 - F-0 (R8)",
                                    "Σ-n-0 - W-b-0 (R12)", "Σ-n-0 - W-n-0 (R9)"}
 
@@ -323,14 +339,17 @@ def test_the_r9_contrast_is_on_the_not_recoverable_far_cells_with_the_same_resam
     assert set(v) == set(NR_FAR)
     assert (x["r9_contrast"]["templates"], x["r9_contrast"]["left_out"]) == ("0-2", [])
     assert x["r9_contrast"]["runs"] == ["20261024T060051Z-W-n-0-claude-haiku-5-5"]
-    idx = hh.resample_indices(3, _seed(), 10_000)
+    idx = hh.resample_indices(registered.HAIKU_T, _seed(), 10_000)
     mine = records(root, SIGMA)
-    for tc in NR_FAR:
-        s, b = success(mine, tc, SIGMA_TEMPLATES), committed_success("W-n-0 (R9)", tc,
-                                                                      SIGMA_TEMPLATES)
-        d = 100 * (s[idx].mean(axis=1) - b[idx].mean(axis=1))
-        assert v[tc]["pp"] == pytest.approx(100 * (s.mean() - b.mean()))
-        assert v[tc]["ci90"] == pytest.approx([np.percentile(d, 5), np.percentile(d, 95)])
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # resamples that hold no template read
+        for tc in NR_FAR:
+            s = at_t(success(mine, tc, SIGMA_TEMPLATES), SIGMA_TEMPLATES)
+            b = at_t(committed_success("W-n-0 (R9)", tc, SIGMA_TEMPLATES), SIGMA_TEMPLATES)
+            d = 100 * (np.nanmean(s[idx], axis=1) - np.nanmean(b[idx], axis=1))
+            assert v[tc]["pp"] == pytest.approx(100 * (np.nanmean(s) - np.nanmean(b)))
+            assert v[tc]["ci90"] == pytest.approx([np.nanpercentile(d, 5),
+                                                   np.nanpercentile(d, 95)])
 
 
 def test_a_contrast_on_the_templates_both_finished_leaves_the_rest_out_of_both_sides():
@@ -366,17 +385,20 @@ def test_a_hole_in_sigma_leaves_the_template_out_of_every_arm_and_names_it(root)
     _edit(root, SIGMA, SIGMA_RUN, exclude)
     r = _read(root)
     x = r["experiments"][SIGMA]
-    assert (x["templates_read"], x["templates"], x["resamples_over"]) == (2, "0, 2", 2)
+    assert (x["templates_read"], x["templates"], x["resamples_over"]) == (
+        2, "0, 2", registered.HAIKU_T)
     (row,) = x["left_out"]
     assert (row["template"], row["arm"], row["task_cell"], row["status"]) == (
         1, "Σ-n-0", "derived-rec-far", "excluded")
     assert "made up" in row["reason"]
     assert all(c["n"] == 2 for a in x["arms"] for c in a["cells"])
-    idx = hh.resample_indices(2, _seed(), 10_000)
-    s = success(records(root, SIGMA), NR_FAR[0], [0, 2])
-    means = s[idx].mean(axis=1)
-    assert _cell(_arm(x, "Σ-n-0"), NR_FAR[0])["interval_90"] == pytest.approx(
-        [np.percentile(means, 5), np.percentile(means, 95)])
+    idx = hh.resample_indices(registered.HAIKU_T, _seed(), 10_000)  # by template number
+    s = at_t(success(records(root, SIGMA), NR_FAR[0], [0, 2]), [0, 2])
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # resamples that hold no template read
+        means = np.nanmean(s[idx], axis=1)
+        want = [np.nanpercentile(means, 5), np.nanpercentile(means, 95)]
+    assert _cell(_arm(x, "Σ-n-0"), NR_FAR[0])["interval_90"] == pytest.approx(want)
     assert "template 1, Σ-n-0, derived-rec-far: excluded" in r13.summary(r)
     assert sum(e["excluded_by_runner"] for e in x["exclusions"]) == 1
 
@@ -938,7 +960,7 @@ def test_the_summary_names_every_reading_and_the_caveats(root):
     r = _read(root)
     text = r13.summary(r)
     for needle in ("**FINAL.**", "Exploratory: no test", "Not a model comparison",
-                   "seed SEED + 11", "## What it does not show",
+                   "seed SEED + 10", "## What it does not show",
                    "## Experiment 4: claude-haiku-5-5", "## Experiment 5: claude-haiku-5-5",
                    "**1. Success:**", "**2. Contrasts**", "**3. §2.8 accounting in the bridge**",
                    "**4. Compaction and near cells:**", "**5. Summary calls**",

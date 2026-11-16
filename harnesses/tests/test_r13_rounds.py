@@ -245,13 +245,31 @@ def test_the_driver_never_arms_paid_calls(monkeypatch, capsys):
     assert src.count("ALLOW_ENV") == 3  # the import, the read and the refusal's text
 
 
-# --- the cap: a part starts only if the stops of all its runs left fit ----------------------
+# --- the room: a part starts only if the stops of all its runs left fit -------------------
 
-def _ledger(spent_1a: float) -> list[dict]:
-    """A ledger whose only row puts `spent_1a` in phase 1a (R8's experiment)."""
+def _ledger(spent_1a: float, block_spent: float = 0.0) -> list[dict]:
+    """A ledger that puts `spent_1a` in phase 1a: R8's spend, and `block_spent` of it under
+    block 9-r13."""
     from common import costs
-    return [{**{c: "" for c in costs.COLUMNS}, "experiment": "persistgym_haiku",
-             "cost_usd_list": f"{spent_1a:.2f}", "cost_usd_billed_est": f"{spent_1a:.2f}"}]
+    blank = {c: "" for c in costs.COLUMNS}
+    rows = [{**blank, "experiment": "persistgym_haiku",
+             "cost_usd_list": f"{spent_1a - block_spent:.2f}",
+             "cost_usd_billed_est": f"{spent_1a - block_spent:.2f}"}]
+    if block_spent:
+        rows.append({**blank, "experiment": SIGMA_X, "cost_usd_list": f"{block_spent:.2f}",
+                     "cost_usd_billed_est": f"{block_spent:.2f}",
+                     "notes": "approved_block=9-r13; made up"})
+    return rows
+
+
+def _decisions(max_usd: str | None = "100") -> str:
+    """A decisions log with block 9-r13's approval line at `max_usd`, or none."""
+    from common import approval
+    text = "# Decisions\n\n## 2026-11-20: a made-up approval\n"
+    if max_usd is None:
+        return text
+    return text + "\n" + approval.format_line(
+        "9-r13", ("persistgym_pilot", SIGMA_X, PINNED_X), max_usd) + "\n"
 
 
 # The fake forecast's stops: pilots $2.00, experiment 4 $27.00 (6.0 + 6.5 + 7.0 + 7.5) and
@@ -264,7 +282,7 @@ def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(part, first, refused):
     from common import costs
     assert costs.PHASE_CAPS["1a"] == 620.0
     cmds = r13_rounds.commands(part, FORECAST)[first - 1:]
-    why = r13_rounds.cap_refusal(cmds, _ledger(600.0))
+    why = r13_rounds.room_refusal(cmds, _ledger(600.0), _decisions())
     if refused:
         need = {"sigma": 27.0, "pinned": 21.24}[part]
         assert why == (f"the part's {len(cmds)} runs left need ${need:.2f} by their stops and "
@@ -274,30 +292,65 @@ def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(part, first, refused):
     else:
         assert why is None
     # every part fits in an empty phase, and nothing fits in a full one
-    assert r13_rounds.cap_refusal(cmds, _ledger(0.0)) is None
-    assert r13_rounds.cap_refusal(cmds, _ledger(620.0)) is not None
+    assert r13_rounds.room_refusal(cmds, _ledger(0.0), _decisions()) is None
+    assert r13_rounds.room_refusal(cmds, _ledger(620.0), _decisions()) is not None
 
 
 def test_a_stop_exactly_at_the_cap_fits():
     cmds = r13_rounds.commands("pinned", FORECAST)[4:]  # $11.02
-    assert r13_rounds.cap_refusal(cmds, _ledger(608.98)) is None
-    assert r13_rounds.cap_refusal(cmds, _ledger(608.99)) is not None
+    assert r13_rounds.room_refusal(cmds, _ledger(608.98), _decisions()) is None
+    assert r13_rounds.room_refusal(cmds, _ledger(608.99), _decisions()) is not None
+
+
+def test_a_part_whose_stops_do_not_fit_in_the_block_refuses():
+    """The block's room is its line's max_usd less the spend tagged with it: $30 less $8.80
+    leaves $21.20, $0.04 short of experiment 5's $21.24, though the cap has room."""
+    cmds = r13_rounds.commands("pinned", FORECAST)
+    assert r13_rounds.room_refusal(cmds, _ledger(10.0, 8.80), _decisions("30")) == (
+        "the part's 8 runs left need $21.24 by their stops and block 9-r13 leaves $21.20 of "
+        "its $30.00: R13's block rule gives it every stop plus one send past each (PREREG "
+        "§17.13, Budget)")
+    assert r13_rounds.room_refusal(cmds, _ledger(10.0, 8.76), _decisions("30")) is None
+    # spend under another block does not use 9-r13's room
+    assert r13_rounds.room_refusal(cmds, _ledger(10.0), _decisions("21.24")) is None
+
+
+def test_no_approval_line_or_two_refuse():
+    cmds = r13_rounds.commands("pilots", FORECAST)
+    assert r13_rounds.room_refusal(cmds, _ledger(0.0), _decisions(None)) == (
+        "results/decisions.md has no approval line for block 9-r13: the researcher's pull "
+        "request adds it (PREREG §17.13, Budget)")
+    two = _decisions("50") + _decisions("60")
+    assert r13_rounds.room_refusal(cmds, _ledger(0.0), two) == (
+        "results/decisions.md has 2 different approval lines for block 9-r13")
+    # a line shown in a code block does not count (common.approval)
+    fenced = "```\n" + _decisions("50").split("\n\n", 2)[-1] + "```\n"
+    assert "no approval line" in r13_rounds.room_refusal(cmds, _ledger(0.0), fenced)
+
+
+def test_the_repository_has_no_line_so_every_part_refuses():
+    """Prepared, not run: the working tree has no approval line for block 9-r13."""
+    for part in r13_rounds.PARTS:
+        cmds = r13_rounds.commands(part, FORECAST)
+        assert "no approval line for block 9-r13" in r13_rounds.room_refusal(
+            cmds, _ledger(0.0), r13_rounds.decisions_text())
 
 
 def test_an_experiment_with_no_phase_refuses():
     args = r13_rounds.commands("pilots", FORECAST)[0]
     bad = list(args)
     bad[bad.index("--experiment") + 1] = "persistgym_unknown"
-    assert "has no phase cap" in r13_rounds.cap_refusal([bad], _ledger(0.0))
+    assert "has no phase cap" in r13_rounds.room_refusal([bad], _ledger(0.0), _decisions())
 
 
-def test_main_checks_the_cap_after_the_switch_and_before_any_run(monkeypatch, capsys):
+def test_main_checks_the_room_after_the_switch_and_before_any_run(monkeypatch, capsys):
     """With a test-only switch name (the real PERSISTGYM_ALLOW_PAID is never set), a part
     whose stops do not fit refuses before `drive`, and one that fits reaches it."""
     monkeypatch.setattr(r13_rounds, "ALLOW_ENV", "R13_ROUNDS_TEST_SWITCH")
     monkeypatch.setenv("R13_ROUNDS_TEST_SWITCH", "1")
     monkeypatch.setattr(r13_rounds, "latest_forecast", lambda root=None: FORECAST)
     monkeypatch.setattr(r13_rounds.costs, "read_rows", lambda *a, **k: _ledger(600.0))
+    monkeypatch.setattr(r13_rounds, "decisions_text", lambda root=None: _decisions())
     calls = []
     monkeypatch.setattr(r13_rounds, "drive",
                         lambda cmds, first=1: calls.append((len(cmds), first)) or (0, 0))

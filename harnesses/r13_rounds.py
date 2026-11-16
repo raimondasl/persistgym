@@ -14,7 +14,8 @@ results/decisions.md, the paid guard (common/approval.py) refuses every one of t
 before any call. The full block would pass phase 1a's $620 cap, so the pull request that adds
 the line also raises the cap. The guard checks each run's stop against the cap's headroom when
 the run starts, and before a part starts the driver checks that the stops of all its runs left
-fit (`cap_refusal`), so a part that cannot finish does not start.
+fit in the block's room and the cap's headroom (`room_refusal`), so a part that cannot finish
+does not start.
 
 The driver never arms paid calls itself: as for every paid command, the operator sets
 `PERSISTGYM_ALLOW_PAID=1` for this one command (DESIGN §8), and without it the driver refuses
@@ -38,7 +39,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from common import costs
+from common import approval, costs
 from common.approval import ALLOW_ENV
 from harnesses import registered
 from harnesses.cells import get_cell
@@ -166,12 +167,21 @@ def drive(cmds: list[list[str]], run: Callable[[list[str]], tuple[int, str]] = _
     return done, 0
 
 
-def cap_refusal(cmds: list[list[str]], rows: list[dict]) -> str | None:
-    """Why a part must not start, or None: the stops (`--planned-usd`) of the runs it has left,
-    summed by phase (`common.costs.EXPERIMENT_PHASE`), do not all fit in what the phase's cap
-    leaves (`costs.headroom`, from the ledger `rows`). The paid guard checks each run's stop
-    against the cap when the run starts. Checking the whole part first means a part that cannot
-    finish does not start, so experiment 5 never ends between rounds for want of room."""
+def decisions_text(root: Path = REPO) -> str:
+    """The working tree's results/decisions.md, where block 9-r13's approval line goes."""
+    return (root / approval.DECISIONS_MD).read_text(encoding="utf-8")
+
+
+def room_refusal(cmds: list[list[str]], rows: list[dict], decisions: str) -> str | None:
+    """Why a part must not start, or None. The stops (`--planned-usd`) of the runs it has left
+    must all fit in what block `R13_BLOCK` leaves (its approval line's `max_usd` in `decisions`,
+    less the block's spend in the ledger `rows`) and, summed by phase
+    (`common.costs.EXPERIMENT_PHASE`), in what each phase's cap leaves (`costs.headroom`). The
+    paid guard checks each run's stop against both when the run starts, and is the check that
+    counts (it reads the approval line from origin/main too). Checking the whole part first means
+    a part that cannot finish does not start, so experiment 5 never ends between rounds for want
+    of room. R13's block rule (PREREG §17.13, Budget) makes the block hold every stop plus one
+    send past each, so this passes while every earlier run kept to its stop and one send."""
     need: dict[str, float] = {}
     for args in cmds:
         experiment = args[args.index("--experiment") + 1]
@@ -180,6 +190,20 @@ def cap_refusal(cmds: list[list[str]], rows: list[dict]) -> str | None:
         if phase not in costs.PHASE_CAPS:
             return f"experiment {experiment} has no phase cap (common/costs.py)"
         need[phase] = need.get(phase, 0.0) + planned
+    block = registered.R13_BLOCK
+    lines = approval.approvals_in(decisions, block)
+    if not lines:
+        return (f"results/decisions.md has no approval line for block {block}: the researcher's "
+                "pull request adds it (PREREG §17.13, Budget)")
+    if len(lines) > 1:
+        return f"results/decisions.md has {len(lines)} different approval lines for block {block}"
+    (line,) = lines
+    total = sum(need.values())
+    room = float(line.max_usd) - float(approval.block_spend(block, rows))
+    if total > room + 1e-9:
+        return (f"the part's {len(cmds)} runs left need ${total:.2f} by their stops and block "
+                f"{block} leaves ${room:.2f} of its ${float(line.max_usd):.2f}: R13's block rule "
+                "gives it every stop plus one send past each (PREREG §17.13, Budget)")
     for phase, usd in sorted(need.items()):
         left = costs.headroom(0.0, phase, rows)
         if usd > left + 1e-9:
@@ -213,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"refused: set {ALLOW_ENV}=1 for this one command to run paid calls "
               "(DESIGN §8); nothing was run", file=sys.stderr)
         return 2
-    why = cap_refusal(cmds[a.first - 1:], costs.read_rows())
+    why = room_refusal(cmds[a.first - 1:], costs.read_rows(), decisions_text())
     if why is not None:
         print(f"refused: {why}; nothing was run", file=sys.stderr)
         return 2

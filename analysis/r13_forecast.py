@@ -70,10 +70,14 @@ below), global geo. Served in the "us" geo, every cost here would be 10% higher
 (`pricing.HAIKU_GEO_MULTIPLIERS`), and `most_one_send` already prices that geo.
 
 Each run's stop (--planned-usd) is its high forecast times `STOP_MARGIN`, so a run at the high
-cost finishes, and one send can pass a stop by at most `most_one_send`. The block's limit is the
-high forecast of every run times `BLOCK_MARGIN`, plus every pilot's stop (R12's rule). The paid
-guard admits a run only if its stop fits in what is left of the block and of phase 1a's cap,
-so a later run whose stop no longer fits refuses, and Claude stops and tells the researcher.
+cost finishes, and one send can pass a stop by at most `most_one_send`. The block's limit is
+R13's own rule (PREREG §17.13, Budget): the sum of every run's stop, pilots included, plus one
+send past each, up to the next dollar. So while every run keeps to its stop and one send, no
+run refuses for want of block room. R12's rule (the high forecast times 1.10, plus the pilots'
+stops) was smaller than the stops' sum, so a later run could refuse while experiment 5 was
+between rounds. The paid guard admits a run only if its stop fits in what is left of the block
+and of phase 1a's cap, and `harnesses.r13_rounds.room_refusal` checks a whole part before it
+starts.
 
 Not modelled: failed summary attempts (a retry reads the failed attempt's prompt from the
 cache), refusals, and lookups (the high case's `worst_miss` covers R8's).
@@ -134,8 +138,6 @@ SOURCES = {  # name -> (experiment, run ids) of the committed runs read
 }
 STOP_MARGIN = 1.25
 """Each run's stop is its high forecast times this, so a run at the high cost finishes (R12)."""
-BLOCK_MARGIN = 1.10
-"""The block's limit is every run's high forecast times this, plus the pilots' stops (R12)."""
 MAX_ATTEMPTS = r12.MAX_ATTEMPTS
 MAX_PROMPT_TOKENS = 40_000
 """The prompt `most_one_send` prices, in billed tokens, as R12's window cells; the forecast
@@ -533,10 +535,16 @@ def stop_usd(episodes: int, high: float) -> float:
     return math.ceil(episodes * high * STOP_MARGIN * 100) / 100
 
 
+def block_usd(stops: float, pilot_stops: float, n_runs: int, one_send: float) -> int:
+    """R13's block limit (PREREG §17.13, Budget): every main run's and pilot's stop, plus one
+    send past each of the `n_runs` runs, up to the next dollar."""
+    return math.ceil(round(stops + pilot_stops + n_runs * one_send, 6))
+
+
 def schedule(per: dict[tuple[str, str], tuple[float, float]], spent: float,
              one_send: float) -> dict:
     """`runs`, `pilots`, `totals` and the phase 1a numbers from the per-episode forecasts `per`
-    ((model, cell) -> (low, high)), R12's rules."""
+    ((model, cell) -> (low, high)): R12's stops, and R13's block rule (`block_usd`)."""
     rows_, totals = [], {"low": 0.0, "high": 0.0, "stops": 0.0, "one_send": 0.0}
     for experiment, cell, (a, b) in run_order():
         n = (b - a) * len(SPECS[experiment]["task_cells"])
@@ -555,7 +563,7 @@ def schedule(per: dict[tuple[str, str], tuple[float, float]], spent: float,
         pilots.append({"model": model, "cell": cell, "episodes": n,
                        "planned_usd": stop_usd(n, per[(model, cell)][1]) + PILOT_EXTRA_USD})
     pilot_total = sum(p["planned_usd"] for p in pilots)
-    block = math.ceil(totals["high"] * BLOCK_MARGIN + pilot_total)
+    block = block_usd(totals["stops"], pilot_total, len(rows_) + len(pilots), one_send)
     return {"runs": rows_, "pilots": pilots,
             "totals": {**totals, "pilots": pilot_total, "block_max_usd": block},
             "phase_1a_spent_usd": spent, "phase_1a_after_block_usd": spent + block}
@@ -627,7 +635,8 @@ def main(argv: list[str] | None = None) -> int:
         out, git=runmeta.git_state(), experiment="r13_forecast", run_id=run_id,
         cell_or_config="R13",
         config={"sources": {k: list(v[1]) for k, v in SOURCES.items()},
-                "stop_margin": STOP_MARGIN, "block_margin": BLOCK_MARGIN,
+                "stop_margin": STOP_MARGIN,
+                "block_rule": "every run's stop, pilots included, plus one send past each",
                 "max_attempts": MAX_ATTEMPTS, "max_prompt_tokens": MAX_PROMPT_TOKENS,
                 "pilot_extra_usd": PILOT_EXTRA_USD, "summary_high_factor": SUMMARY_HIGH_FACTOR,
                 "pinned_high_reply_tokens": PINNED_HIGH_REPLY_TOKENS,

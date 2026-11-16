@@ -254,8 +254,15 @@ def test_the_stops_the_block_and_the_pilots_on_made_up_costs():
     assert t["high"] == pytest.approx(4 * 6.6172 + 4 * 2.4444 + 4 * 2.1802)  # 44.9672
     assert t["stops"] == pytest.approx(4 * (8.28 + 3.06 + 2.73))
     assert t["pilots"] == pytest.approx(1.42)
-    assert t["block_max_usd"] == 51  # ceil(44.9672 x 1.10 + 1.42) = ceil(50.884)
-    assert (s["phase_1a_spent_usd"], s["phase_1a_after_block_usd"]) == (500.0, 551.0)
+    # R13's block: every stop plus one send past each of the 14 runs,
+    # ceil(56.28 + 1.42 + 14 x 0.1386) = ceil(59.6604)
+    assert t["block_max_usd"] == 60
+    assert (s["phase_1a_spent_usd"], s["phase_1a_after_block_usd"]) == (500.0, 560.0)
+    # every run fits in what the block leaves while each earlier one spent its stop and a send
+    spent_block = 0.0
+    for stop in [p["planned_usd"] for p in s["pilots"]] + [r["planned_usd"] for r in s["runs"]]:
+        assert spent_block + stop <= t["block_max_usd"]
+        spent_block += stop + 0.1386
 
 
 def test_phase_1a_spend_is_read_as_r12_reads_it(tmp_path):
@@ -274,8 +281,11 @@ def test_phase_1a_spend_is_read_as_r12_reads_it(tmp_path):
     assert rf.phase_1a_spent(tmp_path) == pytest.approx(1.75)
 
 
-def test_the_margins_and_one_send_are_r12s():
-    assert (rf.STOP_MARGIN, rf.BLOCK_MARGIN) == (r12.STOP_MARGIN, r12.BLOCK_MARGIN) == (1.25, 1.10)
+def test_the_stop_margin_and_one_send_are_r12s_and_the_block_rule_r13s():
+    assert rf.STOP_MARGIN == r12.STOP_MARGIN == 1.25
+    assert not hasattr(rf, "BLOCK_MARGIN")  # R13's block rule replaces R12's margin
+    assert rf.block_usd(10.0, 1.0, 3, 0.1) == 12  # ceil(11.3)
+    assert rf.block_usd(10.0, 1.0, 0, 0.1) == 11  # a whole dollar stays whole
     fields = {f.name: f.default for f in dataclasses.fields(PaidTransport)}
     assert rf.MAX_ATTEMPTS == fields["max_attempts"] == 6
     # cache write $0.125, output $0.50 per million; 6 attempts; the US geo's 1.1
@@ -312,7 +322,8 @@ def test_the_forecast_has_r12s_schema(small):
         lo, hi = out["per_episode_usd"][f"{r['model']} {r['cell']}"]
         assert lo <= hi and r["planned_usd"] == rf.stop_usd(r["episodes"], hi)
     t = out["totals"]
-    assert t["block_max_usd"] == math.ceil(t["high"] * rf.BLOCK_MARGIN + t["pilots"])
+    assert t["block_max_usd"] == math.ceil(round(
+        t["stops"] + t["pilots"] + (len(out["runs"]) + len(out["pilots"])) * t["one_send"], 6))
     assert out["phase_1a_after_block_usd"] == pytest.approx(
         out["phase_1a_spent_usd"] + t["block_max_usd"])
 

@@ -1116,7 +1116,7 @@ def completeness(resolved: dict, templates: int, sweep_closed: bool = False,
 
 def _carried(cell: str, rec: dict) -> bool | None:
     """S_carried of §2.8 (reading 5): None where it is undefined. In R13's W-nk-0 the pinned
-    block counts beside the retained replies (ruled item 5), as the bridge does in Σ-n-0."""
+    block counts beside the retained replies (reading 5), as the bridge does in Σ-n-0."""
     if cell not in CARRY_CELLS:
         return None
     payload = rec.get("need_payload") or {}

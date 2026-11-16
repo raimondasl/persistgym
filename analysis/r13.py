@@ -111,7 +111,9 @@ Experiment 5 (W-nk-0 and W-n-0):
    pooled per arm and task cell, as R12 gave it: `analysis.r12.retained`), output tokens and
    cost per episode, and the cache-read share of input.
 8. Rounds: success per arm and round on the templates read, pooled over the 2 task cells (task
-   cell "all") and then per task cell, and each run's start and finish (UTC). Described only.
+   cell "all") and then per task cell, and each run's start and finish (UTC). The arm that
+   started each round is read from the runs' start times (`first_arm`) and given beside the
+   registered order, and a round started by another arm is a warning. Described only.
 9. Beside R12 experiment 1's four arms on the same templates: success, P(carried) and success
    given carried. Described only. They ran on 2026-11-12, not at the same time.
 
@@ -666,23 +668,51 @@ def declines(a: r12.Arm, restricted: dict, stop: int, raw: Path) -> tuple[dict |
     return {"by_task_cell": out, "tally": hnr.tally(rows)}, []
 
 
-def rounds(arms: list[r12.Arm], read: list[int], task_cells: tuple[str, ...]) -> list[dict]:
+def _round_bounds(k: int) -> tuple[int, int]:
+    """Round `k`'s templates (0-based round, ``lo`` to ``hi - 1``)."""
+    first = templates_of(PINNED).start
+    return first + k * ROUND, first + (k + 1) * ROUND
+
+
+def first_arm(arms: list[r12.Arm], times: list[dict], k: int) -> str | None:
+    """Reading 8: the arm that started round `k` (0-based), read from the runs: the arm of the
+    run that started first (``started_utc`` from `analysis.r12.run_times`, then the run id)
+    among those holding a record of one of the round's templates. None when no such run has a
+    start time. The registered order (`registered.r13_round_arms`) is given beside it."""
+    lo, hi = _round_bounds(k)
+    started = {x["run_id"]: x["started_utc"] for x in times}
+    starts = sorted((started[run.run_id], run.run_id, a.name) for a in arms for run in a.runs
+                    if started.get(run.run_id)
+                    and any(lo <= hh.template_index(rec["template_id"]) < hi
+                            for rec in run.records))
+    return starts[0][2] if starts else None
+
+
+def rounds(arms: list[r12.Arm], read: list[int], task_cells: tuple[str, ...],
+           times: list[dict]) -> tuple[list[dict], list[str]]:
     """Reading 8's success per arm and round on the templates read: pooled over the task cells
     (task cell "all", n = the task cells times the templates read in the round), then per task
-    cell as extra detail."""
-    templates = templates_of(PINNED)
-    rows = []
-    for k in range(len(templates) // ROUND):
-        lo, hi = templates.start + k * ROUND, templates.start + (k + 1) * ROUND
+    cell as extra detail. Each row gives the arm that started the round, read from the runs'
+    start times (`first_arm`, from `times`), beside the registered first arm, and a round
+    started by another arm than the registered one is a warning."""
+    rows, warnings = [], []
+    for k in range(len(templates_of(PINNED)) // ROUND):
+        lo, hi = _round_bounds(k)
         ts = [t for t in read if lo <= t < hi]
+        played, planned = first_arm(arms, times, k), registered.r13_round_arms(k)[0]
+        if played is not None and played != planned:
+            warnings.append(f"round {k + 1} ({lo}-{hi - 1}) started with {played}, but the "
+                            f"registered order has {planned} first (the runs' start times are "
+                            "in reading 8)")
         for a in arms:
             per = {tc: [float(bool(a.resolved[r12._key(a.cell, t, tc)].record.get(
                 "need_correct"))) for t in ts] for tc in task_cells}
             for tc, vals in (("all", [v for c in task_cells for v in per[c]]), *per.items()):
                 rows.append({"round": k + 1, "templates": f"{lo}-{hi - 1}",
                              "templates_read": len(ts), "arm": a.name, "task_cell": tc,
-                             "first_arm": registered.r13_round_arms(k)[0], **r12._rate(vals)})
-    return rows
+                             "first_arm": played, "registered_first_arm": planned,
+                             **r12._rate(vals)})
+    return rows, warnings
 
 
 # --- the transcripts: responses ----------------------------------------------------------------
@@ -958,8 +988,10 @@ def _experiment(e: str, st: dict, check: dict, raw: Path, boot_seed: int, facts:
             for run_id in missing:
                 incomplete.append(f"{LABEL[e]}: no raw transcript for {run_id} under {raw} "
                                   f"({a.name}): reading 5 cannot be made")
-        result["rounds"] = {"success": rounds(st["own"], read, task_cells),
-                            "runs": r12.run_times(st["own"])}
+        times = r12.run_times(st["own"])
+        success, warn = rounds(st["own"], read, task_cells, times)
+        warnings += [f"{LABEL[e]}: {w}" for w in warn]
+        result["rounds"] = {"success": success, "runs": times}
         result["beside_r12"] = [beside(r12_arm(comp, registered.R12_NOTES_EXPERIMENT, c), read,
                                        task_cells, stop, hh.MESSAGES_API)
                                 for c in R12_NOTES_CELLS]
@@ -1206,12 +1238,14 @@ def _pinned_lines(x: dict) -> list[str]:
     lines += ["**8. Rounds** (described only):", "",
               ("Task cell \"all\" pools the task cells: success per arm and round. The rows per "
                "task cell are extra detail."), "",
-              "| Round | Templates | Read | First arm | Arm | Task cell | Success |",
-              "|---|---|---|---|---|---|---|"]
+              ("\"First arm\" is the arm whose run started the round, read from the runs' start "
+               "times below. \"Registered\" is the contract's order."), "",
+              ("| Round | Templates | Read | First arm | Registered first arm | Arm | Task cell | "
+               "Success |"), "|---|---|---|---|---|---|---|---|"]
     for r in x["rounds"]["success"]:
         lines.append(f"| {r['round']} | {r['templates']} | {r['templates_read']} | "
-                     f"{r['first_arm']} | {r['arm']} | {r['task_cell']} | "
-                     f"{r['successes']}/{r['n']} ({_pct(r['rate'])}) |")
+                     f"{r['first_arm'] or '-'} | {r['registered_first_arm']} | {r['arm']} | "
+                     f"{r['task_cell']} | {r['successes']}/{r['n']} ({_pct(r['rate'])}) |")
     lines += ["", "| Run | Arm | Templates | Ending | Started (UTC) | Finished (UTC) |",
               "|---|---|---|---|---|---|"]
     for r in x["rounds"]["runs"]:

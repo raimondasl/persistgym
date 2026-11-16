@@ -15,8 +15,9 @@ one summary call, then four in a row, so one episode ends AGENT_ERROR.
 
 The comparators (R8's, R9's, R12's and luna's runs) are read from the committed records
 (`comparators_root`). Each reading is checked against a calculation here from the records and
-transcripts the runner wrote, and a few on made-up records small enough to check by hand. No R13
-run exists, and no test reads an outcome of one."""
+transcripts the runner wrote, and a few on made-up records small enough to check by hand. No test
+reads an outcome of R13's own runs. The last tests check that luna's and R12's arms, as this
+script resolves them, give their cited outputs."""
 
 from __future__ import annotations
 
@@ -266,9 +267,6 @@ def test_with_no_r13_run_it_names_both_experiments_and_writes_nothing(tmp_path, 
     assert not out.exists()
     err = capsys.readouterr().err
     assert "Experiment 4" in err and "Experiment 5" in err and "prepared, not run" in err
-    # the committed records hold no R13 run today: the script says so and writes nothing
-    assert r13.main(["--no-write"]) == 2
-    assert f"no run under results/{SIGMA}/" in capsys.readouterr().err
 
 
 # --- experiment 4: Σ-n-0 ---------------------------------------------------------------------
@@ -714,13 +712,17 @@ def test_experiment_5_responses_and_retained_replies(root):
 
 
 def test_rounds_and_run_times(root):
-    x = _read(root)["experiments"][PINNED]
+    r = _read(root)
+    x = r["experiments"][PINNED]
     rows = x["rounds"]["success"]
     assert len(rows) == 4 * 2 * 3
     assert [r["templates_read"] for r in rows if r["arm"] == "W-nk-0" and r["task_cell"] == "all"
             ] == [2, 2, 0, 0]
-    assert [r["first_arm"] for r in rows if r["arm"] == "W-n-0" and r["task_cell"] == "all"
-            ] == ["W-nk-0", "W-n-0", "W-nk-0", "W-n-0"]
+    # the arm that started a round is read from the runs: rounds 3 and 4 have none
+    pooled = [r for r in rows if r["arm"] == "W-n-0" and r["task_cell"] == "all"]
+    assert [r["first_arm"] for r in pooled] == ["W-nk-0", "W-n-0", None, None]
+    assert [r["registered_first_arm"] for r in pooled] == ["W-nk-0", "W-n-0", "W-nk-0", "W-n-0"]
+    assert not any("round" in w and "started with" in w for w in r["warnings"])
     for cell in ("W-nk-0", "W-n-0"):
         mine = records(root, PINNED, cell)
         pooled = [r for r in rows if r["arm"] == cell and r["task_cell"] == "all"]
@@ -732,6 +734,25 @@ def test_rounds_and_run_times(root):
     assert [r["arm"] for r in runs] == ["W-nk-0", "W-n-0", "W-n-0", "W-nk-0"]
     assert [r["templates"] for r in runs] == ["200-201", "200-201", "225-226", "225-226"]
     assert all(r["started_utc"] <= r["finished_utc"] for r in runs)
+
+
+def test_a_round_played_out_of_the_registered_order_is_read_from_the_runs(root):
+    """Round 1's W-n-0 run is made to start first: the reading says so, beside the registered
+    order, and warns. Round 2 keeps its order."""
+    (wn,) = [f for f in _runs(root, PINNED) if "-W-n-0-" in f.name
+             and "main-000200" in (f / "episodes.jsonl").read_text(encoding="utf-8")]
+    meta = json.loads((wn / "meta.json").read_text(encoding="utf-8"))
+    meta["started_utc"] = "2026-01-01T00:00:00+00:00"            # before every other run
+    (wn / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    r = _read(root)
+    rows = [x for x in r["experiments"][PINNED]["rounds"]["success"] if x["task_cell"] == "all"
+            and x["arm"] == "W-nk-0"]
+    assert [x["first_arm"] for x in rows[:2]] == ["W-n-0", "W-n-0"]
+    assert [x["registered_first_arm"] for x in rows[:2]] == ["W-nk-0", "W-n-0"]
+    (w,) = [w for w in r["warnings"] if "started with" in w]
+    assert w.startswith("Experiment 5: round 1 (200-224) started with W-n-0")
+    assert "registered order has W-nk-0 first" in w
+    assert r13.summary(r).count(f"warning: {w}") == 1
 
 
 def test_r12_experiment_1_is_set_beside_on_the_same_templates(root):
@@ -959,3 +980,64 @@ def test_main_writes_its_three_files_with_their_metadata(root, tmp_path, capsys)
                      "--no-write", "--out-dir", str(again)]) == 0
     assert not again.exists()
     assert "# R13:" in capsys.readouterr().out
+
+
+# --- the comparators, as their cited outputs counted them ----------------------------------------
+
+def _json(x):
+    return json.loads(json.dumps(hh._clean(x), default=hh._json_default))
+
+
+def _templates(ranges: str) -> list[int]:
+    """The templates of an output's ``templates`` field ("0-199", "201, 225-226")."""
+    out: list[int] = []
+    for part in ranges.split(", "):
+        lo, _, hi = part.partition("-")
+        out += range(int(lo), int(hi or lo) + 1)
+    return out
+
+
+def test_lunas_sigma_is_its_cited_output():
+    """luna's Σ-n-0 as `luna_arm` resolves it and `beside` reads it, on main templates 0-199,
+    equals the Σ-n-0 rows of luna's cited output: success, §2.8's accounting and
+    compacted_between per task cell."""
+    h = json.loads((ROOT / hh.LUNA_CITED_OUTPUT / "h1h3.json").read_text(encoding="utf-8"))
+    assert h["templates"] == 200
+    b = r13.beside(r13.luna_arm(ROOT), list(range(200)), ALL8, 200, hh.RESPONSES_API)
+    assert (b["templates"], b["n_templates"], b["left_out"]) == ("0-199", 200, [])
+    want = {c["task_cell"]: c for c in h["cells"]
+            if (c["kind"], c["variant"]) == ("Σ-n-0", "base")}
+    assert {c["task_cell"]: (c["n"], c["successes"]) for c in _json(b["cells"])} == {
+        tc: (c["n"], c["successes"]) for tc, c in want.items()}
+    acc = {x["task_cell"]: x for x in h["accounting"] if x["cell"] == "Σ-n-0"}
+    assert set(acc) == set(ALL8)
+    for x in _json(b["accounting"]):
+        w = acc[x["task_cell"]]
+        assert x == {k: w[k] for k in x}, x["task_cell"]
+        assert _json(b["compacted_between"])[x["task_cell"]] == w["by_compacted_between"]
+
+
+R12_CITED = [(registered.R12_BLOCK_EXPERIMENT, "W-b-0"),
+             *((registered.R12_NOTES_EXPERIMENT, c) for c in r13.R12_NOTES_CELLS)]
+
+
+@pytest.mark.parametrize(("experiment", "cell"), R12_CITED)
+def test_r12s_arms_are_its_cited_output(experiment, cell):
+    """R12's W-b-0 and experiment 1's four arms, as `r12_arm` resolves them and `beside` reads
+    them on the templates R12's cited output read, equal that output's arm cells and §2.8
+    accounting."""
+    x = json.loads((ROOT / r13.R12_OUTPUT / "readings.json").read_text(
+        encoding="utf-8"))["experiments"][experiment]
+    read = _templates(x["templates"])
+    assert len(read) == x["templates_read"]
+    task_cells = tuple(x["task_cells"])
+    b = r13.beside(r13.r12_arm(ROOT, experiment, cell), read, task_cells, read[-1] + 1,
+                   hh.MESSAGES_API)
+    assert (b["templates"], b["n_templates"], b["left_out"]) == (x["templates"], len(read), [])
+    want = next(a for a in x["arms"] if a["arm"] == cell)
+    assert [(c["task_cell"], c["n"], c["successes"]) for c in _json(b["cells"])] == [
+        (c["task_cell"], c["n"], c["successes"]) for c in want["cells"]]
+    got = _json(b["accounting"])
+    assert [g["task_cell"] for g in got] == [w["task_cell"] for w in want["accounting"]]
+    for g, w in zip(got, want["accounting"], strict=True):
+        assert g == {k: w[k] for k in g}, (cell, g["task_cell"])

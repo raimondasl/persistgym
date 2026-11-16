@@ -506,7 +506,8 @@ R13, merged by the researcher. That pull request approves no spending: no R13 ru
 until the researcher merges block `R13_BLOCK`'s approval line in results/decisions.md and the
 PLAN amendment that raises phase 1a's cap, both in a later pull request. A kill switch: set
 False, every run in R13's experiments and every R13 pilot refuses (`R13_STOP`), and R8's to
-R12's runs are unaffected. Tests monkeypatch it."""
+R12's runs are unaffected. With `R8_IN_EFFECT` False they refuse too (R8's `R8_STOP` comes
+first). Tests monkeypatch it."""
 R13_SIGMA_EXPERIMENT = "persistgym_haiku_r13_sigma"
 R13_PINNED_EXPERIMENT = "persistgym_haiku_r13_pinned"
 R13_SPECS: dict[str, dict] = {
@@ -924,8 +925,9 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
       three experiments (`HAIKU_EXPERIMENTS`) pass on to `haiku_refusal`, R8 being the new
       dated amendment R6 change 1 asks for, and so do its runs in R9's
       `HAIKU_NOTES_EXPERIMENT` (PREREG §17.9), R10's `HAIKU_PROVENANCE_EXPERIMENT`
-      (PREREG §17.10), R11's `HAIKU_CONTROL_EXPERIMENT` (PREREG §17.11) and R12's Haiku
-      experiments (PREREG §17.12), and every other Haiku run refuses (another
+      (PREREG §17.10), R11's `HAIKU_CONTROL_EXPERIMENT` (PREREG §17.11), R12's Haiku
+      experiments (PREREG §17.12) and R13's two experiments (PREREG §17.13), and every
+      other Haiku run refuses (another
       `claude-*` model as one that is not registered); with the kill switch off
       (`R8_IN_EFFECT` False) every Haiku run refuses (`R8_STOP`), and so does every other
       model on the Messages wire (any `claude-*` string, `_on_messages_wire`);
@@ -947,7 +949,7 @@ def r6_refusal(experiment: str, model: str, cell: str | None, results_root: Path
     if (family == HAIKU_MODEL
             and experiment in (*HAIKU_EXPERIMENTS, HAIKU_NOTES_EXPERIMENT,
                                HAIKU_PROVENANCE_EXPERIMENT, HAIKU_CONTROL_EXPERIMENT,
-                               R12_NOTES_EXPERIMENT, R12_BLOCK_EXPERIMENT)
+                               R12_NOTES_EXPERIMENT, R12_BLOCK_EXPERIMENT, *R13_EXPERIMENTS)
             and cell is not None):
         return None
     # R12 (PREREG §17.12): Sonnet's runs and pilots pass on to `haiku_refusal`
@@ -1109,9 +1111,16 @@ def haiku_refusal(experiment: str, model: str, effort: str, cell: str, generator
     `HAIKU_PROVENANCE_EXPERIMENT` (PREREG §17.10) to `_haiku_provenance_refusal`, and a run in
     R11's `HAIKU_CONTROL_EXPERIMENT` (PREREG §17.11) to `_haiku_control_refusal`. A run in
     R12's experiments, and a pilot of R12's new cells or of claude-sonnet-5-5 (PREREG §17.12),
-    is held to `_r12_refusal`, before R10's cell rule, since R12 also runs W-np-0."""
+    is held to `_r12_refusal`, before R10's cell rule, since R12 also runs W-np-0. A run in
+    R13's experiments, and a Haiku pilot of R13's new cells (PREREG §17.13), is held to
+    `_r13_refusal`, first of all: R13's runs and R12's are disjoint, and R13 also runs W-n-0
+    (R9's and R11's cell), so no rule of R9's to R12's judges an R13 run, whatever its cell."""
     if not R8_IN_EFFECT:
         return f"{R8_STOP}; got --experiment {experiment}, cell {cell}{_not_haiku(model)}"
+    if _is_r13_run(experiment, model, cell):
+        return _r13_refusal(experiment, model, effort, cell, generator_hash, split=split,
+                            variant=variant, task_cells=task_cells, request=request,
+                            templates=templates, matrix=matrix, repeat_index=repeat_index)
     if _is_r12_run(experiment, model, cell):
         return _r12_refusal(experiment, model, effort, cell, generator_hash, split=split,
                             variant=variant, task_cells=task_cells, request=request,
@@ -1396,7 +1405,10 @@ def r12_block_refusal(approved_block: str | None, cell: str, experiment: str,
     The general guard admits a run only in its block's experiments, but R12's pilots share
     `persistgym_pilot` with R8's and R10's, so the cell and the model decide. `harnesses run`
     and `single-turn` check it before the paid-run lock. The name is compared as the paid
-    guard reads it, stripped (common/approval.py)."""
+    guard reads it, stripped (common/approval.py). A run R13 judges (`_is_r13_run`) is left to
+    `r13_block_refusal`, which `harnesses run` and `single-turn` check next."""
+    if _is_r13_run(experiment, model, cell):
+        return None
     mine = _is_r12_run(experiment, model, cell)
     approved_block = None if approved_block is None else str(approved_block).strip()
     if mine and approved_block != R12_BLOCK:
@@ -1407,6 +1419,121 @@ def r12_block_refusal(approved_block: str | None, cell: str, experiment: str,
         return (f"block {R12_BLOCK} funds R12's runs only ({R12_REF}): its experiments "
                 f"{', '.join(R12_EXPERIMENTS)} and pilots of its new cells or of "
                 f"{SONNET_MODEL}; got --experiment {experiment}, cell {cell}, model {model}")
+    return None
+
+
+def _is_r13_run(experiment: str, model: str, cell: str | None) -> bool:
+    """Whether R13's rules judge this run: any run in R13's experiments, and a pilot of R13's
+    new cells on claude-haiku-5-5 or a dated snapshot of it (PREREG §17.13). Σ-n-0 is also
+    luna's cell (PLAN §6), so a pilot of it, or of W-nk-0, on another model is not R13's."""
+    return (experiment in R13_EXPERIMENTS
+            or (experiment == PILOT_EXPERIMENT and cell in R13_NEW_CELLS
+                and model_family(model) == HAIKU_MODEL))
+
+
+def _r13_refusal(experiment: str, model: str, effort: str, cell: str, generator_hash: str, *,
+                 split: str, variant: str, task_cells: tuple[str, ...] | None,
+                 request: dict | None, templates: tuple[int, int] | None,
+                 matrix: str | None, repeat_index: int = 0) -> str | None:
+    """Why a run under R13 must refuse, or None (PREREG §17.13; fail closed). With
+    `R13_IN_EFFECT` False every such run refuses (`R13_STOP`). While it is True, every run has
+    R8's settings (--effort medium on the default generator config with `HAIKU_REQUEST`, base
+    episodes, repeat 0) and:
+    * a run in one of R13's experiments (`R13_SPECS`) is exactly that experiment's model (no
+      dated snapshot) in one of its cells, the full matrix on its task cells, main templates
+      within its range, and, where the spec says so, only once `HAIKU_G1_PASSED` records
+      Haiku's G1 on that config;
+    * a pilot (`persistgym_pilot`) is one of `R13_PILOTS`' (model, cell) pairs on pilot
+      templates within `R13_PILOT_TEMPLATES`, a non-empty set of that pair's task cells, at
+      most `R13_PILOT_MAX_EPISODES` episodes.
+    `task_cells`, `request`, `templates` and, for a main run, `matrix` left as None refuse.
+    These rules admit no spending: every R13 run also needs block `R13_BLOCK`
+    (`r13_block_refusal`), whose approval line the paid guard reads (common/approval.py)."""
+    if not R13_IN_EFFECT:
+        return f"{R13_STOP}; got --experiment {experiment}, cell {cell}, model {model}"
+    wrong = [what for what, bad in (
+        (f"--effort {effort}", effort != HAIKU_EFFORT),
+        (f"generator config {generator_hash[:12]}", generator_hash != HAIKU_GENERATOR_HASH),
+        (f"--variant {variant}", variant != "base"),
+        (f"--repeat-index {repeat_index}", repeat_index != 0)) if bad]
+    wrong += _request_wrong(request, HAIKU_REQUEST)
+    if experiment == PILOT_EXPERIMENT:
+        allowed = R13_PILOTS.get((model, cell))
+        if allowed is None:
+            wrong.append(f"pilot of model {model}, cell {cell}")
+        if split != "pilot":
+            wrong.append(f"--split {split}")
+        wrong += _haiku_templates_wrong(templates, R13_PILOT_TEMPLATES[1], "pilot",
+                                        first=R13_PILOT_TEMPLATES[0])
+        if task_cells is None:
+            wrong.append("task cells (not given)")
+        elif (not task_cells or len(set(task_cells)) != len(task_cells)
+              or (allowed is not None and not set(task_cells) <= set(allowed))):
+            wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
+        elif templates is not None and (
+                (templates[1] - templates[0]) * len(task_cells) > R13_PILOT_MAX_EPISODES):
+            wrong.append(f"{(templates[1] - templates[0]) * len(task_cells)} pilot episodes")
+        if wrong:
+            pairs = "; ".join(f"{m} {c} on {', '.join(t)}" for (m, c), t in R13_PILOTS.items())
+            return (f"R13's pilots ({R13_REF}) are exactly: {pairs}; on pilot templates "
+                    f"{R13_PILOT_TEMPLATES[0]}-{R13_PILOT_TEMPLATES[1] - 1}, at most "
+                    f"{R13_PILOT_MAX_EPISODES} episodes, --variant base, repeat 0, at --effort "
+                    f"{HAIKU_EFFORT} on the default generator config, with --mode standard, "
+                    "--service-tier standard and no --W; got " + "; ".join(wrong))
+        return None
+    spec = R13_SPECS[experiment]
+    first, stop = spec["templates"]
+    if model != spec["model"]:
+        wrong.append(f"model {model}")
+    if cell not in spec["cells"]:
+        wrong.append(f"cell {cell}")
+    if split != "main":
+        wrong.append(f"--split {split}")
+    if matrix != HAIKU_MATRIX:
+        wrong.append({"d11": "--matrix d11", "custom": "--cell-templates",
+                      None: "run matrix (not given)"}.get(matrix, f"run matrix {matrix}"))
+    if task_cells is None:
+        wrong.append("task cells (not given)")
+    elif sorted(task_cells) != sorted(spec["task_cells"]):
+        wrong.append(f"task cells {', '.join(task_cells) or '(none)'}")
+    wrong += _haiku_templates_wrong(templates, stop, "main", first=first)
+    if wrong:
+        return (f"{experiment} runs exactly {spec['model']}'s {', '.join(spec['cells'])} "
+                f"cells ({R13_REF}): on the task cells {', '.join(spec['task_cells'])} (the "
+                f"full matrix), --split main, main templates within {first}-{stop - 1}, "
+                f"--variant base, repeat 0, at --effort {HAIKU_EFFORT} on the default "
+                "generator config, with --mode standard, --service-tier standard and no --W; "
+                "got " + "; ".join(wrong))
+    if spec["g1"] and HAIKU_G1_PASSED.get(HAIKU_MODEL) != generator_hash:
+        return (f"{experiment} runs {HAIKU_MODEL} only after the researcher has recorded the "
+                f"Haiku replication's G1 gate as passed on generator config "
+                f"{generator_hash[:12]} (harnesses/registered.py HAIKU_G1_PASSED; {R13_REF})")
+    return None
+
+
+def r13_block_refusal(approved_block: str | None, cell: str, experiment: str,
+                      model: str) -> str | None:
+    """Why a paid run must refuse under R13's block rule, or None (PREREG §17.13): every run
+    R13's rules judge (`_is_r13_run`: its experiments, and Haiku pilots of its new cells) runs
+    under block `R13_BLOCK` only, and that block funds nothing else. The general guard admits
+    a run only in its block's experiments, but R13's pilots share `persistgym_pilot` with R8's,
+    R10's and R12's, and luna's Σ-n-0 is not R13's, so the experiment, the cell and the model
+    decide. `harnesses run` and `single-turn` check it before the paid-run lock, after R10's
+    and R12's block rules, which leave R13's runs to it. The name is compared as the paid
+    guard reads it, stripped (common/approval.py). The block's approval line is the
+    researcher's to merge: until it is in results/decisions.md the paid guard refuses every
+    run under it."""
+    mine = _is_r13_run(experiment, model, cell)
+    approved_block = None if approved_block is None else str(approved_block).strip()
+    if mine and approved_block != R13_BLOCK:
+        return (f"R13's runs ({R13_REF}) run under block {R13_BLOCK} only, got "
+                f"--approved-block {approved_block} (--experiment {experiment}, cell {cell}, "
+                f"model {model})")
+    if not mine and approved_block == R13_BLOCK:
+        return (f"block {R13_BLOCK} funds R13's runs only ({R13_REF}): its experiments "
+                f"{', '.join(R13_EXPERIMENTS)} and {HAIKU_MODEL}'s pilots of "
+                f"{', '.join(R13_NEW_CELLS)}; got --experiment {experiment}, cell {cell}, "
+                f"model {model}")
     return None
 
 
@@ -1657,8 +1784,9 @@ def provenance_block_refusal(approved_block: str | None, cell: str, *,
     paid-run lock, and refuse a block name that is not exactly a name (padding) before it. The
     name is compared as the paid guard reads it, stripped (common/approval.py). A run R12
     judges (`_is_r12_run`, given `experiment` and `model`), which also plays W-np-0, is left
-    to `r12_block_refusal`."""
-    if experiment is not None and _is_r12_run(experiment, model or "", cell):
+    to `r12_block_refusal`, and a run R13 judges (`_is_r13_run`) to `r13_block_refusal`."""
+    if experiment is not None and (_is_r12_run(experiment, model or "", cell)
+                                   or _is_r13_run(experiment, model or "", cell)):
         return None
     mine = cell in HAIKU_PROVENANCE_CELLS
     approved_block = None if approved_block is None else str(approved_block).strip()
@@ -1719,9 +1847,12 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
        which reads it too, and a run in R11's `HAIKU_CONTROL_EXPERIMENT` (PREREG §17.11) to
        `_haiku_control_refusal`, which reads it too, and a run under R12 (its experiments and
        pilots of its new cells or of claude-sonnet-5-5, PREREG §17.12) to `_r12_refusal`,
-       which reads it too. No other rule reads it. Any run of R10's or R12's cells, or in R8's
-       `persistgym_haiku`, R9's, R10's, R11's or R12's experiments, goes to `haiku_refusal`
-       whatever its model, so with R6's hard stop off no other model runs there either."""
+       which reads it too, and a run under R13 (its experiments and Haiku pilots of its new
+       cells, PREREG §17.13) to `_r13_refusal`, which reads it too. No other rule reads it.
+       Any run of R10's or R12's cells or of W-nk-0 (R13's new cell that no other model
+       registers; Σ-n-0 is luna's too), or in R8's `persistgym_haiku`, R9's, R10's, R11's,
+       R12's or R13's experiments, goes to `haiku_refusal` whatever its model, so with R6's
+       hard stop off no other model runs there either."""
     why = r6_refusal(experiment, model, cell, results_root, split=split,
                      task_cells=task_cells, templates=templates, effort=effort,
                      generator_hash=generator_hash, request=request)
@@ -1730,12 +1861,14 @@ def check_run_settings(experiment: str, model: str, effort: str, cell: str,
     family = model_family(model)
     # R8's, R9's, R10's and R11's experiments and R10's cells are Haiku's only: any model in
     # them is judged by `haiku_refusal`, which refuses every other model, with R6's hard stop
-    # off too
+    # off too. R12's and R13's experiments and new cells likewise, but for Σ-n-0, which is
+    # luna's cell too (PLAN §6): its runs on luna and sol are judged as before
     if (family == HAIKU_MODEL or _on_messages_wire(model) or cell in HAIKU_PROVENANCE_CELLS
             or cell in R12_NEW_CELLS
+            or (cell in R13_NEW_CELLS and cell not in LUNA_CELLS)
             or experiment in (HAIKU_EXPERIMENT, HAIKU_NOTES_EXPERIMENT,
                               HAIKU_PROVENANCE_EXPERIMENT, HAIKU_CONTROL_EXPERIMENT,
-                              *R12_EXPERIMENTS)):
+                              *R12_EXPERIMENTS, *R13_EXPERIMENTS)):
         return haiku_refusal(experiment, model, effort, cell, generator_hash, results_root,
                              split=split, variant=variant, task_cells=task_cells,
                              request=request, templates=templates, matrix=matrix,

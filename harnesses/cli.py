@@ -506,9 +506,11 @@ def _run_id_refusal(run_id: str, experiment: str, cell_id: str) -> str | None:
     cells also needs a run id the pilot gate reads as a name (`registered.PLAIN_RUN_ID`, not
     ending in "." which Windows drops from a folder name). R12 (PREREG §17.12): a run in R12's
     experiments, played in rounds of its own run ids, refuses a used run id too, so a round
-    never appends to an earlier one."""
+    never appends to an earlier one. R13 (PREREG §17.13) likewise for a run in its
+    experiments, also played in runs and rounds of their own run ids."""
     mine = cell_id in registered.HAIKU_PROVENANCE_CELLS
-    if not (mine or experiment == PILOT_EXPERIMENT or experiment in registered.R12_EXPERIMENTS):
+    if not (mine or experiment == PILOT_EXPERIMENT
+            or experiment in (*registered.R12_EXPERIMENTS, *registered.R13_EXPERIMENTS)):
         return None
     if mine and (not registered.PLAIN_RUN_ID.fullmatch(run_id) or run_id.endswith(".")):
         return (f"--run-id {run_id!r}: a run of R10's cells needs a run id of letters, digits, "
@@ -517,8 +519,8 @@ def _run_id_refusal(run_id: str, experiment: str, cell_id: str) -> str | None:
             if d.exists()]
     if used:
         return (f"--run-id {run_id} is already used ({', '.join(used)}): a pilot, a run of "
-                f"R10's cells or a run in R12's experiments needs a new run id "
-                f"({registered.R10_REF}; {registered.R12_REF})")
+                f"R10's cells or a run in R12's or R13's experiments needs a new run id "
+                f"({registered.R10_REF}; {registered.R12_REF}; {registered.R13_REF})")
     return None
 
 
@@ -574,10 +576,12 @@ def cmd_run(a) -> int:
         templates=(a.start, a.start + matrix.n_templates), matrix=matrix.name,
         repeat_index=matrix.repeat_index)
     # R10 (PREREG §17.10): its cells run under its block only, and its block funds them only;
-    # R12 (PREREG §17.12) likewise for its experiments and pilots
+    # R12 (PREREG §17.12) and R13 (PREREG §17.13) likewise for their experiments and pilots
     why = why or registered.provenance_block_refusal(a.approved_block, cell.cell_id,
                                                      experiment=a.experiment, model=a.model)
     why = why or registered.r12_block_refusal(a.approved_block, cell.cell_id, a.experiment,
+                                              a.model)
+    why = why or registered.r13_block_refusal(a.approved_block, cell.cell_id, a.experiment,
                                               a.model)
     if why:
         print(f"refused: {why}", file=sys.stderr)
@@ -1093,6 +1097,9 @@ def cmd_single_turn(a) -> int:
     why = why or registered.provenance_block_refusal(a.approved_block,
                                                      registered.LUNA_SINGLE_TURN_CELL)
     why = why or registered.r12_block_refusal(a.approved_block,
+                                              registered.LUNA_SINGLE_TURN_CELL, a.experiment,
+                                              a.model)
+    why = why or registered.r13_block_refusal(a.approved_block,
                                               registered.LUNA_SINGLE_TURN_CELL, a.experiment,
                                               a.model)
     if why:

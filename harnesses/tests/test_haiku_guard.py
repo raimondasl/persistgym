@@ -202,7 +202,8 @@ def test_with_r8_luna_g1_never_counts_for_haiku(tmp_path, monkeypatch):
                     "request": {**REQUEST, "W": 1000}}, "--W 1000"),
     (PILOT, "W-0", {"split": "pilot", "templates": (0, 1), "request": None}, "not given"),
     (PILOT, "W-0", {"split": "pilot", "templates": (0, 1), "gen": OTHER}, "generator config"),
-    (PILOT, "Σ-n-0", {"split": "pilot", "templates": (0, 1)}, "cell Σ-n-0"),
+    # Haiku's Σ-n-0 pilot is R13's since PREREG §17.13 (tests/test_r13_guard.py)
+    (PILOT, "Σ-n-r", {"split": "pilot", "templates": (0, 1)}, "cell Σ-n-r"),
     (PILOT, "F-r", {"split": "pilot", "templates": (0, 1)}, "cell F-r"),
     (PILOT, "F-0", {"split": "pilot", "templates": (0, 1), "variant": "restated"},
      "--variant restated"),

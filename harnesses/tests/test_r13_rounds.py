@@ -1,5 +1,5 @@
 """R13's run driver (harnesses/r13_rounds.py; PREREG §17.13), on a fake forecast in R12's
-forecast schema: R13 is prepared, not run, so no forecast of it need be committed yet.
+forecast schema, so the tests do not depend on the committed forecast.
 
 * Every command the driver builds passes R13's guard and block rule, as `harnesses run` would
   check it, and parses as a `harnesses run` command, in plain ASCII (Σ-n-0 as sigma-n-0).

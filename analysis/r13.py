@@ -105,7 +105,7 @@ Experiment 5 (W-nk-0 and W-n-0):
    and the replies left out.
 5. Declines: per arm and task cell, the failed episodes whose carried notes held the fact (either
    source), and among them those whose need-step reply declines (resolved to no option) or
-   disowns an earlier figure, with R10's text pattern (`analysis.haiku_notes_replies`'s
+   disowns an earlier figure, with R9's text pattern (`analysis.haiku_notes_replies`'s
    `DISOWN` and `episode_reading`, which `analysis.haiku_provenance` reads), from the
    transcripts. `haiku_notes_replies.tally` of the same rows is given too, by carried.
 6. Choices with the fact evicted, per arm.
@@ -224,8 +224,9 @@ NOTE_LABEL = ("W-nk-0's block keeps the replies outside the window and labels th
 NOTE_LUNA = ("luna's Σ-n-0 is another model on another API: set beside Haiku's, described only, "
              "with no contrast between the models.")
 NOTE_R12 = "R12 experiment 1 ran on 2026-11-12, not at the same time as experiment 5."
-NOTE_PATTERN = ("Declines and disowns are R10's text patterns (`analysis.haiku_notes_replies`), "
-                "pointers rather than a validated coding.")
+NOTE_PATTERN = ("Declines and disowns are R9's text patterns (`analysis.haiku_notes_replies`), "
+                "which R9's hand checks found to undercount (40 of 62 declines, 45 of 63 "
+                "retractions): pointers rather than a validated coding.")
 """The caveats the summary repeats next to the readings they bear on."""
 
 
@@ -638,7 +639,7 @@ def block_at_need(records: dict[str, list[dict]]) -> dict:
 
 
 def declines(a: r12.Arm, restricted: dict, stop: int, raw: Path) -> tuple[dict | None, list[str]]:
-    """Reading 5 for one arm: R10's text pattern (`haiku_notes_replies.steps` and
+    """Reading 5 for one arm: R9's text pattern (`haiku_notes_replies.steps` and
     `episode_reading`, unchanged) on its counted not-recoverable far episodes, each read from
     the transcript of the run that holds its counted record, with an episode's "carried" read
     as §2.8's S_carried in either source (`persistgym_h1h3._carried`: the retained replies, or

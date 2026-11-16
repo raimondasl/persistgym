@@ -498,6 +498,61 @@ R12_STOP = (f"{', '.join(R12_EXPERIMENTS)} and R12's pilots run only under {R12_
             "switched off (harnesses/registered.py R12_IN_EFFECT is False): every such run "
             "refuses until the researcher's pull request sets it True again")
 
+# --- R13 (PREREG §17.13): Σ-n-0 on Haiku, and W-nk-0 (a pinned block of its dropped replies) ---
+R13_REF = "PREREG.md §17.13 (amendment R13)"
+R13_IN_EFFECT = True
+"""Whether amendment R13 (PREREG §17.13) is in effect. True since the pull request that adds
+R13, merged by the researcher. That pull request approves no spending: no R13 run can be paid
+until the researcher merges block `R13_BLOCK`'s approval line in results/decisions.md and the
+PLAN amendment that raises phase 1a's cap, both in a later pull request. A kill switch: set
+False, every run in R13's experiments and every R13 pilot refuses (`R13_STOP`), and R8's to
+R12's runs are unaffected. Tests monkeypatch it."""
+R13_SIGMA_EXPERIMENT = "persistgym_haiku_r13_sigma"
+R13_PINNED_EXPERIMENT = "persistgym_haiku_r13_pinned"
+R13_SPECS: dict[str, dict] = {
+    # Experiment 4: Haiku's summary cell on R8's episodes, all 8 task cells, 4 runs of 50
+    R13_SIGMA_EXPERIMENT: {"model": HAIKU_MODEL, "cells": ("Σ-n-0",),
+                           "task_cells": HAIKU_TASK_CELLS, "templates": (0, HAIKU_T),
+                           "g1": True},
+    # Experiment 5: the pinned block and a concurrent W-n-0, in rotating rounds of 25
+    R13_PINNED_EXPERIMENT: {"model": HAIKU_MODEL, "cells": ("W-nk-0", "W-n-0"),
+                            "task_cells": HAIKU_CONTROL_TASK_CELLS, "templates": (200, 300),
+                            "g1": True},
+}
+"""R13: each experiment's exact model, harness cells, task cells (the full matrix on them) and
+main template range [first, last + 1), and whether it needs Haiku's G1 (`HAIKU_G1_PASSED`)."""
+R13_EXPERIMENTS = tuple(R13_SPECS)
+R13_NEW_CELLS = ("Σ-n-0", "W-nk-0")
+"""The cells R13 pilots on Haiku. Σ-n-0 is also luna's (PLAN §6), so a pilot is R13's only
+when its model is Haiku (`_is_r13_run`); W-nk-0 is `harnesses.cells.R13_CELLS`'."""
+R13_PILOTS: dict[tuple[str, str], tuple[str, ...]] = {
+    (HAIKU_MODEL, "Σ-n-0"): HAIKU_TASK_CELLS,
+    (HAIKU_MODEL, "W-nk-0"): HAIKU_CONTROL_TASK_CELLS,
+}
+"""R13's pilots (CLAUDE.md: every new harness cell is piloted): (model, cell) -> the task cells
+its pilot may play, in `persistgym_pilot` on pilot templates within `R13_PILOT_TEMPLATES`, at
+most `R13_PILOT_MAX_EPISODES` episodes per run. W-n-0 has run on Haiku and gets none."""
+R13_PILOT_TEMPLATES = (0, 2)
+R13_PILOT_MAX_EPISODES = 8
+R13_SIGMA_RUN_TEMPLATES = 50
+"""Experiment 4 plays its 200 templates in runs of this many, as R12's experiment 3."""
+R13_ROUND_TEMPLATES = 25
+"""Experiment 5 plays its 100 templates in rounds of this many. Each round plays both arms, one
+run each, in the order `r13_round_arms` gives."""
+R13_BLOCK = "9-r13"
+"""R13: the one approval block that funds its runs, pilots included, and funds nothing else
+(`r13_block_refusal`). Not approved by the pull request that adds R13."""
+R13_STOP = (f"{', '.join(R13_EXPERIMENTS)} and R13's pilots run only under {R13_REF}, which is "
+            "switched off (harnesses/registered.py R13_IN_EFFECT is False): every such run "
+            "refuses until the researcher's pull request sets it True again")
+
+
+def r13_round_arms(round_index: int) -> tuple[str, str]:
+    """Experiment 5's arm order in round `round_index` (0-based): W-nk-0 first in rounds 0 and
+    2, W-n-0 first in rounds 1 and 3 (PREREG §17.13)."""
+    arms = R13_SPECS[R13_PINNED_EXPERIMENT]["cells"]
+    return arms if round_index % 2 == 0 else arms[::-1]
+
 REASONING_TOKEN_FLOOR = 32  # an evidence-step call counts toward E at >= 32 reasoning tokens
 E_THRESHOLD = 0.50  # reasoning engages iff E >= 0.50
 DERIVED_FAR_EPISODES = 8  # 2 derived-far task cells x 2 pilot templates x 2 arms

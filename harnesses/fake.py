@@ -74,7 +74,7 @@ def _default_reply(payload: dict, i: int) -> str:
 
 
 def _default_summary(payload: dict, j: int) -> str:
-    return f"SUMMARY s{j}: fake summary of {len(payload['input']) - 1} items."
+    return f"SUMMARY s{j}: fake summary of {len(FakeModel._messages(payload)) - 1} items."
 
 
 class FakeModel:

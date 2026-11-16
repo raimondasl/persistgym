@@ -10,9 +10,10 @@ read. Two wires exist, and the model string alone chooses one (`wire_for`), so
   It is the harness's original code, moved here unchanged; the payload snapshot tests
   (harnesses/tests/test_payload_snapshots.py) hold its bodies byte for byte.
 * `MessagesWire` (`claude-*`): Anthropic's Messages API, `POST /v1/messages`, for the
-  replay-off cells F-0, W-0 and W-n-0 and the single-turn control only (PREREG §17.8,
-  amendment R8; harnesses/DESIGN.md §13). It refuses every cell that replays
-  reasoning and every summary cell (`check_cell`).
+  replay-off cells only (PREREG §17.8, amendment R8; harnesses/DESIGN.md §13): F-0, W-0,
+  W-n-0 and the single-turn control, the notes variants and block window of R10 and R12, and
+  since R13 (PREREG §17.13) Σ-n-0 and W-nk-0. It refuses every cell that replays reasoning
+  (`check_cell`).
 
 Provider-neutral, and the same on both wires: the history and loss policies, the notes
 sentence, and every token count the policies use (tiktoken `o200k_base` on visible text,
@@ -22,7 +23,9 @@ either API. Only the extraction of the visible reply changes per wire.
 The Messages body (`MessagesWire.build`): `model`; `system`, the instructions (in W-n-0 the
 episode's system prompt, "\\n" and the notes sentence, as on OpenAI); `messages`, alternating
 user and assistant, every earlier assistant turn as its visible text only (never a thinking
-or redacted_thinking block: replay off), the last message always the user observation;
+or redacted_thinking block: replay off), the last message always the user observation (or
+a summary cell's summary request); in Σ-n-0 and W-nk-0 (R13) the summary bridge or the
+pinned block first, as one more user message before the alternation starts;
 `max_tokens` (32,000, PREREG D13; it includes thinking); `thinking` `{"type": "adaptive"}`,
 its display left at the model's default; `output_config` `{"effort": <effort>}`; and, in the
 multi-turn cells only, a top-level `cache_control` `{"type": "ephemeral"}` (5 minutes; never a
@@ -50,8 +53,8 @@ from __future__ import annotations
 import copy
 from typing import Any, Protocol
 
-from harnesses.cells import CellSpec
-from harnesses.config import ENCRYPTED_REASONING, HarnessConfig
+from harnesses.cells import PINNED_REPLIES_TEMPLATE, CellSpec
+from harnesses.config import ARC_SUMMARY_BRIDGE_TEMPLATE, ENCRYPTED_REASONING, HarnessConfig
 from harnesses.items import item_text, output_text, replay_items, user_message
 from harnesses.pricing import messages_usage_numbers, usage_numbers
 
@@ -76,6 +79,12 @@ CACHE_CONTROL = {"type": "ephemeral"}
 """Top-level automatic prompt caching with the default 5-minute TTL (never `ttl: 1h`)."""
 ADAPTIVE_THINKING = {"type": "adaptive"}
 THINKING_BLOCKS = ("thinking", "redacted_thinking")
+LEADING_HARNESS_PREFIXES = (ARC_SUMMARY_BRIDGE_TEMPLATE.split("{summary}")[0],
+                            PINNED_REPLIES_TEMPLATE.split("{replies}")[0])
+"""How a leading harness message begins (R13, PREREG §17.13): the fixed text before the
+summary in ARC's bridge template (Σ-n-0, the default `summary_bridge_template`) and before the
+replies in the pinned block (W-nk-0). Only such a message may be followed by another user
+message (`MessagesWire.check_payload`); a bridge from any other template refuses."""
 
 
 class UnsupportedOnWire(ValueError):
@@ -216,16 +225,14 @@ class MessagesWire:
     echoes_reasoning = False
 
     def check_cell(self, cell: CellSpec) -> None:
-        """Replay-off, non-summary cells only: F-0, W-0, W-n-0 (and the single-turn control,
-        which sends F-0's request). A cell that replays reasoning would have to send earlier
-        thinking blocks, and a summary cell's summary request would need two user turns in a
-        row; neither is built."""
+        """Replay-off cells only: F-0, W-0, W-n-0 and its notes variants, W-b-0, the
+        single-turn control (which sends F-0's request), and, since R13 (PREREG §17.13),
+        Σ-n-0 and W-nk-0. A cell that replays reasoning would have to send earlier thinking
+        blocks, which is not built. Σ-n-0's bridge and W-nk-0's pinned block each go as one
+        user message before the next user message (`check_payload`)."""
         if cell.replay:
             raise UnsupportedOnWire(f"cell {cell.cell_id} replays reasoning: the Messages wire "
-                                    "runs replay-off cells only (F-0, W-0, W-n-0)")
-        if cell.history == "summary":
-            raise UnsupportedOnWire(f"cell {cell.cell_id} summarizes at W: the Messages wire "
-                                    "runs no summary cell (F-0, W-0, W-n-0 only)")
+                                    "runs replay-off cells only")
 
     def check_config(self, cfg: HarnessConfig) -> None:
         wrong = [what for what, bad in (
@@ -354,8 +361,12 @@ class MessagesWire:
         the paid transport); `max_tokens` equal to `max_tokens` if given, else a positive
         int; a non-empty system prompt; messages that alternate user and assistant from a
         user message to a user message (no prefill), each content a list of non-empty text
-        blocks; and no thinking or redacted_thinking block anywhere. Raises
-        `RequestCheckFailed` naming every problem."""
+        blocks; and no thinking or redacted_thinking block anywhere. One exception to the
+        alternation (R13, PREREG §17.13): the first message may be a leading harness message,
+        a user message of one text block that starts as a summary bridge or a pinned block
+        does (`LEADING_HARNESS_PREFIXES`), followed by another user message; the
+        alternation then starts at the second message. Raises `RequestCheckFailed` naming
+        every problem."""
         problems = []
         keys = set(payload)
         extra = sorted(keys - set(MESSAGES_FIELDS) - {"cache_control"})
@@ -390,14 +401,32 @@ class MessagesWire:
                                      + "; ".join(problems))
 
 
+def _is_leading_harness_message(m: Any) -> bool:
+    """Whether `m` is a leading harness message (`MessagesWire.check_payload`): a user message
+    of role and content only, whose content is one text block that starts with one of
+    `LEADING_HARNESS_PREFIXES`."""
+    if not isinstance(m, dict) or set(m) != {"role", "content"} or m.get("role") != "user":
+        return False
+    content = m["content"]
+    if not isinstance(content, list) or len(content) != 1:
+        return False
+    b = content[0]
+    return (isinstance(b, dict) and set(b) == {"type", "text"} and b["type"] == "text"
+            and isinstance(b["text"], str)
+            and any(b["text"].startswith(p) for p in LEADING_HARNESS_PREFIXES))
+
+
 def _messages_problems(messages: Any) -> list[str]:
     """What is wrong with a Messages body's `messages` (`MessagesWire.check_payload`)."""
     if not isinstance(messages, list) or not messages:
         return ["no messages"]
     problems = []
     n_thinking = 0
+    # R13: a leading harness message followed by a user message shifts the alternation by one
+    lead = int(len(messages) >= 2 and _is_leading_harness_message(messages[0])
+               and isinstance(messages[1], dict) and messages[1].get("role") == "user")
     for i, m in enumerate(messages):
-        want = "user" if i % 2 == 0 else "assistant"
+        want = "user" if i < lead or (i - lead) % 2 == 0 else "assistant"
         if not isinstance(m, dict) or set(m) != {"role", "content"} or m.get("role") != want:
             problems.append(f"message {i} is not a {want} message of role and content only")
             continue
@@ -414,7 +443,7 @@ def _messages_problems(messages: Any) -> list[str]:
     if n_thinking:
         problems.append(f"{n_thinking} thinking blocks in messages (replay is off on the "
                         "Messages wire: earlier turns go back as visible text only)")
-    if len(messages) % 2 == 0:
+    if (len(messages) - lead) % 2 == 0:
         problems.append("the last message is not the user's (a prefill)")
     return problems
 

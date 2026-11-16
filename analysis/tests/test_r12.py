@@ -28,7 +28,7 @@ from analysis import haiku_provenance as hp
 from analysis import persistgym_h1h3 as hh
 from analysis import r12
 from harnesses import registered
-from harnesses.cells import R12_CELLS
+from harnesses.cells import R12_CELLS, R13_CELLS
 from harnesses.fake import padded_text
 from persistgym.survival import block_keep_starts, window_keep_start
 
@@ -967,8 +967,13 @@ def test_the_block_replay_matches_the_harness_on_real_episodes(tmp_path, monkeyp
 # --- luna's and R8 to R11's helpers are unchanged ------------------------------------------------
 
 def test_the_cell_lists_only_gain_r12s_cells():
-    assert hh.WINDOW_CELLS == ("W-0", "W-n-0", "W-np-0", "W-npd-0", "W-nd-0", "W-nx-0", "W-b-0")
-    assert hh.CARRY_CELLS == ("W-n-0", "Σ-n-0", "W-np-0", "W-npd-0", "W-nd-0", "W-nx-0")
+    """R13's W-nk-0, added after R12's cells, is left out here (analysis/tests/test_r13.py)."""
+    def before_r13(cells):
+        return tuple(c for c in cells if c not in R13_CELLS)
+    assert before_r13(hh.WINDOW_CELLS) == ("W-0", "W-n-0", "W-np-0", "W-npd-0", "W-nd-0",
+                                           "W-nx-0", "W-b-0")
+    assert before_r13(hh.CARRY_CELLS) == ("W-n-0", "Σ-n-0", "W-np-0", "W-npd-0", "W-nd-0",
+                                          "W-nx-0")
     assert hh.SUMMARY_CELLS == ("Σ-n-0",)
     assert {c: hh.SPECS[c].truncation for c in hh.SPECS if c not in R12_CELLS} == {
         c: "slide" for c in hh.SPECS if c not in R12_CELLS}

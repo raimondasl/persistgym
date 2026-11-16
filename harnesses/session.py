@@ -27,10 +27,20 @@ History (PLAN §6):
   to W // 2 (`persistgym.survival.block_keep_start`), so the prompt prefix stays the same
   between drops. The kept context never passes W, so a far fact never survives, but a near
   fact can be dropped.
+* window with a pinned block (R13's W-nk-0, `CellSpec.pinned_tokens`): the sliding window
+  above, plus ONE user-role message before the kept turns, where a summary bridge sits,
+  holding the model's own replies from the dropped turns (`HarnessSession._pinned`). The
+  block is not counted toward W, so the window drops the same turns as W-n-0's.
 * summary: when the same visible context would exceed W, first send a summary request (the
   history to compact, then ARC's summary request prompt), then replace the compacted turns
   with ONE user-role bridge message holding the summary (ARC's bridge template). With
   `summary_keep_recent_tokens` = 0 (default, as ARC) every earlier turn is compacted.
+
+On the Messages wire, the bridge or the pinned block and the observation after it are two
+user messages in a row, which the API combines into one turn ("Consecutive `user` or
+`assistant` turns in your request will be combined into a single turn",
+https://platform.claude.com/docs/en/api/messages, read 2026-11-15). The request-side check
+admits exactly that one leading message (`harnesses.wire.MessagesWire.check_payload`).
 
 Token accounting is visible text only, counted with the generator's tokenizer: observation
 text, the reply's output text and the bridge text. Encrypted reasoning items are opaque and
@@ -47,7 +57,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from harnesses.cells import CellSpec
+from harnesses.cells import PINNED_REPLIES_TEMPLATE, PINNED_REPLY_SEPARATOR, CellSpec
 from harnesses.config import HarnessConfig
 from harnesses.wire import wire_for
 from persistgym import tokens
@@ -82,7 +92,7 @@ class Request:
     turn: int  # index of the pending turn (the observation being answered)
     payload: dict  # exact JSON body of the request (POST /v1/responses or /v1/messages)
     # provenance of each input item (payload["input"]; payload["messages"] on the Messages
-    # wire): U<t>, R<t>, A<t>, B<k>, Q
+    # wire): U<t>, R<t>, A<t>, B<k>, P (R13's pinned block), Q
     trace: list[str]
     info: dict  # loss-policy bookkeeping (never sent)
 
@@ -216,9 +226,37 @@ class HarnessSession:
                              else f"A{t.index}")
         return items, trace
 
+    def _pinned(self, start: int) -> dict:
+        """R13 (W-nk-0, `CellSpec.pinned_tokens`): the pinned block of a step request that
+        sends turns[start:]. It holds the model's own kept replies (`Turn.reply`, the text W
+        counts) from the dropped turns, turns[:start], in their order. It keeps the newest
+        replies whose `reply_tokens` sum to at most the cap, so the oldest leave first, and
+        always the newest, whole, even when it alone passes the cap (`over_cap`). A turn with
+        no kept reply (empty, whitespace only, or a refusal) adds nothing. `text` is None
+        while nothing is pinned."""
+        cap = self.cell.pinned_tokens
+        dropped = [t for t in self.turns[:start] if t.reply.strip()]
+        kept: list[Turn] = []
+        total = 0
+        for t in reversed(dropped):
+            if kept and total + t.reply_tokens > cap:
+                break
+            kept.append(t)
+            total += t.reply_tokens
+        kept.reverse()
+        text = (PINNED_REPLIES_TEMPLATE.format(
+            replies=PINNED_REPLY_SEPARATOR.join(t.reply for t in kept)) if kept else None)
+        return {"text": text, "turns": [t.index for t in kept], "reply_tokens": total,
+                "tokens": self._count(text) if text else 0, "over_cap": total > cap,
+                "n_dropped_with_reply": len(dropped)}
+
     def _step_request(self, start: int) -> Request:
         items, trace = self._history(start, len(self.turns))
         bridge_index = 0 if trace and trace[0].startswith("B") else None
+        pinned = self._pinned(start) if self.cell.pinned_tokens else None
+        if pinned is not None and pinned["text"] is not None:
+            items.insert(0, self.wire.user_message(pinned["text"]))
+            trace.insert(0, "P")
         items.append(self.wire.user_message(self.pending))
         trace.append(f"U{len(self.turns)}")
         ctx = self.context_tokens(start)
@@ -232,6 +270,13 @@ class HarnessSession:
         if self.cell.truncation == "block":  # R12; other cells' info stays as before
             info["truncation"] = "block"
             info["block_drop"] = start != self.start
+        if pinned is not None:  # R13; other cells' info stays as before
+            info["pinned_index"] = 0 if pinned["text"] is not None else None
+            info["pinned_turns"] = pinned["turns"]
+            info["pinned_reply_tokens"] = pinned["reply_tokens"]
+            info["pinned_tokens"] = pinned["tokens"]
+            info["pinned_over_cap"] = pinned["over_cap"]
+            info["pinned_left_out"] = pinned["n_dropped_with_reply"] - len(pinned["turns"])
         return Request("step", len(self.turns),
                        self._base_payload(self.instructions, items, self.cfg.max_output_tokens),
                        trace, info)

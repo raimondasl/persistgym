@@ -11,8 +11,10 @@ items and differ only in `reasoning.context` (PLAN §7). See harnesses/DESIGN.md
 `NOTES_VARIANT_CELLS` are two cells outside PLAN §6's table, for amendment R10 (PREREG §17.10):
 W-n-0 with one or two sentences added after the notes instruction. `R12_CELLS` are three more,
 for amendment R12 (PREREG §17.12): two such notes variants, and W-b-0, a window that drops old
-turns in blocks (`truncation="block"`). `get_cell` finds them all, and `CELLS`,
-`REPLAY_OFF_CELLS` and `REPLAY_PAIRS` leave them out.
+turns in blocks (`truncation="block"`). `R13_CELLS` holds one more, for amendment R13
+(PREREG §17.13): W-nk-0, W-n-0 with a pinned block of the model's own dropped replies
+(`pinned_tokens`). `get_cell` finds them all, and `CELLS`, `REPLAY_OFF_CELLS` and
+`REPLAY_PAIRS` leave them out.
 """
 
 from __future__ import annotations
@@ -67,6 +69,9 @@ class CellSpec:
     optional: bool = False
     notes_extra: str = ""  # R10: sentences sent after the notes instruction
     truncation: str = "slide"  # R12: how a window cell drops turns (TRUNCATIONS)
+    # R13: cap, in project tokens of the replies, of the pinned block that keeps the model's
+    # own replies from the turns the window dropped (0: no block; harnesses/session.py)
+    pinned_tokens: int = 0
 
     def __post_init__(self) -> None:
         if self.history not in HISTORY_POLICIES:
@@ -77,6 +82,13 @@ class CellSpec:
             raise ValueError(f"cell {self.cell_id}: bad truncation {self.truncation!r}")
         if self.truncation != "slide" and self.history != "window":
             raise ValueError(f"cell {self.cell_id}: block truncation needs a window cell")
+        if (isinstance(self.pinned_tokens, bool) or not isinstance(self.pinned_tokens, int)
+                or self.pinned_tokens < 0):
+            raise ValueError(f"cell {self.cell_id}: bad pinned_tokens {self.pinned_tokens!r}")
+        if self.pinned_tokens and not (self.history == "window" and self.truncation == "slide"
+                                       and self.notes and not self.replay):
+            raise ValueError(f"cell {self.cell_id}: a pinned block needs a replay-off notes "
+                             "cell with a sliding window")
 
     @property
     def notes_instruction(self) -> str | None:
@@ -134,6 +146,27 @@ R12_CELLS: dict[str, CellSpec] = {c.cell_id: c for c in (
              truncation="block"),
 )}
 
+# R13 (PREREG §17.13): W-n-0 plus a pinned block (W-nk-0). When the sliding window drops a
+# turn, the model's own reply from that turn moves into one user-role message placed before
+# the kept turns, where Σ-n-0's summary bridge sits. The block keeps the newest dropped
+# replies whose project tokens sum to at most `R13_PINNED_TOKENS`, so the oldest leaves first.
+# The newest is always kept, whole, even when it alone passes the cap. The window drops the
+# same turns as W-n-0's (the block is not counted toward W). Not in PLAN §6's table.
+R13_PINNED_TOKENS = 600
+PINNED_REPLIES_TEMPLATE = (
+    "Earlier conversation history was dropped. Your replies from those turns follow, oldest "
+    "first.\n\n{replies}"
+)
+"""The pinned block's text, modelled on ARC's summary bridge (`harnesses.config.
+ARC_SUMMARY_BRIDGE_TEMPLATE`): one fixed line, then the kept replies, verbatim."""
+PINNED_REPLY_SEPARATOR = "\n\n---\n\n"
+"""What separates two kept replies in the pinned block."""
+
+R13_CELLS: dict[str, CellSpec] = {c.cell_id: c for c in (
+    CellSpec("W-nk-0", "window", notes=True, replay=False, role="R13: pinned replies",
+             pinned_tokens=R13_PINNED_TOKENS),
+)}
+
 # Replay-off cells: the only cells to run on a model that does not honour `all_turns`
 # (PLAN §7: luna runs F-0, W-n-0, Σ-n-0, W-0 if its echo check fails).
 REPLAY_OFF_CELLS = tuple(c for c in CELLS if not CELLS[c].replay)
@@ -144,8 +177,8 @@ REPLAY_PAIRS = (("F-r", "F-0"), ("W-n-r", "W-n-0"), ("Σ-n-r", "Σ-n-0"))
 
 def get_cell(cell_id: str) -> CellSpec:
     """Look up a cell by its PLAN id or its ASCII id ('sigma-n-r', also 'S-n-r'), or one of
-    R10's `NOTES_VARIANT_CELLS` or R12's `R12_CELLS`."""
-    known = {**CELLS, **NOTES_VARIANT_CELLS, **R12_CELLS}
+    R10's `NOTES_VARIANT_CELLS`, R12's `R12_CELLS` or R13's `R13_CELLS`."""
+    known = {**CELLS, **NOTES_VARIANT_CELLS, **R12_CELLS, **R13_CELLS}
     if cell_id in known:
         return known[cell_id]
     for c in known.values():

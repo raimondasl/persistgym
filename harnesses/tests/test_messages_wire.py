@@ -144,10 +144,14 @@ def test_the_model_string_chooses_the_wire():
     assert "api" not in HarnessConfig().to_dict() and "wire" not in HarnessConfig().to_dict()
 
 
-@pytest.mark.parametrize("cell_id", ["F-r", "W-n-r", "Σ-n-r", "Σ-n-0", "Σ-0-r"])
-def test_the_messages_wire_refuses_replay_on_and_summary_cells(cell_id):
-    with pytest.raises(UnsupportedOnWire, match="Messages wire runs"):
+@pytest.mark.parametrize("cell_id", ["F-r", "W-n-r", "Σ-n-r", "Σ-0-r"])
+def test_the_messages_wire_refuses_replay_on_cells(cell_id):
+    with pytest.raises(UnsupportedOnWire, match="Messages wire runs replay-off cells only"):
         HarnessSession(CELLS[cell_id], SYSTEM, CFG, W_tokens=1000, count_system=False)
+
+
+def test_the_messages_wire_admits_the_replay_off_summary_cell_since_r13():
+    HarnessSession(CELLS["Σ-n-0"], SYSTEM, CFG, W_tokens=1000, count_system=False)
 
 
 @pytest.mark.parametrize("change, what", [

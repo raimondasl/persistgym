@@ -182,9 +182,12 @@ RESEARCHER_DECISIONS: dict[str, tuple[str, str]] = {
                                                       "reasoning.context")),
     "output_items_replay": ("§7", "output items sent back verbatim, null fields dropped"),
     # The Messages wire (claude-*; PREREG §17.8, amendment R8; DESIGN §13)
-    "messages_replay_off": ("PREREG §17.8 (R8)", (
-        "earlier turns go back as visible text only, never a thinking block; replay-on and "
-        "summary cells refused")),
+    "messages_replay_off": ("PREREG §17.8 (R8), §17.13 (R13)", (
+        "earlier turns go back as visible text only, never a thinking block; replay-on cells "
+        "refused (summary cells too until R13 admitted Σ-n-0)")),
+    "pinned_block": ("PREREG §17.13 (R13)", (
+        "W-nk-0: the model's own dropped replies, newest within 600 reply tokens, as one user "
+        "message before the kept turns; not counted toward W")),
     "messages_empty_reply": ("PREREG §17.8 (R8)", (
         "a turn with no visible text goes back as '(no reply)'; it counts 0 toward W")),
     "messages_refusal_partial": ("PREREG §17.8 (R8)", (

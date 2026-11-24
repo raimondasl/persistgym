@@ -114,7 +114,7 @@ def test_the_phase_1a_picture(built):
     spent = sum(float(r["cost_usd_billed_est"] or r["cost_usd_list"]) for r in ROWS.values()
                 if costs.phase_of(r["experiment"]) == "1a")
     assert line["spent"] == pytest.approx(spent)
-    assert line["cap_1a"] == costs.PHASE_CAPS["1a"]  # the live cap: $620 since A14 (§29.1)
+    assert line["cap_1a"] == costs.PHASE_CAPS["1a"]  # the live cap: $645 since A15 (§30.1)
     # R3's engagement check (2026-10-03) is in the ledger: its two rows are phase 1a
     r3 = ("20261003T055240Z-F-r-gpt-6.1-sol", "20261003T060120Z-F-0-gpt-6.1-sol")
     assert all(costs.phase_of(ROWS[r]["experiment"]) == "1a" for r in r3)

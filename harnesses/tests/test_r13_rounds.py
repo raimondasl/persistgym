@@ -291,9 +291,9 @@ def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(a14_cap, part, first, 
     if refused:
         need = {"sigma": 27.0, "pinned": 21.24}[part]
         assert why == (f"the part's {len(cmds)} runs left need ${need:.2f} by their stops and "
-                       "phase 1a's cap ($620.00, common/costs.py) leaves $20.00: the pull "
-                       "request that approves block 9-r13 also raises the cap (PREREG §17.13, "
-                       "Budget)")
+                       "phase 1a's cap ($620.00, common/costs.py) leaves $20.00: stop and ask "
+                       "the researcher, since a higher cap needs a new PLAN amendment (PLAN "
+                       "§30.1)")
     else:
         assert why is None
     # every part fits in an empty phase, and nothing fits in a full one

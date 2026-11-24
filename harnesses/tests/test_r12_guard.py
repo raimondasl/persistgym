@@ -2,7 +2,7 @@
 amendment R12): fail closed.
 
 * The repository: `R12_IN_EFFECT` is True, R12's three experiments are in phase 1a (capped at
-  $620 since A14) and the PersistGym stream, claude-sonnet-5-5 is registered at medium.
+  $620 by A14, $645 since A15) and the PersistGym stream, claude-sonnet-5-5 is registered at medium.
 * The rules: each experiment runs exactly its spec (model, cells, the full matrix on its task
   cells, main templates within its range, repeat 0, base episodes, R8's effort, config and
   request settings), Haiku's after `HAIKU_G1_PASSED`. R12's pilots are exactly its (model,

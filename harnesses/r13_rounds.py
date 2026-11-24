@@ -9,10 +9,10 @@ rounds 2 and 4 (`registered.r13_round_arms`). Each is a plain `harnesses run` un
 runs in the forecast's order and refuses a forecast whose runs are not the part's registered
 runs in their registered order, so a round never plays out of turn.
 
-R13 is prepared, not run: until the researcher merges block 9-r13's approval line into
-results/decisions.md, the paid guard (common/approval.py) refuses every one of these runs
-before any call. The full block would pass phase 1a's $620 cap, so the pull request that adds
-the line also raises the cap. The guard checks each run's stop against the cap's headroom when
+R13's runs are approved (results/decisions.md, 2026-11-24): block 9-r13's approval line, at
+$60, is in results/decisions.md, and PLAN A15 raised phase 1a's cap from $620 to $645 so the
+full block fits. Without the line the paid guard (common/approval.py) refuses every one of
+these runs before any call. The guard checks each run's stop against the cap's headroom when
 the run starts, and before a part starts the driver checks that the stops of all its runs left
 fit in the block's room and the cap's headroom (`room_refusal`), so a part that cannot finish
 does not start.
@@ -209,8 +209,8 @@ def room_refusal(cmds: list[list[str]], rows: list[dict], decisions: str) -> str
         if usd > left + 1e-9:
             return (f"the part's {len(cmds)} runs left need ${usd:.2f} by their stops and phase "
                     f"{phase}'s cap (${costs.PHASE_CAPS[phase]:.2f}, common/costs.py) leaves "
-                    f"${left:.2f}: the pull request that approves block {registered.R13_BLOCK} "
-                    "also raises the cap (PREREG §17.13, Budget)")
+                    f"${left:.2f}: stop and ask the researcher, since a higher cap needs a "
+                    "new PLAN amendment (PLAN §30.1)")
     return None
 
 

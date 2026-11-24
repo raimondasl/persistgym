@@ -41,10 +41,11 @@ COLUMNS = [
 OPTIONAL_COLUMNS = {"service_tier_served", "cache_write_tokens", "latency_s"}
 
 # Hard caps per budget phase (USD): PLAN.md §12 as amended by A2 (§17.3, 2026-10-01): 1a 450 -> 500,
-# 2 950 -> 1250, both approved by the researcher, and by A14 (§29.1, 2026-11-11): 1a 500 -> 620, at
-# the researcher's request. Stop and ask the researcher before exceeding.
-# tests/test_common.py checks that this matches the §29.1 table.
-PHASE_CAPS = {"0": 100.0, "1a": 620.0, "1b": 900.0, "2": 1250.0}
+# 2 950 -> 1250, both approved by the researcher, by A14 (§29.1, 2026-11-11): 1a 500 -> 620, at
+# the researcher's request, and by A15 (§30.1, 2026-11-24): 1a 620 -> 645, for R13's block 9-r13.
+# Stop and ask the researcher before exceeding.
+# tests/test_common.py checks that this matches the §30.1 table.
+PHASE_CAPS = {"0": 100.0, "1a": 645.0, "1b": 900.0, "2": 1250.0}
 
 # Which budget phase each `experiment` value counts toward (PLAN.md §12 and amendment A1).
 EXPERIMENT_PHASE = {
@@ -81,7 +82,8 @@ EXPERIMENT_PHASE = {
     "persistgym_sonnet_r12": "1a",
     "persistgym_haiku_r12_block": "1a",
     # R13 (PREREG §17.13): Haiku's Σ-n-0 on all 8 task cells, and W-nk-0 beside W-n-0. Its
-    # block and the cap raise it needs are approved later, by the researcher's merge
+    # block (9-r13, $60) and the cap raise it needs (PLAN A15) come with the decisions entry of
+    # 2026-11-24
     "persistgym_haiku_r13_sigma": "1a",
     "persistgym_haiku_r13_pinned": "1a",
     "arc_path": "1b",

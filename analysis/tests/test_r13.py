@@ -276,7 +276,7 @@ def test_with_no_r13_run_it_names_both_experiments_and_writes_nothing(tmp_path, 
                      "--out-dir", str(out)]) == 2
     assert not out.exists()
     err = capsys.readouterr().err
-    assert "Experiment 4" in err and "Experiment 5" in err and "prepared, not run" in err
+    assert "Experiment 4" in err and "Experiment 5" in err and "has no run to read yet" in err
 
 
 # --- experiment 4: Σ-n-0 ---------------------------------------------------------------------

@@ -274,21 +274,26 @@ def _decisions(max_usd: str | None = "100") -> str:
 
 # The fake forecast's stops: pilots $2.00, experiment 4 $27.00 (6.0 + 6.5 + 7.0 + 7.5) and
 # experiment 5 $21.24 (rounds 1-2: 2.51 + 2.50 + 2.60 + 2.61; rounds 3-4: 2.71 + 2.70 + 2.80
-# + 2.81, so $11.02 from its 5th run on). A $600 ledger leaves $20.00 of the $620 cap.
+# + 2.81, so $11.02 from its 5th run on). A $600 ledger leaves $20.00 of a $620 cap (A14's,
+# pinned by `a14_cap` so the made-up numbers do not move with the real cap).
+@pytest.fixture
+def a14_cap(monkeypatch):
+    from common import costs
+    monkeypatch.setitem(costs.PHASE_CAPS, "1a", 620.0)
+
+
 @pytest.mark.parametrize("part, first, refused", [
     ("pilots", 1, False), ("sigma", 1, True), ("sigma", 3, False), ("pinned", 1, True),
     ("pinned", 5, False)])
-def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(part, first, refused):
-    from common import costs
-    assert costs.PHASE_CAPS["1a"] == 620.0
+def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(a14_cap, part, first, refused):
     cmds = r13_rounds.commands(part, FORECAST)[first - 1:]
     why = r13_rounds.room_refusal(cmds, _ledger(600.0), _decisions())
     if refused:
         need = {"sigma": 27.0, "pinned": 21.24}[part]
         assert why == (f"the part's {len(cmds)} runs left need ${need:.2f} by their stops and "
-                       "phase 1a's cap ($620.00, common/costs.py) leaves $20.00: the pull "
-                       "request that approves block 9-r13 also raises the cap (PREREG §17.13, "
-                       "Budget)")
+                       "phase 1a's cap ($620.00, common/costs.py) leaves $20.00: stop and ask "
+                       "the researcher, since a higher cap needs a new PLAN amendment (PLAN "
+                       "§30.1)")
     else:
         assert why is None
     # every part fits in an empty phase, and nothing fits in a full one
@@ -296,7 +301,7 @@ def test_a_part_whose_stops_do_not_fit_in_the_cap_refuses(part, first, refused):
     assert r13_rounds.room_refusal(cmds, _ledger(620.0), _decisions()) is not None
 
 
-def test_a_stop_exactly_at_the_cap_fits():
+def test_a_stop_exactly_at_the_cap_fits(a14_cap):
     cmds = r13_rounds.commands("pinned", FORECAST)[4:]  # $11.02
     assert r13_rounds.room_refusal(cmds, _ledger(608.98), _decisions()) is None
     assert r13_rounds.room_refusal(cmds, _ledger(608.99), _decisions()) is not None
@@ -328,12 +333,14 @@ def test_no_approval_line_or_two_refuse():
     assert "no approval line" in r13_rounds.room_refusal(cmds, _ledger(0.0), fenced)
 
 
-def test_the_repository_has_no_line_so_every_part_refuses():
-    """Prepared, not run: the working tree has no approval line for block 9-r13."""
-    for part in r13_rounds.PARTS:
-        cmds = r13_rounds.commands(part, FORECAST)
-        assert "no approval line for block 9-r13" in r13_rounds.room_refusal(
-            cmds, _ledger(0.0), r13_rounds.decisions_text())
+def test_the_repository_line_and_cap_fit_every_run():
+    """The approval pull request (2026-11-24, PLAN A15): with phase 1a at its $583.16 before R13
+    and nothing yet spent under block 9-r13, the stops of all three parts' runs together, from
+    the latest committed forecast, fit in the working tree's line and in the cap."""
+    cmds = [c for part in r13_rounds.PARTS
+            for c in r13_rounds.commands(part, r13_rounds.latest_forecast())]
+    assert len(cmds) == 14
+    assert r13_rounds.room_refusal(cmds, _ledger(583.16), r13_rounds.decisions_text()) is None
 
 
 def test_an_experiment_with_no_phase_refuses():
@@ -343,7 +350,7 @@ def test_an_experiment_with_no_phase_refuses():
     assert "has no phase cap" in r13_rounds.room_refusal([bad], _ledger(0.0), _decisions())
 
 
-def test_main_checks_the_room_after_the_switch_and_before_any_run(monkeypatch, capsys):
+def test_main_checks_the_room_after_the_switch_and_before_any_run(a14_cap, monkeypatch, capsys):
     """With a test-only switch name (the real PERSISTGYM_ALLOW_PAID is never set), a part
     whose stops do not fit refuses before `drive`, and one that fits reaches it."""
     monkeypatch.setattr(r13_rounds, "ALLOW_ENV", "R13_ROUNDS_TEST_SWITCH")

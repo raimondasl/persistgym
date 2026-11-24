@@ -1,0 +1,94 @@
+{
+  "experiment": "r13_forecast",
+  "run_id": "20261124T150155Z",
+  "cell_or_config": "R13",
+  "config": {
+    "sources": {
+      "R8 F-0": [
+        "20261018T141157Z-F-0-claude-haiku-5-5"
+      ],
+      "R8 W-0": [
+        "20261018T144829Z-W-0-claude-haiku-5-5",
+        "20261018T154817Z-W-0-claude-haiku-5-5",
+        "20261018T154918Z-W-0-claude-haiku-5-5"
+      ],
+      "R9 W-n-0": [
+        "20261024T060051Z-W-n-0-claude-haiku-5-5"
+      ],
+      "R12 W-n-0": [
+        "20261112T150644Z-W-n-0-claude-haiku-5-5",
+        "20261112T171952Z-W-n-0-claude-haiku-5-5",
+        "20261112T180539Z-W-n-0-claude-haiku-5-5",
+        "20261112T185728Z-W-n-0-claude-haiku-5-5"
+      ],
+      "luna Σ-n-0": [
+        "20261010T100804Z-sigma-n-0-gpt-6-luna"
+      ]
+    },
+    "stop_margin": 1.25,
+    "block_rule": "every run's stop, pilots included, plus one send past each",
+    "max_attempts": 6,
+    "max_prompt_tokens": 40000,
+    "pilot_extra_usd": 0.5,
+    "summary_high_factor": 4.0,
+    "pinned_high_reply_tokens": 150,
+    "pinned_high_output_factor": 2.0,
+    "pinned_cap_tokens": 600,
+    "lookback_blocks": 20,
+    "generator_config_hash": "3d6bc648eaa9b9e843fe6e70060495cd197630b0f2d585e66b3cd280b7a3968b",
+    "harness": {
+      "model": "claude-haiku-5-5",
+      "reasoning_effort": "medium",
+      "reasoning_mode": "standard",
+      "reasoning_summary": null,
+      "service_tier": "standard",
+      "max_output_tokens": 32000,
+      "prompt_cache_key": null,
+      "W_tokens": null,
+      "window_counts_system_prompt": null,
+      "tokenizer": "o200k_base",
+      "notes_separator": "\n",
+      "summary_system_prompt": "You create concise conversation summaries for reliable continuation. Return only the requested summary.",
+      "summary_request_prompt": "Summarize the conversation so you can continue making progress on the task in a future context. The conversation history will be replaced by this summary and will no longer be available.\nUse your judgment about what matters for this task.",
+      "summary_bridge_template": "Earlier conversation history was compacted. Use the following summary as prior context. If it conflicts with newer input, prefer the newer input.\n\n{summary}",
+      "summary_max_output_tokens": 32000,
+      "summary_keep_recent_tokens": 0,
+      "summary_max_attempts": 4,
+      "stop_on_context_mismatch": true,
+      "stop_on_effort_mismatch": true,
+      "abort_after_mismatched_episodes": 2,
+      "max_turns": 200
+    },
+    "price_source_date": "2026-10-17"
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {},
+  "started_utc": "2026-11-24T15:01:55+00:00",
+  "finished_utc": "2026-11-24T15:03:04+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "forecast.json",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "config_hash": "2d4f07326a388764351e44a7f0c6d302df5040d3f53577b32a6746c9ddb74dd7",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "758c4274be31d970048fe634d01edd7e30363dc5",
+  "git_dirty": false
+}

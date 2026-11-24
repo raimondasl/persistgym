@@ -44,7 +44,7 @@ counted (`persistgym_h1h3`, ruled item 2). Before any reading:
   make the output PROVISIONAL with ``--allow-incomplete``. The comparators passed their own
   analyses' checks and are not replayed again. Their readings here come from their records.
 - With no run in any experiment read, the script names the missing experiments and refuses,
-  with or without ``--allow-incomplete``: R13 is prepared, not run, so there is nothing to read.
+  with or without ``--allow-incomplete``: before R13's runs there is nothing to read.
 
 **A reading of some experiments.** ``--experiment`` (sigma, pinned; repeatable) limits a
 reading to the experiments it names, as in R12.
@@ -835,7 +835,7 @@ def readings(root: Path, links: dict[str, str], sweep_closed: set[str] | frozens
     if not any(runs.values()):
         raise hh.Refusal("no R13 run to read, so nothing is written:\n" + "\n".join(
             f"  - {LABEL[e]} ({e}): no run under results/{e}/" for e in chosen)
-            + f"\nR13 ({registered.R13_REF}) is prepared, not run.")
+            + f"\nR13 ({registered.R13_REF}) has no run to read yet.")
     by_exp = split_links(links, runs)
     seed, _ = hh.read_seed(root / "results")
     boot_seed = seed + BOOT_SEED_OFFSET

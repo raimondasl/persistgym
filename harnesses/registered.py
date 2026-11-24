@@ -502,10 +502,10 @@ R12_STOP = (f"{', '.join(R12_EXPERIMENTS)} and R12's pilots run only under {R12_
 R13_REF = "PREREG.md §17.13 (amendment R13)"
 R13_IN_EFFECT = True
 """Whether amendment R13 (PREREG §17.13) is in effect. True since the pull request that adds
-R13, merged by the researcher. That pull request approves no spending: no R13 run can be paid
-until the researcher merges block `R13_BLOCK`'s approval line in results/decisions.md. The
-later pull request that adds it also raises phase 1a's cap (a PLAN amendment), since the block
-would pass $620. The paid guard checks each run's stop against the cap's headroom, and
+R13, merged by the researcher. That pull request approved no spending: no R13 run can be paid
+without block `R13_BLOCK`'s approval line in results/decisions.md. A later pull request
+(results/decisions.md, 2026-11-24) adds it and PLAN A15, which raises phase 1a's cap from $620
+to $645, since the block would pass $620. The paid guard checks each run's stop against the cap's headroom, and
 `harnesses.r13_rounds.room_refusal` refuses a part whose runs' stops do not all fit in the
 block's room and the cap's headroom. A kill switch: set
 False, every run in R13's experiments and every R13 pilot refuses (`R13_STOP`), and R8's to

@@ -46,7 +46,7 @@ def test_the_repository_has_r12_in_effect():
     assert registered.R12_EXPERIMENTS == (NOTES, SONNET_X, BLOCKWIN)
     assert registered.SONNET_MODEL == SONNET
     assert registered.REGISTERED_EFFORT[SONNET] == "medium"
-    assert costs.PHASE_CAPS["1a"] == 620.0
+    assert costs.PHASE_CAPS["1a"] == 645.0  # A14 set $620 for R12, A15 $645 for R13
     for e in registered.R12_EXPERIMENTS:
         assert costs.EXPERIMENT_PHASE[e] == "1a"
         assert paidlock.EXPERIMENT_STREAM[e] == paidlock.PERSISTGYM

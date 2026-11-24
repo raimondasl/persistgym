@@ -52,12 +52,12 @@ def test_headroom_falls_back_to_list_and_refuses_rows_without_cost():
             costs.headroom(10, "0", [_row(), _row(**bad)])
 
 
-def test_phase_caps_are_the_a14_caps():
+def test_phase_caps_are_the_a15_caps():
     # PLAN.md amendment A2 (§17.3), approved by the researcher on 2026-10-01: 1a 450 -> 500,
     # phase 2 950 -> 1250; amendment A14 (§29.1), approved on 2026-11-11: 1a 500 -> 620;
-    # 0 and 1b unchanged.
-    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 620.0, "1b": 900.0, "2": 1250.0}
-    assert costs.headroom(0, "1a", []) == pytest.approx(620)
+    # amendment A15 (§30.1, 2026-11-24): 1a 620 -> 645; 0 and 1b unchanged.
+    assert costs.PHASE_CAPS == {"0": 100.0, "1a": 645.0, "1b": 900.0, "2": 1250.0}
+    assert costs.headroom(0, "1a", []) == pytest.approx(645)
     assert costs.headroom(0, "2", []) == pytest.approx(1250)
 
 
@@ -72,8 +72,10 @@ def _plan_cap_table(heading_text: str) -> dict[str, float]:
 
 
 def test_phase_caps_match_plans_latest_table():
-    # A14's table (§29.1) is the latest; A2's (§17.3) stays as it was written
-    assert _plan_cap_table("29.1 Phase caps") == costs.PHASE_CAPS
+    # A15's table (§30.1) is the latest; A2's (§17.3) and A14's (§29.1) stay as they were written
+    assert _plan_cap_table("30.1 Phase caps") == costs.PHASE_CAPS
+    assert _plan_cap_table("29.1 Phase caps") == {"0": 100.0, "1a": 620.0, "1b": 900.0,
+                                                  "2": 1250.0}
     assert _plan_cap_table("17.3 Phase caps") == {"0": 100.0, "1a": 500.0, "1b": 900.0,
                                                   "2": 1250.0}
 

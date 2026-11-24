@@ -2062,3 +2062,24 @@ Then the commands, one after another, with the app kept open, each arming paid c
 `--dry-run` prints a part's `harnesses run` commands without running them. Without the switch the driver refuses before running anything. It stops at the first run that does not end COMPLETED, and the researcher is told. Between the pilots and the main runs, `uv run python -m analysis.r13_pilot` checks each pilot's errors, payloads and cost per episode. If a pilot ends other than COMPLETED, or costs more than 1.10 times its high forecast per episode, Claude stops and tells the researcher before any main run.
 
 **Approval.** The researcher's merge of the pull request that adds this entry adopts amendment R13 and its code. It adds no spending approval. With no approval line for block `9-r13`, the paid guard refuses every R13 run. The pull request is $0.
+
+## 2026-11-24: R13's runs approved: block 9-r13; PLAN A15 raises phase 1a's cap to $645
+**The request.** On 2026-11-24 the researcher merged PR #98, which adopts amendment R13 (`PREREG.md` §17.13), and said they would set up the key for the run. This entry carries out the three steps of R13's entry (2026-11-15, "To run them later"). The researcher's merge of the pull request that adds it approves block `9-r13` at the amount below and PLAN §30's cap (amendment A15).
+
+**1. Prices.** Haiku's prices on Anthropic's pricing page (https://platform.claude.com/docs/en/about-claude/pricing, read 2026-11-24) are the card's in `harnesses/pricing.py` (dated 2026-10-17): for prompts up to 100,000 tokens $0.10 input, $0.50 output, $0.125 5-minute cache write and $0.01 cache read, and over 100,000 tokens $0.50, $2.50, $0.625 and $0.05. US-only inference costs 1.1x every price, the higher card included, and global routing the prices above. No price has changed, so the card, its date and `worst_miss` stay as they are.
+
+**2. The forecast** (`uv run python -m analysis.r13_forecast` on clean commit 758c427, output `results/r13_forecast/20261124T150155Z/`). Its `forecast.json` is identical to the 2026-11-16 one (`20261116T070742Z`), as neither the prices nor the ledger have changed since: main runs $40.27 to $44.96, pilots at most $1.42 by their stops. The main runs' stops sum to $56.28 and the pilots' to $1.42. With one send past each of the 14 runs ($0.14 each), R13's block rule gives $60, up to the next dollar. The ledger has 124 rows, the last at 2026-11-13T05:21:59Z: phase 1a $583.16 spent of its $620 cap, the project $1,111.69.
+
+**3. The cap and the line.** PLAN §30 (A15) raises phase 1a's cap from $620 to $645. $583.16 spent, plus the $60 block, plus one send past the last admitted run's stop ($0.14), is at most $643.30, and the project total at most $1,171.83. `PHASE_CAPS` in `common/costs.py` follows, and the tests that pinned R13's unapproved state now check this line and the cap.
+
+approved_block: 9-r13 | experiments: persistgym_pilot,persistgym_haiku_r13_sigma,persistgym_haiku_r13_pinned | max_usd: 60
+
+**The commands,** after the merge, with the key in `.env`, one after another, each in a Terminal tab or the researcher's own terminal (a session restart kills a background task), with the app kept open. Each arms paid calls for its own command only:
+
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r13_rounds --part pilots
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r13_rounds --part sigma
+       PERSISTGYM_ALLOW_PAID=1 env -u ANTHROPIC_BASE_URL uv run --env-file .env python -m harnesses.r13_rounds --part pinned
+
+Between the pilots and the main runs, `uv run python -m analysis.r13_pilot` checks each pilot's errors, payloads and cost per episode. If a pilot ends other than COMPLETED, or costs more than 1.10 times its high forecast per episode, Claude stops and tells the researcher before any main run (§17.13). The driver stops at the first run that does not end COMPLETED, and the researcher is told. A run that ended early is continued under DESIGN §7.9, and the part resumes at its next run with `--from N`.
+
+**Approval.** The researcher's merge of the pull request that adds this entry approves block `9-r13` at $60 and A15's cap of $645. Each run's stop is its high forecast times 1.25 (pilots: plus $0.50). The paid guard admits a run only if its stop fits in what is left of the block and of the cap, and the driver refuses a part whose runs' stops do not all fit, so a run that no longer fits refuses, and Claude stops and asks.

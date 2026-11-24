@@ -845,3 +845,20 @@ All costs are in USD. The billed estimate comes first; ARC's no-cache list cost 
 
 - `PHASE_CAPS` in `common/costs.py` matches this table, and a test checks that it does. §17.3's table stays as A2 wrote it.
 - The stop-and-ask rule is unchanged: Claude stops and asks the researcher before any cap is exceeded.
+
+## 30. Amendment A15 (2026-11-24): R13's runs, and phase 1a's cap at $645
+- **The change:** `PREREG.md` §17.13 (amendment R13, in effect since the researcher merged PR #98 on 2026-11-24) adds two exploratory experiments on claude-haiku-5-5: its summary cell Σ-n-0 on all 8 task cells, templates 0-199 (experiment 4), and W-nk-0, W-n-0 plus a pinned block of Haiku's own dropped replies, beside a concurrent W-n-0 on the 2 not-recoverable far cells, templates 200-299 (experiment 5). Each new cell is piloted first. This amendment funds those runs.
+- **Status:** exploratory, decided after R8's to R12's readings were read. The researcher asked for both to be prepared on 2026-11-15 and, after merging PR #98 on 2026-11-24, said they would set up the key for the run. The researcher's merge of the pull request that adds this amendment approves it.
+- **Budget:** block `9-r13`, $60 by R13's block rule (every run's stop, pilots included, plus one send past each; PREREG §17.13, Budget), in phase 1a, whose cap this amendment raises from $620 to $645 ($583.16 spent before R13). One send can pass the last admitted run's stop by at most $0.14, so phase 1a ends at most at $643.30 and the project total at most at $1,171.83. After these runs no further paid run is made without a new amendment.
+- **What it does not show:** a model comparison, or the pinned block on other tasks, models or block designs. Experiment 4 is not concurrent with its comparators, and W-nk-0's rise, if any, cannot be split between the kept replies and the block's label (PREREG §17.13, What it does not show).
+
+### 30.1 Phase caps
+| Phase | Cap before A15 | Cap from A15 | Basis |
+|---|---|---|---|
+| 0 | $100 | $100 | Unchanged |
+| 1a | $620 | $645 | R13's block 9-r13 ($60 and one send) on $583.16 spent |
+| 1b | $900 | $900 | Unchanged |
+| 2 | $1,250 | $1,250 | Unchanged |
+
+- `PHASE_CAPS` in `common/costs.py` matches this table, and a test checks that it does. §17.3's and §29.1's tables stay as A2 and A14 wrote them.
+- The stop-and-ask rule is unchanged: Claude stops and asks the researcher before any cap is exceeded.

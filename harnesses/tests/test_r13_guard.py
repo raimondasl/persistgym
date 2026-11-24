@@ -1,10 +1,10 @@
 """R13's guard (harnesses/registered.py `_r13_refusal`, `r13_block_refusal`; PREREG §17.13,
-amendment R13): fail closed. R13 is prepared, not run.
+amendment R13): fail closed.
 
-* The repository: `R13_IN_EFFECT` is True, R13's two experiments are in phase 1a (its cap still
-  $620: PLAN A15 raises it when the researcher says go) and the PersistGym stream, and
-  results/decisions.md holds no approval line for block 9-r13, so the paid guard refuses every
-  R13 run until the researcher merges one.
+* The repository: `R13_IN_EFFECT` is True, R13's two experiments are in phase 1a (its cap $645
+  from PLAN A15) and the PersistGym stream, and results/decisions.md holds one approval line for
+  block 9-r13 (2026-11-24), for R13's pilots and two experiments at $60. Without it the paid
+  guard refuses every R13 run.
 * The rules: each experiment runs exactly its spec (claude-haiku-5-5, its cells, the full matrix
   on its task cells, main templates within its range, repeat 0, base episodes, R8's effort,
   config and request settings), after `HAIKU_G1_PASSED`. R13's pilots are exactly Haiku's
@@ -60,8 +60,8 @@ def test_the_repository_has_r13_in_effect():
     assert registered.R13_SIGMA_RUN_TEMPLATES == 50 and registered.R13_ROUND_TEMPLATES == 25
     assert [registered.r13_round_arms(k) for k in range(4)] == [
         ("W-nk-0", "W-n-0"), ("W-n-0", "W-nk-0"), ("W-nk-0", "W-n-0"), ("W-n-0", "W-nk-0")]
-    # A15 raises phase 1a's cap when the researcher says go; until then it stays at A14's
-    assert costs.PHASE_CAPS["1a"] == 620.0
+    # PLAN A15 (2026-11-24) raised phase 1a's cap from A14's $620 for R13's block
+    assert costs.PHASE_CAPS["1a"] == 645.0
     for e in registered.R13_EXPERIMENTS:
         assert costs.EXPERIMENT_PHASE[e] == "1a"
         assert paidlock.EXPERIMENT_STREAM[e] == paidlock.PERSISTGYM
@@ -72,12 +72,14 @@ def test_the_repository_has_r13_in_effect():
                                "task_cells": TWO, "templates": (200, 300), "g1": True}
 
 
-def test_the_repository_approves_no_r13_spending():
-    """Prepared, not run: no approval line for block 9-r13 counts in results/decisions.md (R13's
-    entry describes the line without writing it out). The researcher's approval pull request
-    adds one, and updates this test with it."""
+def test_the_repository_approves_block_9_r13():
+    """The approval pull request (results/decisions.md, 2026-11-24; PLAN A15) adds one line for
+    block 9-r13: R13's pilots and two experiments, at R13's block rule's $60
+    (results/r13_forecast/20261124T150155Z)."""
     text = (costs.REPO_ROOT / approval.DECISIONS_MD).read_text(encoding="utf-8")
-    assert approval.approvals_in(text, BLOCK) == set()
+    (line,) = approval.approvals_in(text, BLOCK)
+    assert line.experiments == (PILOT, SIGMA_X, PINNED_X)
+    assert float(line.max_usd) == 60.0
 
 
 def test_without_its_approval_line_the_paid_guard_refuses_r13s_runs(tmp_path, monkeypatch):

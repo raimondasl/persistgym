@@ -80,6 +80,10 @@ EXPERIMENT_PHASE = {
     "persistgym_haiku_r12_notes": "1a",
     "persistgym_sonnet_r12": "1a",
     "persistgym_haiku_r12_block": "1a",
+    # R13 (PREREG §17.13): Haiku's Σ-n-0 on all 8 task cells, and W-nk-0 beside W-n-0. Its
+    # block and the cap raise it needs are approved later, by the researcher's merge
+    "persistgym_haiku_r13_sigma": "1a",
+    "persistgym_haiku_r13_pinned": "1a",
     "arc_path": "1b",
     "statecarry_persistgym": "2",
     "statecarry_arc_dev": "2",

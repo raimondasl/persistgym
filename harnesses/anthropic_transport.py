@@ -233,6 +233,13 @@ class AnthropicMessagesTransport(PaidTransport):
                     f"{', '.join(self.approval.experiments)}: a {registered.SONNET_MODEL} run "
                     f"needs an approval line written for R12 ({registered.R12_REF}), which "
                     f"lists {registered.R12_SONNET_EXPERIMENT}")
+        # R13 (PREREG §17.13): likewise, a block that lists one of its experiments funds R13's
+        # runs and Haiku pilots (`harnesses run` has checked the cell, the model and the block,
+        # registered.r13_block_refusal). After the Sonnet rule: R13 runs Haiku only
+        if (any(e in self.approval.experiments for e in registered.R13_EXPERIMENTS)
+                and self.approval.experiment in (registered.PILOT_EXPERIMENT,
+                                                 *registered.R13_EXPERIMENTS)):
+            return None
         if registered.HAIKU_EXPERIMENT in self.approval.experiments:
             return None
         # R9 (PREREG §17.9): its own run only (the general guard has checked that the block

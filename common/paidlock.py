@@ -113,6 +113,8 @@ EXPERIMENT_STREAM = {
     "persistgym_haiku_r12_notes": PERSISTGYM,
     "persistgym_sonnet_r12": PERSISTGYM,
     "persistgym_haiku_r12_block": PERSISTGYM,
+    "persistgym_haiku_r13_sigma": PERSISTGYM,
+    "persistgym_haiku_r13_pinned": PERSISTGYM,
     "arc_path": ARC,
     "statecarry_persistgym": PERSISTGYM,
     "statecarry_arc_dev": ARC,

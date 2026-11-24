@@ -23,7 +23,7 @@ on one counted run per configuration and game.
 
 | Path | Contents |
 |---|---|
-| `PREREG.md` | The pre-registration: hypotheses, predictions, thresholds and analyses, frozen on 2026-10-01 before the first paid run (PR #4), with dated amendments R1 to R8 in §17 |
+| `PREREG.md` | The pre-registration: hypotheses, predictions, thresholds and analyses, frozen on 2026-10-01 before the first paid run (PR #4), with dated amendments R1 to R13 in §17 (R9 to R13 exploratory, R13 adopted before any of its runs) |
 | `PLAN.md` | The study plan: designs, milestones, gates, budget and kill criteria, with the amendments that cut its scope |
 | `results/decisions.md` | The decisions log: every gate, approval, ruling, deviation and correction, in order |
 | `results/costs.csv` | The cost ledger: one row per paid call batch (tokens, list and billed-estimate cost) |

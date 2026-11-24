@@ -202,7 +202,8 @@ def test_with_r8_luna_g1_never_counts_for_haiku(tmp_path, monkeypatch):
                     "request": {**REQUEST, "W": 1000}}, "--W 1000"),
     (PILOT, "W-0", {"split": "pilot", "templates": (0, 1), "request": None}, "not given"),
     (PILOT, "W-0", {"split": "pilot", "templates": (0, 1), "gen": OTHER}, "generator config"),
-    (PILOT, "Σ-n-0", {"split": "pilot", "templates": (0, 1)}, "cell Σ-n-0"),
+    # Haiku's Σ-n-0 pilot is R13's since PREREG §17.13 (tests/test_r13_guard.py)
+    (PILOT, "Σ-n-r", {"split": "pilot", "templates": (0, 1)}, "cell Σ-n-r"),
     (PILOT, "F-r", {"split": "pilot", "templates": (0, 1)}, "cell F-r"),
     (PILOT, "F-0", {"split": "pilot", "templates": (0, 1), "variant": "restated"},
      "--variant restated"),
@@ -379,8 +380,8 @@ def test_dry_run_on_the_messages_wire(capsys):
 
 
 def test_dry_run_refuses_a_cell_the_messages_wire_does_not_send(capsys):
-    assert cli.main(["dry-run", "--model", HAIKU, "--cell", "sigma-n-0"]) == 2
-    assert "refused: cell Σ-n-0 summarizes at W" in capsys.readouterr().err
+    assert cli.main(["dry-run", "--model", HAIKU, "--cell", "sigma-n-r"]) == 2
+    assert "refused: cell Σ-n-r replays reasoning" in capsys.readouterr().err
 
 
 def test_service_tier_defaults_per_wire():

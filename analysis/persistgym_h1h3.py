@@ -250,7 +250,9 @@ power quoted with the results).
    evidence binding (§2.3, §2.4), so the two agree. The accounting reads base episodes only.
 5. ``S_carried``: in W-n-0 the retained replies of the need payload
    (``need_payload.assistant_carried.carried``); in Σ-n-0 those or the summary bridge
-   (``need_bridge_carried.carried``). F-0 and W-0 have no notes or summary, so S_carried is
+   (``need_bridge_carried.carried``); in R13's W-nk-0 (PREREG §17.13) those or the pinned
+   block of its dropped replies (``need_pinned_carried.carried``), which `analysis.r13` also
+   reports apart. F-0 and W-0 have no notes or summary, so S_carried is
    undefined there and S = S_verbatim; their rescue rate is P(success | S_verbatim = 0), split
    by lookup.
 6. "A lookup was taken" is ``n_lookups`` ≥ 1 (lookups served; over-cap ones come only after 3
@@ -445,7 +447,14 @@ from statsmodels.tools import sm_exceptions
 from analysis import power_sim as ps
 from common import runmeta
 from harnesses import registered
-from harnesses.cells import CELLS, NOTES_INSTRUCTION, NOTES_VARIANT_CELLS, R12_CELLS
+from harnesses.cells import (
+    CELLS,
+    NOTES_INSTRUCTION,
+    NOTES_VARIANT_CELLS,
+    PINNED_REPLIES_TEMPLATE,
+    R12_CELLS,
+    R13_CELLS,
+)
 from harnesses.items import item_text, output_text
 from harnesses.wire import MESSAGES, MESSAGES_API, RESPONSES_API
 from persistgym import tokens
@@ -467,15 +476,23 @@ BASE, RESTATED = "base", "restated"
 KINDS = (("F-0", BASE), ("W-0", BASE), ("W-n-0", BASE), ("Σ-n-0", BASE), ("F-0", RESTATED),
          (SINGLE_TURN, BASE))
 """The run kinds of R6 change 1: (harness cell, variant)."""
-SPECS = {**CELLS, **NOTES_VARIANT_CELLS, **R12_CELLS}
+SPECS = {**CELLS, **NOTES_VARIANT_CELLS, **R12_CELLS, **R13_CELLS}
 """Every harness cell's spec: PLAN §6's table, R10's two variants of W-n-0 (PREREG §17.10),
-which `analysis.haiku_provenance` reads with this module's discovery and §2.8 check, and R12's
-three cells (PREREG §17.12), which `analysis.r12` reads likewise."""
-WINDOW_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS, *R12_CELLS)
+which `analysis.haiku_provenance` reads with this module's discovery and §2.8 check, R12's
+three cells (PREREG §17.12), which `analysis.r12` reads likewise, and R13's W-nk-0 (PREREG
+§17.13), which `analysis.r13` reads likewise."""
+WINDOW_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS, *R12_CELLS, *R13_CELLS)
                      if SPECS[c].history == "window")
-CARRY_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS, *R12_CELLS)
+CARRY_CELLS = tuple(c for c in (*HARNESS_CELLS, *NOTES_VARIANT_CELLS, *R12_CELLS, *R13_CELLS)
                     if SPECS[c].notes or SPECS[c].history == "summary")
 SUMMARY_CELLS = tuple(c for c in HARNESS_CELLS if CELLS[c].history == "summary")
+PINNED_CELLS = tuple(c for c in SPECS if SPECS[c].pinned_tokens)
+"""R13's W-nk-0: a window cell whose step requests may start with a pinned block of the model's
+own dropped replies (`harnesses.cells.CellSpec.pinned_tokens`)."""
+PINNED_PREFIX = PINNED_REPLIES_TEMPLATE.split("{replies}")[0]
+"""The pinned block's fixed opening, before the replies: how §2.8's replay finds the block in a
+W-nk-0 request (`window_recheck`), as the harness's request check does
+(`harnesses.wire.LEADING_HARNESS_PREFIXES`)."""
 OBS_NR_FAR, OBS_R_FAR = "observed-nonrec-far", "observed-rec-far"
 OBS_R = {"near": "observed-rec-near", "far": "observed-rec-far"}
 H3_CELLS = ("observed-nonrec-far", "derived-nonrec-far")
@@ -1098,7 +1115,8 @@ def completeness(resolved: dict, templates: int, sweep_closed: bool = False,
 # --- the episode table ---------------------------------------------------------------------
 
 def _carried(cell: str, rec: dict) -> bool | None:
-    """S_carried of §2.8 (reading 5): None where it is undefined."""
+    """S_carried of §2.8 (reading 5): None where it is undefined. In R13's W-nk-0 the pinned
+    block counts beside the retained replies (reading 5), as the bridge does in Σ-n-0."""
     if cell not in CARRY_CELLS:
         return None
     payload = rec.get("need_payload") or {}
@@ -1106,7 +1124,8 @@ def _carried(cell: str, rec: dict) -> bool | None:
         return None
     retained = bool((payload.get("assistant_carried") or {}).get("carried"))
     bridge = bool((rec.get("need_bridge_carried") or {}).get("carried"))
-    return retained or (cell in SUMMARY_CELLS and bridge)
+    pinned = bool((rec.get("need_pinned_carried") or {}).get("carried"))
+    return retained or (cell in SUMMARY_CELLS and bridge) or (cell in PINNED_CELLS and pinned)
 
 
 def _num(x) -> float:
@@ -1254,10 +1273,16 @@ def reply_counted(response: dict, api: str = RESPONSES_API) -> str:
     return MESSAGES.kept_reply(response) if api == MESSAGES_API else output_text(response)
 
 
+def is_pinned_block(item: dict) -> bool:
+    """Whether a request's message is R13's pinned block: a user message whose text starts with
+    the block's fixed opening (`PINNED_PREFIX`). No observation starts so."""
+    return item.get("role") == "user" and item_text(item).startswith(PINNED_PREFIX)
+
+
 def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
                    settings: dict, api: str = RESPONSES_API,
                    notes_text: str = NOTES_INSTRUCTION,
-                   truncation: str = "slide") -> dict[str, dict]:
+                   truncation: str = "slide", pinned: bool = False) -> dict[str, dict]:
     """§2.8 condition 2 for one window-cell run: for each episode in `wanted` ({episode_id:
     {"need_step", "evidence_steps"}}), the cell's rule replayed on the project-token counts
     of the turns its transcript shows were sent, read on the run's wire (`api`:
@@ -1266,8 +1291,12 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
     (`harnesses.cells.CellSpec.truncation`): "slide", the drop-oldest window of every cell
     before R12, or "block", R12's W-b-0 (PREREG §17.12), replayed from turn 0 with
     `persistgym.survival.block_keep_starts`, since a block start depends on where the last
-    drop fell. Returns {episode_id: {"S", "keep", "user_messages_sent",
-    "user_messages_expected"} or {"problem": why}}."""
+    drop fell. With `pinned` (R13's W-nk-0, PREREG §17.13) a request's first message is taken
+    off when it starts as the pinned block does (`PINNED_PREFIX`): the session counts the block
+    neither toward W nor as an observation, so W-nk-0 is replayed exactly as W-n-0, and the
+    block is not among the user messages counted. The system prompt holds no block, so its
+    count (`_system_tokens`) is the same as W-n-0's. Returns {episode_id: {"S", "keep",
+    "user_messages_sent", "user_messages_expected"} or {"problem": why}}."""
     if truncation not in ("slide", "block"):
         raise ValueError(f"unknown truncation {truncation!r}")
     tok = settings["tokenizer"]
@@ -1286,6 +1315,8 @@ def window_recheck(path: Path, wanted: dict[str, dict], *, notes: bool,
                 continue
             payload = ev.get("payload") or {}
             instructions, items = request_parts(payload, api)
+            if pinned and items and is_pinned_block(items[0]):
+                items = items[1:]
             if eid not in system:
                 system[eid] = _system_tokens(instructions, notes, settings, notes_text)
             turn = int(ev["turn"])
@@ -1353,8 +1384,9 @@ def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIME
                      api: str = RESPONSES_API) -> dict:
     """§2.8's two conditions over every window-cell record that reached its need step, the
     transcripts read from raw_root/<experiment>/ on the runs' wire (`api`), each run's rule
-    replayed as its cell truncates (`window_recheck`: R12's W-b-0 by the block rule). Returns
-    {"bugs", "warnings", "missing_transcripts", "checked", "runs"}."""
+    replayed as its cell truncates (`window_recheck`: R12's W-b-0 by the block rule, R13's
+    W-nk-0 as W-n-0 with its pinned block taken off). Returns {"bugs", "warnings",
+    "missing_transcripts", "checked", "runs"}."""
     bugs = far_window_bugs(runs)
     warn, missing, checked, per_run = [], [], 0, []
     for run in runs:
@@ -1397,7 +1429,7 @@ def accounting_check(runs: list[Run], raw_root: Path, experiment: str = EXPERIME
         spec = SPECS[run.cell]
         got = window_recheck(path, wanted, notes=spec.notes, settings=run.window, api=api,
                              notes_text=spec.notes_instruction or NOTES_INSTRUCTION,
-                             truncation=spec.truncation)
+                             truncation=spec.truncation, pinned=bool(spec.pinned_tokens))
         rule = "drop-oldest" if spec.truncation == "slide" else spec.truncation
         n_keep = n_users = n_stopped = 0
         for eid, (s_verbatim, keep_start, ending) in expect.items():

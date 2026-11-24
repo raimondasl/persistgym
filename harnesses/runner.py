@@ -13,8 +13,8 @@ OpenAI's Responses API, or Anthropic's Messages API for `claude-*` models.
 Per request the runner logs the payload, the response, the echoed `reasoning.context` and the
 returned model string to the raw transcript (results/raw/, gitignored). At the need step's
 first presentation it records survival from the payload actually sent
-(`persistgym.survival.survival_from_payload`, with the summary bridge excluded and
-string-matched separately with `carried_in_text`).
+(`persistgym.survival.survival_from_payload`, with the summary bridge and R13's pinned
+block excluded and each string-matched separately with `carried_in_text`).
 
 An episode whose echoed `reasoning.context` differs from the request on any response is
 excluded (CLAUDE.md); by default it stops at that response. So is an episode whose echoed
@@ -242,6 +242,9 @@ class EpisodeRun:
     compacted_between: int | None = None  # D12; summary cells only, see run_episode
     need_payload: dict | None = None  # survival_from_payload at the need step
     need_bridge_carried: dict | None = None  # carried_in_text on the bridge, summary cells
+    # carried_in_text on R13's pinned block (W-nk-0), when the need step's first request has
+    # one; like the bridge, the block is left out of need_payload's S_verbatim
+    need_pinned_carried: dict | None = None
     need_info: dict | None = None  # loss-policy bookkeeping of the need request
     designed: dict | None = None  # episode.design survival for reference
     need_phase: dict | None = None  # D8 need-phase tokens, see _need_phase_add
@@ -360,15 +363,19 @@ def run_episode(episode: Episode, cell: CellSpec, cfg: HarnessConfig, transport:
                               and not info["is_lookup_result"])
                 if first_need:
                     bridge = req.info["bridge_index"]
+                    pinned = req.info.get("pinned_index")  # R13's W-nk-0 only
                     run.need_payload = survival_from_payload(
                         episode, wire.messages(req.payload), system=wire.system(req.payload),
-                        exclude_indices=[bridge] if bridge is not None else [])
+                        exclude_indices=[i for i in (bridge, pinned) if i is not None])
                     run.need_info = dict(req.info)
                     # every compaction so far is applied to this payload (D12)
                     n_compactions_seen_at_need = len(session.compactions)
                     if bridge is not None:
                         run.need_bridge_carried = carried_in_text(
                             item_text(wire.messages(req.payload)[bridge]), episode)
+                    if pinned is not None:
+                        run.need_pinned_carried = carried_in_text(
+                            item_text(wire.messages(req.payload)[pinned]), episode)
                 started = CLOCK()
                 response = transport.send(req.payload)
                 run.call_latency_s.append(round(CLOCK() - started, 3))

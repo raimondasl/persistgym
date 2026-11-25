@@ -1,0 +1,95 @@
+{
+  "experiment": "r13",
+  "run_id": "20261125T023053Z",
+  "cell_or_config": "persistgym_haiku_r13_sigma,persistgym_haiku_r13_pinned",
+  "config": {
+    "experiments": [
+      "persistgym_haiku_r13_sigma",
+      "persistgym_haiku_r13_pinned"
+    ],
+    "rerun_links": {},
+    "sweep_closed": [],
+    "allow_incomplete": false,
+    "status": "FINAL",
+    "inputs": {
+      "results_root": ".",
+      "comparators_root": ".",
+      "raw_root": "results/raw",
+      "runs": {
+        "persistgym_haiku_r13_sigma": [
+          "20261124T193536Z-sigma-n-0-claude-haiku-5-5",
+          "20261124T205933Z-sigma-n-0-claude-haiku-5-5",
+          "20261124T222140Z-sigma-n-0-claude-haiku-5-5",
+          "20261124T234531Z-sigma-n-0-claude-haiku-5-5"
+        ],
+        "persistgym_haiku_r13_pinned": [
+          "20261125T011046Z-W-nk-0-claude-haiku-5-5",
+          "20261125T012059Z-W-n-0-claude-haiku-5-5",
+          "20261125T013102Z-W-n-0-claude-haiku-5-5",
+          "20261125T014036Z-W-nk-0-claude-haiku-5-5",
+          "20261125T014957Z-W-nk-0-claude-haiku-5-5",
+          "20261125T020005Z-W-n-0-claude-haiku-5-5",
+          "20261125T021021Z-W-n-0-claude-haiku-5-5",
+          "20261125T022022Z-W-nk-0-claude-haiku-5-5"
+        ]
+      },
+      "comparators": {
+        "r8_output": "results/persistgym_h1h3_haiku/20261019T003254Z",
+        "r9_output": "results/haiku_notes/20261024T073307Z",
+        "r12_output": "results/r12/20261113T065503Z",
+        "luna_output": "results/persistgym_h1h3/20261010T232227Z/"
+      }
+    },
+    "templates": {
+      "persistgym_haiku_r13_sigma": "0-199",
+      "persistgym_haiku_r13_pinned": "200-299"
+    }
+  },
+  "model_requested": null,
+  "model_returned": null,
+  "reasoning_effort": null,
+  "reasoning_context_requested": null,
+  "reasoning_context_echoed": null,
+  "template_id": null,
+  "repeat_index": 0,
+  "seeds": {
+    "bootstrap": 4086943125952605544
+  },
+  "started_utc": "2026-11-25T02:30:53+00:00",
+  "finished_utc": "2026-11-25T02:32:25+00:00",
+  "exit_reason": "completed",
+  "tokens": null,
+  "cost_usd": 0.0,
+  "raw_transcript_path": null,
+  "outputs": [
+    "readings.json",
+    "summary.md",
+    "meta.json"
+  ],
+  "paid_calls": 0,
+  "runs": [
+    "20261124T193536Z-sigma-n-0-claude-haiku-5-5",
+    "20261124T205933Z-sigma-n-0-claude-haiku-5-5",
+    "20261124T222140Z-sigma-n-0-claude-haiku-5-5",
+    "20261124T234531Z-sigma-n-0-claude-haiku-5-5",
+    "20261125T011046Z-W-nk-0-claude-haiku-5-5",
+    "20261125T012059Z-W-n-0-claude-haiku-5-5",
+    "20261125T013102Z-W-n-0-claude-haiku-5-5",
+    "20261125T014036Z-W-nk-0-claude-haiku-5-5",
+    "20261125T014957Z-W-nk-0-claude-haiku-5-5",
+    "20261125T020005Z-W-n-0-claude-haiku-5-5",
+    "20261125T021021Z-W-n-0-claude-haiku-5-5",
+    "20261125T022022Z-W-nk-0-claude-haiku-5-5"
+  ],
+  "config_hash": "7cc9de6974276408e47d5bf5f50bbf3df77cbc18703c50f4f068aa041acf7b9d",
+  "prereg_version": "1.0",
+  "sdk_versions": {
+    "openai": "3.22.1",
+    "anthropic": "1.15.0",
+    "google-genai": null,
+    "arc-agi": null,
+    "tiktoken": "0.14.0"
+  },
+  "git_commit": "692e2585761cd2cd46986f4e469001ac32268204",
+  "git_dirty": false
+}

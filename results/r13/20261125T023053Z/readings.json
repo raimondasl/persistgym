@@ -1,0 +1,6257 @@
+{
+  "prereg": "PREREG.md §17.13 (amendment R13)",
+  "block": "9-r13",
+  "status": "FINAL",
+  "experiments_in_reading": [
+    "persistgym_haiku_r13_sigma",
+    "persistgym_haiku_r13_pinned"
+  ],
+  "incomplete": [],
+  "rerun_links": {},
+  "sweep_closed": [],
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 4086943125952605544,
+    "seed_offset": 10,
+    "interval": "90% percentile, template-cluster",
+    "experiment_4": "R8 to R12's resamples (T = 200), by template number",
+    "experiment_5": "over the templates read, mapped to 0..n-1"
+  },
+  "comparators": {
+    "r8_output": "results/persistgym_h1h3_haiku/20261019T003254Z",
+    "r9_output": "results/haiku_notes/20261024T073307Z",
+    "r12_output": "results/r12/20261113T065503Z",
+    "luna_output": "results/persistgym_h1h3/20261010T232227Z/"
+  },
+  "experiments": {
+    "persistgym_haiku_r13_sigma": {
+      "label": "Experiment 4",
+      "experiment": "persistgym_haiku_r13_sigma",
+      "model": "claude-haiku-5-5",
+      "cells": [
+        "Σ-n-0"
+      ],
+      "task_cells": [
+        "observed-nonrec-near",
+        "observed-nonrec-far",
+        "observed-rec-near",
+        "observed-rec-far",
+        "derived-nonrec-near",
+        "derived-nonrec-far",
+        "derived-rec-near",
+        "derived-rec-far"
+      ],
+      "templates_registered": "0-199",
+      "templates_read": 200,
+      "templates": "0-199",
+      "left_out": [],
+      "templates_never_played": 0,
+      "resamples_over": 200,
+      "deviations": [],
+      "accounting_check": {
+        "checked": 0,
+        "bugs": [],
+        "missing_transcripts": []
+      },
+      "exclusions": [
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "observed-rec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "observed-rec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "derived-rec-near",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "variant": "base",
+          "task_cell": "derived-rec-far",
+          "keys": 200,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        }
+      ],
+      "runs": [
+        {
+          "run_id": "20261124T193536Z-sigma-n-0-claude-haiku-5-5",
+          "cell": "Σ-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-24T19:35:38+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261124T205933Z-sigma-n-0-claude-haiku-5-5",
+          "cell": "Σ-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-24T20:59:35+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261124T222140Z-sigma-n-0-claude-haiku-5-5",
+          "cell": "Σ-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-24T22:21:42+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261124T234531Z-sigma-n-0-claude-haiku-5-5",
+          "cell": "Σ-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-24T23:45:33+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 400,
+          "records_counted": 400,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        }
+      ],
+      "arms": [
+        {
+          "arm": "Σ-n-0",
+          "cell": "Σ-n-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r13_sigma",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 194,
+              "rate": 0.97,
+              "content_failures": {
+                "incomplete": 3,
+                "unparsed": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 13
+              },
+              "episodes_with_a_refusal": 8,
+              "interval_90": [
+                0.95,
+                0.99
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 178,
+              "rate": 0.89,
+              "content_failures": {
+                "incomplete": 2,
+                "unparsed": 10
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 12
+              },
+              "episodes_with_a_refusal": 5,
+              "interval_90": [
+                0.855,
+                0.925
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 197,
+              "rate": 0.985,
+              "content_failures": {
+                "incomplete": 1,
+                "nan": 1,
+                "unparsed": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.97,
+                1.0
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 5
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 193,
+              "rate": 0.965,
+              "content_failures": {
+                "incomplete": 3,
+                "nan": 1,
+                "unparsed": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 26
+              },
+              "episodes_with_a_refusal": 11,
+              "interval_90": [
+                0.945,
+                0.985
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 193,
+              "rate": 0.965,
+              "content_failures": {
+                "incomplete": 3,
+                "nan": 2,
+                "unparsed": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 44
+              },
+              "episodes_with_a_refusal": 11,
+              "interval_90": [
+                0.94,
+                0.985
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 1,
+                "nan": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 6
+              },
+              "episodes_with_a_refusal": 5,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "Σ-n-0",
+              "cell": "Σ-n-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 196,
+              "rate": 0.98,
+              "content_failures": {
+                "incomplete": 3,
+                "nan": 1
+              },
+              "exploratory": true,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.965,
+                0.995
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": null,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": null,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 194,
+                "rate": 0.97
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": {
+                "n": 0,
+                "carried": 0,
+                "rate": null
+              },
+              "used_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "0": {
+                  "n": 200,
+                  "S_verbatim_1": 200,
+                  "S_1": 200,
+                  "success": {
+                    "n": 200,
+                    "successes": 194,
+                    "rate": 0.97
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 184,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 178,
+                "rate": 0.89
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 16,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 200,
+                "carried": 184,
+                "rate": 0.92
+              },
+              "used_given_carried": {
+                "n": 184,
+                "successes": 178,
+                "rate": 0.967391304347826
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "1": {
+                  "n": 200,
+                  "S_verbatim_1": 0,
+                  "S_1": 184,
+                  "success": {
+                    "n": 200,
+                    "successes": 178,
+                    "rate": 0.89
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": null,
+              "S_verbatim_1": 199,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 1,
+              "S_1": 199,
+              "planned_vs_verbatim_mismatch": null,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 199,
+                "successes": 197,
+                "rate": 0.9899497487437185
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": {
+                "n": 0,
+                "carried": 0,
+                "rate": null
+              },
+              "used_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "0": {
+                  "n": 199,
+                  "S_verbatim_1": 199,
+                  "S_1": 199,
+                  "success": {
+                    "n": 199,
+                    "successes": 197,
+                    "rate": 0.9899497487437185
+                  }
+                },
+                "none": {
+                  "n": 1,
+                  "S_verbatim_1": 0,
+                  "S_1": 0,
+                  "success": {
+                    "n": 1,
+                    "successes": 0,
+                    "rate": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 171,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "rescued_with_lookup": {
+                "n": 28,
+                "successes": 28,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 200,
+                "carried": 171,
+                "rate": 0.855
+              },
+              "used_given_carried": {
+                "n": 171,
+                "successes": 170,
+                "rate": 0.9941520467836257
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "1": {
+                  "n": 200,
+                  "S_verbatim_1": 0,
+                  "S_1": 171,
+                  "success": {
+                    "n": 200,
+                    "successes": 198,
+                    "rate": 0.99
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": null,
+              "S_verbatim_1": 178,
+              "S_verbatim_0": 21,
+              "S_verbatim_unknown": 1,
+              "S_1": 190,
+              "planned_vs_verbatim_mismatch": null,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 178,
+                "successes": 174,
+                "rate": 0.9775280898876404
+              },
+              "success_given_S0": {
+                "n": 21,
+                "successes": 19,
+                "rate": 0.9047619047619048
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 9,
+                "successes": 7,
+                "rate": 0.7777777777777778
+              },
+              "P_carried": {
+                "n": 21,
+                "carried": 12,
+                "rate": 0.5714285714285714
+              },
+              "used_given_carried": {
+                "n": 12,
+                "successes": 12,
+                "rate": 1.0
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "0": {
+                  "n": 178,
+                  "S_verbatim_1": 178,
+                  "S_1": 178,
+                  "success": {
+                    "n": 178,
+                    "successes": 174,
+                    "rate": 0.9775280898876404
+                  }
+                },
+                "1": {
+                  "n": 21,
+                  "S_verbatim_1": 0,
+                  "S_1": 12,
+                  "success": {
+                    "n": 21,
+                    "successes": 19,
+                    "rate": 0.9047619047619048
+                  }
+                },
+                "none": {
+                  "n": 1,
+                  "S_verbatim_1": 0,
+                  "S_1": 0,
+                  "success": {
+                    "n": 1,
+                    "successes": 0,
+                    "rate": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 198,
+              "S_verbatim_unknown": 2,
+              "S_1": 198,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 198,
+                "successes": 193,
+                "rate": 0.9747474747474747
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": {
+                "n": 198,
+                "carried": 198,
+                "rate": 1.0
+              },
+              "used_given_carried": {
+                "n": 198,
+                "successes": 193,
+                "rate": 0.9747474747474747
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "1": {
+                  "n": 198,
+                  "S_verbatim_1": 0,
+                  "S_1": 198,
+                  "success": {
+                    "n": 198,
+                    "successes": 193,
+                    "rate": 0.9747474747474747
+                  }
+                },
+                "none": {
+                  "n": 2,
+                  "S_verbatim_1": 0,
+                  "S_1": 0,
+                  "success": {
+                    "n": 2,
+                    "successes": 0,
+                    "rate": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": null,
+              "S_verbatim_1": 178,
+              "S_verbatim_0": 21,
+              "S_verbatim_unknown": 1,
+              "S_1": 187,
+              "planned_vs_verbatim_mismatch": null,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 178,
+                "successes": 177,
+                "rate": 0.9943820224719101
+              },
+              "success_given_S0": {
+                "n": 21,
+                "successes": 21,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 1,
+                "successes": 1,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 11,
+                "successes": 11,
+                "rate": 1.0
+              },
+              "P_carried": {
+                "n": 21,
+                "carried": 9,
+                "rate": 0.42857142857142855
+              },
+              "used_given_carried": {
+                "n": 9,
+                "successes": 9,
+                "rate": 1.0
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "0": {
+                  "n": 178,
+                  "S_verbatim_1": 178,
+                  "S_1": 178,
+                  "success": {
+                    "n": 178,
+                    "successes": 177,
+                    "rate": 0.9943820224719101
+                  }
+                },
+                "1": {
+                  "n": 21,
+                  "S_verbatim_1": 0,
+                  "S_1": 9,
+                  "success": {
+                    "n": 21,
+                    "successes": 21,
+                    "rate": 1.0
+                  }
+                },
+                "none": {
+                  "n": 1,
+                  "S_verbatim_1": 0,
+                  "S_1": 0,
+                  "success": {
+                    "n": 1,
+                    "successes": 0,
+                    "rate": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "cell": "Σ-n-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 199,
+              "S_verbatim_unknown": 1,
+              "S_1": 198,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 199,
+                "successes": 196,
+                "rate": 0.9849246231155779
+              },
+              "rescued_with_lookup": {
+                "n": 1,
+                "successes": 1,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": {
+                "n": 199,
+                "carried": 198,
+                "rate": 0.9949748743718593
+              },
+              "used_given_carried": {
+                "n": 198,
+                "successes": 195,
+                "rate": 0.9848484848484849
+              },
+              "exploratory": true,
+              "by_compacted_between": {
+                "1": {
+                  "n": 199,
+                  "S_verbatim_1": 0,
+                  "S_1": 198,
+                  "success": {
+                    "n": 199,
+                    "successes": 196,
+                    "rate": 0.9849246231155779
+                  }
+                },
+                "none": {
+                  "n": 1,
+                  "S_verbatim_1": 0,
+                  "S_1": 0,
+                  "success": {
+                    "n": 1,
+                    "successes": 0,
+                    "rate": 0.0
+                  }
+                }
+              }
+            }
+          ],
+          "carried": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "S_verbatim_0": 0,
+              "retained": {
+                "carried": 0,
+                "rate": null,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                }
+              },
+              "bridge": {
+                "carried": 0,
+                "rate": null,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                },
+                "present_at_need": 0
+              },
+              "either": {
+                "carried": 0,
+                "rate": null,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                }
+              }
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "S_verbatim_0": 200,
+              "retained": {
+                "carried": 0,
+                "rate": 0.0,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                }
+              },
+              "bridge": {
+                "carried": 184,
+                "rate": 0.92,
+                "success_given_carried": {
+                  "n": 184,
+                  "successes": 178,
+                  "rate": 0.967391304347826
+                },
+                "present_at_need": 200
+              },
+              "either": {
+                "carried": 184,
+                "rate": 0.92,
+                "success_given_carried": {
+                  "n": 184,
+                  "successes": 178,
+                  "rate": 0.967391304347826
+                }
+              }
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "S_verbatim_0": 0,
+              "retained": {
+                "carried": 0,
+                "rate": null,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                }
+              },
+              "bridge": {
+                "carried": 0,
+                "rate": null,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                },
+                "present_at_need": 0
+              },
+              "either": {
+                "carried": 0,
+                "rate": null,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                }
+              }
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "S_verbatim_0": 200,
+              "retained": {
+                "carried": 1,
+                "rate": 0.005,
+                "success_given_carried": {
+                  "n": 1,
+                  "successes": 1,
+                  "rate": 1.0
+                }
+              },
+              "bridge": {
+                "carried": 171,
+                "rate": 0.855,
+                "success_given_carried": {
+                  "n": 171,
+                  "successes": 170,
+                  "rate": 0.9941520467836257
+                },
+                "present_at_need": 200
+              },
+              "either": {
+                "carried": 171,
+                "rate": 0.855,
+                "success_given_carried": {
+                  "n": 171,
+                  "successes": 170,
+                  "rate": 0.9941520467836257
+                }
+              }
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "S_verbatim_0": 21,
+              "retained": {
+                "carried": 12,
+                "rate": 0.5714285714285714,
+                "success_given_carried": {
+                  "n": 12,
+                  "successes": 12,
+                  "rate": 1.0
+                }
+              },
+              "bridge": {
+                "carried": 0,
+                "rate": 0.0,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                },
+                "present_at_need": 21
+              },
+              "either": {
+                "carried": 12,
+                "rate": 0.5714285714285714,
+                "success_given_carried": {
+                  "n": 12,
+                  "successes": 12,
+                  "rate": 1.0
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "S_verbatim_0": 198,
+              "retained": {
+                "carried": 5,
+                "rate": 0.025252525252525252,
+                "success_given_carried": {
+                  "n": 5,
+                  "successes": 5,
+                  "rate": 1.0
+                }
+              },
+              "bridge": {
+                "carried": 198,
+                "rate": 1.0,
+                "success_given_carried": {
+                  "n": 198,
+                  "successes": 193,
+                  "rate": 0.9747474747474747
+                },
+                "present_at_need": 198
+              },
+              "either": {
+                "carried": 198,
+                "rate": 1.0,
+                "success_given_carried": {
+                  "n": 198,
+                  "successes": 193,
+                  "rate": 0.9747474747474747
+                }
+              }
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "S_verbatim_0": 21,
+              "retained": {
+                "carried": 9,
+                "rate": 0.42857142857142855,
+                "success_given_carried": {
+                  "n": 9,
+                  "successes": 9,
+                  "rate": 1.0
+                }
+              },
+              "bridge": {
+                "carried": 0,
+                "rate": 0.0,
+                "success_given_carried": {
+                  "n": 0,
+                  "successes": 0,
+                  "rate": null
+                },
+                "present_at_need": 21
+              },
+              "either": {
+                "carried": 9,
+                "rate": 0.42857142857142855,
+                "success_given_carried": {
+                  "n": 9,
+                  "successes": 9,
+                  "rate": 1.0
+                }
+              }
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "S_verbatim_0": 199,
+              "retained": {
+                "carried": 4,
+                "rate": 0.020100502512562814,
+                "success_given_carried": {
+                  "n": 4,
+                  "successes": 4,
+                  "rate": 1.0
+                }
+              },
+              "bridge": {
+                "carried": 198,
+                "rate": 0.9949748743718593,
+                "success_given_carried": {
+                  "n": 198,
+                  "successes": 195,
+                  "rate": 0.9848484848484849
+                },
+                "present_at_need": 199
+              },
+              "either": {
+                "carried": 198,
+                "rate": 0.9949748743718593,
+                "success_given_carried": {
+                  "n": 198,
+                  "successes": 195,
+                  "rate": 0.9848484848484849
+                }
+              }
+            }
+          },
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 178,
+              "correct": 178
+            },
+            "derived-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 193,
+              "correct": 193
+            }
+          },
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01522412295,
+              "cost_missing": 0,
+              "output_tokens_mean": 3111.585,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 398170.48,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7883989039066884,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.014947372975,
+              "cost_missing": 0,
+              "output_tokens_mean": 3126.405,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 398005.965,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7944838464920997,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0151538268,
+              "cost_missing": 0,
+              "output_tokens_mean": 2927.94,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 399715.025,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7890843107536425,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.014965031975000001,
+              "cost_missing": 0,
+              "output_tokens_mean": 2936.84,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 403200.695,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7958266540190364,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01506660165,
+              "cost_missing": 0,
+              "output_tokens_mean": 3380.455,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 398321.335,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7948856543172612,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.015137532175,
+              "cost_missing": 0,
+              "output_tokens_mean": 3515.24,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 398794.97,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7951554780141785,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.014929477025,
+              "cost_missing": 0,
+              "output_tokens_mean": 3043.915,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 399715.53,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7952268329429182,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.015034750999999999,
+              "cost_missing": 0,
+              "output_tokens_mean": 3149.405,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 401065.075,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7950695407721552,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.015057339568750001,
+              "cost_missing": 0,
+              "output_tokens_mean": 3148.973125,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 399623.634375,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.7935204642511955,
+              "cache_read_share_missing": 0
+            }
+          },
+          "near_need_payload_S_false": {
+            "derived-nonrec-near": {
+              "n": 200,
+              "S_false": 21,
+              "success_given_S_false": {
+                "n": 21,
+                "successes": 19,
+                "rate": 0.9047619047619048
+              }
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "S_false": 21,
+              "success_given_S_false": {
+                "n": 21,
+                "successes": 21,
+                "rate": 1.0
+              }
+            },
+            "observed-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            }
+          },
+          "responses": {
+            "episodes": 1600,
+            "runs": [
+              "20261124T193536Z-sigma-n-0-claude-haiku-5-5",
+              "20261124T205933Z-sigma-n-0-claude-haiku-5-5",
+              "20261124T222140Z-sigma-n-0-claude-haiku-5-5",
+              "20261124T234531Z-sigma-n-0-claude-haiku-5-5"
+            ],
+            "step_responses": 38453,
+            "summary_responses": 1629,
+            "responses_not_in_transcript": [],
+            "refused_responses": 117,
+            "refused_share": 0.003042675473955218,
+            "refusal_categories": {
+              "refusal:bio": 117
+            },
+            "step_responses_in_transcript": 38453,
+            "with_thinking": 17757,
+            "thinking_share": 0.4617845161625881,
+            "with_redacted_thinking": 0,
+            "summary_responses_in_transcript": 1629,
+            "summary_with_thinking": 1620,
+            "at_need": {
+              "observed-nonrec-near": {
+                "episodes": 200,
+                "retained_replies_median": 7.0,
+                "retained_replies_pooled": 1402,
+                "reply_chars_median": 101.0,
+                "chars_per_episode_median": 717.0
+              },
+              "observed-nonrec-far": {
+                "episodes": 200,
+                "retained_replies_median": 7.0,
+                "retained_replies_pooled": 1402,
+                "reply_chars_median": 99.0,
+                "chars_per_episode_median": 671.5
+              },
+              "observed-rec-near": {
+                "episodes": 199,
+                "retained_replies_median": 7,
+                "retained_replies_pooled": 1398,
+                "reply_chars_median": 96.0,
+                "chars_per_episode_median": 582.0
+              },
+              "observed-rec-far": {
+                "episodes": 200,
+                "retained_replies_median": 7.0,
+                "retained_replies_pooled": 1404,
+                "reply_chars_median": 91.0,
+                "chars_per_episode_median": 519.5
+              },
+              "derived-nonrec-near": {
+                "episodes": 199,
+                "retained_replies_median": 7,
+                "retained_replies_pooled": 1397,
+                "reply_chars_median": 109.0,
+                "chars_per_episode_median": 832.0
+              },
+              "derived-nonrec-far": {
+                "episodes": 198,
+                "retained_replies_median": 7.0,
+                "retained_replies_pooled": 1393,
+                "reply_chars_median": 99.0,
+                "chars_per_episode_median": 654.0
+              },
+              "derived-rec-near": {
+                "episodes": 199,
+                "retained_replies_median": 7,
+                "retained_replies_pooled": 1397,
+                "reply_chars_median": 105.0,
+                "chars_per_episode_median": 737.0
+              },
+              "derived-rec-far": {
+                "episodes": 199,
+                "retained_replies_median": 7,
+                "retained_replies_pooled": 1398,
+                "reply_chars_median": 95.0,
+                "chars_per_episode_median": 572.0
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-0 (R8)",
+          "cell": "W-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 6
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 177
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 3
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 2
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 5
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 172
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 14
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-0",
+              "cell": "W-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 5,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "carried": null,
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 0,
+              "correct": 0
+            },
+            "derived-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 0,
+              "correct": 0
+            }
+          },
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0423654869,
+              "cost_missing": 0,
+              "output_tokens_mean": 970.095,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540153.32,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4127060442764658,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.04224767455,
+              "cost_missing": 0,
+              "output_tokens_mean": 1350.46,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540114.38,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41761604273524433,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0426273049,
+              "cost_missing": 0,
+              "output_tokens_mean": 1154.985,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 542994.48,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4135215886540872,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.046382664025,
+              "cost_missing": 0,
+              "output_tokens_mean": 1259.655,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 574494.195,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.3943950904499566,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.041780378699999995,
+              "cost_missing": 0,
+              "output_tokens_mean": 1199.145,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540436.6,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4243165988387907,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.041798759025,
+              "cost_missing": 0,
+              "output_tokens_mean": 1681.485,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 540697.46,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.42821925777124975,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.042168220650000005,
+              "cost_missing": 0,
+              "output_tokens_mean": 1361.29,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 543300.78,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4228999818479922,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.046072871024999996,
+              "cost_missing": 0,
+              "output_tokens_mean": 1556.84,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 575050.44,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.40199650138516546,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.04318041997187501,
+              "cost_missing": 0,
+              "output_tokens_mean": 1316.744375,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 549655.206875,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41421104021630123,
+              "cache_read_share_missing": 0
+            }
+          },
+          "near_need_payload_S_false": {
+            "derived-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            }
+          }
+        },
+        {
+          "arm": "F-0 (R8)",
+          "cell": "F-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 199,
+              "rate": 0.995,
+              "content_failures": {
+                "incomplete": 1
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 10
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.985,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 3
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 199,
+              "rate": 0.995,
+              "content_failures": {
+                "incomplete": 1
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                0.985,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 8
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 10
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 12
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 10
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            },
+            {
+              "kind": "F-0",
+              "cell": "F-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 198,
+              "rate": 0.99,
+              "content_failures": {
+                "incomplete": 2
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 12
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.975,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "F-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 199,
+                "rate": 0.995
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 199,
+                "rate": 0.995
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "F-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "carried": null,
+          "choices_nr_far": null,
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012686527125,
+              "cost_missing": 0,
+              "output_tokens_mean": 939.39,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 638843.49,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9206337455203621,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0124090843,
+              "cost_missing": 0,
+              "output_tokens_mean": 977.0,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 639157.29,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9247458164796962,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012863809975,
+              "cost_missing": 0,
+              "output_tokens_mean": 1172.195,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 642883.46,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9208554455577377,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012624179975,
+              "cost_missing": 0,
+              "output_tokens_mean": 1154.32,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 641865.49,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9237173430215107,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01224550935,
+              "cost_missing": 0,
+              "output_tokens_mean": 1146.805,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 639013.04,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9280904658847025,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012320881325,
+              "cost_missing": 0,
+              "output_tokens_mean": 1187.84,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 639407.61,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9274425041641278,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.012385354925000001,
+              "cost_missing": 0,
+              "output_tokens_mean": 1332.855,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 642386.325,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9282909003394492,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01260960745,
+              "cost_missing": 0,
+              "output_tokens_mean": 1407.97,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 643963.01,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.9261583518593716,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.012518119303124998,
+              "cost_missing": 0,
+              "output_tokens_mean": 1164.796875,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 640939.964375,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.924991612635857,
+              "cache_read_share_missing": 0
+            }
+          },
+          "near_need_payload_S_false": {
+            "derived-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-b-0 (R12)",
+          "cell": "W-b-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_block",
+          "counted_repeat_0": 1600,
+          "cells": [
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 1
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 165
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 6
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 1
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 1
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 2
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "successes": 0,
+              "rate": 0.0,
+              "content_failures": {
+                "incomplete": 2,
+                "unparsed": 163
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 7
+              },
+              "episodes_with_a_refusal": 4,
+              "interval_90": [
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 3,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "kind": "W-b-0",
+              "cell": "W-b-0",
+              "variant": "base",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "successes": 200,
+              "rate": 1.0,
+              "content_failures": {},
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 4
+              },
+              "episodes_with_a_refusal": 2,
+              "interval_90": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "observed-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-nonrec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 200,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-rec-near",
+              "n": 200,
+              "S_planned": 1,
+              "S_verbatim_1": 200,
+              "S_verbatim_0": 0,
+              "S_verbatim_unknown": 0,
+              "S_1": 200,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": 0,
+              "residual_at_S1": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "success_given_S0": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false,
+              "near_loss_share": 0.0
+            },
+            {
+              "cell": "W-b-0",
+              "task_cell": "derived-rec-far",
+              "n": 200,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 200,
+              "S_verbatim_unknown": 0,
+              "S_1": 0,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_with_lookup": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              },
+              "rescued_without_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "P_carried": null,
+              "used_given_carried": null,
+              "exploratory": false
+            }
+          ],
+          "carried": null,
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 1,
+              "correct": 0
+            },
+            "derived-nonrec-far": {
+              "episodes": 200,
+              "chose_an_option": 0,
+              "correct": 0
+            }
+          },
+          "costs": {
+            "observed-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0129053855,
+              "cost_missing": 0,
+              "output_tokens_mean": 969.05,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 453735.98,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8488700851980043,
+              "cache_read_share_missing": 0
+            },
+            "observed-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.0122839264,
+              "cost_missing": 0,
+              "output_tokens_mean": 1372.065,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 453823.135,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8646845758535426,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.013074902450000002,
+              "cost_missing": 0,
+              "output_tokens_mean": 1190.67,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 456359.815,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8491203262495844,
+              "cache_read_share_missing": 0
+            },
+            "observed-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.013222670525,
+              "cost_missing": 0,
+              "output_tokens_mean": 1246.895,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 478743.57,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8580652373043882,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01212486535,
+              "cost_missing": 0,
+              "output_tokens_mean": 1188.76,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 453781.605,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8659559591447079,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.011902795400000001,
+              "cost_missing": 0,
+              "output_tokens_mean": 1528.135,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 454005.665,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.87356842783008,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01228514565,
+              "cost_missing": 0,
+              "output_tokens_mean": 1365.87,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 456362.81,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8658392650356412,
+              "cache_read_share_missing": 0
+            },
+            "derived-rec-far": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.01286422955,
+              "cost_missing": 0,
+              "output_tokens_mean": 1427.48,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 478995.245,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8663317837320076,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 1600,
+              "cost_usd_billed_mean": 0.012582990103125,
+              "cost_missing": 0,
+              "output_tokens_mean": 1286.115625,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 460725.978125,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.8615587330573862,
+              "cache_read_share_missing": 0
+            }
+          },
+          "near_need_payload_S_false": {
+            "derived-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "derived-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-nonrec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "observed-rec-near": {
+              "n": 200,
+              "S_false": 0,
+              "success_given_S_false": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            }
+          }
+        }
+      ],
+      "contrasts": {
+        "Σ-n-0 - W-0 (R8)": {
+          "observed-nonrec-near": {
+            "pp": -3.0000000000000027,
+            "ci90": [
+              -5.000000000000004,
+              -1.0000000000000009
+            ]
+          },
+          "observed-nonrec-far": {
+            "pp": 89.0,
+            "ci90": [
+              85.5,
+              92.5
+            ]
+          },
+          "observed-rec-near": {
+            "pp": -1.5000000000000013,
+            "ci90": [
+              -3.0000000000000027,
+              0.0
+            ]
+          },
+          "observed-rec-far": {
+            "pp": -1.0000000000000009,
+            "ci90": [
+              -2.500000000000002,
+              0.0
+            ]
+          },
+          "derived-nonrec-near": {
+            "pp": -3.500000000000003,
+            "ci90": [
+              -5.500000000000005,
+              -1.5000000000000013
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 96.5,
+            "ci90": [
+              94.0,
+              98.5
+            ]
+          },
+          "derived-rec-near": {
+            "pp": -1.0000000000000009,
+            "ci90": [
+              -2.500000000000002,
+              0.0
+            ]
+          },
+          "derived-rec-far": {
+            "pp": -2.0000000000000018,
+            "ci90": [
+              -3.500000000000003,
+              -0.5000000000000004
+            ]
+          }
+        },
+        "Σ-n-0 - F-0 (R8)": {
+          "observed-nonrec-near": {
+            "pp": -2.500000000000002,
+            "ci90": [
+              -4.5000000000000036,
+              -0.5000000000000004
+            ]
+          },
+          "observed-nonrec-far": {
+            "pp": -10.999999999999998,
+            "ci90": [
+              -14.500000000000002,
+              -7.499999999999996
+            ]
+          },
+          "observed-rec-near": {
+            "pp": -1.0000000000000009,
+            "ci90": [
+              -2.500000000000002,
+              0.5000000000000004
+            ]
+          },
+          "observed-rec-far": {
+            "pp": 0.0,
+            "ci90": [
+              -1.5000000000000013,
+              1.5000000000000013
+            ]
+          },
+          "derived-nonrec-near": {
+            "pp": -2.500000000000002,
+            "ci90": [
+              -5.000000000000004,
+              0.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": -3.500000000000003,
+            "ci90": [
+              -6.000000000000005,
+              -1.5000000000000013
+            ]
+          },
+          "derived-rec-near": {
+            "pp": 0.0,
+            "ci90": [
+              -1.0000000000000009,
+              1.0000000000000009
+            ]
+          },
+          "derived-rec-far": {
+            "pp": -1.0000000000000009,
+            "ci90": [
+              -3.0000000000000027,
+              1.0000000000000009
+            ]
+          }
+        },
+        "Σ-n-0 - W-b-0 (R12)": {
+          "observed-nonrec-near": {
+            "pp": -3.0000000000000027,
+            "ci90": [
+              -5.000000000000004,
+              -1.0000000000000009
+            ]
+          },
+          "observed-nonrec-far": {
+            "pp": 89.0,
+            "ci90": [
+              85.5,
+              92.5
+            ]
+          },
+          "observed-rec-near": {
+            "pp": -1.5000000000000013,
+            "ci90": [
+              -3.0000000000000027,
+              0.0
+            ]
+          },
+          "observed-rec-far": {
+            "pp": -1.0000000000000009,
+            "ci90": [
+              -2.500000000000002,
+              0.0
+            ]
+          },
+          "derived-nonrec-near": {
+            "pp": -3.500000000000003,
+            "ci90": [
+              -5.500000000000005,
+              -1.5000000000000013
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 96.5,
+            "ci90": [
+              94.0,
+              98.5
+            ]
+          },
+          "derived-rec-near": {
+            "pp": -1.0000000000000009,
+            "ci90": [
+              -2.500000000000002,
+              0.0
+            ]
+          },
+          "derived-rec-far": {
+            "pp": -2.0000000000000018,
+            "ci90": [
+              -3.500000000000003,
+              -0.5000000000000004
+            ]
+          }
+        },
+        "Σ-n-0 - W-n-0 (R9)": {
+          "observed-nonrec-far": {
+            "pp": 87.0,
+            "ci90": [
+              83.0,
+              90.99999999999999
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 92.0,
+            "ci90": [
+              88.5,
+              95.0
+            ]
+          }
+        }
+      },
+      "r9_contrast": {
+        "runs": [
+          "20261024T060051Z-W-n-0-claude-haiku-5-5"
+        ],
+        "templates": "0-199",
+        "n_templates": 200,
+        "left_out": []
+      },
+      "comparators": {
+        "r8_runs": [
+          "20261018T141157Z-F-0-claude-haiku-5-5",
+          "20261018T144829Z-W-0-claude-haiku-5-5",
+          "20261018T154817Z-W-0-claude-haiku-5-5",
+          "20261018T154918Z-W-0-claude-haiku-5-5"
+        ],
+        "r12_runs": [
+          "20261112T235047Z-W-b-0-claude-haiku-5-5",
+          "20261113T011523Z-W-b-0-claude-haiku-5-5",
+          "20261113T023608Z-W-b-0-claude-haiku-5-5",
+          "20261113T035847Z-W-b-0-claude-haiku-5-5"
+        ]
+      },
+      "compaction": {
+        "observed-nonrec-near": {
+          "episodes": 200,
+          "compactions_per_episode": 1.0,
+          "compactions_distribution": {
+            "1": 200
+          },
+          "compacted_between": {
+            "0": {
+              "n": 200,
+              "S_verbatim_1": 200,
+              "S_1": 200,
+              "success": {
+                "n": 200,
+                "successes": 194,
+                "rate": 0.97
+              }
+            }
+          }
+        },
+        "observed-nonrec-far": {
+          "episodes": 200,
+          "compactions_per_episode": 1.0,
+          "compactions_distribution": {
+            "1": 200
+          },
+          "compacted_between": {
+            "1": {
+              "n": 200,
+              "S_verbatim_1": 0,
+              "S_1": 184,
+              "success": {
+                "n": 200,
+                "successes": 178,
+                "rate": 0.89
+              }
+            }
+          }
+        },
+        "observed-rec-near": {
+          "episodes": 200,
+          "compactions_per_episode": 0.995,
+          "compactions_distribution": {
+            "0": 1,
+            "1": 199
+          },
+          "compacted_between": {
+            "0": {
+              "n": 199,
+              "S_verbatim_1": 199,
+              "S_1": 199,
+              "success": {
+                "n": 199,
+                "successes": 197,
+                "rate": 0.9899497487437185
+              }
+            },
+            "none": {
+              "n": 1,
+              "S_verbatim_1": 0,
+              "S_1": 0,
+              "success": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              }
+            }
+          }
+        },
+        "observed-rec-far": {
+          "episodes": 200,
+          "compactions_per_episode": 1.0,
+          "compactions_distribution": {
+            "1": 200
+          },
+          "compacted_between": {
+            "1": {
+              "n": 200,
+              "S_verbatim_1": 0,
+              "S_1": 171,
+              "success": {
+                "n": 200,
+                "successes": 198,
+                "rate": 0.99
+              }
+            }
+          }
+        },
+        "derived-nonrec-near": {
+          "episodes": 200,
+          "compactions_per_episode": 0.995,
+          "compactions_distribution": {
+            "0": 1,
+            "1": 199
+          },
+          "compacted_between": {
+            "0": {
+              "n": 178,
+              "S_verbatim_1": 178,
+              "S_1": 178,
+              "success": {
+                "n": 178,
+                "successes": 174,
+                "rate": 0.9775280898876404
+              }
+            },
+            "1": {
+              "n": 21,
+              "S_verbatim_1": 0,
+              "S_1": 12,
+              "success": {
+                "n": 21,
+                "successes": 19,
+                "rate": 0.9047619047619048
+              }
+            },
+            "none": {
+              "n": 1,
+              "S_verbatim_1": 0,
+              "S_1": 0,
+              "success": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              }
+            }
+          }
+        },
+        "derived-nonrec-far": {
+          "episodes": 200,
+          "compactions_per_episode": 0.99,
+          "compactions_distribution": {
+            "0": 2,
+            "1": 198
+          },
+          "compacted_between": {
+            "1": {
+              "n": 198,
+              "S_verbatim_1": 0,
+              "S_1": 198,
+              "success": {
+                "n": 198,
+                "successes": 193,
+                "rate": 0.9747474747474747
+              }
+            },
+            "none": {
+              "n": 2,
+              "S_verbatim_1": 0,
+              "S_1": 0,
+              "success": {
+                "n": 2,
+                "successes": 0,
+                "rate": 0.0
+              }
+            }
+          }
+        },
+        "derived-rec-near": {
+          "episodes": 200,
+          "compactions_per_episode": 0.995,
+          "compactions_distribution": {
+            "0": 1,
+            "1": 199
+          },
+          "compacted_between": {
+            "0": {
+              "n": 178,
+              "S_verbatim_1": 178,
+              "S_1": 178,
+              "success": {
+                "n": 178,
+                "successes": 177,
+                "rate": 0.9943820224719101
+              }
+            },
+            "1": {
+              "n": 21,
+              "S_verbatim_1": 0,
+              "S_1": 9,
+              "success": {
+                "n": 21,
+                "successes": 21,
+                "rate": 1.0
+              }
+            },
+            "none": {
+              "n": 1,
+              "S_verbatim_1": 0,
+              "S_1": 0,
+              "success": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              }
+            }
+          }
+        },
+        "derived-rec-far": {
+          "episodes": 200,
+          "compactions_per_episode": 1.0,
+          "compactions_distribution": {
+            "0": 1,
+            "1": 198,
+            "2": 1
+          },
+          "compacted_between": {
+            "1": {
+              "n": 199,
+              "S_verbatim_1": 0,
+              "S_1": 198,
+              "success": {
+                "n": 199,
+                "successes": 196,
+                "rate": 0.9849246231155779
+              }
+            },
+            "none": {
+              "n": 1,
+              "S_verbatim_1": 0,
+              "S_1": 0,
+              "success": {
+                "n": 1,
+                "successes": 0,
+                "rate": 0.0
+              }
+            }
+          }
+        }
+      },
+      "summary_calls": {
+        "observed-nonrec-near": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.015,
+          "failed_attempts_per_episode": 0.015,
+          "failed_attempts": 3,
+          "agent_error_episodes": [],
+          "bridges": 200,
+          "bridge_tokens_median": 554.0,
+          "need_bridge_episodes": 200,
+          "need_bridge_tokens_median": 554.0,
+          "summary_responses": 203,
+          "summary_stopped": {
+            "refusal:bio": 3
+          },
+          "summary_refusals": {
+            "refusal:bio": 3
+          },
+          "summary_with_thinking": 202,
+          "summary_output_tokens_median_per_call": 1183.0,
+          "summary_output_tokens_mean_per_episode": 1210.955
+        },
+        "observed-nonrec-far": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.01,
+          "failed_attempts_per_episode": 0.01,
+          "failed_attempts": 2,
+          "agent_error_episodes": [],
+          "bridges": 200,
+          "bridge_tokens_median": 553.5,
+          "need_bridge_episodes": 200,
+          "need_bridge_tokens_median": 553.5,
+          "summary_responses": 202,
+          "summary_stopped": {
+            "refusal:bio": 2
+          },
+          "summary_refusals": {
+            "refusal:bio": 2
+          },
+          "summary_with_thinking": 202,
+          "summary_output_tokens_median_per_call": 1219.5,
+          "summary_output_tokens_mean_per_episode": 1238.04
+        },
+        "observed-rec-near": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.015,
+          "failed_attempts_per_episode": 0.02,
+          "failed_attempts": 4,
+          "agent_error_episodes": [
+            "main-000193/observed-rec-near/base"
+          ],
+          "bridges": 199,
+          "bridge_tokens_median": 545.0,
+          "need_bridge_episodes": 199,
+          "need_bridge_tokens_median": 545.0,
+          "summary_responses": 203,
+          "summary_stopped": {
+            "refusal:bio": 4
+          },
+          "summary_refusals": {
+            "refusal:bio": 4
+          },
+          "summary_with_thinking": 201,
+          "summary_output_tokens_median_per_call": 1239.0,
+          "summary_output_tokens_mean_per_episode": 1240.72
+        },
+        "observed-rec-far": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.005,
+          "failed_attempts_per_episode": 0.005,
+          "failed_attempts": 1,
+          "agent_error_episodes": [],
+          "bridges": 200,
+          "bridge_tokens_median": 535.5,
+          "need_bridge_episodes": 200,
+          "need_bridge_tokens_median": 535.5,
+          "summary_responses": 201,
+          "summary_stopped": {
+            "refusal:bio": 1
+          },
+          "summary_refusals": {
+            "refusal:bio": 1
+          },
+          "summary_with_thinking": 200,
+          "summary_output_tokens_median_per_call": 1177.0,
+          "summary_output_tokens_mean_per_episode": 1193.375
+        },
+        "derived-nonrec-near": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.02,
+          "failed_attempts_per_episode": 0.025,
+          "failed_attempts": 5,
+          "agent_error_episodes": [
+            "main-000193/derived-nonrec-near/base"
+          ],
+          "bridges": 199,
+          "bridge_tokens_median": 546.0,
+          "need_bridge_episodes": 199,
+          "need_bridge_tokens_median": 546.0,
+          "summary_responses": 204,
+          "summary_stopped": {
+            "refusal:bio": 5
+          },
+          "summary_refusals": {
+            "refusal:bio": 5
+          },
+          "summary_with_thinking": 203,
+          "summary_output_tokens_median_per_call": 1166.5,
+          "summary_output_tokens_mean_per_episode": 1210.075
+        },
+        "derived-nonrec-far": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.035,
+          "failed_attempts_per_episode": 0.045,
+          "failed_attempts": 9,
+          "agent_error_episodes": [
+            "main-000145/derived-nonrec-far/base",
+            "main-000193/derived-nonrec-far/base"
+          ],
+          "bridges": 198,
+          "bridge_tokens_median": 572.0,
+          "need_bridge_episodes": 198,
+          "need_bridge_tokens_median": 572.0,
+          "summary_responses": 207,
+          "summary_stopped": {
+            "refusal:bio": 9
+          },
+          "summary_refusals": {
+            "refusal:bio": 9
+          },
+          "summary_with_thinking": 207,
+          "summary_output_tokens_median_per_call": 1172.0,
+          "summary_output_tokens_mean_per_episode": 1245.57
+        },
+        "derived-rec-near": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.015,
+          "failed_attempts_per_episode": 0.02,
+          "failed_attempts": 4,
+          "agent_error_episodes": [
+            "main-000193/derived-rec-near/base"
+          ],
+          "bridges": 199,
+          "bridge_tokens_median": 556.0,
+          "need_bridge_episodes": 199,
+          "need_bridge_tokens_median": 556.0,
+          "summary_responses": 203,
+          "summary_stopped": {
+            "refusal:bio": 4
+          },
+          "summary_refusals": {
+            "refusal:bio": 4
+          },
+          "summary_with_thinking": 201,
+          "summary_output_tokens_median_per_call": 1173.0,
+          "summary_output_tokens_mean_per_episode": 1207.04
+        },
+        "derived-rec-far": {
+          "episodes": 200,
+          "summary_requests_per_episode": 1.03,
+          "failed_attempts_per_episode": 0.03,
+          "failed_attempts": 6,
+          "agent_error_episodes": [
+            "main-000145/derived-rec-far/base"
+          ],
+          "bridges": 200,
+          "bridge_tokens_median": 548.0,
+          "need_bridge_episodes": 199,
+          "need_bridge_tokens_median": 548.0,
+          "summary_responses": 206,
+          "summary_stopped": {
+            "refusal:bio": 6
+          },
+          "summary_refusals": {
+            "refusal:bio": 6
+          },
+          "summary_with_thinking": 204,
+          "summary_output_tokens_median_per_call": 1119.0,
+          "summary_output_tokens_mean_per_episode": 1192.695
+        },
+        "all": {
+          "episodes": 1600,
+          "summary_requests_per_episode": 1.018125,
+          "failed_attempts_per_episode": 0.02125,
+          "failed_attempts": 34,
+          "agent_error_episodes": [
+            "main-000145/derived-nonrec-far/base",
+            "main-000145/derived-rec-far/base",
+            "main-000193/derived-nonrec-far/base",
+            "main-000193/derived-nonrec-near/base",
+            "main-000193/derived-rec-near/base",
+            "main-000193/observed-rec-near/base"
+          ],
+          "bridges": 1595,
+          "bridge_tokens_median": 552.0,
+          "need_bridge_episodes": 1594,
+          "need_bridge_tokens_median": 552.0,
+          "summary_responses": 1629,
+          "summary_stopped": {
+            "refusal:bio": 34
+          },
+          "summary_refusals": {
+            "refusal:bio": 34
+          },
+          "summary_with_thinking": 1620,
+          "summary_output_tokens_median_per_call": 1180.0,
+          "summary_output_tokens_mean_per_episode": 1217.30875
+        }
+      },
+      "beside_luna": {
+        "arm": "Σ-n-0 (luna)",
+        "model": "gpt-6-luna",
+        "experiment": "persistgym",
+        "templates": "0-199",
+        "n_templates": 200,
+        "left_out": [],
+        "cells": [
+          {
+            "task_cell": "observed-nonrec-near",
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          },
+          {
+            "task_cell": "observed-nonrec-far",
+            "n": 200,
+            "successes": 86,
+            "rate": 0.43
+          },
+          {
+            "task_cell": "observed-rec-near",
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          },
+          {
+            "task_cell": "observed-rec-far",
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          },
+          {
+            "task_cell": "derived-nonrec-near",
+            "n": 200,
+            "successes": 194,
+            "rate": 0.97
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "n": 200,
+            "successes": 184,
+            "rate": 0.92
+          },
+          {
+            "task_cell": "derived-rec-near",
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          },
+          {
+            "task_cell": "derived-rec-far",
+            "n": 200,
+            "successes": 200,
+            "rate": 1.0
+          }
+        ],
+        "accounting": [
+          {
+            "task_cell": "observed-nonrec-near",
+            "S_verbatim_0": 0,
+            "P_carried": {
+              "n": 0,
+              "carried": 0,
+              "rate": null
+            },
+            "used_given_carried": {
+              "n": 0,
+              "successes": 0,
+              "rate": null
+            }
+          },
+          {
+            "task_cell": "observed-nonrec-far",
+            "S_verbatim_0": 200,
+            "P_carried": {
+              "n": 200,
+              "carried": 77,
+              "rate": 0.385
+            },
+            "used_given_carried": {
+              "n": 77,
+              "successes": 77,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "observed-rec-near",
+            "S_verbatim_0": 0,
+            "P_carried": {
+              "n": 0,
+              "carried": 0,
+              "rate": null
+            },
+            "used_given_carried": {
+              "n": 0,
+              "successes": 0,
+              "rate": null
+            }
+          },
+          {
+            "task_cell": "observed-rec-far",
+            "S_verbatim_0": 200,
+            "P_carried": {
+              "n": 200,
+              "carried": 62,
+              "rate": 0.31
+            },
+            "used_given_carried": {
+              "n": 62,
+              "successes": 62,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-near",
+            "S_verbatim_0": 21,
+            "P_carried": {
+              "n": 21,
+              "carried": 10,
+              "rate": 0.47619047619047616
+            },
+            "used_given_carried": {
+              "n": 10,
+              "successes": 10,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-nonrec-far",
+            "S_verbatim_0": 200,
+            "P_carried": {
+              "n": 200,
+              "carried": 184,
+              "rate": 0.92
+            },
+            "used_given_carried": {
+              "n": 184,
+              "successes": 184,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-rec-near",
+            "S_verbatim_0": 21,
+            "P_carried": {
+              "n": 21,
+              "carried": 7,
+              "rate": 0.3333333333333333
+            },
+            "used_given_carried": {
+              "n": 7,
+              "successes": 7,
+              "rate": 1.0
+            }
+          },
+          {
+            "task_cell": "derived-rec-far",
+            "S_verbatim_0": 200,
+            "P_carried": {
+              "n": 200,
+              "carried": 181,
+              "rate": 0.905
+            },
+            "used_given_carried": {
+              "n": 181,
+              "successes": 181,
+              "rate": 1.0
+            }
+          }
+        ],
+        "carried": {
+          "observed-nonrec-near": {
+            "n": 200,
+            "S_verbatim_0": 0,
+            "retained": {
+              "carried": 0,
+              "rate": null,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "bridge": {
+              "carried": 0,
+              "rate": null,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "present_at_need": 0
+            },
+            "either": {
+              "carried": 0,
+              "rate": null,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            }
+          },
+          "observed-nonrec-far": {
+            "n": 200,
+            "S_verbatim_0": 200,
+            "retained": {
+              "carried": 1,
+              "rate": 0.005,
+              "success_given_carried": {
+                "n": 1,
+                "successes": 1,
+                "rate": 1.0
+              }
+            },
+            "bridge": {
+              "carried": 77,
+              "rate": 0.385,
+              "success_given_carried": {
+                "n": 77,
+                "successes": 77,
+                "rate": 1.0
+              },
+              "present_at_need": 200
+            },
+            "either": {
+              "carried": 77,
+              "rate": 0.385,
+              "success_given_carried": {
+                "n": 77,
+                "successes": 77,
+                "rate": 1.0
+              }
+            }
+          },
+          "observed-rec-near": {
+            "n": 200,
+            "S_verbatim_0": 0,
+            "retained": {
+              "carried": 0,
+              "rate": null,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "bridge": {
+              "carried": 0,
+              "rate": null,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "present_at_need": 0
+            },
+            "either": {
+              "carried": 0,
+              "rate": null,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            }
+          },
+          "observed-rec-far": {
+            "n": 200,
+            "S_verbatim_0": 200,
+            "retained": {
+              "carried": 1,
+              "rate": 0.005,
+              "success_given_carried": {
+                "n": 1,
+                "successes": 1,
+                "rate": 1.0
+              }
+            },
+            "bridge": {
+              "carried": 62,
+              "rate": 0.31,
+              "success_given_carried": {
+                "n": 62,
+                "successes": 62,
+                "rate": 1.0
+              },
+              "present_at_need": 200
+            },
+            "either": {
+              "carried": 62,
+              "rate": 0.31,
+              "success_given_carried": {
+                "n": 62,
+                "successes": 62,
+                "rate": 1.0
+              }
+            }
+          },
+          "derived-nonrec-near": {
+            "n": 200,
+            "S_verbatim_0": 21,
+            "retained": {
+              "carried": 10,
+              "rate": 0.47619047619047616,
+              "success_given_carried": {
+                "n": 10,
+                "successes": 10,
+                "rate": 1.0
+              }
+            },
+            "bridge": {
+              "carried": 0,
+              "rate": 0.0,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "present_at_need": 21
+            },
+            "either": {
+              "carried": 10,
+              "rate": 0.47619047619047616,
+              "success_given_carried": {
+                "n": 10,
+                "successes": 10,
+                "rate": 1.0
+              }
+            }
+          },
+          "derived-nonrec-far": {
+            "n": 200,
+            "S_verbatim_0": 200,
+            "retained": {
+              "carried": 2,
+              "rate": 0.01,
+              "success_given_carried": {
+                "n": 2,
+                "successes": 2,
+                "rate": 1.0
+              }
+            },
+            "bridge": {
+              "carried": 184,
+              "rate": 0.92,
+              "success_given_carried": {
+                "n": 184,
+                "successes": 184,
+                "rate": 1.0
+              },
+              "present_at_need": 200
+            },
+            "either": {
+              "carried": 184,
+              "rate": 0.92,
+              "success_given_carried": {
+                "n": 184,
+                "successes": 184,
+                "rate": 1.0
+              }
+            }
+          },
+          "derived-rec-near": {
+            "n": 200,
+            "S_verbatim_0": 21,
+            "retained": {
+              "carried": 7,
+              "rate": 0.3333333333333333,
+              "success_given_carried": {
+                "n": 7,
+                "successes": 7,
+                "rate": 1.0
+              }
+            },
+            "bridge": {
+              "carried": 0,
+              "rate": 0.0,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "present_at_need": 21
+            },
+            "either": {
+              "carried": 7,
+              "rate": 0.3333333333333333,
+              "success_given_carried": {
+                "n": 7,
+                "successes": 7,
+                "rate": 1.0
+              }
+            }
+          },
+          "derived-rec-far": {
+            "n": 200,
+            "S_verbatim_0": 200,
+            "retained": {
+              "carried": 0,
+              "rate": 0.0,
+              "success_given_carried": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              }
+            },
+            "bridge": {
+              "carried": 181,
+              "rate": 0.905,
+              "success_given_carried": {
+                "n": 181,
+                "successes": 181,
+                "rate": 1.0
+              },
+              "present_at_need": 200
+            },
+            "either": {
+              "carried": 181,
+              "rate": 0.905,
+              "success_given_carried": {
+                "n": 181,
+                "successes": 181,
+                "rate": 1.0
+              }
+            }
+          }
+        },
+        "compacted_between": {
+          "observed-nonrec-near": {
+            "0": {
+              "n": 200,
+              "S_verbatim_1": 200,
+              "S_1": 200,
+              "success": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              }
+            }
+          },
+          "observed-nonrec-far": {
+            "1": {
+              "n": 200,
+              "S_verbatim_1": 0,
+              "S_1": 77,
+              "success": {
+                "n": 200,
+                "successes": 86,
+                "rate": 0.43
+              }
+            }
+          },
+          "observed-rec-near": {
+            "0": {
+              "n": 200,
+              "S_verbatim_1": 200,
+              "S_1": 200,
+              "success": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              }
+            }
+          },
+          "observed-rec-far": {
+            "1": {
+              "n": 200,
+              "S_verbatim_1": 0,
+              "S_1": 62,
+              "success": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              }
+            }
+          },
+          "derived-nonrec-near": {
+            "0": {
+              "n": 179,
+              "S_verbatim_1": 179,
+              "S_1": 179,
+              "success": {
+                "n": 179,
+                "successes": 178,
+                "rate": 0.994413407821229
+              }
+            },
+            "1": {
+              "n": 21,
+              "S_verbatim_1": 0,
+              "S_1": 10,
+              "success": {
+                "n": 21,
+                "successes": 16,
+                "rate": 0.7619047619047619
+              }
+            }
+          },
+          "derived-nonrec-far": {
+            "1": {
+              "n": 200,
+              "S_verbatim_1": 0,
+              "S_1": 184,
+              "success": {
+                "n": 200,
+                "successes": 184,
+                "rate": 0.92
+              }
+            }
+          },
+          "derived-rec-near": {
+            "0": {
+              "n": 179,
+              "S_verbatim_1": 179,
+              "S_1": 179,
+              "success": {
+                "n": 179,
+                "successes": 179,
+                "rate": 1.0
+              }
+            },
+            "1": {
+              "n": 21,
+              "S_verbatim_1": 0,
+              "S_1": 7,
+              "success": {
+                "n": 21,
+                "successes": 21,
+                "rate": 1.0
+              }
+            }
+          },
+          "derived-rec-far": {
+            "1": {
+              "n": 200,
+              "S_verbatim_1": 0,
+              "S_1": 181,
+              "success": {
+                "n": 200,
+                "successes": 200,
+                "rate": 1.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "persistgym_haiku_r13_pinned": {
+      "label": "Experiment 5",
+      "experiment": "persistgym_haiku_r13_pinned",
+      "model": "claude-haiku-5-5",
+      "cells": [
+        "W-nk-0",
+        "W-n-0"
+      ],
+      "task_cells": [
+        "observed-nonrec-far",
+        "derived-nonrec-far"
+      ],
+      "templates_registered": "200-299",
+      "templates_read": 100,
+      "templates": "200-299",
+      "left_out": [],
+      "templates_never_played": 0,
+      "resamples_over": 100,
+      "deviations": [],
+      "accounting_check": {
+        "checked": 400,
+        "bugs": [],
+        "missing_transcripts": []
+      },
+      "exclusions": [
+        {
+          "kind": "W-nk-0",
+          "cell": "W-nk-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-nk-0",
+          "cell": "W-nk-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "observed-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        },
+        {
+          "kind": "W-n-0",
+          "cell": "W-n-0",
+          "variant": "base",
+          "task_cell": "derived-nonrec-far",
+          "keys": 100,
+          "never_played": 0,
+          "excluded_by_runner": 0,
+          "excluded_request_check": 0,
+          "excluded_transport": 0,
+          "excluded_no_final": 0,
+          "pending": 0,
+          "dropped_duplicates": 0
+        }
+      ],
+      "runs": [
+        {
+          "run_id": "20261125T011046Z-W-nk-0-claude-haiku-5-5",
+          "cell": "W-nk-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T01:10:48+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T012059Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T01:21:01+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T013102Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T01:31:04+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T014036Z-W-nk-0-claude-haiku-5-5",
+          "cell": "W-nk-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T01:40:38+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T014957Z-W-nk-0-claude-haiku-5-5",
+          "cell": "W-nk-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T01:49:59+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T020005Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T02:00:07+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T021021Z-W-n-0-claude-haiku-5-5",
+          "cell": "W-n-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T02:10:22+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        },
+        {
+          "run_id": "20261125T022022Z-W-nk-0-claude-haiku-5-5",
+          "cell": "W-nk-0",
+          "variants": [
+            "base"
+          ],
+          "repeat_index": 0,
+          "started_utc": "2026-11-25T02:20:23+00:00",
+          "exit_reason": "COMPLETED",
+          "records": 50,
+          "records_counted": 50,
+          "model_returned": [
+            "claude-haiku-5-5"
+          ]
+        }
+      ],
+      "arms": [
+        {
+          "arm": "W-nk-0",
+          "cell": "W-nk-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r13_pinned",
+          "counted_repeat_0": 200,
+          "cells": [
+            {
+              "kind": "W-nk-0",
+              "cell": "W-nk-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 74,
+              "rate": 0.74,
+              "content_failures": {
+                "incomplete": 5,
+                "unparsed": 18
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 24
+              },
+              "episodes_with_a_refusal": 10,
+              "interval_90": [
+                0.67,
+                0.81
+              ]
+            },
+            {
+              "kind": "W-nk-0",
+              "cell": "W-nk-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 84,
+              "rate": 0.84,
+              "content_failures": {
+                "incomplete": 15
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 71
+              },
+              "episodes_with_a_refusal": 16,
+              "interval_90": [
+                0.78,
+                0.9
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-nk-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 78,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 74,
+                "rate": 0.74
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 22,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 78,
+                "rate": 0.78
+              },
+              "used_given_carried": {
+                "n": 78,
+                "successes": 74,
+                "rate": 0.9487179487179487
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-nk-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 97,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 84,
+                "rate": 0.84
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 3,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 97,
+                "rate": 0.97
+              },
+              "used_given_carried": {
+                "n": 97,
+                "successes": 84,
+                "rate": 0.865979381443299
+              },
+              "exploratory": false
+            }
+          ],
+          "carried": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 3,
+                "rate": 0.03,
+                "success_given_carried": {
+                  "n": 3,
+                  "successes": 3,
+                  "rate": 1.0
+                }
+              },
+              "pinned": {
+                "carried": 78,
+                "rate": 0.78,
+                "success_given_carried": {
+                  "n": 78,
+                  "successes": 74,
+                  "rate": 0.9487179487179487
+                },
+                "present_at_need": 100
+              },
+              "either": {
+                "carried": 78,
+                "rate": 0.78,
+                "success_given_carried": {
+                  "n": 78,
+                  "successes": 74,
+                  "rate": 0.9487179487179487
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 6,
+                "rate": 0.06,
+                "success_given_carried": {
+                  "n": 6,
+                  "successes": 4,
+                  "rate": 0.6666666666666666
+                }
+              },
+              "pinned": {
+                "carried": 97,
+                "rate": 0.97,
+                "success_given_carried": {
+                  "n": 97,
+                  "successes": 84,
+                  "rate": 0.865979381443299
+                },
+                "present_at_need": 100
+              },
+              "either": {
+                "carried": 97,
+                "rate": 0.97,
+                "success_given_carried": {
+                  "n": 97,
+                  "successes": 84,
+                  "rate": 0.865979381443299
+                }
+              }
+            }
+          },
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 74,
+              "correct": 74
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 84,
+              "correct": 84
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.0437435334,
+              "cost_missing": 0,
+              "output_tokens_mean": 1763.97,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 550224.15,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.409541620446867,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.043806238850000005,
+              "cost_missing": 0,
+              "output_tokens_mean": 2257.33,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 551607.73,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.41414096934428385,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.043774886125,
+              "cost_missing": 0,
+              "output_tokens_mean": 2010.65,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 550915.94,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4118441826170432,
+              "cache_read_share_missing": 0
+            }
+          },
+          "near_need_payload_S_false": {},
+          "responses": {
+            "episodes": 200,
+            "runs": [
+              "20261125T011046Z-W-nk-0-claude-haiku-5-5",
+              "20261125T014036Z-W-nk-0-claude-haiku-5-5",
+              "20261125T014957Z-W-nk-0-claude-haiku-5-5",
+              "20261125T022022Z-W-nk-0-claude-haiku-5-5"
+            ],
+            "step_responses": 4812,
+            "summary_responses": 0,
+            "responses_not_in_transcript": [],
+            "refused_responses": 95,
+            "refused_share": 0.01974231088944306,
+            "refusal_categories": {
+              "refusal:bio": 95
+            },
+            "step_responses_in_transcript": 4812,
+            "with_thinking": 2015,
+            "thinking_share": 0.4187448046550291,
+            "with_redacted_thinking": 0,
+            "summary_responses_in_transcript": 0,
+            "summary_with_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1400,
+                "reply_chars_median": 105.0,
+                "chars_per_episode_median": 1406.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1399,
+                "reply_chars_median": 105.0,
+                "chars_per_episode_median": 1322.5
+              }
+            }
+          },
+          "block_at_need": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "reached_need": 100,
+              "with_block": 100,
+              "block_tokens_median": 290.5,
+              "block_replies_median": 8.0,
+              "newest_reply_over_cap": 0,
+              "replies_left_out": 2,
+              "left_out_median": 0.0,
+              "episodes_with_replies_left_out": 1
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "reached_need": 100,
+              "with_block": 100,
+              "block_tokens_median": 348.5,
+              "block_replies_median": 8.0,
+              "newest_reply_over_cap": 0,
+              "replies_left_out": 0,
+              "left_out_median": 0.0,
+              "episodes_with_replies_left_out": 0
+            }
+          },
+          "declines": {
+            "by_task_cell": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "carried": 78,
+                "failed_carried": 4,
+                "declined": 4,
+                "disowns": 0,
+                "declined_or_disowns": 4,
+                "declined_or_disowns_ids": [
+                  "main-000244/observed-nonrec-far/base",
+                  "main-000251/observed-nonrec-far/base",
+                  "main-000252/observed-nonrec-far/base",
+                  "main-000288/observed-nonrec-far/base"
+                ]
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "carried": 97,
+                "failed_carried": 13,
+                "declined": 13,
+                "disowns": 1,
+                "declined_or_disowns": 13,
+                "declined_or_disowns_ids": [
+                  "main-000200/derived-nonrec-far/base",
+                  "main-000209/derived-nonrec-far/base",
+                  "main-000210/derived-nonrec-far/base",
+                  "main-000236/derived-nonrec-far/base",
+                  "main-000241/derived-nonrec-far/base",
+                  "main-000251/derived-nonrec-far/base",
+                  "main-000252/derived-nonrec-far/base",
+                  "main-000258/derived-nonrec-far/base",
+                  "main-000270/derived-nonrec-far/base",
+                  "main-000274/derived-nonrec-far/base",
+                  "main-000281/derived-nonrec-far/base",
+                  "main-000282/derived-nonrec-far/base",
+                  "main-000284/derived-nonrec-far/base"
+                ]
+              },
+              "both": {
+                "episodes": 200,
+                "carried": 175,
+                "failed_carried": 17,
+                "declined": 17,
+                "disowns": 1,
+                "declined_or_disowns": 17,
+                "declined_or_disowns_ids": [
+                  "main-000200/derived-nonrec-far/base",
+                  "main-000209/derived-nonrec-far/base",
+                  "main-000210/derived-nonrec-far/base",
+                  "main-000236/derived-nonrec-far/base",
+                  "main-000241/derived-nonrec-far/base",
+                  "main-000244/observed-nonrec-far/base",
+                  "main-000251/derived-nonrec-far/base",
+                  "main-000251/observed-nonrec-far/base",
+                  "main-000252/derived-nonrec-far/base",
+                  "main-000252/observed-nonrec-far/base",
+                  "main-000258/derived-nonrec-far/base",
+                  "main-000270/derived-nonrec-far/base",
+                  "main-000274/derived-nonrec-far/base",
+                  "main-000281/derived-nonrec-far/base",
+                  "main-000282/derived-nonrec-far/base",
+                  "main-000284/derived-nonrec-far/base",
+                  "main-000288/observed-nonrec-far/base"
+                ]
+              }
+            },
+            "tally": {
+              "observed-nonrec-far carried=True": {
+                "episodes": 78,
+                "correct": 74,
+                "failed": 4,
+                "failed_declined": 4,
+                "failed_need_reply_disowns": 0,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 1
+              },
+              "observed-nonrec-far carried=False": {
+                "episodes": 22,
+                "correct": 0,
+                "failed": 22,
+                "failed_declined": 22,
+                "failed_need_reply_disowns": 0,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 0
+              },
+              "derived-nonrec-far carried=True": {
+                "episodes": 97,
+                "correct": 84,
+                "failed": 13,
+                "failed_declined": 13,
+                "failed_need_reply_disowns": 1,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 0
+              },
+              "derived-nonrec-far carried=False": {
+                "episodes": 3,
+                "correct": 0,
+                "failed": 3,
+                "failed_declined": 3,
+                "failed_need_reply_disowns": 0,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 0
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-n-0",
+          "cell": "W-n-0",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r13_pinned",
+          "counted_repeat_0": 200,
+          "cells": [
+            {
+              "kind": "W-n-0",
+              "cell": "W-n-0",
+              "variant": "base",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 2,
+              "rate": 0.02,
+              "content_failures": {
+                "unparsed": 77
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 3
+              },
+              "episodes_with_a_refusal": 1,
+              "interval_90": [
+                0.0,
+                0.05
+              ]
+            },
+            {
+              "kind": "W-n-0",
+              "cell": "W-n-0",
+              "variant": "base",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 2,
+              "rate": 0.02,
+              "content_failures": {
+                "incomplete": 1,
+                "unparsed": 81
+              },
+              "exploratory": false,
+              "stopped_responses": {
+                "refusal:bio": 20
+              },
+              "episodes_with_a_refusal": 7,
+              "interval_90": [
+                0.0,
+                0.05
+              ]
+            }
+          ],
+          "accounting": [
+            {
+              "cell": "W-n-0",
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 4,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 2,
+                "rate": 0.02
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 96,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 4,
+                "rate": 0.04
+              },
+              "used_given_carried": {
+                "n": 4,
+                "successes": 2,
+                "rate": 0.5
+              },
+              "exploratory": false
+            },
+            {
+              "cell": "W-n-0",
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "S_planned": 0,
+              "S_verbatim_1": 0,
+              "S_verbatim_0": 100,
+              "S_verbatim_unknown": 0,
+              "S_1": 25,
+              "planned_vs_verbatim_mismatch": 0,
+              "near_losses": null,
+              "residual_at_S1": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "success_given_S0": {
+                "n": 100,
+                "successes": 2,
+                "rate": 0.02
+              },
+              "rescued_with_lookup": {
+                "n": 0,
+                "successes": 0,
+                "rate": null
+              },
+              "rescued_without_lookup": {
+                "n": 75,
+                "successes": 0,
+                "rate": 0.0
+              },
+              "P_carried": {
+                "n": 100,
+                "carried": 25,
+                "rate": 0.25
+              },
+              "used_given_carried": {
+                "n": 25,
+                "successes": 2,
+                "rate": 0.08
+              },
+              "exploratory": false
+            }
+          ],
+          "carried": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 4,
+                "rate": 0.04,
+                "success_given_carried": {
+                  "n": 4,
+                  "successes": 2,
+                  "rate": 0.5
+                }
+              },
+              "either": {
+                "carried": 4,
+                "rate": 0.04,
+                "success_given_carried": {
+                  "n": 4,
+                  "successes": 2,
+                  "rate": 0.5
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 25,
+                "rate": 0.25,
+                "success_given_carried": {
+                  "n": 25,
+                  "successes": 2,
+                  "rate": 0.08
+                }
+              },
+              "either": {
+                "carried": 25,
+                "rate": 0.25,
+                "success_given_carried": {
+                  "n": 25,
+                  "successes": 2,
+                  "rate": 0.08
+                }
+              }
+            }
+          },
+          "choices_nr_far": {
+            "observed-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 2,
+              "correct": 2
+            },
+            "derived-nonrec-far": {
+              "episodes": 100,
+              "chose_an_option": 2,
+              "correct": 2
+            }
+          },
+          "costs": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.0434900919,
+              "cost_missing": 0,
+              "output_tokens_mean": 2054.31,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 546918.51,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4117849110647215,
+              "cache_read_share_missing": 0
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "cost_usd_billed_mean": 0.0437507964,
+              "cost_missing": 0,
+              "output_tokens_mean": 2772.36,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 548720.55,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4155603248320115,
+              "cache_read_share_missing": 0
+            },
+            "all": {
+              "n": 200,
+              "cost_usd_billed_mean": 0.04362044415000001,
+              "cost_missing": 0,
+              "output_tokens_mean": 2413.335,
+              "output_tokens_missing": 0,
+              "input_tokens_mean": 547819.53,
+              "input_tokens_missing": 0,
+              "cache_read_share": 0.4136757227329957,
+              "cache_read_share_missing": 0
+            }
+          },
+          "near_need_payload_S_false": {},
+          "responses": {
+            "episodes": 200,
+            "runs": [
+              "20261125T012059Z-W-n-0-claude-haiku-5-5",
+              "20261125T013102Z-W-n-0-claude-haiku-5-5",
+              "20261125T020005Z-W-n-0-claude-haiku-5-5",
+              "20261125T021021Z-W-n-0-claude-haiku-5-5"
+            ],
+            "step_responses": 4812,
+            "summary_responses": 0,
+            "responses_not_in_transcript": [],
+            "refused_responses": 23,
+            "refused_share": 0.004779717373233583,
+            "refusal_categories": {
+              "refusal:bio": 23
+            },
+            "step_responses_in_transcript": 4812,
+            "with_thinking": 2176,
+            "thinking_share": 0.45220282626766417,
+            "with_redacted_thinking": 0,
+            "summary_responses_in_transcript": 0,
+            "summary_with_thinking": 0,
+            "at_need": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1400,
+                "reply_chars_median": 105.0,
+                "chars_per_episode_median": 1413.5
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "retained_replies_median": 14.0,
+                "retained_replies_pooled": 1398,
+                "reply_chars_median": 112.0,
+                "chars_per_episode_median": 1615.5
+              }
+            }
+          },
+          "declines": {
+            "by_task_cell": {
+              "observed-nonrec-far": {
+                "episodes": 100,
+                "carried": 4,
+                "failed_carried": 2,
+                "declined": 2,
+                "disowns": 2,
+                "declined_or_disowns": 2,
+                "declined_or_disowns_ids": [
+                  "main-000218/observed-nonrec-far/base",
+                  "main-000282/observed-nonrec-far/base"
+                ]
+              },
+              "derived-nonrec-far": {
+                "episodes": 100,
+                "carried": 25,
+                "failed_carried": 23,
+                "declined": 23,
+                "disowns": 16,
+                "declined_or_disowns": 23,
+                "declined_or_disowns_ids": [
+                  "main-000203/derived-nonrec-far/base",
+                  "main-000206/derived-nonrec-far/base",
+                  "main-000207/derived-nonrec-far/base",
+                  "main-000215/derived-nonrec-far/base",
+                  "main-000219/derived-nonrec-far/base",
+                  "main-000222/derived-nonrec-far/base",
+                  "main-000223/derived-nonrec-far/base",
+                  "main-000224/derived-nonrec-far/base",
+                  "main-000225/derived-nonrec-far/base",
+                  "main-000227/derived-nonrec-far/base",
+                  "main-000230/derived-nonrec-far/base",
+                  "main-000233/derived-nonrec-far/base",
+                  "main-000243/derived-nonrec-far/base",
+                  "main-000249/derived-nonrec-far/base",
+                  "main-000252/derived-nonrec-far/base",
+                  "main-000255/derived-nonrec-far/base",
+                  "main-000260/derived-nonrec-far/base",
+                  "main-000261/derived-nonrec-far/base",
+                  "main-000263/derived-nonrec-far/base",
+                  "main-000282/derived-nonrec-far/base",
+                  "main-000286/derived-nonrec-far/base",
+                  "main-000294/derived-nonrec-far/base",
+                  "main-000298/derived-nonrec-far/base"
+                ]
+              },
+              "both": {
+                "episodes": 200,
+                "carried": 29,
+                "failed_carried": 25,
+                "declined": 25,
+                "disowns": 18,
+                "declined_or_disowns": 25,
+                "declined_or_disowns_ids": [
+                  "main-000203/derived-nonrec-far/base",
+                  "main-000206/derived-nonrec-far/base",
+                  "main-000207/derived-nonrec-far/base",
+                  "main-000215/derived-nonrec-far/base",
+                  "main-000218/observed-nonrec-far/base",
+                  "main-000219/derived-nonrec-far/base",
+                  "main-000222/derived-nonrec-far/base",
+                  "main-000223/derived-nonrec-far/base",
+                  "main-000224/derived-nonrec-far/base",
+                  "main-000225/derived-nonrec-far/base",
+                  "main-000227/derived-nonrec-far/base",
+                  "main-000230/derived-nonrec-far/base",
+                  "main-000233/derived-nonrec-far/base",
+                  "main-000243/derived-nonrec-far/base",
+                  "main-000249/derived-nonrec-far/base",
+                  "main-000252/derived-nonrec-far/base",
+                  "main-000255/derived-nonrec-far/base",
+                  "main-000260/derived-nonrec-far/base",
+                  "main-000261/derived-nonrec-far/base",
+                  "main-000263/derived-nonrec-far/base",
+                  "main-000282/derived-nonrec-far/base",
+                  "main-000282/observed-nonrec-far/base",
+                  "main-000286/derived-nonrec-far/base",
+                  "main-000294/derived-nonrec-far/base",
+                  "main-000298/derived-nonrec-far/base"
+                ]
+              }
+            },
+            "tally": {
+              "observed-nonrec-far carried=True": {
+                "episodes": 4,
+                "correct": 2,
+                "failed": 2,
+                "failed_declined": 2,
+                "failed_need_reply_disowns": 2,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 0
+              },
+              "observed-nonrec-far carried=False": {
+                "episodes": 96,
+                "correct": 0,
+                "failed": 96,
+                "failed_declined": 96,
+                "failed_need_reply_disowns": 2,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 0
+              },
+              "derived-nonrec-far carried=True": {
+                "episodes": 25,
+                "correct": 2,
+                "failed": 23,
+                "failed_declined": 23,
+                "failed_need_reply_disowns": 16,
+                "failed_retracted_before_need": 18,
+                "retraction_lag_steps": {
+                  "0": 9,
+                  "1": 8,
+                  "2": 1
+                },
+                "correct_need_reply_disowns": 0
+              },
+              "derived-nonrec-far carried=False": {
+                "episodes": 75,
+                "correct": 0,
+                "failed": 75,
+                "failed_declined": 75,
+                "failed_need_reply_disowns": 2,
+                "failed_retracted_before_need": 0,
+                "retraction_lag_steps": {},
+                "correct_need_reply_disowns": 0
+              }
+            }
+          }
+        }
+      ],
+      "contrasts": {
+        "W-nk-0 - W-n-0": {
+          "observed-nonrec-far": {
+            "pp": 72.0,
+            "ci90": [
+              64.0,
+              79.0
+            ]
+          },
+          "derived-nonrec-far": {
+            "pp": 82.0,
+            "ci90": [
+              76.0,
+              88.0
+            ]
+          }
+        }
+      },
+      "rounds": {
+        "success": [
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "all",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 50,
+            "successes": 37,
+            "rate": 0.74
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 15,
+            "rate": 0.6
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 22,
+            "rate": 0.88
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 50,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 1,
+            "templates": "200-224",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "all",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 50,
+            "successes": 43,
+            "rate": 0.86
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 20,
+            "rate": 0.8
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 23,
+            "rate": 0.92
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 50,
+            "successes": 2,
+            "rate": 0.04
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 2,
+            "rate": 0.08
+          },
+          {
+            "round": 2,
+            "templates": "225-249",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "all",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 50,
+            "successes": 37,
+            "rate": 0.74
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 19,
+            "rate": 0.76
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 18,
+            "rate": 0.72
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 50,
+            "successes": 1,
+            "rate": 0.02
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 3,
+            "templates": "250-274",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-nk-0",
+            "registered_first_arm": "W-nk-0",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "all",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 50,
+            "successes": 41,
+            "rate": 0.82
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 20,
+            "rate": 0.8
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-nk-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 21,
+            "rate": 0.84
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "all",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 50,
+            "successes": 1,
+            "rate": 0.02
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "observed-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 0,
+            "rate": 0.0
+          },
+          {
+            "round": 4,
+            "templates": "275-299",
+            "templates_read": 25,
+            "arm": "W-n-0",
+            "task_cell": "derived-nonrec-far",
+            "first_arm": "W-n-0",
+            "registered_first_arm": "W-n-0",
+            "n": 25,
+            "successes": 1,
+            "rate": 0.04
+          }
+        ],
+        "runs": [
+          {
+            "run_id": "20261125T011046Z-W-nk-0-claude-haiku-5-5",
+            "arm": "W-nk-0",
+            "templates": "200-224",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T01:10:48+00:00",
+            "finished_utc": "2026-11-25T01:20:49+00:00"
+          },
+          {
+            "run_id": "20261125T012059Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "200-224",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T01:21:01+00:00",
+            "finished_utc": "2026-11-25T01:30:51+00:00"
+          },
+          {
+            "run_id": "20261125T013102Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "225-249",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T01:31:04+00:00",
+            "finished_utc": "2026-11-25T01:40:27+00:00"
+          },
+          {
+            "run_id": "20261125T014036Z-W-nk-0-claude-haiku-5-5",
+            "arm": "W-nk-0",
+            "templates": "225-249",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T01:40:38+00:00",
+            "finished_utc": "2026-11-25T01:49:47+00:00"
+          },
+          {
+            "run_id": "20261125T014957Z-W-nk-0-claude-haiku-5-5",
+            "arm": "W-nk-0",
+            "templates": "250-274",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T01:49:59+00:00",
+            "finished_utc": "2026-11-25T01:59:56+00:00"
+          },
+          {
+            "run_id": "20261125T020005Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "250-274",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T02:00:07+00:00",
+            "finished_utc": "2026-11-25T02:10:11+00:00"
+          },
+          {
+            "run_id": "20261125T021021Z-W-n-0-claude-haiku-5-5",
+            "arm": "W-n-0",
+            "templates": "275-299",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T02:10:22+00:00",
+            "finished_utc": "2026-11-25T02:20:13+00:00"
+          },
+          {
+            "run_id": "20261125T022022Z-W-nk-0-claude-haiku-5-5",
+            "arm": "W-nk-0",
+            "templates": "275-299",
+            "exit_reason": "COMPLETED",
+            "records": 50,
+            "started_utc": "2026-11-25T02:20:23+00:00",
+            "finished_utc": "2026-11-25T02:29:29+00:00"
+          }
+        ]
+      },
+      "beside_r12": [
+        {
+          "arm": "W-n-0 (R12)",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "templates": "200-299",
+          "n_templates": 100,
+          "left_out": [],
+          "cells": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 3,
+              "rate": 0.03
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 5,
+              "rate": 0.05
+            }
+          ],
+          "accounting": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 3,
+                "rate": 0.03
+              },
+              "used_given_carried": {
+                "n": 3,
+                "successes": 3,
+                "rate": 1.0
+              }
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 34,
+                "rate": 0.34
+              },
+              "used_given_carried": {
+                "n": 34,
+                "successes": 5,
+                "rate": 0.14705882352941177
+              }
+            }
+          ],
+          "carried": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 3,
+                "rate": 0.03,
+                "success_given_carried": {
+                  "n": 3,
+                  "successes": 3,
+                  "rate": 1.0
+                }
+              },
+              "either": {
+                "carried": 3,
+                "rate": 0.03,
+                "success_given_carried": {
+                  "n": 3,
+                  "successes": 3,
+                  "rate": 1.0
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 34,
+                "rate": 0.34,
+                "success_given_carried": {
+                  "n": 34,
+                  "successes": 5,
+                  "rate": 0.14705882352941177
+                }
+              },
+              "either": {
+                "carried": 34,
+                "rate": 0.34,
+                "success_given_carried": {
+                  "n": 34,
+                  "successes": 5,
+                  "rate": 0.14705882352941177
+                }
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-np-0 (R12)",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "templates": "200-299",
+          "n_templates": 100,
+          "left_out": [],
+          "cells": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 85,
+              "rate": 0.85
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 86,
+              "rate": 0.86
+            }
+          ],
+          "accounting": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 87,
+                "rate": 0.87
+              },
+              "used_given_carried": {
+                "n": 87,
+                "successes": 85,
+                "rate": 0.9770114942528736
+              }
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 89,
+                "rate": 0.89
+              },
+              "used_given_carried": {
+                "n": 89,
+                "successes": 86,
+                "rate": 0.9662921348314607
+              }
+            }
+          ],
+          "carried": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 87,
+                "rate": 0.87,
+                "success_given_carried": {
+                  "n": 87,
+                  "successes": 85,
+                  "rate": 0.9770114942528736
+                }
+              },
+              "either": {
+                "carried": 87,
+                "rate": 0.87,
+                "success_given_carried": {
+                  "n": 87,
+                  "successes": 85,
+                  "rate": 0.9770114942528736
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 89,
+                "rate": 0.89,
+                "success_given_carried": {
+                  "n": 89,
+                  "successes": 86,
+                  "rate": 0.9662921348314607
+                }
+              },
+              "either": {
+                "carried": 89,
+                "rate": 0.89,
+                "success_given_carried": {
+                  "n": 89,
+                  "successes": 86,
+                  "rate": 0.9662921348314607
+                }
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-nd-0 (R12)",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "templates": "200-299",
+          "n_templates": 100,
+          "left_out": [],
+          "cells": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 35,
+              "rate": 0.35
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 44,
+              "rate": 0.44
+            }
+          ],
+          "accounting": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 38,
+                "rate": 0.38
+              },
+              "used_given_carried": {
+                "n": 38,
+                "successes": 35,
+                "rate": 0.9210526315789473
+              }
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 67,
+                "rate": 0.67
+              },
+              "used_given_carried": {
+                "n": 67,
+                "successes": 44,
+                "rate": 0.6567164179104478
+              }
+            }
+          ],
+          "carried": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 38,
+                "rate": 0.38,
+                "success_given_carried": {
+                  "n": 38,
+                  "successes": 35,
+                  "rate": 0.9210526315789473
+                }
+              },
+              "either": {
+                "carried": 38,
+                "rate": 0.38,
+                "success_given_carried": {
+                  "n": 38,
+                  "successes": 35,
+                  "rate": 0.9210526315789473
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 67,
+                "rate": 0.67,
+                "success_given_carried": {
+                  "n": 67,
+                  "successes": 44,
+                  "rate": 0.6567164179104478
+                }
+              },
+              "either": {
+                "carried": 67,
+                "rate": 0.67,
+                "success_given_carried": {
+                  "n": 67,
+                  "successes": 44,
+                  "rate": 0.6567164179104478
+                }
+              }
+            }
+          }
+        },
+        {
+          "arm": "W-nx-0 (R12)",
+          "model": "claude-haiku-5-5",
+          "experiment": "persistgym_haiku_r12_notes",
+          "templates": "200-299",
+          "n_templates": 100,
+          "left_out": [],
+          "cells": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "n": 100,
+              "successes": 1,
+              "rate": 0.01
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "n": 100,
+              "successes": 1,
+              "rate": 0.01
+            }
+          ],
+          "accounting": [
+            {
+              "task_cell": "observed-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 3,
+                "rate": 0.03
+              },
+              "used_given_carried": {
+                "n": 3,
+                "successes": 1,
+                "rate": 0.3333333333333333
+              }
+            },
+            {
+              "task_cell": "derived-nonrec-far",
+              "S_verbatim_0": 100,
+              "P_carried": {
+                "n": 100,
+                "carried": 26,
+                "rate": 0.26
+              },
+              "used_given_carried": {
+                "n": 26,
+                "successes": 1,
+                "rate": 0.038461538461538464
+              }
+            }
+          ],
+          "carried": {
+            "observed-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 3,
+                "rate": 0.03,
+                "success_given_carried": {
+                  "n": 3,
+                  "successes": 1,
+                  "rate": 0.3333333333333333
+                }
+              },
+              "either": {
+                "carried": 3,
+                "rate": 0.03,
+                "success_given_carried": {
+                  "n": 3,
+                  "successes": 1,
+                  "rate": 0.3333333333333333
+                }
+              }
+            },
+            "derived-nonrec-far": {
+              "n": 100,
+              "S_verbatim_0": 100,
+              "retained": {
+                "carried": 26,
+                "rate": 0.26,
+                "success_given_carried": {
+                  "n": 26,
+                  "successes": 1,
+                  "rate": 0.038461538461538464
+                }
+              },
+              "either": {
+                "carried": 26,
+                "rate": 0.26,
+                "success_given_carried": {
+                  "n": 26,
+                  "successes": 1,
+                  "rate": 0.038461538461538464
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "does_not_show": [
+    "Everything R8 to R12 say they do not show also holds here: one model per provider in the confirmatory sense, the same synthetic task family, thinking text not inspected.",
+    "Experiment 4 is not concurrent with its comparators. R8's W-0 and F-0 ran on 2026-10-18, R9's W-n-0 on 2026-10-24 and R12's W-b-0 on 2026-11-12 and 2026-11-13. Success differences against them mix the summary with any change in serving since.",
+    "One summary rule is run: ARC's summary prompts, with every earlier turn compacted when the context passes W. Other summary prompts, or summaries that keep recent turns, are not run.",
+    "In experiment 5 the pinned block differs from W-n-0's scrolling history in two ways at once. The replies are kept outside the window, and the block carries its own label. A difference between the arms does not separate the two. One cap (600 reply tokens) is run.",
+    "No model comparison. luna's Σ-n-0 is another model of another provider, on another API. Setting it beside Haiku's describes how each behaved on these episodes. It does not rank them.",
+    "R12 experiment 1's arms ran on 2026-11-12, not at the same time as experiment 5, and are set beside it, described only.",
+    "Coarse intervals: every arm plays each template once. P(carried) is a string match, so a lower bound, and the decline and disown counts are text patterns, not a validated coding."
+  ],
+  "warnings": []
+}

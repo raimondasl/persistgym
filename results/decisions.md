@@ -2184,3 +2184,27 @@ On the 2 not-recoverable far cells, R9's W-n-0 (2026-10-24) had 2.0% and 4.5% on
 - **Everything else** R8 to R12 and §17.13 say they do not show also holds here. These are exploratory readings on synthetic tasks, not tests of summaries or pinned blocks in general.
 
 **Approval.** The researcher's merge of the pull request that adds this entry records the runs, the departures and the readings. It adds no spending approval. The pull request is $0.
+
+## 2026-11-25: The list for preprint v2: R12 and R13 added
+**The list.** The list to track for preprint v2 is in the entry of 2026-11-10. It names R9 to R11 as new results and a tag that holds R9 to R11. R12 and R13 ran after it, and the list did not name them yet. This entry adds both and updates the tag. The draft's exact sentences stay with the draft, as before.
+
+**New results, added** (labelled exploratory, like R9 to R11):
+- **R12** (§17.12, `results/r12/20261113T065503Z/`, the entries of 2026-11-12 and 2026-11-13):
+  - Experiment 1, Haiku's notes sentences on templates 200-299, in the two not-recoverable far cells: W-n-0 3.0% and 5.0%, W-np-0 85.0% and 86.0%, W-nd-0 35.0% and 44.0%, and W-nx-0 1.0% and 1.0%. W-np-0 is the request for sources alone. Only R10's W-npd-0 has both sentences.
+  - Experiment 2, claude-sonnet-5-5 on templates 200-224, in the same two cells: W-n-0 96.0% and 100.0%, W-np-0 96.0% and 92.0%, and F-0 100.0% and 100.0%. It is reported without a model comparison or ranking.
+  - Experiment 3, Haiku's W-b-0 on templates 0-199: success equal to R8's W-0's in every task cell, at $0.01258 per episode against $0.04318 for R8's W-0 and $0.01252 for R8's F-0, which ran on 2026-10-18, not concurrently. It goes where v1 discusses the caching cost. v1 has no stable-prefix suggestion for it to replace (checked 2026-11-13).
+- **R13** (§17.13, `results/r13/20261125T023053Z/`, the results entry above):
+  - Experiment 4, Haiku's Σ-n-0 on templates 0-199, all 8 task cells: 89.0% and 96.5% in the not-recoverable far cells, beside R9's W-n-0's 2.0% and 4.5%. The bridge carried the fact in 92.0% and 100% of the episodes that reached the need step. None of its comparators ran concurrently. Its contrasts with R8's W-0 and F-0 and R12's W-b-0 mix the summary with the notes sentence.
+  - Experiment 5, W-nk-0 against a concurrent W-n-0 on templates 200-299: 74.0% and 84.0% against 2.0% and 2.0%. The block's label is a confound, since R12's W-nd-0 alone had 35.0% and 44.0% on these templates. Of the 17 W-nk-0 failures whose block held the fact, 15 were bio refusals at the need step.
+  - luna's Σ-n-0 is set beside Haiku's, never compared. W-nk-0 is not to be called StateCarry. A7 removed that component, and the entry of 2026-11-10 records a name clash.
+
+**Wording that changes with them.** v1's §1 says "Analyses marked exploratory were not registered." R9 to R13 are exploratory, but each registered its readings before its run. R9's reading of the replies was approved after R9's readings were seen, and it was not registered. v2 should tell these apart.
+
+**Data availability, updated** (in place of "a tag that holds R9 to R11"):
+- v2 names a tag at or after 0969c29, the merge of PR #100, that holds R9 to R13. The repository's only tag today is `preprint-v1`.
+- The amendments are thirteen, R1 to R13. R9 to R13 are exploratory and were all adopted after v1.
+- The model cost v2 states is the ledger's total when v2 is posted. On 2026-11-25 it is $1,153.53 (billed estimate) over 138 rows.
+
+**Not decided here:** whether R12 or R13 also go into a camera-ready of the AGENT paper (due 29 Jan 2027), and any change to the paper's figures. Those are the researcher's calls.
+
+**Approval.** The researcher's merge of the pull request that adds this entry records the list. It adds no spending approval. The pull request is $0.

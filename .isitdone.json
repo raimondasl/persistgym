@@ -1,4 +1,7 @@
 {
   "timeout": 2280,
-  "profile": "claim-gated"
+  "profile": "claim-gated",
+  "checks": {
+    "test": "uv run pytest -q -n auto"
+  }
 }

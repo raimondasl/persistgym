@@ -32,6 +32,7 @@ from arc.test_prereg_freeze import prereg_text
 from common import approval, costs, hold, paidlock, runmeta
 from common.tests.gitrepo import (
     DRAFT_PREREG,
+    copied_repo,
     decisions_text,
     git_in,
     guarded_repo,
@@ -64,9 +65,18 @@ def _repo(tmp_path: Path, *, record: bytes | None = RECORD_BYTES,
           patches: list[Path] | None = PATCHES, **kwargs) -> Path:
     """A guarded repo (common.tests.gitrepo) whose HEAD and origin/main also hold
     arc/config_freeze.json (`record`) and arc/patches (copies of `patches`); None leaves
-    either out."""
+    either out. A copy of this process's template for these arguments (`copied_repo`)."""
     (tmp_path / "repo").mkdir()
-    repo = guarded_repo(tmp_path / "repo", push=False, **kwargs)
+    key = ("arc/test_run_path._repo", record,
+           tuple((p.name, p.read_bytes()) for p in patches or ()), tuple(sorted(kwargs.items())))
+    return copied_repo(tmp_path / "repo", key,
+                       lambda template: _build_repo(template, record, patches, kwargs))
+
+
+def _build_repo(repo: Path, record: bytes | None, patches: list[Path] | None,
+                kwargs: dict) -> Path:
+    """`_repo` built in place with git."""
+    guarded_repo(repo, push=False, **kwargs)
     added = []
     if record is not None:
         (repo / rp.FREEZE_GIT_PATH).parent.mkdir(parents=True, exist_ok=True)

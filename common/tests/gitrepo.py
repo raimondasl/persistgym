@@ -1,12 +1,24 @@
 """Throwaway git repositories for the paid-guard tests (common/approval.py), shared with the
 harness tests. Each test repo gets a local bare repository as its `origin`, so the guard's
 `git fetch origin main` never leaves the machine (the test fixtures also set
-GIT_ALLOW_PROTOCOL=file, so git refuses any network transport)."""
+GIT_ALLOW_PROTOCOL=file, so git refuses any network transport).
+
+`guarded_repo` builds each distinct repo (PREREG.md, decisions.md, pushed or not) once per
+test process, as a template, and copies it for every call (`copied_repo`, which other test
+helpers use too): a copy holds the same files, commits and bare origin as a repo built in
+place, with the origin URL pointing at its own bare copy. Building one takes about seven git
+processes, which cost 4-6 s per test on a loaded Windows machine (2026-11-25); a copy takes
+none. common/tests/test_gitrepo.py checks that a copy equals a repo built in place."""
 
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
+import stat
 import subprocess
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from common.approval import format_line
@@ -94,16 +106,76 @@ def commit_on_origin_only(repo: Path, text: str, message: str = "on main",
     git_in(other, "push", "-q", "origin", "HEAD:refs/heads/main")
 
 
-def guarded_repo(path: Path, *, prereg: str = "Version: 0.1\n",
-                 decisions: str | None = None, push: bool = True) -> Path:
-    """`path` as a git repo whose HEAD holds PREREG.md and results/decisions.md (default:
-    approving block '1-pilots'), with a local bare `origin` whose main equals HEAD."""
+def build_guarded_repo(path: Path, *, prereg: str, decisions: str, push: bool) -> Path:
+    """`guarded_repo` built in place with git (the templates are built this way)."""
     git_in(path, "init", "-q")
     (path / "PREREG.md").write_text(prereg, encoding="utf-8")
-    write_decisions(path, decisions_text("1-pilots") if decisions is None else decisions)
+    write_decisions(path, decisions)
     git_in(path, "add", "PREREG.md", "results/decisions.md")
     git_in(path, "commit", "-q", "-m", "prereg")
     add_origin(path)
     if push:
         push_main(path)
     return path
+
+
+# This process's templates, by key (`copied_repo`), under one temporary folder that is removed
+# when the process ends.
+_TEMPLATES: dict[tuple, Path] = {}
+_TEMPLATE_ROOT: list[Path] = []
+
+
+def _writable_then_retry(function, path, _exc) -> None:
+    os.chmod(path, stat.S_IWRITE)   # git writes its object files read-only
+    function(path)
+
+
+def _template(key: tuple, build: Callable[[Path], object]) -> Path:
+    if key not in _TEMPLATES:
+        if not _TEMPLATE_ROOT:
+            _TEMPLATE_ROOT.append(Path(tempfile.mkdtemp(prefix="persistgym-gitrepo-")))
+            atexit.register(shutil.rmtree, _TEMPLATE_ROOT[0], onexc=_writable_then_retry)
+        # a folder of its own: `build` may itself copy a template (nested `copied_repo`)
+        repo = Path(tempfile.mkdtemp(dir=_TEMPLATE_ROOT[0])) / "repo"
+        repo.mkdir()
+        build(repo)
+        _TEMPLATES[key] = repo
+    return _TEMPLATES[key]
+
+
+def _config_value(path: Path) -> str:
+    """`path` as git writes it into a config value (backslashes and quotes escaped)."""
+    return str(path).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def copied_repo(path: Path, key: tuple, build: Callable[[Path], object]) -> Path:
+    """`path` as a copy of this process's template for `key`, which `build(template)` makes
+    the first time it is asked for: a git repo in `template` with its local bare origin at
+    `bare_origin(template)`. The copy's origin is its own copy of that bare repo,
+    `bare_origin(path)`. `key` must name everything `build` depends on."""
+    template = _template(key, build)
+    path.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(template, path, dirs_exist_ok=True)
+    shutil.copytree(bare_origin(template), bare_origin(path))
+    config = path / ".git" / "config"
+    old = f"\turl = {_config_value(bare_origin(template))}\n".encode()
+    text = config.read_bytes()
+    if text.count(old) == 1:
+        config.write_bytes(text.replace(
+            old, f"\turl = {_config_value(bare_origin(path))}\n".encode()))
+    else:
+        git_in(path, "remote", "set-url", "origin", str(bare_origin(path)))
+    (path.parent / ".test-gitconfig").touch()   # as git_in leaves it for a repo built in place
+    return path
+
+
+def guarded_repo(path: Path, *, prereg: str = "Version: 0.1\n",
+                 decisions: str | None = None, push: bool = True) -> Path:
+    """`path` as a git repo whose HEAD holds PREREG.md and results/decisions.md (default:
+    approving block '1-pilots'), with a local bare `origin` whose main equals HEAD (unless
+    `push` is False: then origin has no branch). A copy of this process's template for these
+    arguments (`copied_repo`)."""
+    decisions = decisions_text("1-pilots") if decisions is None else decisions
+    return copied_repo(path, ("guarded_repo", prereg, decisions, push),
+                       lambda t: build_guarded_repo(t, prereg=prereg, decisions=decisions,
+                                                    push=push))
